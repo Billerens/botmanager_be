@@ -5,8 +5,6 @@ import { ConfigService } from "@nestjs/config";
 import helmet from "helmet";
 import compression from "compression";
 import { AppModule } from "./app.module";
-import { MigrationService } from "./database/migration.service";
-import { AppDataSource } from "./database/data-source";
 
 // Критически важные переменные окружения
 const CRITICAL_ENV_VARS = [
@@ -60,11 +58,6 @@ const CRITICAL_ENV_VARS = [
     description: "Хост подключения к Frontend",
     example: "localhost или your-frontend-host.com",
   },
-  {
-    name: "AUTO_MIGRATIONS",
-    description: "Автоматическое применение миграций при запуске",
-    example: "true или false (по умолчанию true)",
-  },
 ];
 
 // Функция проверки критически важных переменных окружения
@@ -106,51 +99,9 @@ function checkCriticalEnvVars() {
   }
 }
 
-// Функция для автоматического применения миграций
-async function runDatabaseMigrations(): Promise<void> {
-  try {
-    // Проверяем, включены ли автоматические миграции
-    const autoMigrations = process.env.AUTO_MIGRATIONS !== "false";
-
-    if (!autoMigrations) {
-      console.log(
-        "⚠️  Автоматические миграции отключены (AUTO_MIGRATIONS=false)"
-      );
-      return;
-    }
-
-    console.log("🔄 Инициализация автоматических миграций...");
-
-    // Инициализируем подключение к базе данных
-    if (!AppDataSource.isInitialized) {
-      await AppDataSource.initialize();
-    }
-
-    // Создаем экземпляр сервиса миграций
-    const migrationService = new MigrationService(AppDataSource);
-
-    // Проверяем состояние базы данных
-    await migrationService.checkDatabaseStatus();
-
-    // Применяем миграции
-    await migrationService.runMigrations();
-
-    console.log("✅ Миграции базы данных завершены");
-  } catch (error) {
-    console.error("❌ Критическая ошибка при применении миграций:", error);
-    console.error(
-      "💥 Приложение не может быть запущено без корректной базы данных"
-    );
-    process.exit(1);
-  }
-}
-
 async function bootstrap() {
   // Проверяем переменные окружения перед запуском
   checkCriticalEnvVars();
-
-  // Применяем миграции базы данных
-  await runDatabaseMigrations();
 
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);

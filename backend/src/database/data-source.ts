@@ -12,12 +12,6 @@ import { ActivityLog } from "./entities/activity-log.entity";
 // Загружаем переменные окружения
 config();
 
-// Определяем пути к миграциям в зависимости от окружения
-const isProduction = process.env.NODE_ENV === "production";
-const migrationPaths = isProduction
-  ? ["dist/src/database/migrations/*.js"]
-  : ["src/database/migrations/*.ts"];
-
 export const AppDataSource = new DataSource({
   type: "postgres",
   host: process.env.DATABASE_HOST || "localhost",
@@ -25,8 +19,8 @@ export const AppDataSource = new DataSource({
   username: process.env.DATABASE_USERNAME || "botmanager",
   password: process.env.DATABASE_PASSWORD || "botmanager_password",
   database: process.env.DATABASE_NAME || "botmanager_dev",
-  synchronize: false, // Отключаем синхронизацию в пользу миграций
-  logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : false,
+  synchronize: process.env.NODE_ENV === "development", // Только для разработки
+  logging: false,
   entities: [
     User,
     Bot,
@@ -37,18 +31,8 @@ export const AppDataSource = new DataSource({
     BotFlowNode,
     ActivityLog,
   ],
-  migrations: migrationPaths,
-  migrationsRun: false, // Отключаем автоматический запуск миграций TypeORM
-  subscribers: isProduction ? [] : ["src/database/subscribers/*.ts"],
-  // Настройки для продакшена
-  ssl: isProduction ? { rejectUnauthorized: false } : false,
-  extra: {
-    // Настройки пула соединений для продакшена
-    max: isProduction ? 20 : 10,
-    min: isProduction ? 5 : 2,
-    acquireTimeoutMillis: 60000,
-    idleTimeoutMillis: 30000,
-  },
+  migrations: ["src/database/migrations/*.ts"],
+  subscribers: ["src/database/subscribers/*.ts"],
 });
 
 // Функция для инициализации подключения
