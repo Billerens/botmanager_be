@@ -19,6 +19,9 @@ import { QueueModule } from "./modules/queue/queue.module";
 import { TelegramModule } from "./modules/telegram/telegram.module";
 import { SubscriptionModule } from "./modules/subscription/subscription.module";
 
+// Проверяем наличие Redis
+const hasRedis = !!process.env.REDIS_URL || !!process.env.REDIS_HOST;
+
 @Module({
   imports: [
     // Конфигурация
@@ -28,25 +31,29 @@ import { SubscriptionModule } from "./modules/subscription/subscription.module";
       load: [databaseConfig, jwtConfig, appConfig],
     }),
 
-    // Rate limiting
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000, // 1 минута
-        limit: 100, // 100 запросов в минуту
-      },
-    ]),
+    // Rate limiting (только если есть Redis)
+    ...(hasRedis ? [
+      ThrottlerModule.forRoot([
+        {
+          ttl: 60000, // 1 минута
+          limit: 100, // 100 запросов в минуту
+        },
+      ]),
+    ] : []),
 
     // База данных
     DatabaseModule,
 
-    // Очереди
-    BullModule.forRoot({
-      redis: {
-        host: process.env.REDIS_HOST || "localhost",
-        port: parseInt(process.env.REDIS_PORT) || 6379,
-        password: process.env.REDIS_PASSWORD,
-      },
-    }),
+    // Очереди (только если есть Redis)
+    ...(hasRedis ? [
+      BullModule.forRoot({
+        redis: process.env.REDIS_URL || {
+          host: process.env.REDIS_HOST || "localhost",
+          port: parseInt(process.env.REDIS_PORT) || 6379,
+          password: process.env.REDIS_PASSWORD,
+        },
+      }),
+    ] : []),
 
     // Модули приложения
     AuthModule,
@@ -56,7 +63,7 @@ import { SubscriptionModule } from "./modules/subscription/subscription.module";
     LeadsModule,
     AnalyticsModule,
     WebSocketModule,
-    QueueModule,
+    QueueModule, // QueueModule всегда импортируется, но работает условно
     TelegramModule,
     SubscriptionModule,
   ],

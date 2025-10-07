@@ -1,19 +1,29 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 
 @Injectable()
 export class QueueService {
   constructor(
-    @InjectQueue('message-queue') private messageQueue: Queue,
-    @InjectQueue('webhook-queue') private webhookQueue: Queue,
+    @Optional() @InjectQueue('message-queue') private messageQueue?: Queue,
+    @Optional() @InjectQueue('webhook-queue') private webhookQueue?: Queue,
   ) {}
 
   async addMessageJob(data: any) {
-    return this.messageQueue.add('process-message', data);
+    if (this.messageQueue) {
+      return this.messageQueue.add('process-message', data);
+    } else {
+      console.log('⚠️ Redis не настроен, задача обработки сообщения пропущена:', data);
+      return null;
+    }
   }
 
   async addWebhookJob(data: any) {
-    return this.webhookQueue.add('process-webhook', data);
+    if (this.webhookQueue) {
+      return this.webhookQueue.add('process-webhook', data);
+    } else {
+      console.log('⚠️ Redis не настроен, задача обработки webhook пропущена:', data);
+      return null;
+    }
   }
 }

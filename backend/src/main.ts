@@ -38,9 +38,13 @@ const CRITICAL_ENV_VARS = [
     description: "Секретный ключ для JWT токенов",
     example: "your-super-secret-jwt-key-32-chars",
   },
+];
+
+// Опциональные переменные окружения
+const OPTIONAL_ENV_VARS = [
   {
     name: "REDIS_URL",
-    description: "URL подключения к Redis",
+    description: "URL подключения к Redis (опционально)",
     example: "redis://localhost:6379 или redis://your-redis-host:6379",
   },
 ];
@@ -81,6 +85,19 @@ function checkCriticalEnvVars() {
     process.exit(1);
   } else {
     console.log("✅ Все критически важные переменные окружения настроены");
+    
+    // Показываем информацию об опциональных переменных
+    const missingOptionalVars = OPTIONAL_ENV_VARS.filter(
+      (envVar) => !process.env[envVar.name]
+    );
+    
+    if (missingOptionalVars.length > 0) {
+      console.log("\n💡 Опциональные переменные (не настроены):");
+      missingOptionalVars.forEach((envVar) => {
+        console.log(`   • ${envVar.name}: ${envVar.description}`);
+      });
+      console.log("   Приложение будет работать без этих функций.\n");
+    }
   }
 }
 
