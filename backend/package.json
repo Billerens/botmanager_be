@@ -21,7 +21,10 @@
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:generate": "npm run typeorm -- migration:generate -d src/database/data-source.ts",
     "migration:run": "npm run typeorm -- migration:run -d src/database/data-source.ts",
-    "migration:revert": "npm run typeorm -- migration:revert -d src/database/data-source.ts"
+    "migration:revert": "npm run typeorm -- migration:revert -d src/database/data-source.ts",
+    "migration:status": "ts-node scripts/migration-manager.ts status",
+    "migration:auto": "ts-node scripts/migration-manager.ts run",
+    "migration:undo": "ts-node scripts/migration-manager.ts revert"
   },
   "dependencies": {
     "@nestjs/bull": "^10.0.1",

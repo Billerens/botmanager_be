@@ -19,8 +19,8 @@ export const AppDataSource = new DataSource({
   username: process.env.DATABASE_USERNAME || "botmanager",
   password: process.env.DATABASE_PASSWORD || "botmanager_password",
   database: process.env.DATABASE_NAME || "botmanager_dev",
-  synchronize: process.env.NODE_ENV === "development", // Только для разработки
-  logging: false,
+  synchronize: false, // Отключаем синхронизацию в пользу миграций
+  logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : false,
   entities: [
     User,
     Bot,
@@ -32,7 +32,20 @@ export const AppDataSource = new DataSource({
     ActivityLog,
   ],
   migrations: ["src/database/migrations/*.ts"],
+  migrationsRun: false, // Отключаем автоматический запуск миграций TypeORM
   subscribers: ["src/database/subscribers/*.ts"],
+  // Настройки для продакшена
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
+  extra: {
+    // Настройки пула соединений для продакшена
+    max: process.env.NODE_ENV === "production" ? 20 : 10,
+    min: process.env.NODE_ENV === "production" ? 5 : 2,
+    acquireTimeoutMillis: 60000,
+    idleTimeoutMillis: 30000,
+  },
 });
 
 // Функция для инициализации подключения
