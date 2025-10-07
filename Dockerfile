@@ -17,6 +17,12 @@ RUN npm ci
 # Собираем приложение
 RUN npm run build
 
+# Копируем скрипт запуска с миграциями
+COPY backend/scripts/start-with-migrations.sh /app/start.sh
+
+# Делаем скрипт исполняемым
+RUN chmod +x /app/start.sh
+
 # Создаем пользователя для безопасности
 RUN addgroup -g 1001 -S nodejs
 RUN adduser -S nestjs -u 1001
@@ -28,9 +34,9 @@ USER nestjs
 # Открываем порт
 EXPOSE 3000
 
-# Команда запуска
+# Команда запуска с автоматическим применением миграций
 # Приложение автоматически проверит наличие критически важных переменных окружения:
 # - DATABASE_HOST, DATABASE_PORT, DATABASE_USERNAME, DATABASE_PASSWORD, DATABASE_NAME
 # - JWT_SECRET
 # - REDIS_URL
-CMD ["npm", "run", "start:prod"]
+CMD ["/app/start.sh"]

@@ -21,7 +21,10 @@
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:generate": "npm run typeorm -- migration:generate -d src/database/data-source.ts",
     "migration:run": "npm run typeorm -- migration:run -d src/database/data-source.ts",
-    "migration:revert": "npm run typeorm -- migration:revert -d src/database/data-source.ts"
+    "migration:revert": "npm run typeorm -- migration:revert -d src/database/data-source.ts",
+    "migration:show": "npm run typeorm -- migration:show -d src/database/data-source.ts",
+    "db:check": "npm run typeorm -- query \"SELECT 1\" -d src/database/data-source.ts",
+    "start:with-migrations": "chmod +x scripts/start-with-migrations.sh && ./scripts/start-with-migrations.sh"
   },
   "dependencies": {
     "@nestjs/bull": "^10.0.1",
