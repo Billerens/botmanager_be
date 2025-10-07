@@ -7,11 +7,12 @@ WORKDIR /app
 # Копируем package.json и package-lock.json
 COPY backend/package*.json ./
 
-# Устанавливаем зависимости
-RUN npm ci --only=production
 
 # Копируем исходный код
 COPY backend/ ./
+
+# Устанавливаем зависимости
+RUN npm ci --only=production
 
 # Собираем приложение
 RUN npm run build
