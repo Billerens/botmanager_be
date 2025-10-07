@@ -1,19 +1,16 @@
-import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bull';
-import { QueueService } from './queue.service';
-
-// Проверяем наличие Redis
-const hasRedis = !!process.env.REDIS_URL || !!process.env.REDIS_HOST;
+import { Module } from "@nestjs/common";
+import { BullModule } from "@nestjs/bull";
+import { QueueService } from "./queue.service";
 
 @Module({
-  imports: hasRedis ? [
+  imports: [
     BullModule.registerQueue({
-      name: 'message-queue',
+      name: "message-queue",
     }),
     BullModule.registerQueue({
-      name: 'webhook-queue',
+      name: "webhook-queue",
     }),
-  ] : [],
+  ],
   providers: [QueueService],
   exports: [QueueService],
 })

@@ -32,5 +32,5 @@ EXPOSE 3000
 # Приложение автоматически проверит наличие критически важных переменных окружения:
 # - DATABASE_HOST, DATABASE_PORT, DATABASE_USERNAME, DATABASE_PASSWORD, DATABASE_NAME
 # - JWT_SECRET
-# Redis опционален (REDIS_URL) - приложение будет работать без очередей
+# - REDIS_URL
 CMD ["npm", "run", "start:prod"]
