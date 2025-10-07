@@ -39,9 +39,19 @@ const CRITICAL_ENV_VARS = [
     example: "your-super-secret-jwt-key-32-chars",
   },
   {
-    name: "REDIS_URL",
-    description: "URL подключения к Redis",
-    example: "redis://localhost:6379 или redis://your-redis-host:6379",
+    name: "REDIS_HOST",
+    description: "Хост подключения к Redis",
+    example: "localhost или your-redis-host.com",
+  },
+  {
+    name: "REDIS_PORT",
+    description: "Порт подключения к Redis",
+    example: "6379",
+  },
+  {
+    name: "REDIS_PASSWORD",
+    description: "Пароль подключения к Redis",
+    example: "your-redis-password",
   },
 ];
 
