@@ -53,6 +53,11 @@ const CRITICAL_ENV_VARS = [
     description: "Пароль подключения к Redis",
     example: "your-redis-password",
   },
+  {
+    name: "FRONTEND_URL",
+    description: "Хост подключения к Frontend",
+    example: "localhost или your-frontend-host.com",
+  },
 ];
 
 // Функция проверки критически важных переменных окружения
@@ -110,6 +115,16 @@ async function bootstrap() {
   app.enableCors({
     origin: corsOrigin ?? true,
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+      "Origin",
+    ],
+    exposedHeaders: ["Authorization"],
+    optionsSuccessStatus: 200,
   });
 
   // Валидация
