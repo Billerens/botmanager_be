@@ -22,6 +22,15 @@ export class MigrationService {
         await this.dataSource.initialize();
       }
 
+      // Логируем информацию о путях к миграциям
+      const isProduction = process.env.NODE_ENV === "production";
+      this.logger.log(
+        `📁 Режим: ${isProduction ? "production" : "development"}`
+      );
+      this.logger.log(
+        `📁 Пути к миграциям: ${isProduction ? "dist/src/database/migrations/*.js" : "src/database/migrations/*.ts"}`
+      );
+
       // Проверяем, есть ли ожидающие миграции
       const hasPendingMigrations = await this.dataSource.showMigrations();
 
@@ -43,7 +52,8 @@ export class MigrationService {
       // В случае критической ошибки миграций, останавливаем приложение
       if (
         error.message?.includes("relation") ||
-        error.message?.includes("table")
+        error.message?.includes("table") ||
+        error.message?.includes("Cannot use import statement")
       ) {
         this.logger.error(
           "💥 Критическая ошибка базы данных. Приложение остановлено."
