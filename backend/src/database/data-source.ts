@@ -31,7 +31,9 @@ export const AppDataSource = new DataSource({
     BotFlowNode,
     ActivityLog,
   ],
-  migrations: ["src/database/migrations/*.ts"],
+  migrations: process.env.NODE_ENV === "production" 
+    ? ["dist/src/database/migrations/*.js"]
+    : ["src/database/migrations/*.ts"],
   migrationsRun: false, // Отключаем автоматический запуск миграций TypeORM
   subscribers: ["src/database/subscribers/*.ts"],
   // Настройки для продакшена
