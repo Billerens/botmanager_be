@@ -11,8 +11,8 @@ COPY backend/package*.json ./
 # Копируем исходный код
 COPY backend/ ./
 
-# Устанавливаем зависимости
-RUN npm ci --only=production
+# Устанавливаем все зависимости (включая dev для сборки)
+RUN npm ci
 
 # Собираем приложение
 RUN npm run build

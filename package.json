@@ -15,7 +15,9 @@
     "format": "cd backend && npm run format",
     "migration:generate": "cd backend && npm run migration:generate",
     "migration:run": "cd backend && npm run migration:run",
-    "migration:revert": "cd backend && npm run migration:revert"
+    "migration:revert": "cd backend && npm run migration:revert",
+    "docker:build": "docker build -t botmanager-backend .",
+    "docker:run": "docker run -p 3000:3000 botmanager-backend"
   },
   "keywords": [
     "telegram",
