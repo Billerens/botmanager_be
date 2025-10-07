@@ -1,0 +1,98 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: botmanager_postgres_dev
+    environment:
+      POSTGRES_DB: botmanager_dev
+      POSTGRES_USER: botmanager
+      POSTGRES_PASSWORD: botmanager_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./backend/scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - botmanager_dev_network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: botmanager_redis_dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - botmanager_dev_network
+    restart: unless-stopped
+
+  # Backend для разработки с hot reload
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: botmanager_backend_dev
+    ports:
+      - "3000:3000"
+      - "9229:9229" # Debug port
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://botmanager:botmanager_password@postgres:5432/botmanager_dev
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-jwt-secret-key
+      - TELEGRAM_BOT_API_URL=https://api.telegram.org/bot
+      - DEBUG=botmanager:*
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - botmanager_dev_network
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - /app/dist
+    restart: unless-stopped
+    command: npm run start:dev
+
+  # Frontend для разработки с hot reload
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: botmanager_frontend_dev
+    ports:
+      - "3001:3001"
+    environment:
+      - REACT_APP_API_URL=http://localhost:3000
+      - REACT_APP_WS_URL=ws://localhost:3000
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      - backend
+    networks:
+      - botmanager_dev_network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    restart: unless-stopped
+    command: npm run dev
+
+  # Mailhog для тестирования email
+  mailhog:
+    image: mailhog/mailhog
+    container_name: botmanager_mailhog_dev
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # Web UI
+    networks:
+      - botmanager_dev_network
+    restart: unless-stopped
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+
+networks:
+  botmanager_dev_network:
+    driver: bridge
