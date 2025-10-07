@@ -235,6 +235,9 @@ export class BotFlowsService {
       variable: NodeType.VARIABLE,
       file: NodeType.FILE,
       random: NodeType.RANDOM,
+      integration: NodeType.INTEGRATION,
+      webhook: NodeType.WEBHOOK,
+      new_message: NodeType.NEW_MESSAGE,
     };
 
     if (!typeMap[type]) {

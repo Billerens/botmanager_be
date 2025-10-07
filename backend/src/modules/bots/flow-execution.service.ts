@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { BotFlow, FlowStatus } from "../../database/entities/bot-flow.entity";
@@ -8,6 +8,7 @@ import {
 } from "../../database/entities/bot-flow-node.entity";
 import { TelegramService } from "../telegram/telegram.service";
 import { BotsService } from "./bots.service";
+import { CustomLoggerService } from "../../common/logger.service";
 
 export interface UserSession {
   userId: string;
@@ -29,7 +30,6 @@ export interface FlowContext {
 
 @Injectable()
 export class FlowExecutionService {
-  private readonly logger = new Logger(FlowExecutionService.name);
   private userSessions = new Map<string, UserSession>();
 
   constructor(
@@ -38,7 +38,8 @@ export class FlowExecutionService {
     @InjectRepository(BotFlowNode)
     private readonly botFlowNodeRepository: Repository<BotFlowNode>,
     private readonly telegramService: TelegramService,
-    private readonly botsService: BotsService
+    private readonly botsService: BotsService,
+    private readonly logger: CustomLoggerService
   ) {}
 
   async processMessage(bot: any, message: any): Promise<void> {
@@ -47,9 +48,18 @@ export class FlowExecutionService {
       const chatId = message.chat.id.toString();
       const sessionKey = `${bot.id}-${userId}`;
 
+      this.logger.log(`=== ОБРАБОТКА СООБЩЕНИЯ ===`);
+      this.logger.log(`Bot ID: ${bot.id}`);
+      this.logger.log(`User ID: ${userId}`);
+      this.logger.log(`Chat ID: ${chatId}`);
+      this.logger.log(`Message text: "${message.text}"`);
+      this.logger.log(`Message type: ${message.type || "text"}`);
+      this.logger.log(`Session key: ${sessionKey}`);
+
       // Получаем или создаем сессию пользователя
       let session = this.userSessions.get(sessionKey);
       if (!session) {
+        this.logger.log(`Создаем новую сессию для пользователя ${userId}`);
         session = {
           userId,
           chatId,
@@ -58,9 +68,17 @@ export class FlowExecutionService {
           lastActivity: new Date(),
         };
         this.userSessions.set(sessionKey, session);
+      } else {
+        this.logger.log(
+          `Найдена существующая сессия для пользователя ${userId}`
+        );
+        this.logger.log(
+          `Текущий узел: ${session.currentNodeId || "не установлен"}`
+        );
       }
 
       // Находим активный flow для бота
+      this.logger.log(`Ищем активный flow для бота ${bot.id}`);
       const activeFlow = await this.botFlowRepository.findOne({
         where: { botId: bot.id, status: FlowStatus.ACTIVE },
         relations: ["nodes"],
@@ -70,6 +88,14 @@ export class FlowExecutionService {
         this.logger.warn(`Нет активного flow для бота ${bot.id}`);
         return;
       }
+
+      this.logger.log(`Найден активный flow: ${activeFlow.id}`);
+      this.logger.log(`Flow содержит ${activeFlow.nodes.length} узлов:`);
+      activeFlow.nodes.forEach((node, index) => {
+        this.logger.log(
+          `  ${index + 1}. ID: ${node.nodeId}, Type: "${node.type}", Name: "${node.name}"`
+        );
+      });
 
       // Создаем контекст выполнения
       const context: FlowContext = {
@@ -81,20 +107,55 @@ export class FlowExecutionService {
       };
 
       // Определяем текущий узел
+      this.logger.log(`Определяем текущий узел...`);
       if (!session.currentNodeId) {
-        // Начинаем с START узла
-        const startNode = activeFlow.nodes.find(
-          (node) => node.type === NodeType.START
-        );
-        if (startNode) {
-          context.currentNode = startNode;
-          session.currentNodeId = startNode.nodeId;
+        this.logger.log(`Сессия не имеет текущего узла, ищем подходящий`);
+
+        // Если это команда /start, ищем START узел
+        if (message.text === "/start") {
+          this.logger.log(`Сообщение "/start" - ищем START узел`);
+          const startNode = activeFlow.nodes.find(
+            (node) => node.type === "start"
+          );
+          if (startNode) {
+            this.logger.log(`Найден START узел: ${startNode.nodeId}`);
+            context.currentNode = startNode;
+            session.currentNodeId = startNode.nodeId;
+          } else {
+            this.logger.warn(`START узел не найден в flow`);
+          }
+        } else {
+          this.logger.log(`Сообщение не "/start" - ищем NEW_MESSAGE узел`);
+          // Для других сообщений ищем подходящий NEW_MESSAGE узел
+          const newMessageNode = this.findMatchingNewMessageNode(
+            activeFlow,
+            message
+          );
+          if (newMessageNode) {
+            this.logger.log(
+              `Найден подходящий NEW_MESSAGE узел: ${newMessageNode.nodeId}`
+            );
+            context.currentNode = newMessageNode;
+            session.currentNodeId = newMessageNode.nodeId;
+          } else {
+            this.logger.warn(`Подходящий NEW_MESSAGE узел не найден`);
+          }
         }
       } else {
+        this.logger.log(`Продолжаем с текущего узла: ${session.currentNodeId}`);
         // Продолжаем с текущего узла
         context.currentNode = activeFlow.nodes.find(
           (node) => node.nodeId === session.currentNodeId
         );
+        if (context.currentNode) {
+          this.logger.log(
+            `Найден текущий узел: ${context.currentNode.nodeId}, тип: "${context.currentNode.type}"`
+          );
+        } else {
+          this.logger.error(
+            `Текущий узел ${session.currentNodeId} не найден в flow!`
+          );
+        }
       }
 
       if (!context.currentNode) {
@@ -123,37 +184,46 @@ export class FlowExecutionService {
 
     try {
       switch (currentNode.type) {
-        case NodeType.START:
+        case "start":
           await this.executeStartNode(context);
           break;
-        case NodeType.MESSAGE:
+        case "new_message":
+          await this.executeNewMessageNode(context);
+          break;
+        case "message":
           await this.executeMessageNode(context);
           break;
-        case NodeType.KEYBOARD:
+        case "keyboard":
           await this.executeKeyboardNode(context);
           break;
-        case NodeType.CONDITION:
+        case "condition":
           await this.executeConditionNode(context);
           break;
-        case NodeType.API:
+        case "api":
           await this.executeApiNode(context);
           break;
-        case NodeType.FORM:
+        case "form":
           await this.executeFormNode(context);
           break;
-        case NodeType.DELAY:
+        case "delay":
           await this.executeDelayNode(context);
           break;
-        case NodeType.VARIABLE:
+        case "variable":
           await this.executeVariableNode(context);
           break;
-        case NodeType.FILE:
+        case "file":
           await this.executeFileNode(context);
           break;
-        case NodeType.RANDOM:
+        case "random":
           await this.executeRandomNode(context);
           break;
-        case NodeType.END:
+        case "webhook":
+          await this.executeWebhookNode(context);
+          break;
+        case "integration":
+          await this.executeIntegrationNode(context);
+          break;
+        case "end":
           await this.executeEndNode(context);
           break;
         default:
@@ -166,7 +236,15 @@ export class FlowExecutionService {
   }
 
   private async executeStartNode(context: FlowContext): Promise<void> {
-    const { currentNode, session } = context;
+    const { currentNode, session, message } = context;
+
+    // START узел работает только с командой /start
+    if (message.text !== "/start") {
+      this.logger.log(`START узел игнорирует сообщение: ${message.text}`);
+      return;
+    }
+
+    this.logger.log("Обрабатываем команду /start");
 
     // Ищем следующий узел по edges
     const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
@@ -226,14 +304,14 @@ export class FlowExecutionService {
     const { currentNode, bot, message, session } = context;
     const decryptedToken = this.botsService.decryptToken(bot.token);
 
-    this.logger.log("Keyboard node data:", currentNode.data);
+    this.logger.log("Keyboard node data:", JSON.stringify(currentNode.data));
 
     const messageText = currentNode.data?.text || "Выберите опцию:";
     const buttons = currentNode.data?.buttons || [];
     const isInline = currentNode.data?.isInline || false;
 
-    this.logger.log("Keyboard buttons:", buttons);
-    this.logger.log("Is inline:", isInline);
+    this.logger.log("Keyboard buttons:", JSON.stringify(buttons));
+    this.logger.log("Is inline:", String(isInline));
 
     // Создаем клавиатуру
     let telegramKeyboard;
@@ -396,6 +474,110 @@ export class FlowExecutionService {
     return currentNode?.data?.nextNodeId || null;
   }
 
+  // Поиск подходящего NEW_MESSAGE узла
+  private findMatchingNewMessageNode(
+    flow: BotFlow,
+    message: any
+  ): BotFlowNode | null {
+    this.logger.log(`Ищем NEW_MESSAGE узлы для сообщения: "${message.text}"`);
+
+    const newMessageNodes = flow.nodes.filter(
+      (node) => node.type === "new_message"
+    );
+
+    this.logger.log(`Найдено ${newMessageNodes.length} NEW_MESSAGE узлов`);
+
+    // Сначала ищем узлы с точным соответствием текста
+    const exactMatches: BotFlowNode[] = [];
+    const fallbackMatches: BotFlowNode[] = [];
+
+    for (const node of newMessageNodes) {
+      this.logger.log(
+        `Проверяем узел ${node.nodeId}: ${JSON.stringify(node.data?.newMessage)}`
+      );
+
+      const newMessageData = node.data?.newMessage;
+      if (!newMessageData) {
+        this.logger.log(`Узел ${node.nodeId} не имеет данных newMessage`);
+        continue;
+      }
+
+      const { text, contentType, caseSensitive } = newMessageData;
+      let matches = true;
+      let isExactMatch = false;
+
+      this.logger.log(
+        `Фильтр узла: text="${text}", contentType="${contentType}", caseSensitive=${caseSensitive}`
+      );
+
+      // Проверяем текст сообщения
+      if (text && text.trim() !== "") {
+        const messageText = message.text || "";
+        const filterText = caseSensitive ? text : text.toLowerCase();
+        const userText = caseSensitive
+          ? messageText
+          : messageText.toLowerCase();
+
+        this.logger.log(`Сравнение текста: "${userText}" vs "${filterText}"`);
+
+        if (userText === filterText) {
+          isExactMatch = true;
+          this.logger.log(`Точное совпадение текста для узла ${node.nodeId}`);
+        } else {
+          this.logger.log(`Текст не совпадает для узла ${node.nodeId}`);
+          matches = false;
+        }
+      }
+
+      // Проверяем тип контента
+      if (contentType && contentType !== "text") {
+        const messageContentType = this.getMessageContentType(message);
+        this.logger.log(
+          `Сравнение типа контента: "${messageContentType}" vs "${contentType}"`
+        );
+
+        if (messageContentType !== contentType) {
+          this.logger.log(`Тип контента не совпадает для узла ${node.nodeId}`);
+          matches = false;
+        }
+      }
+
+      if (matches) {
+        if (isExactMatch) {
+          exactMatches.push(node);
+          this.logger.log(
+            `Узел ${node.nodeId} - точное совпадение для сообщения "${message.text}"`
+          );
+        } else {
+          fallbackMatches.push(node);
+          this.logger.log(
+            `Узел ${node.nodeId} - общий узел для сообщения "${message.text}"`
+          );
+        }
+      } else {
+        this.logger.log(
+          `Узел ${node.nodeId} не подходит для сообщения "${message.text}"`
+        );
+      }
+    }
+
+    // Приоритет: сначала точные совпадения, потом общие
+    if (exactMatches.length > 0) {
+      this.logger.log(
+        `Выбран узел с точным совпадением: ${exactMatches[0].nodeId}`
+      );
+      return exactMatches[0];
+    } else if (fallbackMatches.length > 0) {
+      this.logger.log(`Выбран общий узел: ${fallbackMatches[0].nodeId}`);
+      return fallbackMatches[0];
+    }
+
+    this.logger.log(
+      `Не найден подходящий NEW_MESSAGE узел для сообщения "${message.text}"`
+    );
+    return null;
+  }
+
   // Очистка старых сессий
   cleanupSessions(): void {
     const now = new Date();
@@ -450,7 +632,7 @@ export class FlowExecutionService {
     );
 
     // Переходим к следующему узлу
-    const nextNodeId = this.getNextNodeId(context, currentNode.nodeId);
+    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
     if (nextNodeId) {
       session.currentNodeId = nextNodeId;
     }
@@ -490,7 +672,7 @@ export class FlowExecutionService {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
 
     // Переходим к следующему узлу
-    const nextNodeId = this.getNextNodeId(context, currentNode.nodeId);
+    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
     if (nextNodeId) {
       session.currentNodeId = nextNodeId;
     }
@@ -506,7 +688,7 @@ export class FlowExecutionService {
     }
 
     const variableData = currentNode.data.variable;
-    const { name, value, operation, scope } = variableData;
+    const { name, value, operation } = variableData;
 
     // Выполняем операцию с переменной
     switch (operation) {
@@ -534,7 +716,7 @@ export class FlowExecutionService {
     this.logger.log(`Переменная ${name} = ${session.variables[name]}`);
 
     // Переходим к следующему узлу
-    const nextNodeId = this.getNextNodeId(context, currentNode.nodeId);
+    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
     if (nextNodeId) {
       session.currentNodeId = nextNodeId;
     }
@@ -561,25 +743,30 @@ export class FlowExecutionService {
           );
           break;
         case "download":
-          if (fileData.url) {
-            await this.telegramService.sendDocument(
-              bot.token,
-              session.chatId,
-              fileData.url,
-              fileData.filename
-            );
-          }
-          break;
         case "send":
           if (fileData.url) {
             await this.telegramService.sendDocument(
               bot.token,
               session.chatId,
               fileData.url,
-              fileData.filename
+              {
+                caption: fileData.filename || "file",
+              }
+            );
+          } else {
+            await this.telegramService.sendMessage(
+              bot.token,
+              session.chatId,
+              "📁 Файл не найден"
             );
           }
           break;
+        default:
+          await this.telegramService.sendMessage(
+            bot.token,
+            session.chatId,
+            "📁 Неизвестный тип файла"
+          );
       }
     } catch (error) {
       this.logger.error("Ошибка работы с файлом:", error);
@@ -591,7 +778,7 @@ export class FlowExecutionService {
     }
 
     // Переходим к следующему узлу
-    const nextNodeId = this.getNextNodeId(context, currentNode.nodeId);
+    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
     if (nextNodeId) {
       session.currentNodeId = nextNodeId;
     }
@@ -643,9 +830,211 @@ export class FlowExecutionService {
     this.logger.log(`Случайный выбор: ${selectedOption.value}`);
 
     // Переходим к следующему узлу
-    const nextNodeId = this.getNextNodeId(context, currentNode.nodeId);
+    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
     if (nextNodeId) {
       session.currentNodeId = nextNodeId;
     }
+  }
+
+  // Выполнение узла webhook
+  private async executeWebhookNode(context: FlowContext): Promise<void> {
+    const { currentNode, session } = context;
+
+    if (!currentNode?.data?.webhook) {
+      this.logger.warn("Данные webhook не найдены");
+      return;
+    }
+
+    const webhookData = currentNode.data.webhook;
+    const { url, method, headers, body, timeout } = webhookData;
+
+    try {
+      this.logger.log(`Выполняем webhook запрос: ${method} ${url}`);
+
+      // Здесь можно добавить HTTP запрос с помощью axios или fetch
+      // Пока просто логируем
+      this.logger.log(
+        `Webhook данные: ${JSON.stringify({
+          url,
+          method,
+          headers,
+          body,
+          timeout,
+        })}`
+      );
+
+      // Переходим к следующему узлу
+      const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
+      if (nextNodeId) {
+        session.currentNodeId = nextNodeId;
+        session.lastActivity = new Date();
+
+        const nextNode = context.flow.nodes.find(
+          (node) => node.nodeId === nextNodeId
+        );
+        if (nextNode) {
+          context.currentNode = nextNode;
+          await this.executeNode(context);
+        }
+      }
+    } catch (error) {
+      this.logger.error("Ошибка выполнения webhook узла:", error);
+    }
+  }
+
+  // Выполнение узла интеграции
+  private async executeIntegrationNode(context: FlowContext): Promise<void> {
+    const { currentNode, session } = context;
+
+    if (!currentNode?.data?.integration) {
+      this.logger.warn("Данные интеграции не найдены");
+      return;
+    }
+
+    const integrationData = currentNode.data.integration;
+    const { service, action, config } = integrationData;
+
+    try {
+      this.logger.log(`Выполняем интеграцию: ${service}.${action}`);
+
+      // Здесь можно добавить логику для различных сервисов
+      switch (service) {
+        case "crm":
+          this.logger.log("Интеграция с CRM системой");
+          break;
+        case "email":
+          this.logger.log("Интеграция с email сервисом");
+          break;
+        case "analytics":
+          this.logger.log("Интеграция с аналитикой");
+          break;
+        case "payment":
+          this.logger.log("Интеграция с платежной системой");
+          break;
+        case "custom":
+          this.logger.log("Кастомная интеграция");
+          break;
+        default:
+          this.logger.warn(`Неизвестный сервис интеграции: ${service}`);
+      }
+
+      this.logger.log(`Конфигурация интеграции: ${JSON.stringify(config)}`);
+
+      // Переходим к следующему узлу
+      const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
+      if (nextNodeId) {
+        session.currentNodeId = nextNodeId;
+        session.lastActivity = new Date();
+
+        const nextNode = context.flow.nodes.find(
+          (node) => node.nodeId === nextNodeId
+        );
+        if (nextNode) {
+          context.currentNode = nextNode;
+          await this.executeNode(context);
+        }
+      }
+    } catch (error) {
+      this.logger.error("Ошибка выполнения интеграции:", error);
+    }
+  }
+
+  // Выполнение узла нового сообщения
+  private async executeNewMessageNode(context: FlowContext): Promise<void> {
+    const { currentNode, session, message } = context;
+
+    this.logger.log(`=== ВЫПОЛНЕНИЕ NEW_MESSAGE УЗЛА ===`);
+    this.logger.log(`Узел: ${currentNode.nodeId}`);
+    this.logger.log(`Сообщение: "${message.text}"`);
+
+    if (!currentNode?.data?.newMessage) {
+      this.logger.warn("Данные нового сообщения не найдены");
+      return;
+    }
+
+    const newMessageData = currentNode.data.newMessage;
+    const { text, contentType, caseSensitive } = newMessageData;
+
+    this.logger.log(`Данные узла: ${JSON.stringify(newMessageData)}`);
+
+    // Проверяем соответствие сообщения условиям узла
+    let messageMatches = true;
+
+    // Проверяем текст сообщения
+    if (text && text.trim() !== "") {
+      const messageText = message.text || "";
+      const filterText = caseSensitive ? text : text.toLowerCase();
+      const userText = caseSensitive ? messageText : messageText.toLowerCase();
+
+      this.logger.log(`Проверка текста: "${userText}" vs "${filterText}"`);
+
+      if (userText !== filterText) {
+        this.logger.log(`Текст не совпадает`);
+        messageMatches = false;
+      }
+    }
+
+    // Проверяем тип контента
+    if (contentType && contentType !== "text") {
+      const messageContentType = this.getMessageContentType(message);
+      this.logger.log(
+        `Проверка типа контента: "${messageContentType}" vs "${contentType}"`
+      );
+
+      if (messageContentType !== contentType) {
+        this.logger.log(`Тип контента не совпадает`);
+        messageMatches = false;
+      }
+    }
+
+    if (!messageMatches) {
+      this.logger.log(
+        `Сообщение не соответствует условиям узла NEW_MESSAGE: ${message.text}`
+      );
+      return;
+    }
+
+    this.logger.log(
+      `Сообщение соответствует условиям узла NEW_MESSAGE: ${message.text}`
+    );
+
+    // Переходим к следующему узлу
+    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
+    this.logger.log(`Следующий узел: ${nextNodeId}`);
+
+    if (nextNodeId) {
+      session.currentNodeId = nextNodeId;
+      session.lastActivity = new Date();
+
+      const nextNode = context.flow.nodes.find(
+        (node) => node.nodeId === nextNodeId
+      );
+      if (nextNode) {
+        this.logger.log(
+          `Переходим к узлу: ${nextNode.nodeId} (${nextNode.type})`
+        );
+        context.currentNode = nextNode;
+        await this.executeNode(context);
+      } else {
+        this.logger.error(`Следующий узел ${nextNodeId} не найден!`);
+      }
+    } else {
+      this.logger.warn(
+        `Нет следующего узла для NEW_MESSAGE узла ${currentNode.nodeId}`
+      );
+    }
+  }
+
+  // Вспомогательный метод для определения типа контента сообщения
+  private getMessageContentType(message: any): string {
+    if (message.photo) return "photo";
+    if (message.video) return "video";
+    if (message.audio) return "audio";
+    if (message.document) return "document";
+    if (message.sticker) return "sticker";
+    if (message.voice) return "voice";
+    if (message.location) return "location";
+    if (message.contact) return "contact";
+    return "text";
   }
 }

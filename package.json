@@ -1,42 +1,30 @@
 {
-  "name": "botmanager",
+  "name": "botmanager-backend",
   "version": "1.0.0",
-  "description": "SaaS платформа для управления Telegram-ботами",
-  "main": "index.js",
+  "description": "BotManager Backend API - SaaS платформа для управления Telegram-ботами",
+  "main": "backend/src/main.ts",
   "scripts": {
-    "install": "npm run install:all",
-    "install:all": "npm run install:backend && npm run install:frontend",
-    "install:backend": "cd backend && npm install",
-    "install:frontend": "cd frontend && npm install",
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "cd backend && npm run start:dev",
-    "dev:frontend": "cd frontend && npm run dev",
-    "build": "npm run build:backend && npm run build:frontend",
-    "build:backend": "cd backend && npm run build",
-    "build:frontend": "cd frontend && npm run build",
+    "install": "cd backend && npm install",
+    "dev": "cd backend && npm run start:dev",
+    "build": "cd backend && npm run build",
     "start": "cd backend && npm run start:prod",
-    "test": "npm run test:backend && npm run test:frontend",
-    "test:backend": "cd backend && npm run test",
-    "test:frontend": "cd frontend && npm run test",
-    "infra:up": "docker-compose up -d",
-    "infra:down": "docker-compose down",
-    "infra:logs": "docker-compose logs -f",
-    "infra:restart": "docker-compose restart",
-    "infra:clean": "docker-compose down -v && docker system prune -f"
+    "test": "cd backend && npm run test",
+    "test:e2e": "cd backend && npm run test:e2e",
+    "test:cov": "cd backend && npm run test:cov",
+    "lint": "cd backend && npm run lint",
+    "format": "cd backend && npm run format",
+    "migration:generate": "cd backend && npm run migration:generate",
+    "migration:run": "cd backend && npm run migration:run",
+    "migration:revert": "cd backend && npm run migration:revert"
   },
   "keywords": [
     "telegram",
     "bot",
     "saas",
     "nestjs",
-    "react"
+    "api",
+    "backend"
   ],
   "author": "BotManager Team",
-  "license": "MIT",
-  "devDependencies": {
-    "concurrently": "^8.2.2"
-  },
-  "dependencies": {
-    "bcrypt": "^6.0.0"
-  }
+  "license": "MIT"
 }

@@ -11,6 +11,7 @@ import { BotFlow } from "./bot-flow.entity";
 
 export enum NodeType {
   START = "start",
+  NEW_MESSAGE = "new_message",
   MESSAGE = "message",
   KEYBOARD = "keyboard",
   CONDITION = "condition",
@@ -22,9 +23,6 @@ export enum NodeType {
   FILE = "file",
   WEBHOOK = "webhook",
   RANDOM = "random",
-  LOOP = "loop",
-  TIMER = "timer",
-  NOTIFICATION = "notification",
   INTEGRATION = "integration",
 }
 
@@ -77,6 +75,22 @@ export class BotFlowNode {
 
   @Column({ type: "json" })
   data: {
+    // Для NEW_MESSAGE нод
+    newMessage?: {
+      text?: string; // Конкретный текст сообщения для фильтрации
+      contentType?:
+        | "text"
+        | "photo"
+        | "video"
+        | "audio"
+        | "document"
+        | "sticker"
+        | "voice"
+        | "location"
+        | "contact";
+      caseSensitive?: boolean;
+    };
+
     // Для MESSAGE нод
     messageType?: MessageNodeType;
     text?: string;
@@ -145,11 +159,21 @@ export class BotFlowNode {
       timeout?: number;
     };
 
-    // Для ASSIGNMENT нод
-    assignment?: {
-      variable: string;
+    // Для VARIABLE нод
+    variable?: {
+      name: string;
       value: string;
       operation: "set" | "append" | "prepend" | "increment" | "decrement";
+      scope?: string;
+    };
+
+    // Для FILE нод
+    file?: {
+      type: "upload" | "download" | "send";
+      accept?: string[];
+      maxSize?: number;
+      url?: string;
+      filename?: string;
     };
 
     // Для RANDOM нод
@@ -160,34 +184,6 @@ export class BotFlowNode {
         label?: string;
       }>;
       variable?: string;
-    };
-
-    // Для LOOP нод
-    loop?: {
-      type: "count" | "condition" | "array";
-      count?: number;
-      condition?: string;
-      array?: string;
-      variable?: string;
-      maxIterations?: number;
-    };
-
-    // Для TIMER нод
-    timer?: {
-      type: "schedule" | "interval" | "timeout";
-      schedule?: string; // cron expression
-      interval?: number; // milliseconds
-      timeout?: number; // milliseconds
-      timezone?: string;
-    };
-
-    // Для NOTIFICATION нод
-    notification?: {
-      type: "email" | "sms" | "push" | "webhook";
-      template: string;
-      recipients: string[];
-      subject?: string;
-      config?: Record<string, any>;
     };
 
     // Для INTEGRATION нод
@@ -237,6 +233,10 @@ export class BotFlowNode {
   // Методы
   get isStart(): boolean {
     return this.type === NodeType.START;
+  }
+
+  get isNewMessage(): boolean {
+    return this.type === NodeType.NEW_MESSAGE;
   }
 
   get isMessage(): boolean {

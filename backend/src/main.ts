@@ -6,7 +6,88 @@ import helmet from "helmet";
 import compression from "compression";
 import { AppModule } from "./app.module";
 
+// Критически важные переменные окружения
+const CRITICAL_ENV_VARS = [
+  {
+    name: "DATABASE_HOST",
+    description: "Хост базы данных PostgreSQL",
+    example: "localhost или your-db-host.com",
+  },
+  {
+    name: "DATABASE_PORT",
+    description: "Порт базы данных PostgreSQL",
+    example: "5432",
+  },
+  {
+    name: "DATABASE_USERNAME",
+    description: "Имя пользователя базы данных",
+    example: "botmanager",
+  },
+  {
+    name: "DATABASE_PASSWORD",
+    description: "Пароль базы данных",
+    example: "your-secure-password",
+  },
+  {
+    name: "DATABASE_NAME",
+    description: "Название базы данных",
+    example: "botmanager_prod",
+  },
+  {
+    name: "JWT_SECRET",
+    description: "Секретный ключ для JWT токенов",
+    example: "your-super-secret-jwt-key-32-chars",
+  },
+  {
+    name: "REDIS_URL",
+    description: "URL подключения к Redis",
+    example: "redis://localhost:6379 или redis://your-redis-host:6379",
+  },
+];
+
+// Функция проверки критически важных переменных окружения
+function checkCriticalEnvVars() {
+  const missingVars: typeof CRITICAL_ENV_VARS = [];
+
+  CRITICAL_ENV_VARS.forEach((envVar) => {
+    if (!process.env[envVar.name]) {
+      missingVars.push(envVar);
+    }
+  });
+
+  if (missingVars.length > 0) {
+    console.log(
+      "\n❌ ОШИБКА: Отсутствуют критически важные переменные окружения!\n"
+    );
+    console.log("📋 Необходимо настроить следующие переменные:\n");
+
+    missingVars.forEach((envVar, index) => {
+      console.log(`${index + 1}. ${envVar.name}`);
+      console.log(`   📝 Назначение: ${envVar.description}`);
+      console.log(`   💡 Пример: ${envVar.example}`);
+      console.log("");
+    });
+
+    console.log("🔧 Способы настройки:");
+    console.log("   • Создайте файл .env в папке backend/");
+    console.log("   • Установите переменные в облачном сервисе");
+    console.log("   • Используйте команду: export VARIABLE_NAME=value");
+    console.log("");
+    console.log(
+      "📖 Подробнее: https://docs.nestjs.com/techniques/configuration"
+    );
+    console.log("");
+
+    process.exit(1);
+  } else {
+    console.log("✅ Все критически важные переменные окружения настроены");
+  }
+}
+
 async function bootstrap() {
+  // Проверяем переменные окружения перед запуском
+  checkCriticalEnvVars();
+
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
@@ -15,8 +96,9 @@ async function bootstrap() {
   app.use(compression());
 
   // CORS
+  const corsOrigin = configService.get("app.corsOrigin");
   app.enableCors({
-    origin: configService.get("app.corsOrigin"),
+    origin: corsOrigin ?? true,
     credentials: true,
   });
 
@@ -52,8 +134,8 @@ async function bootstrap() {
     next();
   });
 
-  const port = configService.get("app.port");
-  await app.listen(port);
+  const port = configService.get("app.port") || process.env.PORT || 3000;
+  await app.listen(port, "0.0.0.0");
 
   console.log(`🚀 BotManager API запущен на порту ${port}`);
   console.log(`📚 Swagger документация: http://localhost:${port}/api/docs`);

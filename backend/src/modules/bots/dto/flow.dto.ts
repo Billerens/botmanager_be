@@ -10,11 +10,19 @@ import { Type } from "class-transformer";
 
 export enum FlowNodeType {
   START = "start",
+  NEW_MESSAGE = "new_message",
   MESSAGE = "message",
   KEYBOARD = "keyboard",
   CONDITION = "condition",
   API = "api",
   END = "end",
+  FORM = "form",
+  DELAY = "delay",
+  VARIABLE = "variable",
+  FILE = "file",
+  WEBHOOK = "webhook",
+  RANDOM = "random",
+  INTEGRATION = "integration",
 }
 
 export class KeyboardButtonDto {
@@ -37,6 +45,23 @@ export class KeyboardButtonDto {
 export class FlowNodeDataDto {
   @IsString()
   label: string;
+
+  @IsOptional()
+  @IsObject()
+  newMessage?: {
+    text?: string;
+    contentType?:
+      | "text"
+      | "photo"
+      | "video"
+      | "audio"
+      | "document"
+      | "sticker"
+      | "voice"
+      | "location"
+      | "contact";
+    caseSensitive?: boolean;
+  };
 
   @IsOptional()
   @IsString()
@@ -111,6 +136,89 @@ export class FlowNodeDataDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  @IsOptional()
+  @IsObject()
+  form?: {
+    fields: Array<{
+      id: string;
+      label: string;
+      type:
+        | "text"
+        | "email"
+        | "phone"
+        | "number"
+        | "select"
+        | "multiselect"
+        | "date";
+      required: boolean;
+      placeholder?: string;
+      options?: string[];
+      validation?: {
+        min?: number;
+        max?: number;
+        pattern?: string;
+      };
+    }>;
+    submitText: string;
+    successMessage: string;
+  };
+
+  @IsOptional()
+  @IsObject()
+  delay?: {
+    value: number;
+    unit: "seconds" | "minutes" | "hours" | "days";
+  };
+
+  @IsOptional()
+  @IsObject()
+  variable?: {
+    name: string;
+    value: string;
+    operation: "set" | "append" | "prepend" | "increment" | "decrement";
+    scope?: string;
+  };
+
+  @IsOptional()
+  @IsObject()
+  file?: {
+    type: "upload" | "download" | "send";
+    accept?: string[];
+    maxSize?: number;
+    url?: string;
+    filename?: string;
+  };
+
+  @IsOptional()
+  @IsObject()
+  webhook?: {
+    url: string;
+    method: "GET" | "POST" | "PUT" | "DELETE";
+    headers?: Record<string, string>;
+    body?: string;
+    timeout?: number;
+    retryCount?: number;
+  };
+
+  @IsOptional()
+  @IsObject()
+  random?: {
+    options: Array<{
+      value: string;
+      weight?: number;
+      label?: string;
+    }>;
+    variable?: string;
+  };
+
+  @IsOptional()
+  @IsObject()
+  integration?: {
+    service: "crm" | "email" | "analytics" | "payment" | "custom";
+    action: string;
+    config: Record<string, any>;
+  };
 }
 
 export class FlowNodeDto {
