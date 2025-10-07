@@ -96,6 +96,10 @@ function checkCriticalEnvVars() {
     process.exit(1);
   } else {
     console.log("✅ Все критически важные переменные окружения настроены");
+    console.log(
+      "✅ Переменные окружения: ",
+      JSON.stringify(process.env, null, 2)
+    );
   }
 }
 
