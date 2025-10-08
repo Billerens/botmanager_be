@@ -168,7 +168,7 @@ async function bootstrap() {
 
   console.log(`🚀 BotManager API запущен на порту ${port}`);
   console.log(
-    `📚 Swagger документация: http://${configService.get("app.host")}:${port}/api/docs`
+    `📚 Swagger документация: http://${configService.get("app.host") || process.env.HOST || "localhost"}:${port}/api/docs`
   );
 }
 
