@@ -6,8 +6,12 @@ export default registerAs("app", () => ({
   apiPrefix: process.env.API_PREFIX || "api",
   corsOrigin: process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
-    : ["http://localhost:3001", "https://botmanagertest.online"],
+    : [
+        "http://localhost:3001",
+        "http://localhost:3000",
+        "https://botmanagertest.online",
+        "https://api.botmanagertest.online",
+      ],
   webhookBaseUrl:
-    process.env.WEBHOOK_BASE_URL ||
-    "https://unconstipated-measled-jaiden.ngrok-free.app",
+    process.env.WEBHOOK_BASE_URL || "https://api.botmanagertest.online",
 }));
