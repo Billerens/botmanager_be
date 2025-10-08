@@ -167,7 +167,9 @@ async function bootstrap() {
   await app.listen(port, "0.0.0.0");
 
   console.log(`🚀 BotManager API запущен на порту ${port}`);
-  console.log(`📚 Swagger документация: http://localhost:${port}/api/docs`);
+  console.log(
+    `📚 Swagger документация: http://${configService.get("app.host")}:${port}/api/docs`
+  );
 }
 
 bootstrap();
