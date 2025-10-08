@@ -8,6 +8,15 @@ export class InitialMigration1700000000000 implements MigrationInterface {
     await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
     await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
 
+    // Создаем ENUM тип для bot_flow_nodes
+    await queryRunner.query(`
+      CREATE TYPE bot_flow_nodes_type_enum AS ENUM (
+        'start', 'message', 'keyboard', 'condition', 'api', 'end',
+        'form', 'delay', 'variable', 'file', 'webhook', 
+        'random', 'loop', 'timer', 'notification', 'integration'
+      )
+    `);
+
     // Создаем таблицу users
     await queryRunner.query(`
       CREATE TABLE "users" (
@@ -44,13 +53,15 @@ export class InitialMigration1700000000000 implements MigrationInterface {
         "totalUsers" integer NOT NULL DEFAULT 0,
         "totalMessages" integer NOT NULL DEFAULT 0,
         "totalLeads" integer NOT NULL DEFAULT 0,
+        "webhookUrl" character varying,
         "isWebhookSet" boolean NOT NULL DEFAULT false,
         "lastError" character varying,
         "lastErrorAt" TIMESTAMP,
-        "userId" uuid NOT NULL,
+        "ownerId" uuid NOT NULL,
         "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
         "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
         CONSTRAINT "UQ_bots_username" UNIQUE ("username"),
+        CONSTRAINT "UQ_bots_token" UNIQUE ("token"),
         CONSTRAINT "PK_bots_id" PRIMARY KEY ("id")
       )
     `);
@@ -124,7 +135,7 @@ export class InitialMigration1700000000000 implements MigrationInterface {
       CREATE TABLE "bot_flow_nodes" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "flowId" uuid NOT NULL,
-        "type" character varying NOT NULL,
+        "type" bot_flow_nodes_type_enum NOT NULL,
         "position" jsonb NOT NULL,
         "data" jsonb NOT NULL,
         "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
@@ -152,7 +163,7 @@ export class InitialMigration1700000000000 implements MigrationInterface {
       `CREATE INDEX "IDX_users_email" ON "users" ("email")`
     );
     await queryRunner.query(
-      `CREATE INDEX "IDX_bots_userId" ON "bots" ("userId")`
+      `CREATE INDEX "IDX_bots_ownerId" ON "bots" ("ownerId")`
     );
     await queryRunner.query(
       `CREATE INDEX "IDX_messages_botId" ON "messages" ("botId")`
@@ -181,7 +192,7 @@ export class InitialMigration1700000000000 implements MigrationInterface {
 
     // Создаем внешние ключи
     await queryRunner.query(
-      `ALTER TABLE "bots" ADD CONSTRAINT "FK_bots_userId" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE`
+      `ALTER TABLE "bots" ADD CONSTRAINT "FK_bots_ownerId" FOREIGN KEY ("ownerId") REFERENCES "users"("id") ON DELETE CASCADE`
     );
     await queryRunner.query(
       `ALTER TABLE "messages" ADD CONSTRAINT "FK_messages_botId" FOREIGN KEY ("botId") REFERENCES "bots"("id") ON DELETE CASCADE`
@@ -230,7 +241,7 @@ export class InitialMigration1700000000000 implements MigrationInterface {
       `ALTER TABLE "messages" DROP CONSTRAINT "FK_messages_botId"`
     );
     await queryRunner.query(
-      `ALTER TABLE "bots" DROP CONSTRAINT "FK_bots_userId"`
+      `ALTER TABLE "bots" DROP CONSTRAINT "FK_bots_ownerId"`
     );
 
     // Удаляем индексы
@@ -242,7 +253,7 @@ export class InitialMigration1700000000000 implements MigrationInterface {
     await queryRunner.query(`DROP INDEX "IDX_leads_botId"`);
     await queryRunner.query(`DROP INDEX "IDX_messages_userId"`);
     await queryRunner.query(`DROP INDEX "IDX_messages_botId"`);
-    await queryRunner.query(`DROP INDEX "IDX_bots_userId"`);
+    await queryRunner.query(`DROP INDEX "IDX_bots_ownerId"`);
     await queryRunner.query(`DROP INDEX "IDX_users_email"`);
 
     // Удаляем таблицы
@@ -254,5 +265,8 @@ export class InitialMigration1700000000000 implements MigrationInterface {
     await queryRunner.query(`DROP TABLE "messages"`);
     await queryRunner.query(`DROP TABLE "bots"`);
     await queryRunner.query(`DROP TABLE "users"`);
+
+    // Удаляем ENUM тип
+    await queryRunner.query(`DROP TYPE bot_flow_nodes_type_enum`);
   }
 }

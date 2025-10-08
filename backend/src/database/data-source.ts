@@ -12,14 +12,6 @@ import { ActivityLog } from "./entities/activity-log.entity";
 // Загружаем переменные окружения
 config();
 
-console.log("process.env.DATABASE_HOST", process.env.DATABASE_HOST);
-console.log("process.env.DATABASE_PORT", process.env.DATABASE_PORT);
-console.log("process.env.DATABASE_USERNAME", process.env.DATABASE_USERNAME);
-console.log("process.env.DATABASE_PASSWORD", process.env.DATABASE_PASSWORD);
-console.log("process.env.DATABASE_NAME", process.env.DATABASE_NAME);
-console.log("process.env.NODE_ENV", process.env.NODE_ENV);
-console.log("process.env.DEBUG", process.env.DEBUG);
-
 export const AppDataSource = new DataSource({
   type: "postgres",
   host: process.env.DATABASE_HOST || "localhost",
