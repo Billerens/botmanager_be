@@ -1,122 +1,138 @@
 version: "3.8"
 
 services:
-  # PostgreSQL база данных
-  postgres:
+  # PostgreSQL база данных для разработки
+  postgres-dev:
     image: postgres:15-alpine
-    container_name: botmanager-postgres
+    container_name: botmanager-postgres-dev
     environment:
-      POSTGRES_DB: ${DATABASE_NAME:-botmanager_prod}
-      POSTGRES_USER: ${DATABASE_USERNAME:-botmanager}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-botmanager_password}
+      POSTGRES_DB: botmanager_dev
+      POSTGRES_USER: botmanager
+      POSTGRES_PASSWORD: botmanager_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_dev_data:/var/lib/postgresql/data
       - ./backend/scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./backend/scripts/dev-setup.sql:/docker-entrypoint-initdb.d/dev-setup.sql
     ports:
-      - "${DATABASE_PORT:-5432}:5432"
+      - "5432:5432"
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${DATABASE_USERNAME:-botmanager} -d ${DATABASE_NAME:-botmanager_prod}",
-        ]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U botmanager -d botmanager_dev"]
+      interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
     networks:
-      - botmanager-network
-
-  # Redis для кэширования и очередей
-  redis:
-    image: redis:7-alpine
-    container_name: botmanager-redis
-    command: redis-server --requirepass ${REDIS_PASSWORD:-}
-    volumes:
-      - redis_data:/data
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - botmanager-network
-
-  # BotManager API
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: botmanager-api
-    environment:
-      # База данных
-      DATABASE_HOST: postgres
-      DATABASE_PORT: 5432
-      DATABASE_USERNAME: ${DATABASE_USERNAME:-botmanager}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-botmanager_password}
-      DATABASE_NAME: ${DATABASE_NAME:-botmanager_prod}
-
-      # Redis
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-
-      # JWT
-      JWT_SECRET: ${JWT_SECRET:-your-super-secure-jwt-secret-32-chars}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your-refresh-secret-key-change-in-production}
-      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
-
-      # CORS
-      CORS_ORIGIN: ${CORS_ORIGIN:-https://botmanagertest.online}
-
-      # API
-      API_PREFIX: ${API_PREFIX:-api}
-      NODE_ENV: ${NODE_ENV:-production}
-      PORT: ${PORT:-3000}
-
-      # Webhook
-      WEBHOOK_BASE_URL: ${WEBHOOK_BASE_URL:-https://api.botmanagertest.online}
-
-      # Telegram
-      TELEGRAM_BOT_API_URL: ${TELEGRAM_BOT_API_URL:-https://api.telegram.org/bot}
-
-      # Шифрование
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev-32-character-secret-key-12345}
-
-      # Логирование
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-    ports:
-      - "${PORT:-3000}:3000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - botmanager-dev-network
     restart: unless-stopped
-    networks:
-      - botmanager-network
+
+  # Redis для разработки
+  redis-dev:
+    image: redis:7-alpine
+    container_name: botmanager-redis-dev
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass botmanager_redis_password
+    volumes:
+      - redis_dev_data:/data
+    ports:
+      - "6379:6379"
     healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:3000/api/docs",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "redis-cli", "-a", "botmanager_redis_password", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - botmanager-dev-network
+    restart: unless-stopped
+
+  # pgAdmin для управления базой данных (опционально)
+  pgadmin-dev:
+    image: dpage/pgadmin4:latest
+    container_name: botmanager-pgadmin-dev
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@botmanager.dev
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    volumes:
+      - pgadmin_dev_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres-dev
+    networks:
+      - botmanager-dev-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+  # Redis Commander для управления Redis (опционально)
+  redis-commander-dev:
+    image: rediscommander/redis-commander:latest
+    container_name: botmanager-redis-commander-dev
+    environment:
+      REDIS_HOSTS: local:redis-dev:6379:0:botmanager_redis_password
+      HTTP_USER: admin
+      HTTP_PASSWORD: admin123
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis-dev
+    networks:
+      - botmanager-dev-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+  # Loki для централизованного логирования (опционально)
+  loki-dev:
+    image: grafana/loki:2.9.0
+    container_name: botmanager-loki-dev
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_dev_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - botmanager-dev-network
+    restart: unless-stopped
+    profiles:
+      - logging
+
+  # Grafana для визуализации логов (опционально)
+  grafana-dev:
+    image: grafana/grafana:latest
+    container_name: botmanager-grafana-dev
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - grafana_dev_data:/var/lib/grafana
+    ports:
+      - "3002:3000"
+    depends_on:
+      - loki-dev
+    networks:
+      - botmanager-dev-network
+    restart: unless-stopped
+    profiles:
+      - logging
 
 volumes:
-  postgres_data:
+  postgres_dev_data:
     driver: local
-  redis_data:
+  redis_dev_data:
+    driver: local
+  pgadmin_dev_data:
+    driver: local
+  redis_commander_dev_data:
+    driver: local
+  loki_dev_data:
+    driver: local
+  grafana_dev_data:
     driver: local
 
 networks:
-  botmanager-network:
+  botmanager-dev-network:
     driver: bridge
+    name: botmanager-dev-network
