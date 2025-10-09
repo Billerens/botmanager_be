@@ -71,4 +71,42 @@ export class MessagesController {
   ) {
     return this.messagesService.getBotMessageStats(botId, req.user.id);
   }
+
+  @Get("bot/:botId/dialogs")
+  @ApiOperation({
+    summary: "Получить список диалогов бота (сгруппированные по пользователям)",
+  })
+  @ApiResponse({ status: 200, description: "Список диалогов получен" })
+  @ApiResponse({ status: 401, description: "Неавторизован" })
+  @ApiResponse({ status: 404, description: "Бот не найден" })
+  async getBotDialogs(
+    @Param("botId", ParseUUIDPipe) botId: string,
+    @Request() req: any,
+    @Query("page") page: number = 1,
+    @Query("limit") limit: number = 20,
+    @Query("search") search?: string,
+    @Query("sortBy")
+    sortBy: "lastActivity" | "messageCount" | "createdAt" = "lastActivity",
+    @Query("sortOrder") sortOrder: "asc" | "desc" = "desc"
+  ) {
+    return this.messagesService.getBotDialogs(botId, req.user.id, {
+      page,
+      limit,
+      search,
+      sortBy,
+      sortOrder,
+    });
+  }
+
+  @Get("bot/:botId/dialog-stats")
+  @ApiOperation({ summary: "Получить статистику диалогов бота" })
+  @ApiResponse({ status: 200, description: "Статистика диалогов получена" })
+  @ApiResponse({ status: 401, description: "Неавторизован" })
+  @ApiResponse({ status: 404, description: "Бот не найден" })
+  async getBotDialogStats(
+    @Param("botId", ParseUUIDPipe) botId: string,
+    @Request() req: any
+  ) {
+    return this.messagesService.getBotDialogStats(botId, req.user.id);
+  }
 }
