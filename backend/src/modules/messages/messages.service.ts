@@ -86,7 +86,7 @@ export class MessagesService {
 
     if (type) {
       queryBuilder.andWhere("message.type = :type", {
-        type: type.toUpperCase(),
+        type: type === "incoming" ? MessageType.INCOMING : MessageType.OUTGOING,
       });
     }
 
