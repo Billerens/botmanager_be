@@ -31,7 +31,7 @@ export class Message {
   id: string;
 
   @Column({ type: "bigint" })
-  telegramMessageId: string;
+  telegramMessageId: number;
 
   @Column()
   telegramChatId: string;
@@ -85,7 +85,7 @@ export class Message {
     username?: string;
     languageCode?: string;
     isBot?: boolean;
-    replyToMessageId?: string;
+    replyToMessageId?: number;
     forwardFrom?: any;
   };
 

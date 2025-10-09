@@ -137,7 +137,7 @@ export class TelegramService {
       reply_to_message_id?: number;
       disable_web_page_preview?: boolean;
     } = {}
-  ): Promise<boolean> {
+  ): Promise<any> {
     try {
       const response = await axios.post(`${this.baseUrl}${token}/sendMessage`, {
         chat_id: chatId,
@@ -145,10 +145,10 @@ export class TelegramService {
         ...options,
       });
 
-      return response.data.ok;
+      return response.data.ok ? response.data.result : null;
     } catch (error) {
       console.error("Ошибка отправки сообщения:", error.message);
-      return false;
+      return null;
     }
   }
 
@@ -162,7 +162,7 @@ export class TelegramService {
       reply_markup?: any;
       reply_to_message_id?: number;
     } = {}
-  ): Promise<boolean> {
+  ): Promise<any> {
     try {
       const formData = new FormData();
       formData.append("chat_id", chatId);
@@ -199,10 +199,10 @@ export class TelegramService {
         }
       );
 
-      return response.data.ok;
+      return response.data.ok ? response.data.result : null;
     } catch (error) {
       console.error("Ошибка отправки фото:", error.message);
-      return false;
+      return null;
     }
   }
 
@@ -216,7 +216,7 @@ export class TelegramService {
       reply_markup?: any;
       reply_to_message_id?: number;
     } = {}
-  ): Promise<boolean> {
+  ): Promise<any> {
     try {
       const formData = new FormData();
       formData.append("chat_id", chatId);
@@ -253,10 +253,10 @@ export class TelegramService {
         }
       );
 
-      return response.data.ok;
+      return response.data.ok ? response.data.result : null;
     } catch (error) {
       console.error("Ошибка отправки документа:", error.message);
-      return false;
+      return null;
     }
   }
 

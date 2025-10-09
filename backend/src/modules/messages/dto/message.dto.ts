@@ -17,8 +17,8 @@ export class CreateMessageDto {
   botId: string;
 
   @ApiProperty({ description: "ID сообщения в Telegram" })
-  @IsString()
-  telegramMessageId: string;
+  @IsNumber()
+  telegramMessageId: number;
 
   @ApiProperty({ description: "ID чата в Telegram" })
   @IsString()

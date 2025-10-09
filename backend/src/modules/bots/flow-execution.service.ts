@@ -65,18 +65,18 @@ export class FlowExecutionService {
     const decryptedToken = this.botsService.decryptToken(bot.token);
 
     // Отправляем сообщение через Telegram API
-    const success = await this.telegramService.sendMessage(
+    const telegramResponse = await this.telegramService.sendMessage(
       decryptedToken,
       chatId,
       text,
       options
     );
 
-    if (success) {
+    if (telegramResponse) {
       // Сохраняем исходящее сообщение в базу данных
       await this.messagesService.create({
         botId: bot.id,
-        telegramMessageId: Date.now().toString(), // Временный ID, так как Telegram не возвращает ID отправленного сообщения
+        telegramMessageId: telegramResponse.message_id, // Используем реальный ID из ответа Telegram API
         telegramChatId: chatId,
         telegramUserId: bot.id, // Для исходящих сообщений userId = botId
         type: MessageType.OUTGOING,
@@ -96,7 +96,7 @@ export class FlowExecutionService {
           lastName: "",
           username: bot.username,
           isBot: true,
-          replyToMessageId: options.reply_to_message_id?.toString(),
+          replyToMessageId: options.reply_to_message_id,
         },
         isProcessed: true,
         processedAt: new Date(),
@@ -107,73 +107,6 @@ export class FlowExecutionService {
       );
     } else {
       this.logger.error(`Ошибка отправки сообщения в чат ${chatId}`);
-    }
-  }
-
-  /**
-   * Отправляет документ через Telegram API и сохраняет его в базу данных
-   */
-  private async sendAndSaveDocument(
-    bot: any,
-    chatId: string,
-    document: string | Buffer,
-    options: {
-      caption?: string;
-      parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
-      reply_markup?: any;
-      reply_to_message_id?: number;
-    } = {}
-  ): Promise<void> {
-    const decryptedToken = this.botsService.decryptToken(bot.token);
-
-    // Отправляем документ через Telegram API
-    const success = await this.telegramService.sendDocument(
-      decryptedToken,
-      chatId,
-      document,
-      options
-    );
-
-    if (success) {
-      // Сохраняем исходящее сообщение в базу данных
-      await this.messagesService.create({
-        botId: bot.id,
-        telegramMessageId: Date.now().toString(),
-        telegramChatId: chatId,
-        telegramUserId: bot.id,
-        type: MessageType.OUTGOING,
-        contentType: MessageContentType.DOCUMENT,
-        text: options.caption || "📄 Документ",
-        media: {
-          fileId: typeof document === "string" ? "url" : "buffer",
-          fileUniqueId: `doc_${Date.now()}`,
-          fileName: options.caption || "document",
-        },
-        keyboard: options.reply_markup
-          ? {
-              type: options.reply_markup.inline_keyboard ? "inline" : "reply",
-              buttons:
-                options.reply_markup.inline_keyboard ||
-                options.reply_markup.keyboard ||
-                [],
-            }
-          : null,
-        metadata: {
-          firstName: bot.name || "Bot",
-          lastName: "",
-          username: bot.username,
-          isBot: true,
-          replyToMessageId: options.reply_to_message_id?.toString(),
-        },
-        isProcessed: true,
-        processedAt: new Date(),
-      });
-
-      this.logger.log(
-        `Исходящий документ отправлен и сохранен для чата ${chatId}`
-      );
-    } else {
-      this.logger.error(`Ошибка отправки документа в чат ${chatId}`);
     }
   }
 
@@ -1136,6 +1069,70 @@ export class FlowExecutionService {
       this.logger.warn(
         `Нет следующего узла для NEW_MESSAGE узла ${currentNode.nodeId}`
       );
+    }
+  }
+
+  /**
+   * Отправляет документ через Telegram API и сохраняет его в базу данных
+   */
+  private async sendAndSaveDocument(
+    bot: any,
+    chatId: string,
+    document: string | Buffer,
+    options: {
+      caption?: string;
+      parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
+      reply_markup?: any;
+      reply_to_message_id?: number;
+    } = {}
+  ): Promise<void> {
+    const decryptedToken = this.botsService.decryptToken(bot.token);
+
+    // Отправляем документ через Telegram API
+    const telegramResponse = await this.telegramService.sendDocument(
+      decryptedToken,
+      chatId,
+      document,
+      options
+    );
+
+    if (telegramResponse) {
+      // Сохраняем исходящее сообщение в базу данных
+      await this.messagesService.create({
+        botId: bot.id,
+        telegramMessageId: telegramResponse.message_id, // Используем реальный ID из ответа Telegram API
+        telegramChatId: chatId,
+        telegramUserId: bot.id, // Для исходящих сообщений userId = botId
+        type: MessageType.OUTGOING,
+        contentType: MessageContentType.DOCUMENT,
+        text: options.caption || null,
+        media: {
+          fileId: telegramResponse.document?.file_id || "",
+          fileUniqueId: telegramResponse.document?.file_unique_id || "",
+          fileName: telegramResponse.document?.file_name || "document",
+          fileSize: telegramResponse.document?.file_size || 0,
+          mimeType:
+            telegramResponse.document?.mime_type || "application/octet-stream",
+        },
+        keyboard: options.reply_markup
+          ? {
+              type: options.reply_markup.inline_keyboard ? "inline" : "reply",
+              buttons:
+                options.reply_markup.inline_keyboard ||
+                options.reply_markup.keyboard ||
+                [],
+            }
+          : null,
+        metadata: {
+          firstName: bot.name || "Bot",
+          lastName: "",
+          username: bot.username,
+          isBot: true,
+          replyToMessageId: options.reply_to_message_id,
+        },
+        isProcessed: true,
+        processedAt: new Date(),
+      });
     }
   }
 

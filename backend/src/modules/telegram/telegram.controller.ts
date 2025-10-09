@@ -106,7 +106,7 @@ export class TelegramController {
       // Сохраняем входящее сообщение
       const savedMessage = await this.messagesService.create({
         botId: bot.id,
-        telegramMessageId: message.message_id.toString(),
+        telegramMessageId: message.message_id,
         telegramChatId: message.chat.id.toString(),
         telegramUserId: message.from.id.toString(),
         type: MessageType.INCOMING,
@@ -120,7 +120,7 @@ export class TelegramController {
           username: message.from.username,
           languageCode: message.from.language_code,
           isBot: message.from.is_bot,
-          replyToMessageId: message.reply_to_message?.message_id?.toString(),
+          replyToMessageId: message.reply_to_message?.message_id,
         },
       });
 
