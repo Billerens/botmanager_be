@@ -76,7 +76,7 @@ export class FlowExecutionService {
       // Сохраняем исходящее сообщение в базу данных
       await this.messagesService.create({
         botId: bot.id,
-        telegramMessageId: Date.now(), // Временный ID, так как Telegram не возвращает ID отправленного сообщения
+        telegramMessageId: Date.now().toString(), // Временный ID, так как Telegram не возвращает ID отправленного сообщения
         telegramChatId: chatId,
         telegramUserId: bot.id, // Для исходящих сообщений userId = botId
         type: MessageType.OUTGOING,
@@ -96,7 +96,7 @@ export class FlowExecutionService {
           lastName: "",
           username: bot.username,
           isBot: true,
-          replyToMessageId: options.reply_to_message_id,
+          replyToMessageId: options.reply_to_message_id?.toString(),
         },
         isProcessed: true,
         processedAt: new Date(),
@@ -138,7 +138,7 @@ export class FlowExecutionService {
       // Сохраняем исходящее сообщение в базу данных
       await this.messagesService.create({
         botId: bot.id,
-        telegramMessageId: Date.now(),
+        telegramMessageId: Date.now().toString(),
         telegramChatId: chatId,
         telegramUserId: bot.id,
         type: MessageType.OUTGOING,
@@ -163,7 +163,7 @@ export class FlowExecutionService {
           lastName: "",
           username: bot.username,
           isBot: true,
-          replyToMessageId: options.reply_to_message_id,
+          replyToMessageId: options.reply_to_message_id?.toString(),
         },
         isProcessed: true,
         processedAt: new Date(),

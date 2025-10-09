@@ -30,8 +30,8 @@ export class Message {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column()
-  telegramMessageId: number;
+  @Column({ type: "bigint" })
+  telegramMessageId: string;
 
   @Column()
   telegramChatId: string;
@@ -85,7 +85,7 @@ export class Message {
     username?: string;
     languageCode?: string;
     isBot?: boolean;
-    replyToMessageId?: number;
+    replyToMessageId?: string;
     forwardFrom?: any;
   };
 
