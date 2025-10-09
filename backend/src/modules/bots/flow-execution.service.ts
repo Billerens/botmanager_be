@@ -9,6 +9,11 @@ import {
 import { TelegramService } from "../telegram/telegram.service";
 import { BotsService } from "./bots.service";
 import { CustomLoggerService } from "../../common/logger.service";
+import { MessagesService } from "../messages/messages.service";
+import {
+  MessageType,
+  MessageContentType,
+} from "../../database/entities/message.entity";
 
 export interface UserSession {
   userId: string;
@@ -39,8 +44,138 @@ export class FlowExecutionService {
     private readonly botFlowNodeRepository: Repository<BotFlowNode>,
     private readonly telegramService: TelegramService,
     private readonly botsService: BotsService,
-    private readonly logger: CustomLoggerService
+    private readonly logger: CustomLoggerService,
+    private readonly messagesService: MessagesService
   ) {}
+
+  /**
+   * Отправляет сообщение через Telegram API и сохраняет его в базу данных
+   */
+  private async sendAndSaveMessage(
+    bot: any,
+    chatId: string,
+    text: string,
+    options: {
+      parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
+      reply_markup?: any;
+      reply_to_message_id?: number;
+      disable_web_page_preview?: boolean;
+    } = {}
+  ): Promise<void> {
+    const decryptedToken = this.botsService.decryptToken(bot.token);
+
+    // Отправляем сообщение через Telegram API
+    const success = await this.telegramService.sendMessage(
+      decryptedToken,
+      chatId,
+      text,
+      options
+    );
+
+    if (success) {
+      // Сохраняем исходящее сообщение в базу данных
+      await this.messagesService.create({
+        botId: bot.id,
+        telegramMessageId: Date.now(), // Временный ID, так как Telegram не возвращает ID отправленного сообщения
+        telegramChatId: chatId,
+        telegramUserId: bot.id, // Для исходящих сообщений userId = botId
+        type: MessageType.OUTGOING,
+        contentType: MessageContentType.TEXT,
+        text: text,
+        keyboard: options.reply_markup
+          ? {
+              type: options.reply_markup.inline_keyboard ? "inline" : "reply",
+              buttons:
+                options.reply_markup.inline_keyboard ||
+                options.reply_markup.keyboard ||
+                [],
+            }
+          : null,
+        metadata: {
+          firstName: bot.name || "Bot",
+          lastName: "",
+          username: bot.username,
+          isBot: true,
+          replyToMessageId: options.reply_to_message_id,
+        },
+        isProcessed: true,
+        processedAt: new Date(),
+      });
+
+      this.logger.log(
+        `Исходящее сообщение отправлено и сохранено для чата ${chatId}`
+      );
+    } else {
+      this.logger.error(`Ошибка отправки сообщения в чат ${chatId}`);
+    }
+  }
+
+  /**
+   * Отправляет документ через Telegram API и сохраняет его в базу данных
+   */
+  private async sendAndSaveDocument(
+    bot: any,
+    chatId: string,
+    document: string | Buffer,
+    options: {
+      caption?: string;
+      parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
+      reply_markup?: any;
+      reply_to_message_id?: number;
+    } = {}
+  ): Promise<void> {
+    const decryptedToken = this.botsService.decryptToken(bot.token);
+
+    // Отправляем документ через Telegram API
+    const success = await this.telegramService.sendDocument(
+      decryptedToken,
+      chatId,
+      document,
+      options
+    );
+
+    if (success) {
+      // Сохраняем исходящее сообщение в базу данных
+      await this.messagesService.create({
+        botId: bot.id,
+        telegramMessageId: Date.now(),
+        telegramChatId: chatId,
+        telegramUserId: bot.id,
+        type: MessageType.OUTGOING,
+        contentType: MessageContentType.DOCUMENT,
+        text: options.caption || "📄 Документ",
+        media: {
+          fileId: typeof document === "string" ? "url" : "buffer",
+          fileUniqueId: `doc_${Date.now()}`,
+          fileName: options.caption || "document",
+        },
+        keyboard: options.reply_markup
+          ? {
+              type: options.reply_markup.inline_keyboard ? "inline" : "reply",
+              buttons:
+                options.reply_markup.inline_keyboard ||
+                options.reply_markup.keyboard ||
+                [],
+            }
+          : null,
+        metadata: {
+          firstName: bot.name || "Bot",
+          lastName: "",
+          username: bot.username,
+          isBot: true,
+          replyToMessageId: options.reply_to_message_id,
+        },
+        isProcessed: true,
+        processedAt: new Date(),
+      });
+
+      this.logger.log(
+        `Исходящий документ отправлен и сохранен для чата ${chatId}`
+      );
+    } else {
+      this.logger.error(`Ошибка отправки документа в чат ${chatId}`);
+    }
+  }
 
   async processMessage(bot: any, message: any): Promise<void> {
     try {
@@ -269,20 +404,14 @@ export class FlowExecutionService {
 
   private async executeMessageNode(context: FlowContext): Promise<void> {
     const { currentNode, bot, message, session } = context;
-    const decryptedToken = this.botsService.decryptToken(bot.token);
 
     const messageText = currentNode.data?.text || "Привет!";
     const parseMode = currentNode.data?.parseMode || "HTML";
 
-    // Отправляем сообщение
-    await this.telegramService.sendMessage(
-      decryptedToken,
-      message.chat.id,
-      messageText,
-      {
-        parse_mode: parseMode,
-      }
-    );
+    // Отправляем сообщение и сохраняем в БД
+    await this.sendAndSaveMessage(bot, message.chat.id, messageText, {
+      parse_mode: parseMode,
+    });
 
     // Переходим к следующему узлу
     const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
@@ -302,7 +431,6 @@ export class FlowExecutionService {
 
   private async executeKeyboardNode(context: FlowContext): Promise<void> {
     const { currentNode, bot, message, session } = context;
-    const decryptedToken = this.botsService.decryptToken(bot.token);
 
     this.logger.log("Keyboard node data:", JSON.stringify(currentNode.data));
 
@@ -336,15 +464,10 @@ export class FlowExecutionService {
       };
     }
 
-    // Отправляем сообщение с клавиатурой
-    await this.telegramService.sendMessage(
-      decryptedToken,
-      message.chat.id,
-      messageText,
-      {
-        reply_markup: telegramKeyboard,
-      }
-    );
+    // Отправляем сообщение с клавиатурой и сохраняем в БД
+    await this.sendAndSaveMessage(bot, message.chat.id, messageText, {
+      reply_markup: telegramKeyboard,
+    });
 
     // Переходим к следующему узлу
     const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
@@ -606,11 +729,7 @@ export class FlowExecutionService {
       .map((field) => `${field.label}${field.required ? " *" : ""}`)
       .join("\n")}\n\n${formData.submitText}`;
 
-    await this.telegramService.sendMessage(
-      bot.token,
-      session.chatId,
-      formMessage
-    );
+    await this.sendAndSaveMessage(bot, session.chatId, formMessage);
 
     // Создаем клавиатуру для отправки формы
     const keyboard = {
@@ -624,8 +743,8 @@ export class FlowExecutionService {
       ],
     };
 
-    await this.telegramService.sendMessage(
-      bot.token,
+    await this.sendAndSaveMessage(
+      bot,
       session.chatId,
       "Нажмите кнопку для отправки формы:",
       { reply_markup: keyboard }
@@ -736,8 +855,8 @@ export class FlowExecutionService {
     try {
       switch (fileData.type) {
         case "upload":
-          await this.telegramService.sendMessage(
-            bot.token,
+          await this.sendAndSaveMessage(
+            bot,
             session.chatId,
             `📁 Пожалуйста, загрузите файл.\nРазрешенные типы: ${fileData.accept?.join(", ")}\nМаксимальный размер: ${fileData.maxSize}МБ`
           );
@@ -745,33 +864,28 @@ export class FlowExecutionService {
         case "download":
         case "send":
           if (fileData.url) {
-            await this.telegramService.sendDocument(
-              bot.token,
-              session.chatId,
-              fileData.url,
-              {
-                caption: fileData.filename || "file",
-              }
-            );
+            await this.sendAndSaveDocument(bot, session.chatId, fileData.url, {
+              caption: fileData.filename || "file",
+            });
           } else {
-            await this.telegramService.sendMessage(
-              bot.token,
+            await this.sendAndSaveMessage(
+              bot,
               session.chatId,
               "📁 Файл не найден"
             );
           }
           break;
         default:
-          await this.telegramService.sendMessage(
-            bot.token,
+          await this.sendAndSaveMessage(
+            bot,
             session.chatId,
             "📁 Неизвестный тип файла"
           );
       }
     } catch (error) {
       this.logger.error("Ошибка работы с файлом:", error);
-      await this.telegramService.sendMessage(
-        bot.token,
+      await this.sendAndSaveMessage(
+        bot,
         session.chatId,
         "❌ Произошла ошибка при работе с файлом"
       );

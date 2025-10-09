@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Delete,
   Param,
   Query,
   UseGuards,
@@ -108,5 +109,18 @@ export class MessagesController {
     @Request() req: any
   ) {
     return this.messagesService.getBotDialogStats(botId, req.user.id);
+  }
+
+  @Delete("bot/:botId/dialog/:chatId")
+  @ApiOperation({ summary: "Удалить диалог с пользователем" })
+  @ApiResponse({ status: 200, description: "Диалог удален" })
+  @ApiResponse({ status: 401, description: "Неавторизован" })
+  @ApiResponse({ status: 404, description: "Бот или диалог не найден" })
+  async deleteDialog(
+    @Param("botId", ParseUUIDPipe) botId: string,
+    @Param("chatId") chatId: string,
+    @Request() req: any
+  ) {
+    return this.messagesService.deleteDialog(botId, chatId, req.user.id);
   }
 }

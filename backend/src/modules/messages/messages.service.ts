@@ -504,4 +504,42 @@ export class MessagesService {
         Math.round(averageMessagesPerDialog * 100) / 100,
     };
   }
+
+  async deleteDialog(
+    botId: string,
+    chatId: string,
+    userId: string
+  ): Promise<{ success: boolean; deletedCount: number }> {
+    // Проверяем, что бот принадлежит пользователю
+    const bot = await this.botRepository.findOne({
+      where: { id: botId, ownerId: userId },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
+
+    // Подсчитываем количество сообщений для логирования
+    const messageCount = await this.messageRepository.count({
+      where: {
+        botId,
+        telegramChatId: chatId,
+      },
+    });
+
+    // Удаляем все сообщения диалога
+    const deleteResult = await this.messageRepository.delete({
+      botId,
+      telegramChatId: chatId,
+    });
+
+    console.log(
+      `Удален диалог: botId=${botId}, chatId=${chatId}, сообщений=${messageCount}`
+    );
+
+    return {
+      success: true,
+      deletedCount: messageCount,
+    };
+  }
 }
