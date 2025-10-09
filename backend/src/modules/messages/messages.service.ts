@@ -319,7 +319,7 @@ export class MessagesService {
     }
 
     // Получаем все необходимые сообщения одним запросом
-    const chatIds = rawDialogs.map((dialog) => dialog.chatId);
+    const chatIds = rawDialogs.map((dialog) => dialog.chatid);
 
     // Получаем последние и первые сообщения для каждого диалога
     const messagesQuery = this.messageRepository
@@ -368,37 +368,37 @@ export class MessagesService {
     // Формируем результат
     const dialogs: Dialog[] = rawDialogs
       .map((rawDialog) => {
-        const lastMessage = lastMessageMap.get(rawDialog.chatId);
-        const firstMessage = firstMessageMap.get(rawDialog.chatId);
+        const lastMessage = lastMessageMap.get(rawDialog.chatid);
+        const firstMessage = firstMessageMap.get(rawDialog.chatid);
 
         // Если не найдены сообщения в мапах, попробуем найти их в исходных данных
         if (!lastMessage || !firstMessage) {
-          const chatMessages = messagesByChat.get(rawDialog.chatId);
+          const chatMessages = messagesByChat.get(rawDialog.chatid);
           if (chatMessages && chatMessages.length > 0) {
             const lastMsg = chatMessages[chatMessages.length - 1];
             const firstMsg = chatMessages[0];
 
             return {
-              chatId: rawDialog.chatId,
+              chatId: rawDialog.chatid,
               userInfo: firstMsg.metadata || {},
               lastMessage: lastMsg,
-              messageCount: parseInt(rawDialog.messageCount),
-              unreadCount: parseInt(rawDialog.unreadCount) || 0,
-              lastActivityAt: rawDialog.lastActivityAt,
-              createdAt: rawDialog.createdAt,
+              messageCount: parseInt(rawDialog.messagecount),
+              unreadCount: parseInt(rawDialog.unreadcount) || 0,
+              lastActivityAt: rawDialog.lastactivityat,
+              createdAt: rawDialog.createdat,
             };
           }
           return null;
         }
 
         return {
-          chatId: rawDialog.chatId,
+          chatId: rawDialog.chatid,
           userInfo: firstMessage.metadata || {},
           lastMessage,
-          messageCount: parseInt(rawDialog.messageCount),
-          unreadCount: parseInt(rawDialog.unreadCount) || 0,
-          lastActivityAt: rawDialog.lastActivityAt,
-          createdAt: rawDialog.createdAt,
+          messageCount: parseInt(rawDialog.messagecount),
+          unreadCount: parseInt(rawDialog.unreadcount) || 0,
+          lastActivityAt: rawDialog.lastactivityat,
+          createdAt: rawDialog.createdat,
         };
       })
       .filter((dialog): dialog is Dialog => dialog !== null);
