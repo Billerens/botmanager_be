@@ -318,27 +318,36 @@ export class MessagesService {
     // Получаем все необходимые сообщения одним запросом
     const chatIds = rawDialogs.map((dialog) => dialog.chatId);
 
-    const [lastMessages, firstMessages] = await Promise.all([
-      // Последние сообщения для каждого диалога
-      this.messageRepository
-        .createQueryBuilder("message")
-        .where("message.botId = :botId", { botId })
-        .andWhere("message.telegramChatId IN (:...chatIds)", { chatIds })
-        .andWhere(
-          "message.createdAt IN (SELECT MAX(m2.createdAt) FROM messages m2 WHERE m2.botId = :botId AND m2.telegramChatId = message.telegramChatId)"
-        )
-        .getMany(),
+    // Получаем последние и первые сообщения для каждого диалога
+    const messagesQuery = this.messageRepository
+      .createQueryBuilder("message")
+      .where("message.botId = :botId", { botId })
+      .andWhere("message.telegramChatId IN (:...chatIds)", { chatIds })
+      .orderBy("message.telegramChatId")
+      .addOrderBy("message.createdAt", "ASC")
+      .getMany();
 
-      // Первые сообщения для получения метаданных пользователей
-      this.messageRepository
-        .createQueryBuilder("message")
-        .where("message.botId = :botId", { botId })
-        .andWhere("message.telegramChatId IN (:...chatIds)", { chatIds })
-        .andWhere(
-          "message.createdAt IN (SELECT MIN(m2.createdAt) FROM messages m2 WHERE m2.botId = :botId AND m2.telegramChatId = message.telegramChatId)"
-        )
-        .getMany(),
-    ]);
+    const allMessages = await messagesQuery;
+
+    // Группируем сообщения по chatId
+    const messagesByChat = new Map<string, Message[]>();
+    allMessages.forEach((message) => {
+      if (!messagesByChat.has(message.telegramChatId)) {
+        messagesByChat.set(message.telegramChatId, []);
+      }
+      messagesByChat.get(message.telegramChatId)!.push(message);
+    });
+
+    // Получаем первые и последние сообщения
+    const lastMessages: Message[] = [];
+    const firstMessages: Message[] = [];
+
+    messagesByChat.forEach((messages) => {
+      if (messages.length > 0) {
+        firstMessages.push(messages[0]); // Первое сообщение
+        lastMessages.push(messages[messages.length - 1]); // Последнее сообщение
+      }
+    });
 
     // Создаем мапы для быстрого поиска
     const lastMessageMap = new Map(
