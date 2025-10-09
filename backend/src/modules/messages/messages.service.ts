@@ -303,6 +303,9 @@ export class MessagesService {
 
     const rawDialogs = await queryBuilder.getRawMany();
 
+    console.log("Raw dialogs found:", rawDialogs.length);
+    console.log("Raw dialogs:", rawDialogs);
+
     if (rawDialogs.length === 0) {
       return {
         dialogs: [],
@@ -329,6 +332,9 @@ export class MessagesService {
 
     const allMessages = await messagesQuery;
 
+    console.log("All messages found:", allMessages.length);
+    console.log("Chat IDs:", chatIds);
+
     // Группируем сообщения по chatId
     const messagesByChat = new Map<string, Message[]>();
     allMessages.forEach((message) => {
@@ -337,6 +343,8 @@ export class MessagesService {
       }
       messagesByChat.get(message.telegramChatId)!.push(message);
     });
+
+    console.log("Messages by chat:", Array.from(messagesByChat.keys()));
 
     // Получаем первые и последние сообщения
     const lastMessages: Message[] = [];
@@ -363,7 +371,23 @@ export class MessagesService {
         const lastMessage = lastMessageMap.get(rawDialog.chatId);
         const firstMessage = firstMessageMap.get(rawDialog.chatId);
 
+        // Если не найдены сообщения в мапах, попробуем найти их в исходных данных
         if (!lastMessage || !firstMessage) {
+          const chatMessages = messagesByChat.get(rawDialog.chatId);
+          if (chatMessages && chatMessages.length > 0) {
+            const lastMsg = chatMessages[chatMessages.length - 1];
+            const firstMsg = chatMessages[0];
+
+            return {
+              chatId: rawDialog.chatId,
+              userInfo: firstMsg.metadata || {},
+              lastMessage: lastMsg,
+              messageCount: parseInt(rawDialog.messageCount),
+              unreadCount: parseInt(rawDialog.unreadCount) || 0,
+              lastActivityAt: rawDialog.lastActivityAt,
+              createdAt: rawDialog.createdAt,
+            };
+          }
           return null;
         }
 
