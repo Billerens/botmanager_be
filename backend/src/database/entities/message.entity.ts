@@ -5,29 +5,29 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
-} from 'typeorm';
-import { Bot } from './bot.entity';
+} from "typeorm";
+import { Bot } from "./bot.entity";
 
 export enum MessageType {
-  INCOMING = 'incoming',
-  OUTGOING = 'outgoing',
+  INCOMING = "incoming",
+  OUTGOING = "outgoing",
 }
 
 export enum MessageContentType {
-  TEXT = 'text',
-  PHOTO = 'photo',
-  VIDEO = 'video',
-  AUDIO = 'audio',
-  DOCUMENT = 'document',
-  STICKER = 'sticker',
-  VOICE = 'voice',
-  LOCATION = 'location',
-  CONTACT = 'contact',
+  TEXT = "text",
+  PHOTO = "photo",
+  VIDEO = "video",
+  AUDIO = "audio",
+  DOCUMENT = "document",
+  STICKER = "sticker",
+  VOICE = "voice",
+  LOCATION = "location",
+  CONTACT = "contact",
 }
 
-@Entity('messages')
+@Entity("messages")
 export class Message {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
   @Column()
@@ -40,22 +40,22 @@ export class Message {
   telegramUserId: string;
 
   @Column({
-    type: 'enum',
+    type: "enum",
     enum: MessageType,
   })
   type: MessageType;
 
   @Column({
-    type: 'enum',
+    type: "enum",
     enum: MessageContentType,
     default: MessageContentType.TEXT,
   })
   contentType: MessageContentType;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: "text", nullable: true })
   text: string;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: "json", nullable: true })
   media: {
     fileId: string;
     fileUniqueId: string;
@@ -67,9 +67,9 @@ export class Message {
     duration?: number;
   };
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: "json", nullable: true })
   keyboard: {
-    type: 'reply' | 'inline';
+    type: "reply" | "inline";
     buttons: Array<{
       text: string;
       callbackData?: string;
@@ -78,7 +78,7 @@ export class Message {
     }>;
   };
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: "json", nullable: true })
   metadata: {
     firstName?: string;
     lastName?: string;
@@ -102,8 +102,8 @@ export class Message {
   createdAt: Date;
 
   // Связи
-  @ManyToOne(() => Bot, (bot) => bot.messages, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'botId' })
+  @ManyToOne(() => Bot, (bot) => bot.messages, { onDelete: "CASCADE" })
+  @JoinColumn({ name: "botId" })
   bot: Bot;
 
   @Column()

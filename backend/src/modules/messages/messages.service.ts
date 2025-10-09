@@ -131,6 +131,34 @@ export class MessagesService {
       take: limit,
     });
 
+    // Отладочная информация
+    console.log(`Dialog for botId: ${botId}, chatId: ${chatId}`);
+    console.log(`Total messages found: ${total}`);
+    console.log(`Messages on page ${page}: ${messages.length}`);
+
+    if (messages.length > 0) {
+      const messageTypes = messages.reduce(
+        (acc, msg) => {
+          acc[msg.type] = (acc[msg.type] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      );
+      console.log("Message types in dialog:", messageTypes);
+
+      // Показываем примеры сообщений
+      console.log(
+        "Sample messages:",
+        messages.slice(0, 5).map((msg) => ({
+          id: msg.id,
+          type: msg.type,
+          chatId: msg.telegramChatId,
+          text: msg.text?.substring(0, 50) + "...",
+          createdAt: msg.createdAt,
+        }))
+      );
+    }
+
     // Получаем информацию о пользователе из первого сообщения
     const userInfo = messages.length > 0 ? messages[0].metadata : null;
 
