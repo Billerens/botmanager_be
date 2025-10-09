@@ -268,14 +268,13 @@ export class MessagesService {
       .createQueryBuilder("message")
       .select([
         "message.telegramChatId as chatId",
-        "message.metadata as userInfo",
-        "message.createdAt as createdAt",
+        "MIN(message.createdAt) as createdAt",
         "COUNT(message.id) as messageCount",
         "MAX(message.createdAt) as lastActivityAt",
         "SUM(CASE WHEN message.isProcessed = false THEN 1 ELSE 0 END) as unreadCount",
       ])
       .where("message.botId = :botId", { botId })
-      .groupBy("message.telegramChatId, message.metadata, message.createdAt");
+      .groupBy("message.telegramChatId");
 
     // Добавляем поиск по имени пользователя
     if (search) {
@@ -304,29 +303,72 @@ export class MessagesService {
 
     const rawDialogs = await queryBuilder.getRawMany();
 
-    // Получаем последние сообщения для каждого диалога
-    const dialogs: Dialog[] = [];
-    for (const rawDialog of rawDialogs) {
-      const lastMessage = await this.messageRepository.findOne({
-        where: {
-          botId,
-          telegramChatId: rawDialog.chatId,
+    if (rawDialogs.length === 0) {
+      return {
+        dialogs: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
         },
-        order: { createdAt: "DESC" },
-      });
+      };
+    }
 
-      if (lastMessage) {
-        dialogs.push({
+    // Получаем все необходимые сообщения одним запросом
+    const chatIds = rawDialogs.map((dialog) => dialog.chatId);
+
+    const [lastMessages, firstMessages] = await Promise.all([
+      // Последние сообщения для каждого диалога
+      this.messageRepository
+        .createQueryBuilder("message")
+        .where("message.botId = :botId", { botId })
+        .andWhere("message.telegramChatId IN (:...chatIds)", { chatIds })
+        .andWhere(
+          "message.createdAt IN (SELECT MAX(m2.createdAt) FROM messages m2 WHERE m2.botId = :botId AND m2.telegramChatId = message.telegramChatId)"
+        )
+        .getMany(),
+
+      // Первые сообщения для получения метаданных пользователей
+      this.messageRepository
+        .createQueryBuilder("message")
+        .where("message.botId = :botId", { botId })
+        .andWhere("message.telegramChatId IN (:...chatIds)", { chatIds })
+        .andWhere(
+          "message.createdAt IN (SELECT MIN(m2.createdAt) FROM messages m2 WHERE m2.botId = :botId AND m2.telegramChatId = message.telegramChatId)"
+        )
+        .getMany(),
+    ]);
+
+    // Создаем мапы для быстрого поиска
+    const lastMessageMap = new Map(
+      lastMessages.map((msg) => [msg.telegramChatId, msg])
+    );
+    const firstMessageMap = new Map(
+      firstMessages.map((msg) => [msg.telegramChatId, msg])
+    );
+
+    // Формируем результат
+    const dialogs: Dialog[] = rawDialogs
+      .map((rawDialog) => {
+        const lastMessage = lastMessageMap.get(rawDialog.chatId);
+        const firstMessage = firstMessageMap.get(rawDialog.chatId);
+
+        if (!lastMessage || !firstMessage) {
+          return null;
+        }
+
+        return {
           chatId: rawDialog.chatId,
-          userInfo: rawDialog.userInfo || {},
+          userInfo: firstMessage.metadata || {},
           lastMessage,
           messageCount: parseInt(rawDialog.messageCount),
           unreadCount: parseInt(rawDialog.unreadCount) || 0,
           lastActivityAt: rawDialog.lastActivityAt,
           createdAt: rawDialog.createdAt,
-        });
-      }
-    }
+        };
+      })
+      .filter((dialog): dialog is Dialog => dialog !== null);
 
     // Получаем общее количество диалогов для пагинации
     const totalDialogsQuery = this.messageRepository
