@@ -62,7 +62,10 @@ export class ProductsService {
       throw new NotFoundException("Бот не найден");
     }
 
-    const { page = 1, limit = 20, search, isActive, inStock } = filters;
+    // Устанавливаем значения по умолчанию если они не переданы
+    const page = filters.page || 1;
+    const limit = filters.limit || 20;
+    const { search, isActive, inStock } = filters;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.productRepository

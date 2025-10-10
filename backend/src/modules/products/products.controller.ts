@@ -11,6 +11,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  ValidationPipe,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -51,7 +52,7 @@ export class ProductsController {
   findAll(
     @Param("botId") botId: string,
     @Request() req: any,
-    @Query() filters: ProductFiltersDto
+    @Query(new ValidationPipe({ transform: true })) filters: ProductFiltersDto
   ) {
     return this.productsService.findAll(botId, req.user.id, filters);
   }

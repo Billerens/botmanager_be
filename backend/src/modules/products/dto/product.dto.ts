@@ -9,6 +9,7 @@ import {
   MaxLength,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Transform, Type } from "class-transformer";
 
 export class CreateProductDto {
   @ApiProperty({ description: "Название товара" })
@@ -105,15 +106,19 @@ export class UpdateProductDto {
 export class ProductFiltersDto {
   @ApiPropertyOptional({ description: "Страница", default: 1 })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
+  @Transform(({ value }) => (value ? Number(value) : 1))
   page?: number = 1;
 
   @ApiPropertyOptional({ description: "Количество на странице", default: 20 })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   @MaxLength(100)
+  @Transform(({ value }) => (value ? Number(value) : 20))
   limit?: number = 20;
 
   @ApiPropertyOptional({ description: "Поиск по названию" })
@@ -123,11 +128,23 @@ export class ProductFiltersDto {
 
   @ApiPropertyOptional({ description: "Фильтр по активности" })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === "true") return true;
+    if (value === "false") return false;
+    if (value === true || value === false) return value;
+    return undefined;
+  })
   @IsBoolean()
   isActive?: boolean;
 
   @ApiPropertyOptional({ description: "Фильтр по наличию на складе" })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === "true") return true;
+    if (value === "false") return false;
+    if (value === true || value === false) return value;
+    return undefined;
+  })
   @IsBoolean()
   inStock?: boolean;
 }
