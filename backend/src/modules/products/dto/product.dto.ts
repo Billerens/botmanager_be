@@ -6,6 +6,7 @@ import {
   IsArray,
   IsObject,
   Min,
+  Max,
   MaxLength,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
@@ -117,7 +118,7 @@ export class ProductFiltersDto {
   @Type(() => Number)
   @IsNumber()
   @Min(1)
-  @MaxLength(100)
+  @Max(100)
   @Transform(({ value }) => (value ? Number(value) : 20))
   limit?: number = 20;
 

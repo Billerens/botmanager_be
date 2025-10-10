@@ -331,9 +331,6 @@ export class MessagesService {
 
     const rawDialogs = await queryBuilder.getRawMany();
 
-    console.log("Raw dialogs found:", rawDialogs.length);
-    console.log("Raw dialogs:", rawDialogs);
-
     if (rawDialogs.length === 0) {
       return {
         dialogs: [],
