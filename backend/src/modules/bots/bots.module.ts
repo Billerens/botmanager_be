@@ -11,6 +11,7 @@ import { BotFlowsController } from "./bot-flows.controller";
 import { FlowExecutionService } from "./flow-execution.service";
 import { TelegramModule } from "../telegram/telegram.module";
 import { MessagesModule } from "../messages/messages.module";
+import { ProductsModule } from "../products/products.module";
 import { CustomLoggerService } from "../../common/logger.service";
 
 @Module({
@@ -18,6 +19,7 @@ import { CustomLoggerService } from "../../common/logger.service";
     TypeOrmModule.forFeature([Bot, BotFlow, BotFlowNode]),
     forwardRef(() => TelegramModule),
     MessagesModule,
+    ProductsModule,
   ],
   providers: [
     BotsService,

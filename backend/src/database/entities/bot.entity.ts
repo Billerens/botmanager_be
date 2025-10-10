@@ -7,22 +7,23 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
-} from 'typeorm';
-import { User } from './user.entity';
-import { Message } from './message.entity';
-import { Lead } from './lead.entity';
-import { BotFlow } from './bot-flow.entity';
-import { ActivityLog } from './activity-log.entity';
+} from "typeorm";
+import { User } from "./user.entity";
+import { Message } from "./message.entity";
+import { Lead } from "./lead.entity";
+import { BotFlow } from "./bot-flow.entity";
+import { ActivityLog } from "./activity-log.entity";
+import { Product } from "./product.entity";
 
 export enum BotStatus {
-  ACTIVE = 'active',
-  INACTIVE = 'inactive',
-  ERROR = 'error',
+  ACTIVE = "active",
+  INACTIVE = "inactive",
+  ERROR = "error",
 }
 
-@Entity('bots')
+@Entity("bots")
 export class Bot {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
   @Column()
@@ -38,7 +39,7 @@ export class Bot {
   username: string; // @botname
 
   @Column({
-    type: 'enum',
+    type: "enum",
     enum: BotStatus,
     default: BotStatus.INACTIVE,
   })
@@ -72,8 +73,8 @@ export class Bot {
   updatedAt: Date;
 
   // Связи
-  @ManyToOne(() => User, (user) => user.bots, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'ownerId' })
+  @ManyToOne(() => User, (user) => user.bots, { onDelete: "CASCADE" })
+  @JoinColumn({ name: "ownerId" })
   owner: User;
 
   @Column()
@@ -90,6 +91,9 @@ export class Bot {
 
   @OneToMany(() => ActivityLog, (log) => log.bot)
   activityLogs: ActivityLog[];
+
+  @OneToMany(() => Product, (product) => product.bot)
+  products: Product[];
 
   // Методы
   get isActive(): boolean {
