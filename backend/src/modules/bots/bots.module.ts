@@ -4,6 +4,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { Bot } from "../../database/entities/bot.entity";
 import { BotFlow } from "../../database/entities/bot-flow.entity";
 import { BotFlowNode } from "../../database/entities/bot-flow-node.entity";
+import { Product } from "../../database/entities/product.entity";
 import { BotsService } from "./bots.service";
 import { BotsController } from "./bots.controller";
 import { BotFlowsService } from "./bot-flows.service";
@@ -16,7 +17,7 @@ import { CustomLoggerService } from "../../common/logger.service";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Bot, BotFlow, BotFlowNode]),
+    TypeOrmModule.forFeature([Bot, BotFlow, BotFlowNode, Product]),
     forwardRef(() => TelegramModule),
     MessagesModule,
     ProductsModule,

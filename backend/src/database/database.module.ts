@@ -10,6 +10,7 @@ import { Subscription } from "./entities/subscription.entity";
 import { BotFlow } from "./entities/bot-flow.entity";
 import { BotFlowNode } from "./entities/bot-flow-node.entity";
 import { ActivityLog } from "./entities/activity-log.entity";
+import { Product } from "./entities/product.entity";
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { ActivityLog } from "./entities/activity-log.entity";
           BotFlow,
           BotFlowNode,
           ActivityLog,
+          Product,
         ],
         synchronize: configService.get("NODE_ENV") === "development",
         logging: false,
@@ -50,6 +52,7 @@ import { ActivityLog } from "./entities/activity-log.entity";
       BotFlow,
       BotFlowNode,
       ActivityLog,
+      Product,
     ]),
   ],
   exports: [TypeOrmModule],
