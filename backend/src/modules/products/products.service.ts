@@ -49,6 +49,10 @@ export class ProductsService {
       throw new NotFoundException("Бот не найден");
     }
 
+    this.logger.log(
+      `Creating product with ${createProductDto.images?.length || 0} images`
+    );
+
     const product = this.productRepository.create({
       ...createProductDto,
       botId,
@@ -139,6 +143,10 @@ export class ProductsService {
     updateProductDto: UpdateProductDto
   ): Promise<Product> {
     const product = await this.findOne(id, botId, userId);
+
+    this.logger.log(
+      `Updating product ${id} with ${updateProductDto.images?.length || 0} images`
+    );
 
     // Если обновляются изображения, удаляем старые из S3
     if (updateProductDto.images && product.images) {
