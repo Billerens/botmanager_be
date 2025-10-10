@@ -43,7 +43,7 @@
     "@nestjs/typeorm": "^10.0.0",
     "@nestjs/websockets": "^10.2.8",
     "@types/multer": "^2.0.0",
-    "@types/uuid": "^10.0.0",
+    "@types/uuid": "^7.0.8",
     "axios": "^1.12.2",
     "bcrypt": "^5.1.1",
     "bull": "^4.11.3",
@@ -67,7 +67,7 @@
     "socket.io": "^4.7.2",
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.17",
-    "uuid": "^13.0.0",
+    "uuid": "^8.3.2",
     "winston": "^3.17.0",
     "winston-loki": "^6.1.3"
   },
