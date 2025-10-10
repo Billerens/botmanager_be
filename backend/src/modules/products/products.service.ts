@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  Logger,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, Like, Between } from "typeorm";
@@ -12,6 +13,7 @@ import {
   UpdateProductDto,
   ProductFiltersDto,
 } from "./dto/product.dto";
+import { UploadService } from "../upload/upload.service";
 
 export interface ProductStats {
   totalProducts: number;
@@ -23,11 +25,14 @@ export interface ProductStats {
 
 @Injectable()
 export class ProductsService {
+  private readonly logger = new Logger(ProductsService.name);
+
   constructor(
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     @InjectRepository(Bot)
-    private readonly botRepository: Repository<Bot>
+    private readonly botRepository: Repository<Bot>,
+    private readonly uploadService: UploadService
   ) {}
 
   async create(
@@ -135,12 +140,37 @@ export class ProductsService {
   ): Promise<Product> {
     const product = await this.findOne(id, botId, userId);
 
+    // Если обновляются изображения, удаляем старые из S3
+    if (updateProductDto.images && product.images) {
+      try {
+        await this.uploadService.deleteProductImages(product.images);
+        this.logger.log(`Deleted old images for product ${id}`);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to delete old images for product ${id}: ${error.message}`
+        );
+      }
+    }
+
     Object.assign(product, updateProductDto);
     return await this.productRepository.save(product);
   }
 
   async remove(id: string, botId: string, userId: string): Promise<void> {
     const product = await this.findOne(id, botId, userId);
+
+    // Удаляем изображения из S3 перед удалением продукта
+    if (product.images && product.images.length > 0) {
+      try {
+        await this.uploadService.deleteProductImages(product.images);
+        this.logger.log(`Deleted images for product ${id}`);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to delete images for product ${id}: ${error.message}`
+        );
+      }
+    }
+
     await this.productRepository.remove(product);
   }
 

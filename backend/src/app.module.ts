@@ -18,6 +18,7 @@ import { WebSocketModule } from "./modules/websocket/websocket.module";
 import { QueueModule } from "./modules/queue/queue.module";
 import { TelegramModule } from "./modules/telegram/telegram.module";
 import { SubscriptionModule } from "./modules/subscription/subscription.module";
+import { UploadModule } from "./modules/upload/upload.module";
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { SubscriptionModule } from "./modules/subscription/subscription.module";
     QueueModule,
     TelegramModule,
     SubscriptionModule,
+    UploadModule,
   ],
 })
 export class AppModule {}

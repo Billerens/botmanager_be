@@ -35,7 +35,7 @@ export class CreateProductDto {
   @Min(0)
   stockQuantity?: number = 0;
 
-  @ApiPropertyOptional({ description: "Изображения в base64" })
+  @ApiPropertyOptional({ description: "URL изображений товара" })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -82,7 +82,7 @@ export class UpdateProductDto {
   @Min(0)
   stockQuantity?: number;
 
-  @ApiPropertyOptional({ description: "Изображения в base64" })
+  @ApiPropertyOptional({ description: "URL изображений товара" })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
