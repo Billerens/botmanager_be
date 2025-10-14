@@ -19,6 +19,7 @@ export class CreateProductDto {
   name: string;
 
   @ApiProperty({ description: "Цена товара" })
+  @Transform(({ value }) => parseFloat(value))
   @IsNumber()
   @Min(0)
   price: number;
@@ -31,6 +32,7 @@ export class CreateProductDto {
 
   @ApiPropertyOptional({ description: "Количество на складе", default: 0 })
   @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? parseInt(value) : value))
   @IsNumber()
   @Min(0)
   stockQuantity?: number = 0;
@@ -66,6 +68,7 @@ export class UpdateProductDto {
 
   @ApiPropertyOptional({ description: "Цена товара" })
   @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? parseFloat(value) : value))
   @IsNumber()
   @Min(0)
   price?: number;
@@ -78,6 +81,7 @@ export class UpdateProductDto {
 
   @ApiPropertyOptional({ description: "Количество на складе" })
   @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? parseInt(value) : value))
   @IsNumber()
   @Min(0)
   stockQuantity?: number;
