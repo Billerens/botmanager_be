@@ -41,7 +41,8 @@ export class ProductsController {
   create(
     @Param("botId") botId: string,
     @Request() req: any,
-    @Body() createProductDto: CreateProductDto
+    @Body(new ValidationPipe({ transform: true }))
+    createProductDto: CreateProductDto
   ) {
     return this.productsService.create(botId, req.user.id, createProductDto);
   }
@@ -84,7 +85,8 @@ export class ProductsController {
     @Param("botId") botId: string,
     @Param("id") id: string,
     @Request() req: any,
-    @Body() updateProductDto: UpdateProductDto
+    @Body(new ValidationPipe({ transform: true }))
+    updateProductDto: UpdateProductDto
   ) {
     return this.productsService.update(
       id,
