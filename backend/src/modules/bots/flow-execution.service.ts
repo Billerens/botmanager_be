@@ -192,7 +192,11 @@ export class FlowExecutionService {
           } else {
             this.logger.warn(`START узел не найден в flow`);
           }
-        } else if (message.text === "/shop" && bot.isShop) {
+        } else if (
+          message.text === "/shop" &&
+          bot.isShop &&
+          bot.shopButtonTypes?.includes("command")
+        ) {
           // Специальная обработка команды /shop для открытия магазина
           this.logger.log(`Команда "/shop" - открываем магазин`);
           await this.handleShopCommand(bot, message);
@@ -1168,7 +1172,7 @@ export class FlowExecutionService {
         inline_keyboard: [
           [
             {
-              text: bot.shopButtonSettings?.inline_button?.text || "🛒 Открыть магазин",
+              text: "🛒 Открыть магазин",
               web_app: {
                 url: shopUrl,
               },
