@@ -14,6 +14,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiExcludeEndpoint,
 } from "@nestjs/swagger";
 
 import { BotsService } from "./bots.service";

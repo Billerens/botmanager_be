@@ -7,6 +7,7 @@ import { BotFlowNode } from "../../database/entities/bot-flow-node.entity";
 import { Product } from "../../database/entities/product.entity";
 import { BotsService } from "./bots.service";
 import { BotsController } from "./bots.controller";
+import { PublicBotsController } from "./public-bots.controller";
 import { BotFlowsService } from "./bot-flows.service";
 import { BotFlowsController } from "./bot-flows.controller";
 import { FlowExecutionService } from "./flow-execution.service";
@@ -28,7 +29,7 @@ import { CustomLoggerService } from "../../common/logger.service";
     FlowExecutionService,
     CustomLoggerService,
   ],
-  controllers: [BotsController, BotFlowsController],
+  controllers: [BotsController, PublicBotsController, BotFlowsController],
   exports: [BotsService, BotFlowsService, FlowExecutionService],
 })
 export class BotsModule {}

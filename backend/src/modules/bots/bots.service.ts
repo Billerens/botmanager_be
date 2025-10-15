@@ -139,6 +139,41 @@ export class BotsService {
     return savedBot;
   }
 
+  /**
+   * Получить публичные данные бота для магазина (без авторизации)
+   */
+  async getPublicBotForShop(botId: string): Promise<any> {
+    const bot = await this.botRepository.findOne({
+      where: { 
+        id: botId,
+        status: BotStatus.ACTIVE,
+        isShop: true 
+      },
+      relations: ["products"]
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден или магазин не активен");
+    }
+
+    // Возвращаем только публичные данные, необходимые для магазина
+    return {
+      id: bot.id,
+      name: bot.name,
+      description: bot.description,
+      shopTitle: bot.shopTitle,
+      shopDescription: bot.shopDescription,
+      shopLogoUrl: bot.shopLogoUrl,
+      shopCustomStyles: bot.shopCustomStyles,
+      shopButtonText: bot.shopButtonText,
+      shopButtonColor: bot.shopButtonColor,
+      shopButtonTypes: bot.shopButtonTypes,
+      shopButtonSettings: bot.shopButtonSettings,
+      shopUrl: bot.shopUrl,
+      products: bot.products?.filter(product => product.isActive) || []
+    };
+  }
+
   async remove(id: string, userId: string): Promise<void> {
     const bot = await this.findOne(id, userId);
 
