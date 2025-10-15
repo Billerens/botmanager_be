@@ -1168,7 +1168,7 @@ export class FlowExecutionService {
         inline_keyboard: [
           [
             {
-              text: bot.shopButtonText || "🛒 Открыть магазин",
+              text: bot.shopButtonSettings?.inline_button?.text || "🛒 Открыть магазин",
               web_app: {
                 url: shopUrl,
               },

@@ -145,7 +145,7 @@ export class TelegramService {
       if (bot.isShop) {
         commands.push({
           command: "shop",
-          description: bot.shopButtonText || "🛒 Открыть магазин",
+          description: "🛒 Открыть магазин",
         });
       }
 
@@ -209,7 +209,6 @@ export class TelegramService {
     try {
       const buttonText =
         bot.shopButtonSettings?.menu_button?.text ||
-        bot.shopButtonText ||
         "🛒 Магазин";
 
       await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {
@@ -239,7 +238,6 @@ export class TelegramService {
     try {
       const buttonText =
         bot.shopButtonSettings?.main_app?.text ||
-        bot.shopButtonText ||
         "🛒 Магазин";
 
       await axios.post(`${this.baseUrl}${token}/setMyCommands`, {

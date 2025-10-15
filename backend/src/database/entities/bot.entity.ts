@@ -100,12 +100,6 @@ export class Bot {
   isShop: boolean;
 
   @Column({ nullable: true })
-  shopButtonText: string;
-
-  @Column({ nullable: true })
-  shopButtonColor: string;
-
-  @Column({ nullable: true })
   shopLogoUrl: string;
 
   @Column({ type: "text", nullable: true })

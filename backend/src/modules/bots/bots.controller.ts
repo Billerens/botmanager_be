@@ -101,12 +101,12 @@ export class BotsController {
     @Body()
     shopSettings: {
       isShop?: boolean;
-      shopButtonText?: string;
-      shopButtonColor?: string;
       shopLogoUrl?: string;
       shopTitle?: string;
       shopDescription?: string;
       shopCustomStyles?: string;
+      shopButtonTypes?: string[];
+      shopButtonSettings?: Record<string, any>;
     },
     @Request() req
   ) {

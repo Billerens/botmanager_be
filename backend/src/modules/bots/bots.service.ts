@@ -102,12 +102,12 @@ export class BotsService {
     id: string,
     shopSettings: {
       isShop?: boolean;
-      shopButtonText?: string;
-      shopButtonColor?: string;
       shopLogoUrl?: string;
       shopTitle?: string;
       shopDescription?: string;
       shopCustomStyles?: string;
+      shopButtonTypes?: string[];
+      shopButtonSettings?: Record<string, any>;
     },
     userId: string
   ): Promise<Bot> {
@@ -118,12 +118,12 @@ export class BotsService {
 
     // Если магазин отключается, очищаем связанные поля
     if (shopSettings.isShop === false) {
-      bot.shopButtonText = null;
-      bot.shopButtonColor = null;
       bot.shopLogoUrl = null;
       bot.shopTitle = null;
       bot.shopDescription = null;
       bot.shopCustomStyles = null;
+      bot.shopButtonTypes = null;
+      bot.shopButtonSettings = null;
     }
 
     const savedBot = await this.botRepository.save(bot);
@@ -165,8 +165,6 @@ export class BotsService {
       shopDescription: bot.shopDescription,
       shopLogoUrl: bot.shopLogoUrl,
       shopCustomStyles: bot.shopCustomStyles,
-      shopButtonText: bot.shopButtonText,
-      shopButtonColor: bot.shopButtonColor,
       shopButtonTypes: bot.shopButtonTypes,
       shopButtonSettings: bot.shopButtonSettings,
       shopUrl: bot.shopUrl,

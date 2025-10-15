@@ -66,23 +66,6 @@ export class UpdateBotDto {
   @IsBoolean()
   isShop?: boolean;
 
-  @ApiPropertyOptional({
-    description: "Текст кнопки магазина",
-    example: "🛒 Открыть магазин",
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(50, { message: "Текст кнопки не должен превышать 50 символов" })
-  shopButtonText?: string;
-
-  @ApiPropertyOptional({
-    description: "Цвет кнопки магазина (hex)",
-    example: "#007bff",
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(7, { message: "Цвет должен быть в формате hex (#ffffff)" })
-  shopButtonColor?: string;
 
   @ApiPropertyOptional({
     description: "URL логотипа магазина",
