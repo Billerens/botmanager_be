@@ -1,4 +1,12 @@
-import { IsString, IsOptional, MinLength, MaxLength, IsBoolean } from "class-validator";
+import {
+  IsString,
+  IsOptional,
+  MinLength,
+  MaxLength,
+  IsBoolean,
+  IsArray,
+  IsObject,
+} from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 export class CreateBotDto {
@@ -91,7 +99,9 @@ export class UpdateBotDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(100, { message: "Заголовок магазина не должен превышать 100 символов" })
+  @MaxLength(100, {
+    message: "Заголовок магазина не должен превышать 100 символов",
+  })
   shopTitle?: string;
 
   @ApiPropertyOptional({
@@ -100,15 +110,44 @@ export class UpdateBotDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(500, { message: "Описание магазина не должно превышать 500 символов" })
+  @MaxLength(500, {
+    message: "Описание магазина не должно превышать 500 символов",
+  })
   shopDescription?: string;
 
   @ApiPropertyOptional({
     description: "Кастомные CSS стили для магазина",
-    example: ".shop-header { background: linear-gradient(45deg, #ff6b6b, #4ecdc4); }",
+    example:
+      ".shop-header { background: linear-gradient(45deg, #ff6b6b, #4ecdc4); }",
   })
   @IsOptional()
   @IsString()
   @MaxLength(2000, { message: "CSS стили не должны превышать 2000 символов" })
   shopCustomStyles?: string;
+
+  @ApiPropertyOptional({
+    description: "Типы кнопок магазина",
+    example: [
+      "menu_button",
+      "main_app",
+      "command",
+      "inline_button",
+      "keyboard_button",
+    ],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  shopButtonTypes?: string[];
+
+  @ApiPropertyOptional({
+    description: "Настройки для разных типов кнопок",
+    example: {
+      menu_button: { text: "Магазин" },
+      inline_button: { text: "🛒 Купить" },
+    },
+  })
+  @IsOptional()
+  @IsObject()
+  shopButtonSettings?: Record<string, any>;
 }

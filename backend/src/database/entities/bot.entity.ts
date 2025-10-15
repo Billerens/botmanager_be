@@ -117,6 +117,14 @@ export class Bot {
   @Column({ type: "text", nullable: true })
   shopDescription: string;
 
+  // Типы кнопок магазина
+  @Column({ type: "json", nullable: true })
+  shopButtonTypes: string[];
+
+  // Настройки для разных типов кнопок
+  @Column({ type: "json", nullable: true })
+  shopButtonSettings: Record<string, any>;
+
   // Методы
   get isActive(): boolean {
     return this.status === BotStatus.ACTIVE;

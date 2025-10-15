@@ -192,6 +192,11 @@ export class FlowExecutionService {
           } else {
             this.logger.warn(`START узел не найден в flow`);
           }
+        } else if (message.text === "/shop" && bot.isShop) {
+          // Специальная обработка команды /shop для открытия магазина
+          this.logger.log(`Команда "/shop" - открываем магазин`);
+          await this.handleShopCommand(bot, message);
+          return; // Не обрабатываем через flow
         } else {
           this.logger.log(`Сообщение не "/start" - ищем NEW_MESSAGE узел`);
           // Для других сообщений ищем подходящий NEW_MESSAGE узел
@@ -1147,5 +1152,44 @@ export class FlowExecutionService {
     if (message.location) return "location";
     if (message.contact) return "contact";
     return "text";
+  }
+
+  /**
+   * Обрабатывает команду /shop для открытия магазина
+   */
+  private async handleShopCommand(bot: any, message: any): Promise<void> {
+    try {
+      const shopUrl =
+        bot.shopUrl ||
+        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/shop/${bot.id}`;
+
+      // Отправляем сообщение с кнопкой для открытия магазина
+      const keyboard = {
+        inline_keyboard: [
+          [
+            {
+              text: bot.shopButtonText || "🛒 Открыть магазин",
+              web_app: {
+                url: shopUrl,
+              },
+            },
+          ],
+        ],
+      };
+
+      await this.telegramService.sendMessage(
+        bot.token,
+        message.chat.id.toString(),
+        bot.shopDescription ||
+          "Добро пожаловать в наш магазин! Нажмите кнопку ниже, чтобы открыть магазин.",
+        { reply_markup: keyboard }
+      );
+
+      this.logger.log(
+        `Отправлено сообщение с магазином для пользователя ${message.from.id}`
+      );
+    } catch (error) {
+      this.logger.error(`Ошибка при обработке команды /shop: ${error.message}`);
+    }
   }
 }

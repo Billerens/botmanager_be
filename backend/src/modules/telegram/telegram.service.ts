@@ -157,6 +157,12 @@ export class TelegramService {
       );
 
       console.log("Bot commands response:", response.data);
+
+      // Устанавливаем дополнительные типы кнопок если они настроены
+      if (bot.isShop && bot.shopButtonTypes) {
+        await this.setShopButtons(token, bot);
+      }
+
       return response.data.ok;
     } catch (error) {
       console.error("Ошибка установки команд бота:", {
@@ -164,6 +170,98 @@ export class TelegramService {
         response: error.response?.data,
       });
       return false;
+    }
+  }
+
+  /**
+   * Устанавливает различные типы кнопок магазина
+   */
+  async setShopButtons(token: string, bot: Bot): Promise<void> {
+    try {
+      const shopUrl =
+        bot.shopUrl ||
+        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/shop/${bot.id}`;
+
+      for (const buttonType of bot.shopButtonTypes || []) {
+        switch (buttonType) {
+          case "menu_button":
+            await this.setMenuButton(token, shopUrl, bot);
+            break;
+          case "main_app":
+            await this.setMainAppButton(token, shopUrl, bot);
+            break;
+          // Другие типы кнопок будут обрабатываться в сообщениях
+        }
+      }
+    } catch (error) {
+      console.error("Ошибка установки кнопок магазина:", error.message);
+    }
+  }
+
+  /**
+   * Устанавливает Menu Button для магазина
+   */
+  private async setMenuButton(
+    token: string,
+    shopUrl: string,
+    bot: Bot
+  ): Promise<void> {
+    try {
+      const buttonText =
+        bot.shopButtonSettings?.menu_button?.text ||
+        bot.shopButtonText ||
+        "🛒 Магазин";
+
+      await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {
+        menu_button: {
+          type: "web_app",
+          text: buttonText,
+          web_app: {
+            url: shopUrl,
+          },
+        },
+      });
+
+      console.log("Menu button set successfully");
+    } catch (error) {
+      console.error("Ошибка установки Menu Button:", error.message);
+    }
+  }
+
+  /**
+   * Устанавливает Main App Button для магазина
+   */
+  private async setMainAppButton(
+    token: string,
+    shopUrl: string,
+    bot: Bot
+  ): Promise<void> {
+    try {
+      const buttonText =
+        bot.shopButtonSettings?.main_app?.text ||
+        bot.shopButtonText ||
+        "🛒 Магазин";
+
+      await axios.post(`${this.baseUrl}${token}/setMyCommands`, {
+        commands: [
+          {
+            command: "start",
+            description: "Запустить бота",
+          },
+          {
+            command: "help",
+            description: "Помощь",
+          },
+          {
+            command: "shop",
+            description: buttonText,
+          },
+        ],
+      });
+
+      console.log("Main app button set successfully");
+    } catch (error) {
+      console.error("Ошибка установки Main App Button:", error.message);
     }
   }
 
