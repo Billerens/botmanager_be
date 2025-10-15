@@ -4,11 +4,12 @@ import {
   Delete,
   UseInterceptors,
   UploadedFiles,
+  UploadedFile,
   Body,
   UseGuards,
   Request,
 } from "@nestjs/common";
-import { FilesInterceptor } from "@nestjs/platform-express";
+import { FilesInterceptor, FileInterceptor } from "@nestjs/platform-express";
 import {
   ApiTags,
   ApiOperation,
@@ -82,6 +83,39 @@ export class UploadController {
       return {
         success: false,
         message: error.message,
+      };
+    }
+  }
+
+  @Post("shop-logo")
+  @UseInterceptors(FileInterceptor("logo"))
+  @ApiOperation({ summary: "Загрузить логотип магазина" })
+  @ApiConsumes("multipart/form-data")
+  async uploadShopLogo(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: any
+  ) {
+    if (!file) {
+      return {
+        success: false,
+        message: "No file uploaded",
+        imageUrls: [],
+      };
+    }
+
+    try {
+      const imageUrl = await this.uploadService.uploadShopLogo(file);
+
+      return {
+        success: true,
+        message: "Successfully uploaded shop logo",
+        imageUrls: [imageUrl],
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+        imageUrls: [],
       };
     }
   }

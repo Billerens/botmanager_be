@@ -98,6 +98,47 @@ export class BotsService {
     return this.botRepository.save(bot);
   }
 
+  async updateShopSettings(
+    id: string,
+    shopSettings: {
+      isShop?: boolean;
+      shopButtonText?: string;
+      shopButtonColor?: string;
+      shopLogoUrl?: string;
+      shopTitle?: string;
+      shopDescription?: string;
+      shopCustomStyles?: string;
+    },
+    userId: string
+  ): Promise<Bot> {
+    const bot = await this.findOne(id, userId);
+
+    // Обновляем настройки магазина
+    Object.assign(bot, shopSettings);
+
+    // Если магазин отключается, очищаем связанные поля
+    if (shopSettings.isShop === false) {
+      bot.shopButtonText = null;
+      bot.shopButtonColor = null;
+      bot.shopLogoUrl = null;
+      bot.shopTitle = null;
+      bot.shopDescription = null;
+      bot.shopCustomStyles = null;
+    }
+
+    const savedBot = await this.botRepository.save(bot);
+
+    // Обновляем команды бота в Telegram
+    try {
+      const token = this.decryptToken(bot.token);
+      await this.telegramService.setBotCommands(token, savedBot);
+    } catch (error) {
+      console.error("Ошибка обновления команд бота:", error.message);
+    }
+
+    return savedBot;
+  }
+
   async remove(id: string, userId: string): Promise<void> {
     const bot = await this.findOne(id, userId);
 

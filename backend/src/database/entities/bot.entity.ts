@@ -95,6 +95,28 @@ export class Bot {
   @OneToMany(() => Product, (product) => product.bot)
   products: Product[];
 
+  // Поля для магазина
+  @Column({ default: false })
+  isShop: boolean;
+
+  @Column({ nullable: true })
+  shopButtonText: string;
+
+  @Column({ nullable: true })
+  shopButtonColor: string;
+
+  @Column({ nullable: true })
+  shopLogoUrl: string;
+
+  @Column({ type: "text", nullable: true })
+  shopCustomStyles: string;
+
+  @Column({ nullable: true })
+  shopTitle: string;
+
+  @Column({ type: "text", nullable: true })
+  shopDescription: string;
+
   // Методы
   get isActive(): boolean {
     return this.status === BotStatus.ACTIVE;
@@ -102,5 +124,11 @@ export class Bot {
 
   get hasError(): boolean {
     return this.status === BotStatus.ERROR;
+  }
+
+  get shopUrl(): string {
+    const frontendUrl =
+      process.env.FRONTEND_URL || "https://botmanagertest.online";
+    return `${frontendUrl}/shop/${this.id}`;
   }
 }

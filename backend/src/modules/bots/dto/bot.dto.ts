@@ -1,36 +1,114 @@
-import { IsString, IsOptional, MinLength, MaxLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsOptional, MinLength, MaxLength, IsBoolean } from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 export class CreateBotDto {
-  @ApiProperty({ description: 'Название бота', example: 'Мой Telegram бот' })
+  @ApiProperty({ description: "Название бота", example: "Мой Telegram бот" })
   @IsString()
-  @MinLength(1, { message: 'Название бота обязательно' })
-  @MaxLength(100, { message: 'Название бота не должно превышать 100 символов' })
+  @MinLength(1, { message: "Название бота обязательно" })
+  @MaxLength(100, { message: "Название бота не должно превышать 100 символов" })
   name: string;
 
-  @ApiProperty({ description: 'Описание бота', example: 'Бот для обработки заявок', required: false })
+  @ApiProperty({
+    description: "Описание бота",
+    example: "Бот для обработки заявок",
+    required: false,
+  })
   @IsOptional()
   @IsString()
-  @MaxLength(500, { message: 'Описание бота не должно превышать 500 символов' })
+  @MaxLength(500, { message: "Описание бота не должно превышать 500 символов" })
   description?: string;
 
-  @ApiProperty({ description: 'Токен бота от @BotFather', example: '1234567890:ABCdefGHIjklMNOpqrsTUVwxyz' })
+  @ApiProperty({
+    description: "Токен бота от @BotFather",
+    example: "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz",
+  })
   @IsString()
-  @MinLength(1, { message: 'Токен бота обязателен' })
+  @MinLength(1, { message: "Токен бота обязателен" })
   token: string;
 }
 
 export class UpdateBotDto {
-  @ApiProperty({ description: 'Название бота', example: 'Обновленное название бота', required: false })
+  @ApiProperty({
+    description: "Название бота",
+    example: "Обновленное название бота",
+    required: false,
+  })
   @IsOptional()
   @IsString()
-  @MinLength(1, { message: 'Название бота не может быть пустым' })
-  @MaxLength(100, { message: 'Название бота не должно превышать 100 символов' })
+  @MinLength(1, { message: "Название бота не может быть пустым" })
+  @MaxLength(100, { message: "Название бота не должно превышать 100 символов" })
   name?: string;
 
-  @ApiProperty({ description: 'Описание бота', example: 'Обновленное описание бота', required: false })
+  @ApiProperty({
+    description: "Описание бота",
+    example: "Обновленное описание бота",
+    required: false,
+  })
   @IsOptional()
   @IsString()
-  @MaxLength(500, { message: 'Описание бота не должно превышать 500 символов' })
+  @MaxLength(500, { message: "Описание бота не должно превышать 500 символов" })
   description?: string;
+
+  // Поля для магазина
+  @ApiPropertyOptional({
+    description: "Включить магазин для бота",
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isShop?: boolean;
+
+  @ApiPropertyOptional({
+    description: "Текст кнопки магазина",
+    example: "🛒 Открыть магазин",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50, { message: "Текст кнопки не должен превышать 50 символов" })
+  shopButtonText?: string;
+
+  @ApiPropertyOptional({
+    description: "Цвет кнопки магазина (hex)",
+    example: "#007bff",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(7, { message: "Цвет должен быть в формате hex (#ffffff)" })
+  shopButtonColor?: string;
+
+  @ApiPropertyOptional({
+    description: "URL логотипа магазина",
+    example: "https://example.com/logo.png",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500, { message: "URL логотипа не должен превышать 500 символов" })
+  shopLogoUrl?: string;
+
+  @ApiPropertyOptional({
+    description: "Заголовок магазина",
+    example: "Мой магазин",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100, { message: "Заголовок магазина не должен превышать 100 символов" })
+  shopTitle?: string;
+
+  @ApiPropertyOptional({
+    description: "Описание магазина",
+    example: "Добро пожаловать в наш магазин!",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500, { message: "Описание магазина не должно превышать 500 символов" })
+  shopDescription?: string;
+
+  @ApiPropertyOptional({
+    description: "Кастомные CSS стили для магазина",
+    example: ".shop-header { background: linear-gradient(45deg, #ff6b6b, #4ecdc4); }",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000, { message: "CSS стили не должны превышать 2000 символов" })
+  shopCustomStyles?: string;
 }

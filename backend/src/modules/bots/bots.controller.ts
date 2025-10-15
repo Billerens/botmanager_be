@@ -83,6 +83,26 @@ export class BotsController {
     return this.botsService.deactivate(id, req.user.id);
   }
 
+  @Patch(':id/shop-settings')
+  @ApiOperation({ summary: 'Обновить настройки магазина бота' })
+  @ApiResponse({ status: 200, description: 'Настройки магазина обновлены' })
+  @ApiResponse({ status: 404, description: 'Бот не найден' })
+  async updateShopSettings(
+    @Param('id') id: string,
+    @Body() shopSettings: {
+      isShop?: boolean;
+      shopButtonText?: string;
+      shopButtonColor?: string;
+      shopLogoUrl?: string;
+      shopTitle?: string;
+      shopDescription?: string;
+      shopCustomStyles?: string;
+    },
+    @Request() req
+  ) {
+    return this.botsService.updateShopSettings(id, shopSettings, req.user.id);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Удалить бота' })
   @ApiResponse({ status: 200, description: 'Бот удален' })

@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import axios from "axios";
 import FormData from "form-data";
+import { Bot } from "../../database/entities/bot.entity";
 
 export interface TelegramBotInfo {
   id: number;
@@ -123,6 +124,45 @@ export class TelegramService {
       return response.data.ok;
     } catch (error) {
       console.error("Ошибка удаления webhook:", error.message);
+      return false;
+    }
+  }
+
+  async setBotCommands(token: string, bot: Bot): Promise<boolean> {
+    try {
+      const commands = [
+        {
+          command: "start",
+          description: "Запустить бота",
+        },
+        {
+          command: "help",
+          description: "Помощь",
+        },
+      ];
+
+      // Добавляем команду магазина если он включен
+      if (bot.isShop) {
+        commands.push({
+          command: "shop",
+          description: bot.shopButtonText || "🛒 Открыть магазин",
+        });
+      }
+
+      const response = await axios.post(
+        `${this.baseUrl}${token}/setMyCommands`,
+        {
+          commands: commands,
+        }
+      );
+
+      console.log("Bot commands response:", response.data);
+      return response.data.ok;
+    } catch (error) {
+      console.error("Ошибка установки команд бота:", {
+        message: error.message,
+        response: error.response?.data,
+      });
       return false;
     }
   }

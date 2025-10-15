@@ -69,4 +69,30 @@ export class UploadService {
       throw error;
     }
   }
+
+  /**
+   * Загружает логотип магазина в S3
+   */
+  async uploadShopLogo(file: {
+    buffer: Buffer;
+    originalname: string;
+    mimetype: string;
+  }): Promise<string> {
+    try {
+      this.logger.log(`Uploading shop logo: ${file.originalname}`);
+
+      const imageUrl = await this.s3Service.uploadFile(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        "shop-logos"
+      );
+
+      this.logger.log(`Successfully uploaded shop logo: ${imageUrl}`);
+      return imageUrl;
+    } catch (error) {
+      this.logger.error(`Error uploading shop logo: ${error.message}`);
+      throw error;
+    }
+  }
 }
