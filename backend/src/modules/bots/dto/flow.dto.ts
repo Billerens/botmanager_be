@@ -14,7 +14,6 @@ export enum FlowNodeType {
   MESSAGE = "message",
   KEYBOARD = "keyboard",
   CONDITION = "condition",
-  API = "api",
   END = "end",
   FORM = "form",
   DELAY = "delay",
@@ -68,6 +67,10 @@ export class FlowNodeDataDto {
   text?: string;
 
   @IsOptional()
+  @IsString()
+  messageText?: string;
+
+  @IsOptional()
   @IsEnum(["HTML", "Markdown", "Plain"])
   parseMode?: "HTML" | "Markdown" | "Plain";
 
@@ -92,6 +95,9 @@ export class FlowNodeDataDto {
     "not_exists",
     "contains",
     "not_contains",
+    "startsWith",
+    "variable_equals",
+    "variable_contains",
   ])
   operator?:
     | "equals"
@@ -99,7 +105,10 @@ export class FlowNodeDataDto {
     | "exists"
     | "not_exists"
     | "contains"
-    | "not_contains";
+    | "not_contains"
+    | "startsWith"
+    | "variable_equals"
+    | "variable_contains";
 
   @IsOptional()
   @IsString()
