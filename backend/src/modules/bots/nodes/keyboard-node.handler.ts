@@ -26,23 +26,32 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       session.variables["last_callback_data"] = message.callback_query.data;
       session.variables["last_callback_id"] = message.callback_query.id;
       session.variables["callback_timestamp"] = new Date().toISOString();
-      
+
       // Дополнительная информация о callback
       if (message.callback_query.from) {
-        session.variables["callback_user_id"] = message.callback_query.from.id?.toString();
-        session.variables["callback_username"] = message.callback_query.from.username || "";
-        session.variables["callback_first_name"] = message.callback_query.from.first_name || "";
+        session.variables["callback_user_id"] =
+          message.callback_query.from.id?.toString();
+        session.variables["callback_username"] =
+          message.callback_query.from.username || "";
+        session.variables["callback_first_name"] =
+          message.callback_query.from.first_name || "";
       }
-      
+
       // Информация о сообщении с кнопкой
       if (message.callback_query.message) {
-        session.variables["callback_message_id"] = message.callback_query.message.message_id?.toString();
-        session.variables["callback_chat_id"] = message.callback_query.message.chat?.id?.toString();
+        session.variables["callback_message_id"] =
+          message.callback_query.message.message_id?.toString();
+        session.variables["callback_chat_id"] =
+          message.callback_query.message.chat?.id?.toString();
       }
-      
-      this.logger.log(`Callback данные сохранены: ${message.callback_query.data}`);
+
+      this.logger.log(
+        `Callback данные сохранены: ${message.callback_query.data}`
+      );
       this.logger.log(`Callback ID: ${message.callback_query.id}`);
-      this.logger.log(`Callback от пользователя: ${message.callback_query.from?.id}`);
+      this.logger.log(
+        `Callback от пользователя: ${message.callback_query.from?.id}`
+      );
     }
 
     // Получаем текст сообщения из правильного поля
@@ -52,6 +61,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       "Выберите опцию:";
     const buttons = currentNode.data?.buttons || [];
     const isInline = currentNode.data?.isInline || false;
+    const parseMode = currentNode.data?.parseMode;
 
     // Валидация кнопок
     if (!Array.isArray(buttons)) {
@@ -98,6 +108,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
     this.logger.log("Keyboard buttons:", JSON.stringify(processedButtons));
     this.logger.log("Is inline:", String(isInline));
+    this.logger.log("Parse mode:", parseMode || "не указан");
     this.logger.log(`Исходный текст: "${rawMessageText}"`);
     this.logger.log(`Обработанный текст: "${messageText}"`);
 
@@ -127,12 +138,15 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     }
 
     // Отправляем сообщение с клавиатурой (если есть) и сохраняем в БД
-    const messageOptions =
-      processedButtons.length > 0
-        ? {
-            reply_markup: telegramKeyboard,
-          }
-        : {};
+    const messageOptions: any = {};
+    
+    if (processedButtons.length > 0) {
+      messageOptions.reply_markup = telegramKeyboard;
+    }
+    
+    if (parseMode) {
+      messageOptions.parse_mode = parseMode;
+    }
 
     await this.sendAndSaveMessage(
       bot,
