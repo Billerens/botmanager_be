@@ -176,12 +176,20 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     if (message.is_callback && message.callback_query) {
       // Находим индекс нажатой кнопки
       const pressedButtonData = message.callback_query.data;
+      this.logger.log(`Нажата кнопка с данными: ${pressedButtonData}`);
+      this.logger.log(
+        `Доступные кнопки: ${JSON.stringify(processedButtons.map((b) => ({ text: b.text, callbackData: b.callbackData })))}`
+      );
+
       const buttonIndex = processedButtons.findIndex(
         (button) => button.callbackData === pressedButtonData
       );
 
+      this.logger.log(`Найден индекс кнопки: ${buttonIndex}`);
+
       if (buttonIndex !== -1) {
         // Переходим к узлу, подключенному к соответствующему выходу
+        this.logger.log(`Переходим к выходу button-${buttonIndex}`);
         await this.moveToNextNodeByOutput(
           context,
           currentNode.nodeId,
@@ -189,6 +197,9 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
         );
       } else {
         // Если кнопка не найдена, переходим к первому выходу
+        this.logger.warn(
+          `Кнопка с данными ${pressedButtonData} не найдена, переходим к button-0`
+        );
         await this.moveToNextNodeByOutput(
           context,
           currentNode.nodeId,
@@ -197,6 +208,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       }
     } else {
       // Если это не callback запрос, переходим к первому выходу
+      this.logger.log(`Не callback запрос, переходим к button-0`);
       await this.moveToNextNodeByOutput(
         context,
         currentNode.nodeId,

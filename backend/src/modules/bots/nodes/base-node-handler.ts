@@ -195,16 +195,26 @@ export abstract class BaseNodeHandler implements INodeHandler {
     currentNodeId: string,
     outputId: string
   ): string | null {
+    this.logger.log(
+      `Поиск следующего узла для выхода ${outputId} узла ${currentNodeId}`
+    );
+    this.logger.log(
+      `Доступные edges: ${JSON.stringify(context.flow.flowData?.edges || [])}`
+    );
+
     // Ищем edge, который начинается с текущего узла и конкретного выхода
     const edge = context.flow.flowData?.edges?.find(
       (edge) => edge.source === currentNodeId && edge.sourceHandle === outputId
     );
 
     if (edge) {
+      this.logger.log(`Найден edge: ${JSON.stringify(edge)}`);
       return edge.target;
     }
 
-    // Если edge не найден, возвращаем null
+    this.logger.warn(
+      `Edge не найден для выхода ${outputId} узла ${currentNodeId}`
+    );
     return null;
   }
 
