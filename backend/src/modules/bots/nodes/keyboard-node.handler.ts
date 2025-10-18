@@ -165,14 +165,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       messageOptions.parse_mode = parseMode;
     }
 
-    await this.sendAndSaveMessage(
-      bot,
-      message.chat.id,
-      messageText,
-      messageOptions
-    );
-
-    // Переходим к следующему узлу на основе нажатой кнопки
+    // Если это callback запрос (пользователь нажал кнопку)
     if (message.is_callback && message.callback_query) {
       // Находим индекс нажатой кнопки
       const pressedButtonData = message.callback_query.data;
@@ -207,13 +200,18 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
         );
       }
     } else {
-      // Если это не callback запрос, переходим к первому выходу
-      this.logger.log(`Не callback запрос, переходим к button-0`);
-      await this.moveToNextNodeByOutput(
-        context,
-        currentNode.nodeId,
-        "button-0"
+      // Если это обычное сообщение - отправляем клавиатуру и ждем выбора
+      this.logger.log(`Отправляем клавиатуру и ждем выбора пользователя`);
+
+      await this.sendAndSaveMessage(
+        bot,
+        message.chat.id,
+        messageText,
+        messageOptions
       );
+
+      // НЕ переходим к следующему узлу - ждем callback запрос
+      this.logger.log(`Keyboard узел завершен, ожидаем выбор пользователя`);
     }
   }
 }

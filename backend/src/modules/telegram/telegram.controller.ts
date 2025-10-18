@@ -162,6 +162,8 @@ export class TelegramController {
         chat: callbackQuery.message.chat,
         text: callbackQuery.data,
         date: callbackQuery.message.date,
+        is_callback: true,
+        callback_query: callbackQuery,
       };
 
       // Обрабатываем callback query как обычное сообщение через flow
