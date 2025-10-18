@@ -172,7 +172,36 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       messageOptions
     );
 
-    // Переходим к следующему узлу
-    await this.moveToNextNode(context, currentNode.nodeId);
+    // Переходим к следующему узлу на основе нажатой кнопки
+    if (message.is_callback && message.callback_query) {
+      // Находим индекс нажатой кнопки
+      const pressedButtonData = message.callback_query.data;
+      const buttonIndex = processedButtons.findIndex(
+        (button) => button.callbackData === pressedButtonData
+      );
+
+      if (buttonIndex !== -1) {
+        // Переходим к узлу, подключенному к соответствующему выходу
+        await this.moveToNextNodeByOutput(
+          context,
+          currentNode.nodeId,
+          `button-${buttonIndex}`
+        );
+      } else {
+        // Если кнопка не найдена, переходим к первому выходу
+        await this.moveToNextNodeByOutput(
+          context,
+          currentNode.nodeId,
+          "button-0"
+        );
+      }
+    } else {
+      // Если это не callback запрос, переходим к первому выходу
+      await this.moveToNextNodeByOutput(
+        context,
+        currentNode.nodeId,
+        "button-0"
+      );
+    }
   }
 }

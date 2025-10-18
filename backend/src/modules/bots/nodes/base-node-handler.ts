@@ -188,6 +188,27 @@ export abstract class BaseNodeHandler implements INodeHandler {
   }
 
   /**
+   * Находит следующий узел по конкретному выходу
+   */
+  protected findNextNodeIdByOutput(
+    context: FlowContext,
+    currentNodeId: string,
+    outputId: string
+  ): string | null {
+    // Ищем edge, который начинается с текущего узла и конкретного выхода
+    const edge = context.flow.flowData?.edges?.find(
+      (edge) => edge.source === currentNodeId && edge.sourceHandle === outputId
+    );
+
+    if (edge) {
+      return edge.target;
+    }
+
+    // Если edge не найден, возвращаем null
+    return null;
+  }
+
+  /**
    * Переходит к следующему узлу и выполняет его
    */
   protected async moveToNextNode(
@@ -206,6 +227,37 @@ export abstract class BaseNodeHandler implements INodeHandler {
         context.currentNode = nextNode;
         await this.executeNodeCallback(context);
       }
+    }
+  }
+
+  /**
+   * Переходит к следующему узлу по конкретному выходу и выполняет его
+   */
+  protected async moveToNextNodeByOutput(
+    context: FlowContext,
+    currentNodeId: string,
+    outputId: string
+  ): Promise<void> {
+    const nextNodeId = this.findNextNodeIdByOutput(
+      context,
+      currentNodeId,
+      outputId
+    );
+    if (nextNodeId) {
+      context.session.currentNodeId = nextNodeId;
+      context.session.lastActivity = new Date();
+
+      const nextNode = context.flow.nodes.find(
+        (node) => node.nodeId === nextNodeId
+      );
+      if (nextNode && this.executeNodeCallback) {
+        context.currentNode = nextNode;
+        await this.executeNodeCallback(context);
+      }
+    } else {
+      this.logger.warn(
+        `Не найден следующий узел для выхода ${outputId} узла ${currentNodeId}`
+      );
     }
   }
 
