@@ -157,6 +157,7 @@ export class BotFlowNode {
       headers?: Record<string, string>;
       body?: string;
       timeout?: number;
+      retryCount?: number;
     };
 
     // Для VARIABLE нод
