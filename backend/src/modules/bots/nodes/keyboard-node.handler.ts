@@ -21,21 +21,55 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
     this.logger.log("Keyboard node data:", JSON.stringify(currentNode.data));
 
-    const rawMessageText = currentNode.data?.text || "Выберите опцию:";
+    // Получаем текст сообщения из правильного поля
+    const rawMessageText =
+      currentNode.data?.messageText ||
+      currentNode.data?.text ||
+      "Выберите опцию:";
     const buttons = currentNode.data?.buttons || [];
     const isInline = currentNode.data?.isInline || false;
+
+    // Валидация кнопок
+    if (!Array.isArray(buttons)) {
+      this.logger.error("Кнопки должны быть массивом");
+      throw new Error("Invalid buttons format: expected array");
+    }
+
+    // Фильтруем валидные кнопки
+    const validButtons = buttons.filter((button) => {
+      if (!button || typeof button !== "object") {
+        this.logger.warn(
+          "Пропускаем невалидную кнопку:",
+          JSON.stringify(button)
+        );
+        return false;
+      }
+      if (!button.text || typeof button.text !== "string") {
+        this.logger.warn(
+          "Пропускаем кнопку без текста:",
+          JSON.stringify(button)
+        );
+        return false;
+      }
+      return true;
+    });
+
+    if (validButtons.length === 0) {
+      this.logger.warn(
+        "Нет валидных кнопок, отправляем сообщение без клавиатуры"
+      );
+    }
 
     // Подставляем переменные в текст сообщения
     const messageText = this.substituteVariables(rawMessageText, context);
 
     // Подставляем переменные в текст кнопок
-    const processedButtons = buttons.map((button) => ({
+    const processedButtons = validButtons.map((button) => ({
       ...button,
       text: this.substituteVariables(button.text, context),
-      callbackData: this.substituteVariables(
-        button.callbackData || button.text,
-        context
-      ),
+      callbackData: button.callbackData
+        ? this.substituteVariables(button.callbackData, context)
+        : undefined,
     }));
 
     this.logger.log("Keyboard buttons:", JSON.stringify(processedButtons));
@@ -45,31 +79,43 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
     // Создаем клавиатуру
     let telegramKeyboard;
-    if (isInline) {
-      telegramKeyboard = {
-        inline_keyboard: processedButtons.map((button) => [
-          {
-            text: button.text,
-            callback_data: button.callbackData || button.text,
-          },
-        ]),
-      };
-    } else {
-      telegramKeyboard = {
-        keyboard: processedButtons.map((button) => [
-          {
-            text: button.text,
-          },
-        ]),
-        resize_keyboard: true,
-        one_time_keyboard: true,
-      };
+    if (processedButtons.length > 0) {
+      if (isInline) {
+        telegramKeyboard = {
+          inline_keyboard: processedButtons.map((button) => [
+            {
+              text: button.text,
+              callback_data: button.callbackData || button.text,
+            },
+          ]),
+        };
+      } else {
+        telegramKeyboard = {
+          keyboard: processedButtons.map((button) => [
+            {
+              text: button.text,
+            },
+          ]),
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        };
+      }
     }
 
-    // Отправляем сообщение с клавиатурой и сохраняем в БД
-    await this.sendAndSaveMessage(bot, message.chat.id, messageText, {
-      reply_markup: telegramKeyboard,
-    });
+    // Отправляем сообщение с клавиатурой (если есть) и сохраняем в БД
+    const messageOptions =
+      processedButtons.length > 0
+        ? {
+            reply_markup: telegramKeyboard,
+          }
+        : {};
+
+    await this.sendAndSaveMessage(
+      bot,
+      message.chat.id,
+      messageText,
+      messageOptions
+    );
 
     // Переходим к следующему узлу
     await this.moveToNextNode(context, currentNode.nodeId);

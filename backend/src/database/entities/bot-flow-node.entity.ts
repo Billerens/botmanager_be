@@ -103,6 +103,7 @@ export class BotFlowNode {
       mimeType?: string;
     };
     // Для KEYBOARD нод
+    messageText?: string; // Текст сообщения с клавиатурой
     buttons?: Array<{
       text: string;
       callbackData?: string;
