@@ -22,7 +22,6 @@ import {
   MessageNodeHandler,
   KeyboardNodeHandler,
   ConditionNodeHandler,
-  ApiNodeHandler,
   EndNodeHandler,
   FormNodeHandler,
   DelayNodeHandler,
@@ -62,7 +61,6 @@ export class FlowExecutionService {
     private readonly messageNodeHandler: MessageNodeHandler,
     private readonly keyboardNodeHandler: KeyboardNodeHandler,
     private readonly conditionNodeHandler: ConditionNodeHandler,
-    private readonly apiNodeHandler: ApiNodeHandler,
     private readonly endNodeHandler: EndNodeHandler,
     private readonly formNodeHandler: FormNodeHandler,
     private readonly delayNodeHandler: DelayNodeHandler,
@@ -88,7 +86,6 @@ export class FlowExecutionService {
       "condition",
       this.conditionNodeHandler
     );
-    this.nodeHandlerService.registerHandler("api", this.apiNodeHandler);
     this.nodeHandlerService.registerHandler("end", this.endNodeHandler);
     this.nodeHandlerService.registerHandler("form", this.formNodeHandler);
     this.nodeHandlerService.registerHandler("delay", this.delayNodeHandler);
@@ -114,7 +111,6 @@ export class FlowExecutionService {
       this.messageNodeHandler,
       this.keyboardNodeHandler,
       this.conditionNodeHandler,
-      this.apiNodeHandler,
       this.endNodeHandler,
       this.formNodeHandler,
       this.delayNodeHandler,

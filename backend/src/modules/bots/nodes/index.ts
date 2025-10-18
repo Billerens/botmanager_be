@@ -7,7 +7,6 @@ export * from "./start-node.handler";
 export * from "./message-node.handler";
 export * from "./keyboard-node.handler";
 export * from "./condition-node.handler";
-export * from "./api-node.handler";
 export * from "./end-node.handler";
 export * from "./form-node.handler";
 export * from "./delay-node.handler";

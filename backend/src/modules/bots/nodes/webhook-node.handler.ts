@@ -28,14 +28,45 @@ export class WebhookNodeHandler extends BaseNodeHandler {
     const webhookData = currentNode.data.webhook;
     const { url, method, headers, body, timeout, retryCount } = webhookData;
 
+    // Валидация URL
+    if (!url || url.trim() === "") {
+      this.logger.error("URL webhook не задан");
+      session.variables[`webhook_${currentNode.nodeId}_error_type`] = "config";
+      session.variables[`webhook_${currentNode.nodeId}_error_message`] =
+        "URL не задан";
+      await this.moveToNextNode(context, currentNode.nodeId);
+      return;
+    }
+
+    // Проверка корректности URL
+    try {
+      new URL(url);
+    } catch (urlError) {
+      this.logger.error(`Некорректный URL: ${url}`);
+      session.variables[`webhook_${currentNode.nodeId}_error_type`] = "config";
+      session.variables[`webhook_${currentNode.nodeId}_error_message`] =
+        `Некорректный URL: ${url}`;
+      await this.moveToNextNode(context, currentNode.nodeId);
+      return;
+    }
+
+    // Фильтруем пустые заголовки
+    const validHeaders = headers
+      ? Object.fromEntries(
+          Object.entries(headers).filter(
+            ([key, value]) => key.trim() !== "" && value.trim() !== ""
+          )
+        )
+      : {};
+
     this.logger.log(`=== WEBHOOK УЗЕЛ ВЫПОЛНЕНИЕ ===`);
     this.logger.log(`Узел ID: ${currentNode.nodeId}`);
     this.logger.log(`Пользователь: ${session.userId}`);
     this.logger.log(`URL: ${url}`);
     this.logger.log(`Метод: ${method}`);
-    this.logger.log(`Заголовки: ${JSON.stringify(headers, null, 2)}`);
+    this.logger.log(`Заголовки: ${JSON.stringify(validHeaders, null, 2)}`);
     this.logger.log(`Тело запроса: ${body}`);
-    this.logger.log(`Таймаут: ${timeout}мс`);
+    this.logger.log(`Таймаут: ${timeout}с`);
     this.logger.log(`Количество повторов: ${retryCount || 0}`);
 
     try {
@@ -47,7 +78,7 @@ export class WebhookNodeHandler extends BaseNodeHandler {
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "BotManager-Webhook/1.0",
-          ...headers,
+          ...validHeaders,
         },
         validateStatus: (status) => status < 500, // Не выбрасывать ошибку для 4xx статусов
       };
@@ -56,12 +87,20 @@ export class WebhookNodeHandler extends BaseNodeHandler {
       if (body && body.trim() !== "") {
         try {
           // Пытаемся парсить как JSON
-          axiosConfig.data = JSON.parse(body);
+          const parsedBody = JSON.parse(body);
+          axiosConfig.data = parsedBody;
+          // Content-Type остается application/json
         } catch (parseError) {
           // Если не JSON, отправляем как строку
           axiosConfig.data = body;
           axiosConfig.headers["Content-Type"] = "text/plain";
+          this.logger.log(
+            `Тело запроса не является валидным JSON, отправляем как текст`
+          );
         }
+      } else if (method === "POST" || method === "PUT") {
+        // Для POST/PUT запросов без тела добавляем пустой объект
+        axiosConfig.data = {};
       }
 
       this.logger.log(`Отправляем HTTP запрос...`);
@@ -83,6 +122,7 @@ export class WebhookNodeHandler extends BaseNodeHandler {
       let lastError: any = null;
       let attempt = 0;
       const maxAttempts = (retryCount || 0) + 1;
+      let startTime: number;
 
       while (attempt < maxAttempts) {
         attempt++;
@@ -96,7 +136,7 @@ export class WebhookNodeHandler extends BaseNodeHandler {
         }
 
         try {
-          const startTime = Date.now();
+          startTime = Date.now();
           const response: AxiosResponse = await axios(axiosConfig);
           const endTime = Date.now();
           const duration = endTime - startTime;
@@ -134,7 +174,7 @@ export class WebhookNodeHandler extends BaseNodeHandler {
         } catch (error: any) {
           lastError = error;
           const endTime = Date.now();
-          const duration = endTime - Date.now();
+          const duration = endTime - startTime; // Исправлено: было Date.now()
 
           this.logger.error(
             `=== WEBHOOK ОШИБКА (попытка ${attempt}/${maxAttempts}) ===`
