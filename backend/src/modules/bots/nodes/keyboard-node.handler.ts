@@ -17,9 +17,33 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
   }
 
   async execute(context: FlowContext): Promise<void> {
-    const { currentNode, bot, message } = context;
+    const { currentNode, bot, message, session } = context;
 
     this.logger.log("Keyboard node data:", JSON.stringify(currentNode.data));
+
+    // Сохраняем callback данные в переменные сессии, если это callback запрос
+    if (message.is_callback && message.callback_query) {
+      session.variables["last_callback_data"] = message.callback_query.data;
+      session.variables["last_callback_id"] = message.callback_query.id;
+      session.variables["callback_timestamp"] = new Date().toISOString();
+      
+      // Дополнительная информация о callback
+      if (message.callback_query.from) {
+        session.variables["callback_user_id"] = message.callback_query.from.id?.toString();
+        session.variables["callback_username"] = message.callback_query.from.username || "";
+        session.variables["callback_first_name"] = message.callback_query.from.first_name || "";
+      }
+      
+      // Информация о сообщении с кнопкой
+      if (message.callback_query.message) {
+        session.variables["callback_message_id"] = message.callback_query.message.message_id?.toString();
+        session.variables["callback_chat_id"] = message.callback_query.message.chat?.id?.toString();
+      }
+      
+      this.logger.log(`Callback данные сохранены: ${message.callback_query.data}`);
+      this.logger.log(`Callback ID: ${message.callback_query.id}`);
+      this.logger.log(`Callback от пользователя: ${message.callback_query.from?.id}`);
+    }
 
     // Получаем текст сообщения из правильного поля
     const rawMessageText =
