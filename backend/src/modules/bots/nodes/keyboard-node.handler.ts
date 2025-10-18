@@ -104,6 +104,12 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       callbackData: button.callbackData
         ? this.substituteVariables(button.callbackData, context)
         : undefined,
+      url: button.url
+        ? this.substituteVariables(button.url, context)
+        : undefined,
+      webApp: button.webApp
+        ? this.substituteVariables(button.webApp, context)
+        : undefined,
     }));
 
     this.logger.log("Keyboard buttons:", JSON.stringify(processedButtons));
@@ -117,12 +123,23 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     if (processedButtons.length > 0) {
       if (isInline) {
         telegramKeyboard = {
-          inline_keyboard: processedButtons.map((button) => [
-            {
+          inline_keyboard: processedButtons.map((button) => {
+            const buttonData: any = {
               text: button.text,
-              callback_data: button.callbackData || button.text,
-            },
-          ]),
+            };
+
+            if (button.callbackData) {
+              buttonData.callback_data = button.callbackData;
+            } else if (button.url) {
+              buttonData.url = button.url;
+            } else if (button.webApp) {
+              buttonData.web_app = { url: button.webApp };
+            } else {
+              buttonData.callback_data = button.text;
+            }
+
+            return [buttonData];
+          }),
         };
       } else {
         telegramKeyboard = {
@@ -139,11 +156,11 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
     // Отправляем сообщение с клавиатурой (если есть) и сохраняем в БД
     const messageOptions: any = {};
-    
+
     if (processedButtons.length > 0) {
       messageOptions.reply_markup = telegramKeyboard;
     }
-    
+
     if (parseMode) {
       messageOptions.parse_mode = parseMode;
     }
