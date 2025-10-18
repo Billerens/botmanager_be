@@ -223,4 +223,61 @@ export abstract class BaseNodeHandler implements INodeHandler {
     if (message.contact) return "contact";
     return "text";
   }
+
+  /**
+   * Подставляет переменные в текст
+   * Поддерживает синтаксис: {{variableName}}, {{user.firstName}}, {{session.data}}
+   */
+  protected substituteVariables(text: string, context: FlowContext): string {
+    if (!text || typeof text !== "string") {
+      return text || "";
+    }
+
+    const { session, message } = context;
+
+    // Подставляем переменные сессии
+    let result = text.replace(/\{\{([^}]+)\}\}/g, (match, variablePath) => {
+      const trimmedPath = variablePath.trim();
+
+      // Обработка специальных переменных
+      if (trimmedPath === "user.firstName") {
+        return message.from?.first_name || "Пользователь";
+      }
+      if (trimmedPath === "user.lastName") {
+        return message.from?.last_name || "";
+      }
+      if (trimmedPath === "user.username") {
+        return message.from?.username || "";
+      }
+      if (trimmedPath === "user.id") {
+        return message.from?.id?.toString() || "";
+      }
+      if (trimmedPath === "chat.id") {
+        return message.chat?.id?.toString() || "";
+      }
+      if (trimmedPath === "message.text") {
+        return message.text || "";
+      }
+      if (trimmedPath === "timestamp") {
+        return new Date().toLocaleString("ru-RU");
+      }
+      if (trimmedPath === "date") {
+        return new Date().toLocaleDateString("ru-RU");
+      }
+      if (trimmedPath === "time") {
+        return new Date().toLocaleTimeString("ru-RU");
+      }
+
+      // Обработка переменных сессии
+      if (session.variables && session.variables[trimmedPath] !== undefined) {
+        return session.variables[trimmedPath];
+      }
+
+      // Если переменная не найдена, возвращаем оригинальный текст
+      this.logger.warn(`Переменная не найдена: ${trimmedPath}`);
+      return match;
+    });
+
+    return result;
+  }
 }

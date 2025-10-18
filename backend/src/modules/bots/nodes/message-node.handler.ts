@@ -19,8 +19,17 @@ export class MessageNodeHandler extends BaseNodeHandler {
   async execute(context: FlowContext): Promise<void> {
     const { currentNode, bot, message } = context;
 
-    const messageText = currentNode.data?.text || "Привет!";
+    const rawMessageText = currentNode.data?.text || "Привет!";
     const parseMode = currentNode.data?.parseMode || "HTML";
+
+    // Подставляем переменные в текст сообщения
+    const messageText = this.substituteVariables(rawMessageText, context);
+
+    this.logger.log(`=== MESSAGE УЗЕЛ ВЫПОЛНЕНИЕ ===`);
+    this.logger.log(`Узел ID: ${currentNode.nodeId}`);
+    this.logger.log(`Пользователь: ${context.session.userId}`);
+    this.logger.log(`Исходный текст: "${rawMessageText}"`);
+    this.logger.log(`Обработанный текст: "${messageText}"`);
 
     // Отправляем сообщение и сохраняем в БД
     await this.sendAndSaveMessage(bot, message.chat.id, messageText, {

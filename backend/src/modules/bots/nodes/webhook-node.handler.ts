@@ -28,8 +28,11 @@ export class WebhookNodeHandler extends BaseNodeHandler {
     const webhookData = currentNode.data.webhook;
     const { url, method, headers, body, timeout, retryCount } = webhookData;
 
+    // Подставляем переменные в URL
+    const processedUrl = this.substituteVariables(url || "", context);
+
     // Валидация URL
-    if (!url || url.trim() === "") {
+    if (!processedUrl || processedUrl.trim() === "") {
       this.logger.error("URL webhook не задан");
       session.variables[`webhook_${currentNode.nodeId}_error_type`] = "config";
       session.variables[`webhook_${currentNode.nodeId}_error_message`] =
@@ -40,32 +43,40 @@ export class WebhookNodeHandler extends BaseNodeHandler {
 
     // Проверка корректности URL
     try {
-      new URL(url);
+      new URL(processedUrl);
     } catch (urlError) {
-      this.logger.error(`Некорректный URL: ${url}`);
+      this.logger.error(`Некорректный URL: ${processedUrl}`);
       session.variables[`webhook_${currentNode.nodeId}_error_type`] = "config";
       session.variables[`webhook_${currentNode.nodeId}_error_message`] =
-        `Некорректный URL: ${url}`;
+        `Некорректный URL: ${processedUrl}`;
       await this.moveToNextNode(context, currentNode.nodeId);
       return;
     }
 
-    // Фильтруем пустые заголовки
-    const validHeaders = headers
+    // Фильтруем пустые заголовки и подставляем переменные
+    const processedHeaders = headers
       ? Object.fromEntries(
-          Object.entries(headers).filter(
-            ([key, value]) => key.trim() !== "" && value.trim() !== ""
-          )
+          Object.entries(headers)
+            .filter(([key, value]) => key.trim() !== "" && value.trim() !== "")
+            .map(([key, value]) => [
+              key,
+              this.substituteVariables(value, context),
+            ])
         )
       : {};
+
+    // Подставляем переменные в тело запроса
+    const processedBody = this.substituteVariables(body || "", context);
 
     this.logger.log(`=== WEBHOOK УЗЕЛ ВЫПОЛНЕНИЕ ===`);
     this.logger.log(`Узел ID: ${currentNode.nodeId}`);
     this.logger.log(`Пользователь: ${session.userId}`);
-    this.logger.log(`URL: ${url}`);
+    this.logger.log(`Исходный URL: ${url}`);
+    this.logger.log(`Обработанный URL: ${processedUrl}`);
     this.logger.log(`Метод: ${method}`);
-    this.logger.log(`Заголовки: ${JSON.stringify(validHeaders, null, 2)}`);
-    this.logger.log(`Тело запроса: ${body}`);
+    this.logger.log(`Заголовки: ${JSON.stringify(processedHeaders, null, 2)}`);
+    this.logger.log(`Исходное тело запроса: ${body}`);
+    this.logger.log(`Обработанное тело запроса: ${processedBody}`);
     this.logger.log(`Таймаут: ${timeout}с`);
     this.logger.log(`Количество повторов: ${retryCount || 0}`);
 
@@ -73,26 +84,26 @@ export class WebhookNodeHandler extends BaseNodeHandler {
       // Подготавливаем конфигурацию axios
       const axiosConfig: AxiosRequestConfig = {
         method: method || "POST",
-        url: url,
+        url: processedUrl,
         timeout: (timeout || 30) * 1000, // Конвертируем секунды в миллисекунды
         headers: {
           "Content-Type": "application/json",
           "User-Agent": "BotManager-Webhook/1.0",
-          ...validHeaders,
+          ...processedHeaders,
         },
         validateStatus: (status) => status < 500, // Не выбрасывать ошибку для 4xx статусов
       };
 
       // Добавляем тело запроса если есть
-      if (body && body.trim() !== "") {
+      if (processedBody && processedBody.trim() !== "") {
         try {
           // Пытаемся парсить как JSON
-          const parsedBody = JSON.parse(body);
+          const parsedBody = JSON.parse(processedBody);
           axiosConfig.data = parsedBody;
           // Content-Type остается application/json
         } catch (parseError) {
           // Если не JSON, отправляем как строку
-          axiosConfig.data = body;
+          axiosConfig.data = processedBody;
           axiosConfig.headers["Content-Type"] = "text/plain";
           this.logger.log(
             `Тело запроса не является валидным JSON, отправляем как текст`

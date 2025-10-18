@@ -21,18 +21,33 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
     this.logger.log("Keyboard node data:", JSON.stringify(currentNode.data));
 
-    const messageText = currentNode.data?.text || "Выберите опцию:";
+    const rawMessageText = currentNode.data?.text || "Выберите опцию:";
     const buttons = currentNode.data?.buttons || [];
     const isInline = currentNode.data?.isInline || false;
 
-    this.logger.log("Keyboard buttons:", JSON.stringify(buttons));
+    // Подставляем переменные в текст сообщения
+    const messageText = this.substituteVariables(rawMessageText, context);
+
+    // Подставляем переменные в текст кнопок
+    const processedButtons = buttons.map((button) => ({
+      ...button,
+      text: this.substituteVariables(button.text, context),
+      callbackData: this.substituteVariables(
+        button.callbackData || button.text,
+        context
+      ),
+    }));
+
+    this.logger.log("Keyboard buttons:", JSON.stringify(processedButtons));
     this.logger.log("Is inline:", String(isInline));
+    this.logger.log(`Исходный текст: "${rawMessageText}"`);
+    this.logger.log(`Обработанный текст: "${messageText}"`);
 
     // Создаем клавиатуру
     let telegramKeyboard;
     if (isInline) {
       telegramKeyboard = {
-        inline_keyboard: buttons.map((button) => [
+        inline_keyboard: processedButtons.map((button) => [
           {
             text: button.text,
             callback_data: button.callbackData || button.text,
@@ -41,7 +56,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       };
     } else {
       telegramKeyboard = {
-        keyboard: buttons.map((button) => [
+        keyboard: processedButtons.map((button) => [
           {
             text: button.text,
           },
