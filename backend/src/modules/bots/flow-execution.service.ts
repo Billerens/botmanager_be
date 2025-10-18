@@ -1,7 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 import { BotFlow, FlowStatus } from "../../database/entities/bot-flow.entity";
 import {
   BotFlowNode,
@@ -15,6 +14,25 @@ import {
   MessageType,
   MessageContentType,
 } from "../../database/entities/message.entity";
+import {
+  NodeHandlerService,
+  FlowContext,
+  INodeHandler,
+  StartNodeHandler,
+  MessageNodeHandler,
+  KeyboardNodeHandler,
+  ConditionNodeHandler,
+  ApiNodeHandler,
+  EndNodeHandler,
+  FormNodeHandler,
+  DelayNodeHandler,
+  VariableNodeHandler,
+  FileNodeHandler,
+  RandomNodeHandler,
+  WebhookNodeHandler,
+  IntegrationNodeHandler,
+  NewMessageNodeHandler,
+} from "./nodes";
 
 export interface UserSession {
   userId: string;
@@ -23,15 +41,6 @@ export interface UserSession {
   currentNodeId?: string;
   variables: Record<string, any>;
   lastActivity: Date;
-}
-
-export interface FlowContext {
-  bot: any;
-  user: any;
-  message: any;
-  session: UserSession;
-  flow: BotFlow;
-  currentNode?: BotFlowNode;
 }
 
 @Injectable()
@@ -46,69 +55,80 @@ export class FlowExecutionService {
     private readonly telegramService: TelegramService,
     private readonly botsService: BotsService,
     private readonly logger: CustomLoggerService,
-    private readonly messagesService: MessagesService
-  ) {}
+    private readonly messagesService: MessagesService,
+    private readonly nodeHandlerService: NodeHandlerService,
+    // Node handlers
+    private readonly startNodeHandler: StartNodeHandler,
+    private readonly messageNodeHandler: MessageNodeHandler,
+    private readonly keyboardNodeHandler: KeyboardNodeHandler,
+    private readonly conditionNodeHandler: ConditionNodeHandler,
+    private readonly apiNodeHandler: ApiNodeHandler,
+    private readonly endNodeHandler: EndNodeHandler,
+    private readonly formNodeHandler: FormNodeHandler,
+    private readonly delayNodeHandler: DelayNodeHandler,
+    private readonly variableNodeHandler: VariableNodeHandler,
+    private readonly fileNodeHandler: FileNodeHandler,
+    private readonly randomNodeHandler: RandomNodeHandler,
+    private readonly webhookNodeHandler: WebhookNodeHandler,
+    private readonly integrationNodeHandler: IntegrationNodeHandler,
+    private readonly newMessageNodeHandler: NewMessageNodeHandler
+  ) {
+    // Регистрируем все обработчики
+    this.registerNodeHandlers();
+  }
 
-  /**
-   * Отправляет сообщение через Telegram API и сохраняет его в базу данных
-   */
-  private async sendAndSaveMessage(
-    bot: any,
-    chatId: string,
-    text: string,
-    options: {
-      parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
-      reply_markup?: any;
-      reply_to_message_id?: number;
-      disable_web_page_preview?: boolean;
-    } = {}
-  ): Promise<void> {
-    const decryptedToken = this.botsService.decryptToken(bot.token);
-
-    // Отправляем сообщение через Telegram API
-    const telegramResponse = await this.telegramService.sendMessage(
-      decryptedToken,
-      chatId,
-      text,
-      options
+  private registerNodeHandlers(): void {
+    this.nodeHandlerService.registerHandler("start", this.startNodeHandler);
+    this.nodeHandlerService.registerHandler("message", this.messageNodeHandler);
+    this.nodeHandlerService.registerHandler(
+      "keyboard",
+      this.keyboardNodeHandler
+    );
+    this.nodeHandlerService.registerHandler(
+      "condition",
+      this.conditionNodeHandler
+    );
+    this.nodeHandlerService.registerHandler("api", this.apiNodeHandler);
+    this.nodeHandlerService.registerHandler("end", this.endNodeHandler);
+    this.nodeHandlerService.registerHandler("form", this.formNodeHandler);
+    this.nodeHandlerService.registerHandler("delay", this.delayNodeHandler);
+    this.nodeHandlerService.registerHandler(
+      "variable",
+      this.variableNodeHandler
+    );
+    this.nodeHandlerService.registerHandler("file", this.fileNodeHandler);
+    this.nodeHandlerService.registerHandler("random", this.randomNodeHandler);
+    this.nodeHandlerService.registerHandler("webhook", this.webhookNodeHandler);
+    this.nodeHandlerService.registerHandler(
+      "integration",
+      this.integrationNodeHandler
+    );
+    this.nodeHandlerService.registerHandler(
+      "new_message",
+      this.newMessageNodeHandler
     );
 
-    if (telegramResponse) {
-      // Сохраняем исходящее сообщение в базу данных
-      await this.messagesService.create({
-        botId: bot.id,
-        telegramMessageId: telegramResponse.message_id, // Используем реальный ID из ответа Telegram API
-        telegramChatId: chatId,
-        telegramUserId: bot.id, // Для исходящих сообщений userId = botId
-        type: MessageType.OUTGOING,
-        contentType: MessageContentType.TEXT,
-        text: text,
-        keyboard: options.reply_markup
-          ? {
-              type: options.reply_markup.inline_keyboard ? "inline" : "reply",
-              buttons:
-                options.reply_markup.inline_keyboard ||
-                options.reply_markup.keyboard ||
-                [],
-            }
-          : null,
-        metadata: {
-          firstName: bot.name || "Bot",
-          lastName: "",
-          username: bot.username,
-          isBot: true,
-          replyToMessageId: options.reply_to_message_id,
-        },
-        isProcessed: true,
-        processedAt: new Date(),
-      });
+    // Устанавливаем callback для всех обработчиков
+    const handlers = [
+      this.startNodeHandler,
+      this.messageNodeHandler,
+      this.keyboardNodeHandler,
+      this.conditionNodeHandler,
+      this.apiNodeHandler,
+      this.endNodeHandler,
+      this.formNodeHandler,
+      this.delayNodeHandler,
+      this.variableNodeHandler,
+      this.fileNodeHandler,
+      this.randomNodeHandler,
+      this.webhookNodeHandler,
+      this.integrationNodeHandler,
+      this.newMessageNodeHandler,
+    ];
 
-      this.logger.log(
-        `Исходящее сообщение отправлено и сохранено для чата ${chatId}`
-      );
-    } else {
-      this.logger.error(`Ошибка отправки сообщения в чат ${chatId}`);
-    }
+    handlers.forEach((handler) => {
+      handler.setExecuteNodeCallback(this.executeNode.bind(this));
+    });
   }
 
   async processMessage(bot: any, message: any): Promise<void> {
@@ -252,7 +272,7 @@ export class FlowExecutionService {
   }
 
   private async executeNode(context: FlowContext): Promise<void> {
-    const { currentNode, bot, message, session } = context;
+    const { currentNode } = context;
 
     if (!currentNode) return;
 
@@ -261,283 +281,18 @@ export class FlowExecutionService {
     );
 
     try {
-      switch (currentNode.type) {
-        case "start":
-          await this.executeStartNode(context);
-          break;
-        case "new_message":
-          await this.executeNewMessageNode(context);
-          break;
-        case "message":
-          await this.executeMessageNode(context);
-          break;
-        case "keyboard":
-          await this.executeKeyboardNode(context);
-          break;
-        case "condition":
-          await this.executeConditionNode(context);
-          break;
-        case "api":
-          await this.executeApiNode(context);
-          break;
-        case "form":
-          await this.executeFormNode(context);
-          break;
-        case "delay":
-          await this.executeDelayNode(context);
-          break;
-        case "variable":
-          await this.executeVariableNode(context);
-          break;
-        case "file":
-          await this.executeFileNode(context);
-          break;
-        case "random":
-          await this.executeRandomNode(context);
-          break;
-        case "webhook":
-          await this.executeWebhookNode(context);
-          break;
-        case "integration":
-          await this.executeIntegrationNode(context);
-          break;
-        case "end":
-          await this.executeEndNode(context);
-          break;
-        default:
-          this.logger.warn(`Неизвестный тип узла: ${currentNode.type}`);
+      // Получаем обработчик для данного типа узла
+      const handler = this.nodeHandlerService.getHandler(currentNode.type);
+
+      if (handler) {
+        await handler.execute(context);
+      } else {
+        this.logger.warn(`Неизвестный тип узла: ${currentNode.type}`);
       }
     } catch (error) {
       this.logger.error(`Ошибка выполнения узла ${currentNode.type}:`, error);
       throw error;
     }
-  }
-
-  private async executeStartNode(context: FlowContext): Promise<void> {
-    const { currentNode, session, message } = context;
-
-    // START узел работает только с командой /start
-    if (message.text !== "/start") {
-      this.logger.log(`START узел игнорирует сообщение: ${message.text}`);
-      return;
-    }
-
-    this.logger.log("Обрабатываем команду /start");
-
-    // Ищем следующий узел по edges
-    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
-    if (nextNodeId) {
-      session.currentNodeId = nextNodeId;
-      session.lastActivity = new Date();
-
-      // Находим и выполняем следующий узел
-      const nextNode = context.flow.nodes.find(
-        (node) => node.nodeId === nextNodeId
-      );
-      if (nextNode) {
-        context.currentNode = nextNode;
-        await this.executeNode(context);
-      }
-    } else {
-      this.logger.warn(
-        `Нет следующего узла для START узла ${currentNode.nodeId}`
-      );
-    }
-  }
-
-  private async executeMessageNode(context: FlowContext): Promise<void> {
-    const { currentNode, bot, message, session } = context;
-
-    const messageText = currentNode.data?.text || "Привет!";
-    const parseMode = currentNode.data?.parseMode || "HTML";
-
-    // Отправляем сообщение и сохраняем в БД
-    await this.sendAndSaveMessage(bot, message.chat.id, messageText, {
-      parse_mode: parseMode,
-    });
-
-    // Переходим к следующему узлу
-    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
-    if (nextNodeId) {
-      session.currentNodeId = nextNodeId;
-      session.lastActivity = new Date();
-
-      const nextNode = context.flow.nodes.find(
-        (node) => node.nodeId === nextNodeId
-      );
-      if (nextNode) {
-        context.currentNode = nextNode;
-        await this.executeNode(context);
-      }
-    }
-  }
-
-  private async executeKeyboardNode(context: FlowContext): Promise<void> {
-    const { currentNode, bot, message, session } = context;
-
-    this.logger.log("Keyboard node data:", JSON.stringify(currentNode.data));
-
-    const messageText = currentNode.data?.text || "Выберите опцию:";
-    const buttons = currentNode.data?.buttons || [];
-    const isInline = currentNode.data?.isInline || false;
-
-    this.logger.log("Keyboard buttons:", JSON.stringify(buttons));
-    this.logger.log("Is inline:", String(isInline));
-
-    // Создаем клавиатуру
-    let telegramKeyboard;
-    if (isInline) {
-      telegramKeyboard = {
-        inline_keyboard: buttons.map((button) => [
-          {
-            text: button.text,
-            callback_data: button.callbackData || button.text,
-          },
-        ]),
-      };
-    } else {
-      telegramKeyboard = {
-        keyboard: buttons.map((button) => [
-          {
-            text: button.text,
-          },
-        ]),
-        resize_keyboard: true,
-        one_time_keyboard: true,
-      };
-    }
-
-    // Отправляем сообщение с клавиатурой и сохраняем в БД
-    await this.sendAndSaveMessage(bot, message.chat.id, messageText, {
-      reply_markup: telegramKeyboard,
-    });
-
-    // Переходим к следующему узлу
-    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
-    if (nextNodeId) {
-      session.currentNodeId = nextNodeId;
-      session.lastActivity = new Date();
-
-      const nextNode = context.flow.nodes.find(
-        (node) => node.nodeId === nextNodeId
-      );
-      if (nextNode) {
-        context.currentNode = nextNode;
-        await this.executeNode(context);
-      }
-    }
-  }
-
-  private async executeConditionNode(context: FlowContext): Promise<void> {
-    const { currentNode, message, session } = context;
-
-    // Простая логика условий (можно расширить)
-    const condition = currentNode.data?.condition;
-    if (!condition) {
-      this.logger.warn("Условие не задано в узле");
-      return;
-    }
-
-    const userInput = message.text || "";
-    let conditionMet = false;
-
-    switch (condition.operator) {
-      case "equals":
-        conditionMet = userInput === condition.value;
-        break;
-      case "contains":
-        conditionMet = userInput
-          .toLowerCase()
-          .includes(condition.value.toLowerCase());
-        break;
-      case "startsWith":
-        conditionMet = userInput
-          .toLowerCase()
-          .startsWith(condition.value.toLowerCase());
-        break;
-      default:
-        this.logger.warn(`Неизвестный оператор условия: ${condition.operator}`);
-    }
-
-    // Переходим к следующему узлу (в реальной реализации можно добавить trueNodeId/falseNodeId)
-    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
-    if (nextNodeId) {
-      session.currentNodeId = nextNodeId;
-      session.lastActivity = new Date();
-
-      const nextNode = context.flow.nodes.find(
-        (node) => node.nodeId === nextNodeId
-      );
-      if (nextNode) {
-        context.currentNode = nextNode;
-        await this.executeNode(context);
-      }
-    }
-  }
-
-  private async executeApiNode(context: FlowContext): Promise<void> {
-    const { currentNode, session } = context;
-
-    // Простая реализация API узла (можно расширить)
-    const apiConfig = currentNode.data?.webhook;
-    if (!apiConfig) {
-      this.logger.warn("API конфигурация не задана в узле");
-      return;
-    }
-
-    try {
-      // Здесь можно добавить HTTP запрос
-      this.logger.log(`Выполняем API запрос: ${apiConfig.url}`);
-
-      // Переходим к следующему узлу
-      const nextNodeId = currentNode.data?.nextNodeId;
-      if (nextNodeId) {
-        session.currentNodeId = nextNodeId;
-        session.lastActivity = new Date();
-
-        const nextNode = context.flow.nodes.find(
-          (node) => node.nodeId === nextNodeId
-        );
-        if (nextNode) {
-          context.currentNode = nextNode;
-          await this.executeNode(context);
-        }
-      }
-    } catch (error) {
-      this.logger.error("Ошибка выполнения API узла:", error);
-    }
-  }
-
-  private async executeEndNode(context: FlowContext): Promise<void> {
-    const { session } = context;
-
-    // Завершаем сессию
-    session.currentNodeId = undefined;
-    session.lastActivity = new Date();
-
-    this.logger.log(`Диалог завершен для пользователя ${session.userId}`);
-  }
-
-  // Поиск следующего узла по edges
-  private findNextNodeId(
-    context: FlowContext,
-    currentNodeId: string
-  ): string | null {
-    // Ищем edge, который начинается с текущего узла
-    const edge = context.flow.flowData?.edges?.find(
-      (edge) => edge.source === currentNodeId
-    );
-
-    if (edge) {
-      return edge.target;
-    }
-
-    // Если edge не найден, ищем в данных узла
-    const currentNode = context.flow.nodes.find(
-      (node) => node.nodeId === currentNodeId
-    );
-
-    return currentNode?.data?.nextNodeId || null;
   }
 
   // Поиск подходящего NEW_MESSAGE узла
@@ -653,663 +408,6 @@ export class FlowExecutionService {
       if (now.getTime() - session.lastActivity.getTime() > maxAge) {
         this.userSessions.delete(key);
       }
-    }
-  }
-
-  // Выполнение узла формы
-  private async executeFormNode(context: FlowContext): Promise<void> {
-    const { currentNode, bot, message, session } = context;
-
-    if (!currentNode?.data?.form) {
-      this.logger.warn("Данные формы не найдены");
-      return;
-    }
-
-    const formData = currentNode.data.form;
-
-    // Отправляем сообщение с формой
-    const formMessage = `📝 ${formData.fields
-      .map((field) => `${field.label}${field.required ? " *" : ""}`)
-      .join("\n")}\n\n${formData.submitText}`;
-
-    await this.sendAndSaveMessage(bot, session.chatId, formMessage);
-
-    // Создаем клавиатуру для отправки формы
-    const keyboard = {
-      inline_keyboard: [
-        [
-          {
-            text: formData.submitText,
-            callback_data: `form_submit_${currentNode.nodeId}`,
-          },
-        ],
-      ],
-    };
-
-    await this.sendAndSaveMessage(
-      bot,
-      session.chatId,
-      "Нажмите кнопку для отправки формы:",
-      { reply_markup: keyboard }
-    );
-
-    // Переходим к следующему узлу
-    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
-    if (nextNodeId) {
-      session.currentNodeId = nextNodeId;
-    }
-  }
-
-  // Выполнение узла задержки
-  private async executeDelayNode(context: FlowContext): Promise<void> {
-    const { currentNode, session } = context;
-
-    if (!currentNode?.data?.delay) {
-      this.logger.warn("Данные задержки не найдены");
-      return;
-    }
-
-    const delayData = currentNode.data.delay;
-    let delayMs = delayData.value;
-
-    // Конвертируем в миллисекунды
-    switch (delayData.unit) {
-      case "seconds":
-        delayMs *= 1000;
-        break;
-      case "minutes":
-        delayMs *= 60 * 1000;
-        break;
-      case "hours":
-        delayMs *= 60 * 60 * 1000;
-        break;
-      case "days":
-        delayMs *= 24 * 60 * 60 * 1000;
-        break;
-    }
-
-    this.logger.log(`Задержка на ${delayMs}мс`);
-
-    // Ждем указанное время
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-
-    // Переходим к следующему узлу
-    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
-    if (nextNodeId) {
-      session.currentNodeId = nextNodeId;
-    }
-  }
-
-  // Выполнение узла переменной
-  private async executeVariableNode(context: FlowContext): Promise<void> {
-    const { currentNode, session } = context;
-
-    if (!currentNode?.data?.variable) {
-      this.logger.warn("Данные переменной не найдены");
-      return;
-    }
-
-    const variableData = currentNode.data.variable;
-    const { name, value, operation } = variableData;
-
-    // Выполняем операцию с переменной
-    switch (operation) {
-      case "set":
-        session.variables[name] = value;
-        break;
-      case "append":
-        session.variables[name] = (session.variables[name] || "") + value;
-        break;
-      case "prepend":
-        session.variables[name] = value + (session.variables[name] || "");
-        break;
-      case "increment":
-        session.variables[name] = (
-          parseInt(session.variables[name] || "0") + 1
-        ).toString();
-        break;
-      case "decrement":
-        session.variables[name] = (
-          parseInt(session.variables[name] || "0") - 1
-        ).toString();
-        break;
-    }
-
-    this.logger.log(`Переменная ${name} = ${session.variables[name]}`);
-
-    // Переходим к следующему узлу
-    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
-    if (nextNodeId) {
-      session.currentNodeId = nextNodeId;
-    }
-  }
-
-  // Выполнение узла файла
-  private async executeFileNode(context: FlowContext): Promise<void> {
-    const { currentNode, bot, session } = context;
-
-    if (!currentNode?.data?.file) {
-      this.logger.warn("Данные файла не найдены");
-      return;
-    }
-
-    const fileData = currentNode.data.file;
-
-    try {
-      switch (fileData.type) {
-        case "upload":
-          await this.sendAndSaveMessage(
-            bot,
-            session.chatId,
-            `📁 Пожалуйста, загрузите файл.\nРазрешенные типы: ${fileData.accept?.join(", ")}\nМаксимальный размер: ${fileData.maxSize}МБ`
-          );
-          break;
-        case "download":
-        case "send":
-          if (fileData.url) {
-            await this.sendAndSaveDocument(bot, session.chatId, fileData.url, {
-              caption: fileData.filename || "file",
-            });
-          } else {
-            await this.sendAndSaveMessage(
-              bot,
-              session.chatId,
-              "📁 Файл не найден"
-            );
-          }
-          break;
-        default:
-          await this.sendAndSaveMessage(
-            bot,
-            session.chatId,
-            "📁 Неизвестный тип файла"
-          );
-      }
-    } catch (error) {
-      this.logger.error("Ошибка работы с файлом:", error);
-      await this.sendAndSaveMessage(
-        bot,
-        session.chatId,
-        "❌ Произошла ошибка при работе с файлом"
-      );
-    }
-
-    // Переходим к следующему узлу
-    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
-    if (nextNodeId) {
-      session.currentNodeId = nextNodeId;
-    }
-  }
-
-  // Выполнение узла случайного выбора
-  private async executeRandomNode(context: FlowContext): Promise<void> {
-    const { currentNode, session } = context;
-
-    if (!currentNode?.data?.random) {
-      this.logger.warn("Данные случайного выбора не найдены");
-      return;
-    }
-
-    const randomData = currentNode.data.random;
-    const { options, variable } = randomData;
-
-    if (!options || options.length === 0) {
-      this.logger.warn("Нет вариантов для случайного выбора");
-      return;
-    }
-
-    // Вычисляем общий вес
-    const totalWeight = options.reduce(
-      (sum, option) => sum + (option.weight || 1),
-      0
-    );
-
-    // Генерируем случайное число
-    const random = Math.random() * totalWeight;
-
-    // Выбираем вариант
-    let currentWeight = 0;
-    let selectedOption = options[0];
-
-    for (const option of options) {
-      currentWeight += option.weight || 1;
-      if (random <= currentWeight) {
-        selectedOption = option;
-        break;
-      }
-    }
-
-    // Сохраняем результат в переменную
-    if (variable) {
-      session.variables[variable] = selectedOption.value;
-    }
-
-    this.logger.log(`Случайный выбор: ${selectedOption.value}`);
-
-    // Переходим к следующему узлу
-    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
-    if (nextNodeId) {
-      session.currentNodeId = nextNodeId;
-    }
-  }
-
-  // Выполнение узла webhook
-  private async executeWebhookNode(context: FlowContext): Promise<void> {
-    const { currentNode, session } = context;
-
-    if (!currentNode?.data?.webhook) {
-      this.logger.warn("Данные webhook не найдены");
-      return;
-    }
-
-    const webhookData = currentNode.data.webhook;
-    const { url, method, headers, body, timeout, retryCount } = webhookData;
-
-    this.logger.log(`=== WEBHOOK УЗЕЛ ВЫПОЛНЕНИЕ ===`);
-    this.logger.log(`Узел ID: ${currentNode.nodeId}`);
-    this.logger.log(`Пользователь: ${session.userId}`);
-    this.logger.log(`URL: ${url}`);
-    this.logger.log(`Метод: ${method}`);
-    this.logger.log(`Заголовки: ${JSON.stringify(headers, null, 2)}`);
-    this.logger.log(`Тело запроса: ${body}`);
-    this.logger.log(`Таймаут: ${timeout}мс`);
-    this.logger.log(`Количество повторов: ${retryCount || 0}`);
-
-    try {
-      // Подготавливаем конфигурацию axios
-      const axiosConfig: AxiosRequestConfig = {
-        method: method || "POST",
-        url: url,
-        timeout: (timeout || 30) * 1000, // Конвертируем секунды в миллисекунды
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent": "BotManager-Webhook/1.0",
-          ...headers,
-        },
-        validateStatus: (status) => status < 500, // Не выбрасывать ошибку для 4xx статусов
-      };
-
-      // Добавляем тело запроса если есть
-      if (body && body.trim() !== "") {
-        try {
-          // Пытаемся парсить как JSON
-          axiosConfig.data = JSON.parse(body);
-        } catch (parseError) {
-          // Если не JSON, отправляем как строку
-          axiosConfig.data = body;
-          axiosConfig.headers["Content-Type"] = "text/plain";
-        }
-      }
-
-      this.logger.log(`Отправляем HTTP запрос...`);
-      this.logger.log(
-        `Конфигурация axios: ${JSON.stringify(
-          {
-            method: axiosConfig.method,
-            url: axiosConfig.url,
-            timeout: axiosConfig.timeout,
-            headers: axiosConfig.headers,
-            hasData: !!axiosConfig.data,
-          },
-          null,
-          2
-        )}`
-      );
-
-      // Выполняем запрос с повторными попытками
-      let lastError: any = null;
-      let attempt = 0;
-      const maxAttempts = (retryCount || 0) + 1;
-
-      while (attempt < maxAttempts) {
-        attempt++;
-
-        if (attempt > 1) {
-          this.logger.log(`Повторная попытка ${attempt}/${maxAttempts}...`);
-          // Задержка между попытками (экспоненциальная)
-          await new Promise((resolve) =>
-            setTimeout(resolve, Math.pow(2, attempt - 2) * 1000)
-          );
-        }
-
-        try {
-          const startTime = Date.now();
-          const response: AxiosResponse = await axios(axiosConfig);
-          const endTime = Date.now();
-          const duration = endTime - startTime;
-
-          this.logger.log(`=== WEBHOOK УСПЕШНЫЙ ОТВЕТ ===`);
-          this.logger.log(`Статус: ${response.status} ${response.statusText}`);
-          this.logger.log(`Время выполнения: ${duration}мс`);
-          this.logger.log(
-            `Заголовки ответа: ${JSON.stringify(response.headers, null, 2)}`
-          );
-          this.logger.log(
-            `Размер ответа: ${JSON.stringify(response.data).length} символов`
-          );
-
-          // Логируем тело ответа (ограничиваем размер для логов)
-          const responseDataStr = JSON.stringify(response.data);
-          if (responseDataStr.length > 1000) {
-            this.logger.log(
-              `Тело ответа (первые 1000 символов): ${responseDataStr.substring(0, 1000)}...`
-            );
-          } else {
-            this.logger.log(`Тело ответа: ${responseDataStr}`);
-          }
-
-          // Сохраняем результат в переменные сессии для дальнейшего использования
-          session.variables[`webhook_${currentNode.nodeId}_status`] =
-            response.status.toString();
-          session.variables[`webhook_${currentNode.nodeId}_response`] =
-            JSON.stringify(response.data);
-          session.variables[`webhook_${currentNode.nodeId}_duration`] =
-            duration.toString();
-
-          this.logger.log(`Результат сохранен в переменные сессии`);
-          break; // Успешный запрос, выходим из цикла
-        } catch (error: any) {
-          lastError = error;
-          const endTime = Date.now();
-          const duration = endTime - Date.now();
-
-          this.logger.error(
-            `=== WEBHOOK ОШИБКА (попытка ${attempt}/${maxAttempts}) ===`
-          );
-          this.logger.error(`Ошибка: ${error.message}`);
-          this.logger.error(`Код ошибки: ${error.code || "N/A"}`);
-          this.logger.error(`Время до ошибки: ${duration}мс`);
-
-          if (error.response) {
-            // Сервер ответил с кодом ошибки
-            this.logger.error(
-              `Статус ответа: ${error.response.status} ${error.response.statusText}`
-            );
-            this.logger.error(
-              `Заголовки ответа: ${JSON.stringify(error.response.headers, null, 2)}`
-            );
-            this.logger.error(
-              `Тело ошибки: ${JSON.stringify(error.response.data, null, 2)}`
-            );
-
-            // Сохраняем информацию об ошибке в переменные
-            session.variables[`webhook_${currentNode.nodeId}_error_status`] =
-              error.response.status.toString();
-            session.variables[`webhook_${currentNode.nodeId}_error_response`] =
-              JSON.stringify(error.response.data);
-          } else if (error.request) {
-            // Запрос был отправлен, но ответа не получено
-            this.logger.error(`Запрос отправлен, но ответа не получено`);
-            this.logger.error(
-              `Детали запроса: ${JSON.stringify(error.request, null, 2)}`
-            );
-
-            session.variables[`webhook_${currentNode.nodeId}_error_type`] =
-              "timeout";
-            session.variables[`webhook_${currentNode.nodeId}_error_message`] =
-              error.message;
-          } else {
-            // Ошибка при настройке запроса
-            this.logger.error(`Ошибка настройки запроса: ${error.message}`);
-
-            session.variables[`webhook_${currentNode.nodeId}_error_type`] =
-              "config";
-            session.variables[`webhook_${currentNode.nodeId}_error_message`] =
-              error.message;
-          }
-
-          // Если это последняя попытка, не продолжаем
-          if (attempt >= maxAttempts) {
-            this.logger.error(
-              `Все попытки исчерпаны. Webhook завершился с ошибкой.`
-            );
-            break;
-          }
-        }
-      }
-
-      // Переходим к следующему узлу независимо от результата
-      const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
-      if (nextNodeId) {
-        session.currentNodeId = nextNodeId;
-        session.lastActivity = new Date();
-
-        const nextNode = context.flow.nodes.find(
-          (node) => node.nodeId === nextNodeId
-        );
-        if (nextNode) {
-          context.currentNode = nextNode;
-          await this.executeNode(context);
-        }
-      }
-    } catch (error) {
-      this.logger.error("Критическая ошибка выполнения webhook узла:", error);
-
-      // Сохраняем критическую ошибку в переменные
-      session.variables[`webhook_${currentNode.nodeId}_critical_error`] =
-        error.message;
-
-      // Переходим к следующему узлу даже при критической ошибке
-      const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
-      if (nextNodeId) {
-        session.currentNodeId = nextNodeId;
-        session.lastActivity = new Date();
-
-        const nextNode = context.flow.nodes.find(
-          (node) => node.nodeId === nextNodeId
-        );
-        if (nextNode) {
-          context.currentNode = nextNode;
-          await this.executeNode(context);
-        }
-      }
-    }
-  }
-
-  // Выполнение узла интеграции
-  private async executeIntegrationNode(context: FlowContext): Promise<void> {
-    const { currentNode, session } = context;
-
-    if (!currentNode?.data?.integration) {
-      this.logger.warn("Данные интеграции не найдены");
-      return;
-    }
-
-    const integrationData = currentNode.data.integration;
-    const { service, action, config } = integrationData;
-
-    try {
-      this.logger.log(`Выполняем интеграцию: ${service}.${action}`);
-
-      // Здесь можно добавить логику для различных сервисов
-      switch (service) {
-        case "crm":
-          this.logger.log("Интеграция с CRM системой");
-          break;
-        case "email":
-          this.logger.log("Интеграция с email сервисом");
-          break;
-        case "analytics":
-          this.logger.log("Интеграция с аналитикой");
-          break;
-        case "payment":
-          this.logger.log("Интеграция с платежной системой");
-          break;
-        case "custom":
-          this.logger.log("Кастомная интеграция");
-          break;
-        default:
-          this.logger.warn(`Неизвестный сервис интеграции: ${service}`);
-      }
-
-      this.logger.log(`Конфигурация интеграции: ${JSON.stringify(config)}`);
-
-      // Переходим к следующему узлу
-      const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
-      if (nextNodeId) {
-        session.currentNodeId = nextNodeId;
-        session.lastActivity = new Date();
-
-        const nextNode = context.flow.nodes.find(
-          (node) => node.nodeId === nextNodeId
-        );
-        if (nextNode) {
-          context.currentNode = nextNode;
-          await this.executeNode(context);
-        }
-      }
-    } catch (error) {
-      this.logger.error("Ошибка выполнения интеграции:", error);
-    }
-  }
-
-  // Выполнение узла нового сообщения
-  private async executeNewMessageNode(context: FlowContext): Promise<void> {
-    const { currentNode, session, message } = context;
-
-    this.logger.log(`=== ВЫПОЛНЕНИЕ NEW_MESSAGE УЗЛА ===`);
-    this.logger.log(`Узел: ${currentNode.nodeId}`);
-    this.logger.log(`Сообщение: "${message.text}"`);
-
-    if (!currentNode?.data?.newMessage) {
-      this.logger.warn("Данные нового сообщения не найдены");
-      return;
-    }
-
-    const newMessageData = currentNode.data.newMessage;
-    const { text, contentType, caseSensitive } = newMessageData;
-
-    this.logger.log(`Данные узла: ${JSON.stringify(newMessageData)}`);
-
-    // Проверяем соответствие сообщения условиям узла
-    let messageMatches = true;
-
-    // Проверяем текст сообщения
-    if (text && text.trim() !== "") {
-      const messageText = message.text || "";
-      const filterText = caseSensitive ? text : text.toLowerCase();
-      const userText = caseSensitive ? messageText : messageText.toLowerCase();
-
-      this.logger.log(`Проверка текста: "${userText}" vs "${filterText}"`);
-
-      if (userText !== filterText) {
-        this.logger.log(`Текст не совпадает`);
-        messageMatches = false;
-      }
-    }
-
-    // Проверяем тип контента
-    if (contentType && contentType !== "text") {
-      const messageContentType = this.getMessageContentType(message);
-      this.logger.log(
-        `Проверка типа контента: "${messageContentType}" vs "${contentType}"`
-      );
-
-      if (messageContentType !== contentType) {
-        this.logger.log(`Тип контента не совпадает`);
-        messageMatches = false;
-      }
-    }
-
-    if (!messageMatches) {
-      this.logger.log(
-        `Сообщение не соответствует условиям узла NEW_MESSAGE: ${message.text}`
-      );
-      return;
-    }
-
-    this.logger.log(
-      `Сообщение соответствует условиям узла NEW_MESSAGE: ${message.text}`
-    );
-
-    // Переходим к следующему узлу
-    const nextNodeId = this.findNextNodeId(context, currentNode.nodeId);
-    this.logger.log(`Следующий узел: ${nextNodeId}`);
-
-    if (nextNodeId) {
-      session.currentNodeId = nextNodeId;
-      session.lastActivity = new Date();
-
-      const nextNode = context.flow.nodes.find(
-        (node) => node.nodeId === nextNodeId
-      );
-      if (nextNode) {
-        this.logger.log(
-          `Переходим к узлу: ${nextNode.nodeId} (${nextNode.type})`
-        );
-        context.currentNode = nextNode;
-        await this.executeNode(context);
-      } else {
-        this.logger.error(`Следующий узел ${nextNodeId} не найден!`);
-      }
-    } else {
-      this.logger.warn(
-        `Нет следующего узла для NEW_MESSAGE узла ${currentNode.nodeId}`
-      );
-    }
-  }
-
-  /**
-   * Отправляет документ через Telegram API и сохраняет его в базу данных
-   */
-  private async sendAndSaveDocument(
-    bot: any,
-    chatId: string,
-    document: string | Buffer,
-    options: {
-      caption?: string;
-      parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
-      reply_markup?: any;
-      reply_to_message_id?: number;
-    } = {}
-  ): Promise<void> {
-    const decryptedToken = this.botsService.decryptToken(bot.token);
-
-    // Отправляем документ через Telegram API
-    const telegramResponse = await this.telegramService.sendDocument(
-      decryptedToken,
-      chatId,
-      document,
-      options
-    );
-
-    if (telegramResponse) {
-      // Сохраняем исходящее сообщение в базу данных
-      await this.messagesService.create({
-        botId: bot.id,
-        telegramMessageId: telegramResponse.message_id, // Используем реальный ID из ответа Telegram API
-        telegramChatId: chatId,
-        telegramUserId: bot.id, // Для исходящих сообщений userId = botId
-        type: MessageType.OUTGOING,
-        contentType: MessageContentType.DOCUMENT,
-        text: options.caption || null,
-        media: {
-          fileId: telegramResponse.document?.file_id || "",
-          fileUniqueId: telegramResponse.document?.file_unique_id || "",
-          fileName: telegramResponse.document?.file_name || "document",
-          fileSize: telegramResponse.document?.file_size || 0,
-          mimeType:
-            telegramResponse.document?.mime_type || "application/octet-stream",
-        },
-        keyboard: options.reply_markup
-          ? {
-              type: options.reply_markup.inline_keyboard ? "inline" : "reply",
-              buttons:
-                options.reply_markup.inline_keyboard ||
-                options.reply_markup.keyboard ||
-                [],
-            }
-          : null,
-        metadata: {
-          firstName: bot.name || "Bot",
-          lastName: "",
-          username: bot.username,
-          isBot: true,
-          replyToMessageId: options.reply_to_message_id,
-        },
-        isProcessed: true,
-        processedAt: new Date(),
-      });
     }
   }
 

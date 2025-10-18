@@ -15,6 +15,23 @@ import { TelegramModule } from "../telegram/telegram.module";
 import { MessagesModule } from "../messages/messages.module";
 import { ProductsModule } from "../products/products.module";
 import { CustomLoggerService } from "../../common/logger.service";
+import {
+  NodeHandlerService,
+  StartNodeHandler,
+  MessageNodeHandler,
+  KeyboardNodeHandler,
+  ConditionNodeHandler,
+  ApiNodeHandler,
+  EndNodeHandler,
+  FormNodeHandler,
+  DelayNodeHandler,
+  VariableNodeHandler,
+  FileNodeHandler,
+  RandomNodeHandler,
+  WebhookNodeHandler,
+  IntegrationNodeHandler,
+  NewMessageNodeHandler,
+} from "./nodes";
 
 @Module({
   imports: [
@@ -28,6 +45,21 @@ import { CustomLoggerService } from "../../common/logger.service";
     BotFlowsService,
     FlowExecutionService,
     CustomLoggerService,
+    NodeHandlerService,
+    StartNodeHandler,
+    MessageNodeHandler,
+    KeyboardNodeHandler,
+    ConditionNodeHandler,
+    ApiNodeHandler,
+    EndNodeHandler,
+    FormNodeHandler,
+    DelayNodeHandler,
+    VariableNodeHandler,
+    FileNodeHandler,
+    RandomNodeHandler,
+    WebhookNodeHandler,
+    IntegrationNodeHandler,
+    NewMessageNodeHandler,
   ],
   controllers: [BotsController, PublicBotsController, BotFlowsController],
   exports: [BotsService, BotFlowsService, FlowExecutionService],
