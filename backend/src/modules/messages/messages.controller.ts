@@ -9,7 +9,7 @@ import {
   UseGuards,
   Request,
   ParseUUIDPipe,
-  ParseIntPipe,
+  BadRequestException,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -137,13 +137,25 @@ export class MessagesController {
   async getBotUsers(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any,
-    @Query("page", new ParseIntPipe({ optional: true })) page: number = 1,
-    @Query("limit", new ParseIntPipe({ optional: true })) limit: number = 50,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
     @Query("search") search?: string
   ) {
+    // Преобразуем строковые параметры в числа с значениями по умолчанию
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 50;
+    
+    // Валидация значений
+    if (isNaN(pageNum) || pageNum < 1) {
+      throw new BadRequestException("Page must be a positive number");
+    }
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+      throw new BadRequestException("Limit must be between 1 and 100");
+    }
+    
     return this.messagesService.getBotUsers(botId, req.user.id, {
-      page,
-      limit,
+      page: pageNum,
+      limit: limitNum,
       search,
     });
   }
