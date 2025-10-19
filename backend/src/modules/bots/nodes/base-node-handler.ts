@@ -430,6 +430,11 @@ export abstract class BaseNodeHandler implements INodeHandler {
         return session.variables[trimmedPath];
       }
 
+      // Если требовалась переменная, но она не найдена, возвращаем пустую строку
+      if (trimmedPath.startsWith("{{") && trimmedPath.endsWith("}}")) {
+        return "";
+      }
+
       // Если переменная не найдена, возвращаем оригинальный текст
       this.logger.warn(`Переменная не найдена: ${trimmedPath}`);
       return match;

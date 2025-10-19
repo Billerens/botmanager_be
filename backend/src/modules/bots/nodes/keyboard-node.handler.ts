@@ -172,6 +172,33 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
     // Если это callback запрос (пользователь нажал кнопку)
     if (message.is_callback && message.callback_query) {
+      // Проверяем, что callback_query относится к текущему keyboard узлу
+      // Если это не так, отправляем клавиатуру и ждем новый выбор
+      const isCallbackForCurrentKeyboard =
+        message.callback_query.message?.message_id ===
+          session.variables[
+            `keyboard_${currentNode.nodeId}_callback_message_id`
+          ] ||
+        !session.variables[
+          `keyboard_${currentNode.nodeId}_callback_message_id`
+        ]; // Если это первый keyboard узел
+
+      if (!isCallbackForCurrentKeyboard) {
+        this.logger.log(
+          `Callback_query не относится к текущему keyboard узлу ${currentNode.nodeId}, отправляем клавиатуру`
+        );
+
+        await this.sendAndSaveMessage(
+          bot,
+          message.chat.id,
+          messageText,
+          messageOptions
+        );
+
+        this.logger.log(`Keyboard узел завершен, ожидаем выбор пользователя`);
+        return;
+      }
+
       // Находим индекс нажатой кнопки
       const pressedButtonData = message.callback_query.data;
       this.logger.log(`Нажата кнопка с данными: ${pressedButtonData}`);

@@ -99,7 +99,12 @@ export class ConditionNodeHandler extends BaseNodeHandler {
         conditionMet = !isNaN(num3) && !isNaN(num4) && num3 < num4;
         break;
       case "isEmpty":
-        conditionMet = !conditionField || conditionField.trim() === "";
+        // Проверяем, что переменная действительно пустая или не определена
+        const isEmptyResult = !conditionField || conditionField.trim() === "";
+        this.logger.log(
+          `isEmpty проверка: conditionField="${conditionField}", результат=${isEmptyResult}`
+        );
+        conditionMet = isEmptyResult;
         break;
       case "isNotEmpty":
         conditionMet = conditionField && conditionField.trim() !== "";
