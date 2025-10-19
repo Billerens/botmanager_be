@@ -48,8 +48,6 @@ export enum ConditionOperator {
   LESS_THAN = "lessThan",
   IS_EMPTY = "isEmpty",
   IS_NOT_EMPTY = "isNotEmpty",
-  VARIABLE_EQUALS = "variable_equals",
-  VARIABLE_CONTAINS = "variable_contains",
 }
 
 @Entity("bot_flow_nodes")

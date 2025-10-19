@@ -100,9 +100,7 @@ export class FlowNodeDataDto {
       | "greaterThan"
       | "lessThan"
       | "isEmpty"
-      | "isNotEmpty"
-      | "variable_equals"
-      | "variable_contains";
+      | "isNotEmpty";
     value: string;
     caseSensitive?: boolean;
   };
