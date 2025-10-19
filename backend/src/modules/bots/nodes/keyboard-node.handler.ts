@@ -23,30 +23,35 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
     // Сохраняем callback данные в переменные сессии, если это callback запрос
     if (message.is_callback && message.callback_query) {
-      session.variables["last_callback_data"] = message.callback_query.data;
-      session.variables["last_callback_id"] = message.callback_query.id;
-      session.variables["callback_timestamp"] = new Date().toISOString();
+      session.variables[`keyboard_${currentNode.nodeId}_last_callback_data`] =
+        message.callback_query.data;
+      session.variables[`keyboard_${currentNode.nodeId}_last_callback_id`] =
+        message.callback_query.id;
+      session.variables[`keyboard_${currentNode.nodeId}_callback_timestamp`] =
+        new Date().toISOString();
 
       // Дополнительная информация о callback
       if (message.callback_query.from) {
-        session.variables["callback_user_id"] =
+        session.variables[`keyboard_${currentNode.nodeId}_callback_user_id`] =
           message.callback_query.from.id?.toString();
-        session.variables["callback_username"] =
+        session.variables[`keyboard_${currentNode.nodeId}_callback_username`] =
           message.callback_query.from.username || "";
-        session.variables["callback_first_name"] =
-          message.callback_query.from.first_name || "";
+        session.variables[
+          `keyboard_${currentNode.nodeId}_callback_first_name`
+        ] = message.callback_query.from.first_name || "";
       }
 
       // Информация о сообщении с кнопкой
       if (message.callback_query.message) {
-        session.variables["callback_message_id"] =
-          message.callback_query.message.message_id?.toString();
-        session.variables["callback_chat_id"] =
+        session.variables[
+          `keyboard_${currentNode.nodeId}_callback_message_id`
+        ] = message.callback_query.message.message_id?.toString();
+        session.variables[`keyboard_${currentNode.nodeId}_callback_chat_id`] =
           message.callback_query.message.chat?.id?.toString();
       }
 
       this.logger.log(
-        `Callback данные сохранены: ${message.callback_query.data}`
+        `Callback данные сохранены для ноды ${currentNode.nodeId}: ${message.callback_query.data}`
       );
       this.logger.log(`Callback ID: ${message.callback_query.id}`);
       this.logger.log(
