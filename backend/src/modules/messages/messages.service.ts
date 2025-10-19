@@ -8,6 +8,7 @@ import { Repository, Between } from "typeorm";
 import { Message, MessageType } from "../../database/entities/message.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import { BroadcastDto } from "./dto/broadcast.dto";
+import { TelegramService } from "../telegram/telegram.service";
 
 interface MessageFilters {
   page: number;
@@ -92,7 +93,8 @@ export class MessagesService {
     @InjectRepository(Message)
     private messageRepository: Repository<Message>,
     @InjectRepository(Bot)
-    private botRepository: Repository<Bot>
+    private botRepository: Repository<Bot>,
+    private telegramService: TelegramService
   ) {}
 
   async getBotMessages(botId: string, userId: string, filters: MessageFilters) {
@@ -720,14 +722,14 @@ export class MessagesService {
           sortBy: "lastActivity",
           sortOrder: "desc",
         });
-        
+
         recipientChatIds = allDialogsForActivity.dialogs
           .filter((dialog) => {
             if (!data.recipients.activityDate) return true;
-            
+
             const dialogDate = new Date(dialog.lastActivityAt);
             const filterDate = new Date(data.recipients.activityDate);
-            
+
             if (data.recipients.activityType === "after") {
               return dialogDate >= filterDate;
             } else {
@@ -740,16 +742,104 @@ export class MessagesService {
 
     console.log(`Рассылка: найдено ${recipientChatIds.length} получателей`);
 
-    // Здесь должна быть логика отправки сообщений через Telegram API
-    // Пока что возвращаем заглушку
-    const sentCount = Math.min(recipientChatIds.length, 10); // Ограничиваем для тестирования
-    const failedCount = recipientChatIds.length - sentCount;
+    // Отправляем сообщения через Telegram API
+    let sentCount = 0;
+    let failedCount = 0;
+    const failedChatIds: string[] = [];
+
+    for (const chatId of recipientChatIds) {
+      try {
+        let success = false;
+
+        // Отправляем текст если есть
+        if (data.text) {
+          const replyMarkup =
+            data.buttons && data.buttons.length > 0
+              ? {
+                  inline_keyboard: data.buttons.map((button) => [
+                    {
+                      text: button.text,
+                      callback_data: button.callbackData,
+                    },
+                  ]),
+                }
+              : undefined;
+
+          const result = await this.telegramService.sendMessage(
+            bot.token,
+            chatId,
+            data.text,
+            {
+              parse_mode: "HTML",
+              reply_markup: replyMarkup,
+            }
+          );
+
+          if (result) {
+            success = true;
+            console.log(`Сообщение отправлено пользователю ${chatId}`);
+          }
+        }
+
+        // Отправляем изображение если есть
+        if (data.image && success) {
+          const replyMarkup =
+            data.buttons && data.buttons.length > 0
+              ? {
+                  inline_keyboard: data.buttons.map((button) => [
+                    {
+                      text: button.text,
+                      callback_data: button.callbackData,
+                    },
+                  ]),
+                }
+              : undefined;
+
+          const result = await this.telegramService.sendPhoto(
+            bot.token,
+            chatId,
+            data.image,
+            {
+              caption: data.text,
+              parse_mode: "HTML",
+              reply_markup: replyMarkup,
+            }
+          );
+
+          if (result) {
+            console.log(`Фото отправлено пользователю ${chatId}`);
+          }
+        }
+
+        if (success) {
+          sentCount++;
+        } else {
+          failedCount++;
+          failedChatIds.push(chatId);
+        }
+
+        // Небольшая задержка между отправками для избежания rate limiting
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      } catch (error) {
+        console.error(
+          `Ошибка отправки сообщения пользователю ${chatId}:`,
+          error.message
+        );
+        failedCount++;
+        failedChatIds.push(chatId);
+      }
+    }
+
+    console.log(
+      `Рассылка завершена: отправлено ${sentCount}, не удалось ${failedCount}`
+    );
 
     return {
       success: true,
       sentCount,
       failedCount,
       totalRecipients: recipientChatIds.length,
+      failedChatIds: failedChatIds.length > 0 ? failedChatIds : undefined,
     };
   }
 }
