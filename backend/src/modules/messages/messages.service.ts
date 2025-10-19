@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, Between } from "typeorm";
+import * as crypto from "crypto";
 import { Message, MessageType } from "../../database/entities/message.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import { BroadcastDto } from "./dto/broadcast.dto";
@@ -699,7 +700,8 @@ export class MessagesService {
     }
 
     // Проверяем валидность токена
-    const botInfo = await this.telegramService.getBotInfo(bot.token);
+    const decryptedToken = this.decryptToken(bot.token);
+    const botInfo = await this.telegramService.getBotInfo(decryptedToken);
     if (!botInfo) {
       throw new BadRequestException("Неверный токен бота или бот недоступен");
     }
@@ -759,7 +761,7 @@ export class MessagesService {
 
     console.log(`Рассылка: найдено ${recipientChatIds.length} получателей`);
     console.log(
-      `Токен бота: ${bot.token ? bot.token.substring(0, 10) + "..." : "НЕ НАЙДЕН"}`
+      `Токен бота: ${decryptedToken ? decryptedToken.substring(0, 10) + "..." : "НЕ НАЙДЕН"}`
     );
 
     // Отправляем сообщения через Telegram API
@@ -793,7 +795,7 @@ export class MessagesService {
           console.log(`Reply markup:`, replyMarkup);
 
           const result = await this.telegramService.sendMessage(
-            bot.token,
+            decryptedToken,
             chatId,
             data.text,
             {
@@ -829,7 +831,7 @@ export class MessagesService {
               : undefined;
 
           const result = await this.telegramService.sendPhoto(
-            bot.token,
+            decryptedToken,
             chatId,
             data.image,
             {
@@ -874,5 +876,24 @@ export class MessagesService {
       totalRecipients: recipientChatIds.length,
       failedChatIds: failedChatIds.length > 0 ? failedChatIds : undefined,
     };
+  }
+
+  // Расшифровка токена (копия из BotsService)
+  private decryptToken(encryptedToken: string): string {
+    const algorithm = "aes-256-cbc";
+    const keyString =
+      process.env.ENCRYPTION_KEY || "your-32-character-secret-key-here";
+    // Убеждаемся, что ключ имеет правильную длину (32 байта для AES-256)
+    const key = crypto.scryptSync(keyString, "salt", 32);
+
+    const parts = encryptedToken.split(":");
+    const iv = Buffer.from(parts[0], "hex");
+    const encrypted = parts[1];
+
+    const decipher = crypto.createDecipheriv(algorithm, key, iv);
+    let decrypted = decipher.update(encrypted, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+
+    return decrypted;
   }
 }
