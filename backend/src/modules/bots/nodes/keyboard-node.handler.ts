@@ -201,17 +201,35 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       }
     } else {
       // Если это обычное сообщение - отправляем клавиатуру и ждем выбора
-      this.logger.log(`Отправляем клавиатуру и ждем выбора пользователя`);
+      this.logger.log(`[KEYBOARD] Отправляем клавиатуру и ждем выбора пользователя`);
 
-      await this.sendAndSaveMessage(
-        bot,
-        message.chat.id,
-        messageText,
-        messageOptions
-      );
+      try {
+        await this.sendAndSaveMessage(
+          bot,
+          message.chat.id,
+          messageText,
+          messageOptions
+        );
 
-      // НЕ переходим к следующему узлу - ждем callback запрос
-      this.logger.log(`Keyboard узел завершен, ожидаем выбор пользователя`);
+        // НЕ переходим к следующему узлу - ждем callback запрос
+        this.logger.log(`[KEYBOARD] Узел завершен, ожидаем выбор пользователя`);
+      } catch (error) {
+        this.logger.error(`[KEYBOARD] Ошибка отправки клавиатуры: ${error.message}`);
+        
+        // Если не удалось отправить клавиатуру, попробуем отправить простое сообщение
+        try {
+          this.logger.log(`[KEYBOARD] Пробуем отправить простое сообщение без клавиатуры`);
+          await this.sendAndSaveMessage(
+            bot,
+            message.chat.id,
+            messageText,
+            { parse_mode: parseMode }
+          );
+        } catch (fallbackError) {
+          this.logger.error(`[KEYBOARD] Ошибка отправки простого сообщения: ${fallbackError.message}`);
+          throw new Error(`Не удалось отправить сообщение: ${error.message}`);
+        }
+      }
     }
   }
 }

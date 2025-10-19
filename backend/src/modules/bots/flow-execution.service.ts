@@ -129,6 +129,19 @@ export class FlowExecutionService {
 
   async processMessage(bot: any, message: any): Promise<void> {
     try {
+      // Проверяем валидность бота и токена
+      if (!bot || !bot.id) {
+        this.logger.error(`[FLOW] Объект бота невалиден:`, bot);
+        throw new Error("Invalid bot object");
+      }
+      
+      if (!bot.token) {
+        this.logger.error(`[FLOW] У бота ${bot.id} отсутствует токен`);
+        throw new Error(`Bot ${bot.id} has no token`);
+      }
+      
+      this.logger.log(`[FLOW] Токен бота ${bot.id}: ${bot.token.substring(0, 10)}...`);
+      
       const userId = message.from.id.toString();
       const chatId = message.chat.id.toString();
       const sessionKey = `${bot.id}-${userId}`;

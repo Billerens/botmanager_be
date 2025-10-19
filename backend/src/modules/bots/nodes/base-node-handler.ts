@@ -51,6 +51,9 @@ export abstract class BaseNodeHandler implements INodeHandler {
     } = {}
   ): Promise<any> {
     try {
+      this.logger.log(`[TELEGRAM] Отправка сообщения в чат ${chatId} через бота ${bot.id}`);
+      this.logger.log(`[TELEGRAM] Токен бота: ${bot.token ? `${bot.token.substring(0, 10)}...` : 'НЕ НАЙДЕН'}`);
+      
       // Отправляем сообщение через Telegram API
       const message = await this.telegramService.sendMessage(
         bot.token,
@@ -58,6 +61,12 @@ export abstract class BaseNodeHandler implements INodeHandler {
         text,
         options
       );
+
+      if (!message || !message.message_id) {
+        throw new Error(`Telegram API вернул пустой ответ или отсутствует message_id`);
+      }
+
+      this.logger.log(`[TELEGRAM] Сообщение отправлено успешно, ID: ${message.message_id}`);
 
       // Сохраняем сообщение в базу данных
       await this.messagesService.create({
@@ -76,7 +85,19 @@ export abstract class BaseNodeHandler implements INodeHandler {
 
       return message;
     } catch (error) {
-      this.logger.error(`Ошибка отправки сообщения: ${error.message}`);
+      this.logger.error(`[TELEGRAM] Ошибка отправки сообщения: ${error.message}`);
+      this.logger.error(`[TELEGRAM] Детали ошибки:`, error);
+      
+      // Проверяем тип ошибки
+      if (error.response) {
+        this.logger.error(`[TELEGRAM] HTTP статус: ${error.response.status}`);
+        this.logger.error(`[TELEGRAM] HTTP данные:`, error.response.data);
+        
+        if (error.response.status === 404) {
+          throw new Error(`Бот не найден или токен недействителен. Проверьте токен бота: ${bot.token ? `${bot.token.substring(0, 10)}...` : 'НЕ НАЙДЕН'}`);
+        }
+      }
+      
       throw error;
     }
   }
