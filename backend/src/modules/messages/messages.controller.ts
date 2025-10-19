@@ -9,6 +9,7 @@ import {
   UseGuards,
   Request,
   ParseUUIDPipe,
+  ParseIntPipe,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -136,8 +137,8 @@ export class MessagesController {
   async getBotUsers(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any,
-    @Query("page") page: number = 1,
-    @Query("limit") limit: number = 50,
+    @Query("page", new ParseIntPipe({ optional: true })) page: number = 1,
+    @Query("limit", new ParseIntPipe({ optional: true })) limit: number = 50,
     @Query("search") search?: string
   ) {
     return this.messagesService.getBotUsers(botId, req.user.id, {

@@ -591,7 +591,14 @@ export class MessagesService {
     }
 
     const { page, limit, search } = filters;
-    const skip = (page - 1) * limit;
+
+    // Убеждаемся, что page и limit являются числами
+    const pageNum =
+      typeof page === "number" ? page : parseInt(page as any) || 1;
+    const limitNum =
+      typeof limit === "number" ? limit : parseInt(limit as any) || 50;
+
+    const skip = (pageNum - 1) * limitNum;
 
     // Создаем запрос для получения уникальных пользователей
     let queryBuilder = this.messageRepository
@@ -616,7 +623,7 @@ export class MessagesService {
       .addGroupBy("message.metadata->>'isBot'")
       .orderBy("lastActivityAt", "DESC")
       .offset(skip)
-      .limit(limit);
+      .limit(limitNum);
 
     // Добавляем поиск если указан
     if (search && search.trim()) {
@@ -656,10 +663,10 @@ export class MessagesService {
     return {
       users,
       pagination: {
-        page,
-        limit,
+        page: pageNum,
+        limit: limitNum,
         total,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.ceil(total / limitNum),
       },
     };
   }
