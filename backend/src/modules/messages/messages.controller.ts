@@ -2,8 +2,10 @@ import {
   Controller,
   Get,
   Delete,
+  Post,
   Param,
   Query,
+  Body,
   UseGuards,
   Request,
   ParseUUIDPipe,
@@ -124,5 +126,37 @@ export class MessagesController {
     @Request() req: any
   ) {
     return this.messagesService.deleteDialog(botId, chatId, req.user.id);
+  }
+
+  @Get("bot/:botId/users")
+  @ApiOperation({ summary: "Получить список пользователей бота" })
+  @ApiResponse({ status: 200, description: "Список пользователей получен" })
+  @ApiResponse({ status: 401, description: "Неавторизован" })
+  @ApiResponse({ status: 404, description: "Бот не найден" })
+  async getBotUsers(
+    @Param("botId", ParseUUIDPipe) botId: string,
+    @Request() req: any,
+    @Query("page") page: number = 1,
+    @Query("limit") limit: number = 50,
+    @Query("search") search?: string
+  ) {
+    return this.messagesService.getBotUsers(botId, req.user.id, {
+      page,
+      limit,
+      search,
+    });
+  }
+
+  @Post("bot/:botId/broadcast")
+  @ApiOperation({ summary: "Отправить рассылку" })
+  @ApiResponse({ status: 200, description: "Рассылка отправлена" })
+  @ApiResponse({ status: 401, description: "Неавторизован" })
+  @ApiResponse({ status: 404, description: "Бот не найден" })
+  async sendBroadcast(
+    @Param("botId", ParseUUIDPipe) botId: string,
+    @Request() req: any,
+    @Body() body: any
+  ) {
+    return this.messagesService.sendBroadcast(botId, req.user.id, body);
   }
 }

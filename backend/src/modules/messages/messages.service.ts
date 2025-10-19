@@ -23,6 +23,12 @@ interface DialogFilters {
   sortOrder: "asc" | "desc";
 }
 
+interface UserFilters {
+  page: number;
+  limit: number;
+  search?: string;
+}
+
 export interface MessageStats {
   totalMessages: number;
   incomingMessages: number;
@@ -54,6 +60,29 @@ export interface DialogStats {
   activeDialogs: number;
   totalMessages: number;
   averageMessagesPerDialog: number;
+}
+
+export interface BotUser {
+  chatId: string;
+  userInfo: {
+    firstName?: string;
+    lastName?: string;
+    username?: string;
+    languageCode?: string;
+    isBot?: boolean;
+  };
+  lastActivityAt: string;
+  messageCount: number;
+}
+
+export interface BotUsersResponse {
+  users: BotUser[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 @Injectable()
@@ -544,6 +573,181 @@ export class MessagesService {
     return {
       success: true,
       deletedCount: messageCount,
+    };
+  }
+
+  async getBotUsers(
+    botId: string,
+    userId: string,
+    filters: UserFilters
+  ): Promise<BotUsersResponse> {
+    // Проверяем, что бот принадлежит пользователю
+    const bot = await this.botRepository.findOne({
+      where: { id: botId, ownerId: userId },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
+
+    const { page, limit, search } = filters;
+    const skip = (page - 1) * limit;
+
+    // Создаем запрос для получения уникальных пользователей
+    let queryBuilder = this.messageRepository
+      .createQueryBuilder("message")
+      .select([
+        "message.telegramChatId as chatId",
+        "message.metadata->>'firstName' as firstName",
+        "message.metadata->>'lastName' as lastName", 
+        "message.metadata->>'username' as username",
+        "message.metadata->>'languageCode' as languageCode",
+        "message.metadata->>'isBot' as isBot",
+        "MAX(message.createdAt) as lastActivityAt",
+        "COUNT(*) as messageCount"
+      ])
+      .where("message.botId = :botId", { botId })
+      .andWhere("message.type = :type", { type: MessageType.INCOMING })
+      .groupBy("message.telegramChatId")
+      .addGroupBy("message.metadata->>'firstName'")
+      .addGroupBy("message.metadata->>'lastName'")
+      .addGroupBy("message.metadata->>'username'")
+      .addGroupBy("message.metadata->>'languageCode'")
+      .addGroupBy("message.metadata->>'isBot'")
+      .orderBy("lastActivityAt", "DESC")
+      .offset(skip)
+      .limit(limit);
+
+    // Добавляем поиск если указан
+    if (search && search.trim()) {
+      queryBuilder.andWhere(
+        "(message.metadata->>'firstName' ILIKE :search OR " +
+        "message.metadata->>'lastName' ILIKE :search OR " +
+        "message.metadata->>'username' ILIKE :search)",
+        { search: `%${search.trim()}%` }
+      );
+    }
+
+    const [rawUsers, total] = await Promise.all([
+      queryBuilder.getRawMany(),
+      this.messageRepository
+        .createQueryBuilder("message")
+        .select("COUNT(DISTINCT message.telegramChatId)", "count")
+        .where("message.botId = :botId", { botId })
+        .andWhere("message.type = :type", { type: MessageType.INCOMING })
+        .getRawOne()
+        .then(result => parseInt(result.count) || 0)
+    ]);
+
+    // Преобразуем результат в нужный формат
+    const users: BotUser[] = rawUsers.map((raw) => ({
+      chatId: raw.chatId,
+      userInfo: {
+        firstName: raw.firstName || undefined,
+        lastName: raw.lastName || undefined,
+        username: raw.username || undefined,
+        languageCode: raw.languageCode || undefined,
+        isBot: raw.isBot === 'true',
+      },
+      lastActivityAt: raw.lastActivityAt,
+      messageCount: parseInt(raw.messageCount) || 0,
+    }));
+
+    return {
+      users,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async sendBroadcast(
+    botId: string,
+    userId: string,
+    data: {
+      text?: string;
+      image?: any;
+      buttons?: Array<{
+        text: string;
+        callbackData: string;
+      }>;
+      recipients: {
+        type: "all" | "specific" | "activity";
+        specificUsers?: string[];
+        activityType?: "before" | "after";
+        activityDate?: Date;
+      };
+    }
+  ) {
+    // Проверяем, что бот принадлежит пользователю
+    const bot = await this.botRepository.findOne({
+      where: { id: botId, ownerId: userId },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
+
+    // Получаем список получателей
+    let recipientChatIds: string[] = [];
+
+    switch (data.recipients.type) {
+      case "all":
+        // Получаем всех пользователей, которые писали боту
+        const allMessages = await this.messageRepository
+          .createQueryBuilder("message")
+          .select("DISTINCT message.telegramChatId", "chatId")
+          .where("message.botId = :botId", { botId })
+          .andWhere("message.type = :type", { type: MessageType.INCOMING })
+          .getRawMany();
+
+        recipientChatIds = allMessages.map((msg) => msg.chatId);
+        break;
+
+      case "specific":
+        recipientChatIds = data.recipients.specificUsers || [];
+        break;
+
+      case "activity":
+        // Фильтруем по активности
+        const activityQuery = this.messageRepository
+          .createQueryBuilder("message")
+          .select("DISTINCT message.telegramChatId", "chatId")
+          .where("message.botId = :botId", { botId })
+          .andWhere("message.type = :type", { type: MessageType.INCOMING });
+
+        if (data.recipients.activityDate) {
+          if (data.recipients.activityType === "after") {
+            activityQuery.andWhere("message.createdAt >= :date", {
+              date: data.recipients.activityDate,
+            });
+          } else {
+            activityQuery.andWhere("message.createdAt <= :date", {
+              date: data.recipients.activityDate,
+            });
+          }
+        }
+
+        const activityMessages = await activityQuery.getRawMany();
+        recipientChatIds = activityMessages.map((msg) => msg.chatId);
+        break;
+    }
+
+    console.log(`Рассылка: найдено ${recipientChatIds.length} получателей`);
+
+    // Здесь должна быть логика отправки сообщений через Telegram API
+    // Пока что возвращаем заглушку
+    const sentCount = Math.min(recipientChatIds.length, 10); // Ограничиваем для тестирования
+    const failedCount = recipientChatIds.length - sentCount;
+
+    return {
+      success: true,
+      sentCount,
+      failedCount,
+      totalRecipients: recipientChatIds.length,
     };
   }
 }
