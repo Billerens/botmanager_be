@@ -182,6 +182,10 @@ export class FlowNodeDataDto {
 
   @IsOptional()
   @IsObject()
+  variables?: Record<string, string>;
+
+  @IsOptional()
+  @IsObject()
   file?: {
     type: "upload" | "download" | "send";
     accept?: string[];
