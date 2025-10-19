@@ -48,57 +48,54 @@ export abstract class BaseNodeHandler implements INodeHandler {
       parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
       reply_markup?: any;
       reply_to_message_id?: number;
+      disable_web_page_preview?: boolean;
     } = {}
-  ): Promise<any> {
-    try {
-      this.logger.log(`[TELEGRAM] Отправка сообщения в чат ${chatId} через бота ${bot.id}`);
-      this.logger.log(`[TELEGRAM] Токен бота: ${bot.token ? `${bot.token.substring(0, 10)}...` : 'НЕ НАЙДЕН'}`);
-      
-      // Отправляем сообщение через Telegram API
-      const message = await this.telegramService.sendMessage(
-        bot.token,
-        chatId,
-        text,
-        options
-      );
+  ): Promise<void> {
+    const decryptedToken = this.botsService.decryptToken(bot.token);
 
-      if (!message || !message.message_id) {
-        throw new Error(`Telegram API вернул пустой ответ или отсутствует message_id`);
-      }
+    // Отправляем сообщение через Telegram API
+    const telegramResponse = await this.telegramService.sendMessage(
+      decryptedToken,
+      chatId,
+      text,
+      options
+    );
 
-      this.logger.log(`[TELEGRAM] Сообщение отправлено успешно, ID: ${message.message_id}`);
-
-      // Сохраняем сообщение в базу данных
+    if (telegramResponse) {
+      // Сохраняем исходящее сообщение в базу данных
       await this.messagesService.create({
         botId: bot.id,
+        telegramMessageId: telegramResponse.message_id,
         telegramChatId: chatId,
-        telegramMessageId: message.message_id,
+        telegramUserId: bot.id,
         type: MessageType.OUTGOING,
         contentType: MessageContentType.TEXT,
         text: text,
+        keyboard: options.reply_markup
+          ? {
+              type: options.reply_markup.inline_keyboard ? "inline" : "reply",
+              buttons:
+                options.reply_markup.inline_keyboard ||
+                options.reply_markup.keyboard ||
+                [],
+            }
+          : null,
         metadata: {
-          parseMode: options.parse_mode,
-          replyMarkup: options.reply_markup,
+          firstName: bot.name || "Bot",
+          lastName: "",
+          username: bot.username,
+          isBot: true,
           replyToMessageId: options.reply_to_message_id,
-        } as any,
+        },
+        isProcessed: true,
+        processedAt: new Date(),
       });
 
-      return message;
-    } catch (error) {
-      this.logger.error(`[TELEGRAM] Ошибка отправки сообщения: ${error.message}`);
-      this.logger.error(`[TELEGRAM] Детали ошибки:`, error);
-      
-      // Проверяем тип ошибки
-      if (error.response) {
-        this.logger.error(`[TELEGRAM] HTTP статус: ${error.response.status}`);
-        this.logger.error(`[TELEGRAM] HTTP данные:`, error.response.data);
-        
-        if (error.response.status === 404) {
-          throw new Error(`Бот не найден или токен недействителен. Проверьте токен бота: ${bot.token ? `${bot.token.substring(0, 10)}...` : 'НЕ НАЙДЕН'}`);
-        }
-      }
-      
-      throw error;
+      this.logger.log(
+        `Исходящее сообщение отправлено и сохранено для чата ${chatId}`
+      );
+    } else {
+      this.logger.error(`Ошибка отправки сообщения в чат ${chatId}`);
     }
   }
 
@@ -108,48 +105,186 @@ export abstract class BaseNodeHandler implements INodeHandler {
   protected async sendAndSaveDocument(
     bot: any,
     chatId: string,
-    documentUrl: string,
+    document: string | Buffer,
     options: {
       caption?: string;
       parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
       reply_markup?: any;
       reply_to_message_id?: number;
     } = {}
-  ): Promise<any> {
-    try {
-      // Отправляем документ через Telegram API
-      const message = await this.telegramService.sendDocument(
-        bot.token,
-        chatId,
-        documentUrl,
-        options
-      );
+  ): Promise<void> {
+    const decryptedToken = this.botsService.decryptToken(bot.token);
 
-      // Сохраняем сообщение в базу данных
+    // Отправляем документ через Telegram API
+    const telegramResponse = await this.telegramService.sendDocument(
+      decryptedToken,
+      chatId,
+      document,
+      options
+    );
+
+    if (telegramResponse) {
+      // Сохраняем исходящее сообщение в базу данных
       await this.messagesService.create({
         botId: bot.id,
+        telegramMessageId: telegramResponse.message_id,
         telegramChatId: chatId,
-        telegramMessageId: message.message_id,
+        telegramUserId: bot.id,
         type: MessageType.OUTGOING,
         contentType: MessageContentType.DOCUMENT,
-        text: options.caption || "",
+        text: options.caption || null,
+        media: {
+          fileId: telegramResponse.document?.file_id || "",
+          fileUniqueId: telegramResponse.document?.file_unique_id || "",
+          fileName: telegramResponse.document?.file_name || "document",
+          fileSize: telegramResponse.document?.file_size || 0,
+          mimeType:
+            telegramResponse.document?.mime_type || "application/octet-stream",
+        },
+        keyboard: options.reply_markup
+          ? {
+              type: options.reply_markup.inline_keyboard ? "inline" : "reply",
+              buttons:
+                options.reply_markup.inline_keyboard ||
+                options.reply_markup.keyboard ||
+                [],
+            }
+          : null,
         metadata: {
-          documentUrl,
-          parseMode: options.parse_mode,
-          replyMarkup: options.reply_markup,
+          firstName: bot.name || "Bot",
+          lastName: "",
+          username: bot.username,
+          isBot: true,
           replyToMessageId: options.reply_to_message_id,
-        } as any,
+        },
+        isProcessed: true,
+        processedAt: new Date(),
       });
-
-      return message;
-    } catch (error) {
-      this.logger.error(`Ошибка отправки документа: ${error.message}`);
-      throw error;
     }
   }
 
   /**
-   * Переходит к указанному узлу и выполняет его
+   * Поиск следующего узла по edges
+   */
+  protected findNextNodeId(
+    context: FlowContext,
+    currentNodeId: string,
+    sourceHandle?: string
+  ): string | null {
+    // Ищем edge, который начинается с текущего узла
+    const edge = context.flow.flowData?.edges?.find(
+      (edge) =>
+        edge.source === currentNodeId &&
+        (!sourceHandle || edge.sourceHandle === sourceHandle)
+    );
+
+    if (edge) {
+      return edge.target;
+    }
+
+    // Если edge не найден, ищем в данных узла
+    const currentNode = context.flow.nodes.find(
+      (node) => node.nodeId === currentNodeId
+    );
+
+    return currentNode?.data?.nextNodeId || null;
+  }
+
+  /**
+   * Находит следующий узел по конкретному выходу
+   */
+  protected findNextNodeIdByOutput(
+    context: FlowContext,
+    currentNodeId: string,
+    outputId: string
+  ): string | null {
+    this.logger.log(
+      `Поиск следующего узла для выхода ${outputId} узла ${currentNodeId}`
+    );
+
+    // Логируем структуру flow
+    this.logger.log(`=== СТРУКТУРА FLOW ===`);
+    this.logger.log(`Flow ID: ${context.flow.id}`);
+    this.logger.log(
+      `Flow Data: ${JSON.stringify(context.flow.flowData, null, 2)}`
+    );
+
+    // Логируем все edges
+    this.logger.log(`=== ВСЕ EDGES ===`);
+    if (context.flow.flowData?.edges) {
+      context.flow.flowData.edges.forEach((edge, index) => {
+        this.logger.log(`Edge ${index}: ${JSON.stringify(edge)}`);
+      });
+    } else {
+      this.logger.log(`Edges не найдены в flowData`);
+    }
+
+    // Логируем все узлы
+    this.logger.log(`=== ВСЕ УЗЛЫ ===`);
+    context.flow.nodes.forEach((node, index) => {
+      this.logger.log(
+        `Узел ${index}: ID=${node.nodeId}, Type=${node.type}, Data=${JSON.stringify(node.data)}`
+      );
+    });
+
+    // Ищем edge, который начинается с текущего узла и конкретного выхода
+    const edge = context.flow.flowData?.edges?.find(
+      (edge) => edge.source === currentNodeId && edge.sourceHandle === outputId
+    );
+
+    if (edge) {
+      this.logger.log(`Найден edge: ${JSON.stringify(edge)}`);
+      return edge.target;
+    }
+
+    this.logger.warn(
+      `Edge не найден для выхода ${outputId} узла ${currentNodeId}`
+    );
+
+    // Попробуем найти edge без sourceHandle (fallback)
+    // Для keyboard узлов с множественными выходами используем индекс кнопки
+    const allEdgesFromNode = context.flow.flowData?.edges?.filter(
+      (edge) => edge.source === currentNodeId
+    );
+
+    if (allEdgesFromNode && allEdgesFromNode.length > 0) {
+      // Если это keyboard узел и ищем button-X выход
+      if (
+        outputId.startsWith("button-") &&
+        currentNodeId.includes("keyboard")
+      ) {
+        const buttonIndex = parseInt(outputId.replace("button-", ""));
+        this.logger.log(
+          `Keyboard fallback: ищем edge для кнопки с индексом ${buttonIndex}`
+        );
+
+        if (buttonIndex >= 0 && buttonIndex < allEdgesFromNode.length) {
+          const selectedEdge = allEdgesFromNode[buttonIndex];
+          this.logger.log(
+            `Найден fallback edge для кнопки ${buttonIndex}: ${JSON.stringify(selectedEdge)}`
+          );
+          return selectedEdge.target;
+        } else {
+          this.logger.warn(
+            `Индекс кнопки ${buttonIndex} выходит за пределы доступных edges (${allEdgesFromNode.length})`
+          );
+        }
+      }
+
+      // Обычный fallback - берем первый edge
+      const fallbackEdge = allEdgesFromNode[0];
+      this.logger.log(
+        `Найден обычный fallback edge: ${JSON.stringify(fallbackEdge)}`
+      );
+      return fallbackEdge.target;
+    }
+
+    this.logger.warn(`Fallback edge также не найден для узла ${currentNodeId}`);
+    return null;
+  }
+
+  /**
+   * Переходит к конкретному узлу и выполняет его
    */
   protected async moveToNode(
     context: FlowContext,
@@ -163,13 +298,13 @@ export abstract class BaseNodeHandler implements INodeHandler {
       context.session.currentNodeId = nodeId;
       context.session.lastActivity = new Date();
 
-      this.logger.log(`[FLOW] Переход к узлу: ${nodeId}`);
+      this.logger.log(`Переход к узлу: ${nodeId}`);
       if (this.executeNodeCallback) {
         context.currentNode = targetNode;
         await this.executeNodeCallback(context);
       }
     } else {
-      this.logger.warn(`[FLOW] Узел с ID ${nodeId} не найден`);
+      this.logger.warn(`Узел с ID ${nodeId} не найден`);
     }
   }
 
@@ -226,74 +361,9 @@ export abstract class BaseNodeHandler implements INodeHandler {
       }
     } else {
       this.logger.warn(
-        `[FLOW] Не найден следующий узел для выхода ${outputId} узла ${currentNodeId}`
+        `Не найден следующий узел для выхода ${outputId} узла ${currentNodeId}`
       );
     }
-  }
-
-  /**
-   * Поиск следующего узла по edges
-   */
-  protected findNextNodeId(
-    context: FlowContext,
-    currentNodeId: string,
-    sourceHandle?: string
-  ): string | null {
-    this.logger.log(
-      `[FLOW] Поиск следующего узла: ${currentNodeId}, handle: ${sourceHandle || "default"}`
-    );
-
-    // Ищем edge, который начинается с текущего узла
-    const edge = context.flow.flowData?.edges?.find(
-      (edge) =>
-        edge.source === currentNodeId &&
-        (!sourceHandle || edge.sourceHandle === sourceHandle)
-    );
-
-    if (edge) {
-      this.logger.log(
-        `[FLOW] Найден edge: ${edge.source} -> ${edge.target} (handle: ${edge.sourceHandle})`
-      );
-      return edge.target;
-    }
-
-    this.logger.log(`[FLOW] Edge не найден, ищем в данных узла`);
-    // Если edge не найден, ищем в данных узла
-    const currentNode = context.flow.nodes.find(
-      (node) => node.nodeId === currentNodeId
-    );
-
-    return currentNode?.data?.nextNodeId || null;
-  }
-
-  /**
-   * Находит следующий узел по конкретному выходу
-   */
-  protected findNextNodeIdByOutput(
-    context: FlowContext,
-    currentNodeId: string,
-    outputId: string
-  ): string | null {
-    this.logger.log(
-      `[FLOW] Поиск узла по выходу: ${currentNodeId} -> ${outputId}`
-    );
-
-    // Ищем edge, который начинается с текущего узла и конкретного выхода
-    const edge = context.flow.flowData?.edges?.find(
-      (edge) => edge.source === currentNodeId && edge.sourceHandle === outputId
-    );
-
-    if (edge) {
-      this.logger.log(
-        `[FLOW] Найден edge по выходу: ${edge.source} -> ${edge.target} (handle: ${edge.sourceHandle})`
-      );
-      return edge.target;
-    }
-
-    this.logger.warn(
-      `[FLOW] Edge не найден для выхода ${outputId} узла ${currentNodeId}`
-    );
-    return null;
   }
 
   /**
@@ -339,14 +409,14 @@ export abstract class BaseNodeHandler implements INodeHandler {
       if (trimmedPath === "user.id") {
         return message.from?.id?.toString() || "";
       }
-      if (trimmedPath === "message.text") {
-        return message.text || "";
-      }
       if (trimmedPath === "chat.id") {
         return message.chat?.id?.toString() || "";
       }
+      if (trimmedPath === "message.text") {
+        return message.text || "";
+      }
       if (trimmedPath === "timestamp") {
-        return new Date().toISOString();
+        return new Date().toLocaleString("ru-RU");
       }
       if (trimmedPath === "date") {
         return new Date().toLocaleDateString("ru-RU");
@@ -356,47 +426,15 @@ export abstract class BaseNodeHandler implements INodeHandler {
       }
 
       // Обработка переменных сессии
-      const sessionValue = session.variables[trimmedPath];
-      if (sessionValue !== undefined) {
-        return String(sessionValue);
+      if (session.variables && session.variables[trimmedPath] !== undefined) {
+        return session.variables[trimmedPath];
       }
 
-      // Если переменная не найдена, возвращаем исходный текст
+      // Если переменная не найдена, возвращаем оригинальный текст
+      this.logger.warn(`Переменная не найдена: ${trimmedPath}`);
       return match;
     });
 
     return result;
-  }
-
-  /**
-   * Обновляет статистику выполнения узла
-   */
-  protected async updateNodeStats(
-    nodeId: string,
-    success: boolean,
-    error?: string
-  ): Promise<void> {
-    try {
-      const node = await this.botFlowNodeRepository.findOne({
-        where: { nodeId },
-      });
-
-      if (node) {
-        node.executionCount += 1;
-        node.lastExecutedAt = new Date();
-
-        if (success) {
-          node.successCount += 1;
-          node.lastError = null;
-        } else {
-          node.errorCount += 1;
-          node.lastError = error || "Неизвестная ошибка";
-        }
-
-        await this.botFlowNodeRepository.save(node);
-      }
-    } catch (error) {
-      this.logger.error(`Ошибка обновления статистики узла: ${error.message}`);
-    }
   }
 }

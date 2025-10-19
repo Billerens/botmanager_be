@@ -37,13 +37,13 @@ export class ConditionNodeHandler extends BaseNodeHandler {
       context
     );
 
-    // Отладочные логи для condition ноды
-    this.logger.log(
-      `[CONDITION] Узел: ${currentNode.nodeId}, Оператор: ${condition.operator}`
-    );
-    this.logger.log(
-      `[CONDITION] Поле: "${condition.field}", Значение: "${conditionValue}", Ввод: "${userInput}"`
-    );
+    this.logger.log(`=== CONDITION УЗЕЛ ВЫПОЛНЕНИЕ ===`);
+    this.logger.log(`Узел ID: ${currentNode.nodeId}`);
+    this.logger.log(`Пользователь: ${context.session.userId}`);
+    this.logger.log(`Оператор: ${condition.operator}`);
+    this.logger.log(`Исходное значение условия: "${condition.value}"`);
+    this.logger.log(`Обработанное значение условия: "${conditionValue}"`);
+    this.logger.log(`Вход пользователя: "${userInput}"`);
 
     let conditionMet = false;
 
@@ -110,26 +110,30 @@ export class ConditionNodeHandler extends BaseNodeHandler {
         // Сравнение с переменной сессии
         const variableValue = context.session.variables[conditionValue] || "";
         conditionMet = userInput === variableValue;
+        this.logger.log(
+          `Сравнение с переменной ${conditionValue} = "${variableValue}"`
+        );
         break;
       case ConditionOperator.VARIABLE_CONTAINS:
         // Проверка содержимого переменной
         const varValue = context.session.variables[conditionValue] || "";
         conditionMet = varValue.toLowerCase().includes(userInput.toLowerCase());
+        this.logger.log(
+          `Проверка переменной ${conditionValue} = "${varValue}" содержит "${userInput}"`
+        );
         break;
       default:
         this.logger.warn(`Неизвестный оператор условия: ${condition.operator}`);
     }
 
-    this.logger.log(
-      `[CONDITION] Результат: ${conditionMet ? "TRUE" : "FALSE"}`
-    );
+    this.logger.log(`Результат условия: ${conditionMet ? "TRUE" : "FALSE"}`);
 
     // Переходим к соответствующему узлу в зависимости от результата
     if (conditionMet) {
-      this.logger.log(`[CONDITION] Переход по TRUE выходу`);
+      // Переходим к узлу "true" если есть, иначе к следующему
       await this.moveToNextNode(context, currentNode.nodeId, "true");
     } else {
-      this.logger.log(`[CONDITION] Переход по FALSE выходу`);
+      // Переходим к узлу "false" если есть, иначе к следующему
       await this.moveToNextNode(context, currentNode.nodeId, "false");
     }
   }
