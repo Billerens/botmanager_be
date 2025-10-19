@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, Between } from "typeorm";
@@ -693,6 +694,22 @@ export class MessagesService {
       throw new NotFoundException("Бот не найден");
     }
 
+    if (!bot.token) {
+      throw new BadRequestException("Токен бота не настроен");
+    }
+
+    // Проверяем валидность токена
+    const botInfo = await this.telegramService.getBotInfo(bot.token);
+    if (!botInfo) {
+      throw new BadRequestException("Неверный токен бота или бот недоступен");
+    }
+
+    console.log(`Информация о боте:`, {
+      id: botInfo.id,
+      username: botInfo.username,
+      first_name: botInfo.first_name,
+    });
+
     // Получаем список получателей используя данные из диалогов
     let recipientChatIds: string[] = [];
 
@@ -741,6 +758,9 @@ export class MessagesService {
     }
 
     console.log(`Рассылка: найдено ${recipientChatIds.length} получателей`);
+    console.log(
+      `Токен бота: ${bot.token ? bot.token.substring(0, 10) + "..." : "НЕ НАЙДЕН"}`
+    );
 
     // Отправляем сообщения через Telegram API
     let sentCount = 0;
@@ -753,6 +773,11 @@ export class MessagesService {
 
         // Отправляем текст если есть
         if (data.text) {
+          console.log(
+            `Отправляем текст пользователю ${chatId}:`,
+            data.text.substring(0, 50) + "..."
+          );
+
           const replyMarkup =
             data.buttons && data.buttons.length > 0
               ? {
@@ -765,6 +790,8 @@ export class MessagesService {
                 }
               : undefined;
 
+          console.log(`Reply markup:`, replyMarkup);
+
           const result = await this.telegramService.sendMessage(
             bot.token,
             chatId,
@@ -775,9 +802,15 @@ export class MessagesService {
             }
           );
 
+          console.log(`Результат отправки сообщения:`, result);
+
           if (result) {
             success = true;
             console.log(`Сообщение отправлено пользователю ${chatId}`);
+          } else {
+            console.log(
+              `Не удалось отправить сообщение пользователю ${chatId}`
+            );
           }
         }
 

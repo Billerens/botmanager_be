@@ -209,15 +209,31 @@ export class TelegramService {
     } = {}
   ): Promise<any> {
     try {
-      const response = await axios.post(`${this.baseUrl}${token}/sendMessage`, {
+      const url = `${this.baseUrl}${token}/sendMessage`;
+      console.log(`Отправляем сообщение на URL: ${url}`);
+      console.log(`Данные:`, {
+        chat_id: chatId,
+        text: text.substring(0, 50) + "...",
+        ...options,
+      });
+
+      const response = await axios.post(url, {
         chat_id: chatId,
         text,
         ...options,
       });
 
+      console.log(`Ответ Telegram API:`, response.data);
       return response.data.ok ? response.data.result : null;
     } catch (error) {
-      console.error("Ошибка отправки сообщения:", error.message);
+      console.error("Ошибка отправки сообщения:", {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: `${this.baseUrl}${token.substring(0, 10)}.../sendMessage`,
+        chatId,
+      });
       return null;
     }
   }
