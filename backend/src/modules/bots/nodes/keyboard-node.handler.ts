@@ -173,15 +173,18 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     // Если это callback запрос (пользователь нажал кнопку)
     if (message.is_callback && message.callback_query) {
       // Проверяем, что callback_query относится к текущему keyboard узлу
-      // Если это не так, отправляем клавиатуру и ждем новый выбор
+      // Сравниваем message_id из callback_query с сохраненным в сессии
+      const savedMessageId =
+        session.variables[`keyboard_${currentNode.nodeId}_callback_message_id`];
+      const callbackMessageId =
+        message.callback_query.message?.message_id?.toString();
+
+      this.logger.log(
+        `Проверка callback: сохраненный message_id=${savedMessageId}, callback message_id=${callbackMessageId}`
+      );
+
       const isCallbackForCurrentKeyboard =
-        message.callback_query.message?.message_id ===
-          session.variables[
-            `keyboard_${currentNode.nodeId}_callback_message_id`
-          ] ||
-        !session.variables[
-          `keyboard_${currentNode.nodeId}_callback_message_id`
-        ]; // Если это первый keyboard узел
+        callbackMessageId === savedMessageId || !savedMessageId; // Если это первый keyboard узел (нет сохраненного message_id)
 
       if (!isCallbackForCurrentKeyboard) {
         this.logger.log(
