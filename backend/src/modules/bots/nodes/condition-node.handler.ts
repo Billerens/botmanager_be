@@ -39,6 +39,9 @@ export class ConditionNodeHandler extends BaseNodeHandler {
     this.logger.log(`Обработанное значение условия: "${conditionValue}"`);
     this.logger.log(`Исходное поле: "${condition.field}"`);
     this.logger.log(`Обработанное поле: "${conditionField}"`);
+    this.logger.log(
+      `Все переменные сессии: ${JSON.stringify(context.session.variables)}`
+    );
 
     let conditionMet = false;
 

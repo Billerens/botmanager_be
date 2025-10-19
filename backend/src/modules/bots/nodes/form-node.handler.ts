@@ -198,6 +198,13 @@ export class FormNodeHandler extends BaseNodeHandler {
     );
     if (nextFieldIndex >= totalFields) {
       session.variables[`form_${currentNode.nodeId}_completed`] = "true";
+      this.logger.log(`=== ФОРМА ЗАВЕРШЕНА ===`);
+      this.logger.log(
+        `Установлена переменная: form_${currentNode.nodeId}_completed = "true"`
+      );
+      this.logger.log(
+        `Все переменные сессии: ${JSON.stringify(session.variables)}`
+      );
       await this.showFormCompletion(context);
     } else {
       // Показываем следующее поле
