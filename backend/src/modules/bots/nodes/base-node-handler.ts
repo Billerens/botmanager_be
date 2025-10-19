@@ -239,13 +239,39 @@ export abstract class BaseNodeHandler implements INodeHandler {
     );
 
     // Попробуем найти edge без sourceHandle (fallback)
-    const fallbackEdge = context.flow.flowData?.edges?.find(
+    // Для keyboard узлов с множественными выходами используем индекс кнопки
+    const allEdgesFromNode = context.flow.flowData?.edges?.filter(
       (edge) => edge.source === currentNodeId
     );
 
-    if (fallbackEdge) {
+    if (allEdgesFromNode && allEdgesFromNode.length > 0) {
+      // Если это keyboard узел и ищем button-X выход
+      if (
+        outputId.startsWith("button-") &&
+        currentNodeId.includes("keyboard")
+      ) {
+        const buttonIndex = parseInt(outputId.replace("button-", ""));
+        this.logger.log(
+          `Keyboard fallback: ищем edge для кнопки с индексом ${buttonIndex}`
+        );
+
+        if (buttonIndex >= 0 && buttonIndex < allEdgesFromNode.length) {
+          const selectedEdge = allEdgesFromNode[buttonIndex];
+          this.logger.log(
+            `Найден fallback edge для кнопки ${buttonIndex}: ${JSON.stringify(selectedEdge)}`
+          );
+          return selectedEdge.target;
+        } else {
+          this.logger.warn(
+            `Индекс кнопки ${buttonIndex} выходит за пределы доступных edges (${allEdgesFromNode.length})`
+          );
+        }
+      }
+
+      // Обычный fallback - берем первый edge
+      const fallbackEdge = allEdgesFromNode[0];
       this.logger.log(
-        `Найден fallback edge без sourceHandle: ${JSON.stringify(fallbackEdge)}`
+        `Найден обычный fallback edge: ${JSON.stringify(fallbackEdge)}`
       );
       return fallbackEdge.target;
     }
