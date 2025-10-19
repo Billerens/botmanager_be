@@ -10,15 +10,20 @@ import {
   Request,
   ParseUUIDPipe,
   BadRequestException,
+  UseInterceptors,
+  UploadedFile,
 } from "@nestjs/common";
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiConsumes,
 } from "@nestjs/swagger";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { MessagesService } from "./messages.service";
+import { BroadcastDto } from "./dto/broadcast.dto";
 
 @ApiTags("messages")
 @Controller("messages")
@@ -144,7 +149,7 @@ export class MessagesController {
     // Преобразуем строковые параметры в числа с значениями по умолчанию
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 50;
-    
+
     // Валидация значений
     if (isNaN(pageNum) || pageNum < 1) {
       throw new BadRequestException("Page must be a positive number");
@@ -152,7 +157,7 @@ export class MessagesController {
     if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
       throw new BadRequestException("Limit must be between 1 and 100");
     }
-    
+
     return this.messagesService.getBotUsers(botId, req.user.id, {
       page: pageNum,
       limit: limitNum,
@@ -161,15 +166,42 @@ export class MessagesController {
   }
 
   @Post("bot/:botId/broadcast")
+  @UseInterceptors(FileInterceptor("image"))
   @ApiOperation({ summary: "Отправить рассылку" })
+  @ApiConsumes("multipart/form-data")
   @ApiResponse({ status: 200, description: "Рассылка отправлена" })
   @ApiResponse({ status: 401, description: "Неавторизован" })
   @ApiResponse({ status: 404, description: "Бот не найден" })
   async sendBroadcast(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any,
-    @Body() body: any
+    @Body() body: any,
+    @UploadedFile() image?: Express.Multer.File
   ) {
-    return this.messagesService.sendBroadcast(botId, req.user.id, body);
+    // Парсим JSON данные из FormData
+    let recipients;
+    let buttons;
+
+    try {
+      recipients = JSON.parse(body.recipients || "{}");
+      buttons = body.buttons ? JSON.parse(body.buttons) : undefined;
+    } catch (error) {
+      throw new BadRequestException(
+        "Неверный формат данных получателей или кнопок"
+      );
+    }
+
+    const broadcastData: BroadcastDto = {
+      text: body.text,
+      image: image,
+      buttons: buttons,
+      recipients: recipients,
+    };
+
+    return this.messagesService.sendBroadcast(
+      botId,
+      req.user.id,
+      broadcastData
+    );
   }
 }

@@ -7,6 +7,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, Between } from "typeorm";
 import { Message, MessageType } from "../../database/entities/message.entity";
 import { Bot } from "../../database/entities/bot.entity";
+import { BroadcastDto } from "./dto/broadcast.dto";
 
 interface MessageFilters {
   page: number;
@@ -664,24 +665,7 @@ export class MessagesService {
     };
   }
 
-  async sendBroadcast(
-    botId: string,
-    userId: string,
-    data: {
-      text?: string;
-      image?: any;
-      buttons?: Array<{
-        text: string;
-        callbackData: string;
-      }>;
-      recipients: {
-        type: "all" | "specific" | "activity";
-        specificUsers?: string[];
-        activityType?: "before" | "after";
-        activityDate?: Date;
-      };
-    }
-  ) {
+  async sendBroadcast(botId: string, userId: string, data: BroadcastDto) {
     // Проверяем, что бот принадлежит пользователю
     const bot = await this.botRepository.findOne({
       where: { id: botId, ownerId: userId },
