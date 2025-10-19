@@ -599,12 +599,12 @@ export class MessagesService {
       .select([
         "message.telegramChatId as chatId",
         "message.metadata->>'firstName' as firstName",
-        "message.metadata->>'lastName' as lastName", 
+        "message.metadata->>'lastName' as lastName",
         "message.metadata->>'username' as username",
         "message.metadata->>'languageCode' as languageCode",
         "message.metadata->>'isBot' as isBot",
         "MAX(message.createdAt) as lastActivityAt",
-        "COUNT(*) as messageCount"
+        "COUNT(*) as messageCount",
       ])
       .where("message.botId = :botId", { botId })
       .andWhere("message.type = :type", { type: MessageType.INCOMING })
@@ -622,8 +622,8 @@ export class MessagesService {
     if (search && search.trim()) {
       queryBuilder.andWhere(
         "(message.metadata->>'firstName' ILIKE :search OR " +
-        "message.metadata->>'lastName' ILIKE :search OR " +
-        "message.metadata->>'username' ILIKE :search)",
+          "message.metadata->>'lastName' ILIKE :search OR " +
+          "message.metadata->>'username' ILIKE :search)",
         { search: `%${search.trim()}%` }
       );
     }
@@ -636,7 +636,7 @@ export class MessagesService {
         .where("message.botId = :botId", { botId })
         .andWhere("message.type = :type", { type: MessageType.INCOMING })
         .getRawOne()
-        .then(result => parseInt(result.count) || 0)
+        .then((result) => parseInt(result.count) || 0),
     ]);
 
     // Преобразуем результат в нужный формат
@@ -647,7 +647,7 @@ export class MessagesService {
         lastName: raw.lastName || undefined,
         username: raw.username || undefined,
         languageCode: raw.languageCode || undefined,
-        isBot: raw.isBot === 'true',
+        isBot: raw.isBot === "true",
       },
       lastActivityAt: raw.lastActivityAt,
       messageCount: parseInt(raw.messageCount) || 0,
