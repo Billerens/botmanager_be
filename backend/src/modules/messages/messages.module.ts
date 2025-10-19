@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { MessagesController } from "./messages.controller";
 import { MessagesService } from "./messages.service";
@@ -7,7 +7,10 @@ import { Bot } from "../../database/entities/bot.entity";
 import { TelegramModule } from "../telegram/telegram.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Message, Bot]), TelegramModule],
+  imports: [
+    TypeOrmModule.forFeature([Message, Bot]),
+    forwardRef(() => TelegramModule),
+  ],
   controllers: [MessagesController],
   providers: [MessagesService],
   exports: [MessagesService],

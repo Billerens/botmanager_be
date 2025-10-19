@@ -12,7 +12,7 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
   imports: [
     ConfigModule,
     forwardRef(() => BotsModule),
-    MessagesModule,
+    forwardRef(() => MessagesModule),
     LeadsModule,
     ActivityLogModule,
   ],
