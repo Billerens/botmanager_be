@@ -52,14 +52,59 @@ export class ConditionNodeHandler extends BaseNodeHandler {
         conditionMet = userInput === conditionValue;
         break;
       case "contains":
-        conditionMet = userInput
-          .toLowerCase()
-          .includes(conditionValue.toLowerCase());
+        if (condition.caseSensitive) {
+          conditionMet = userInput.includes(conditionValue);
+        } else {
+          conditionMet = userInput
+            .toLowerCase()
+            .includes(conditionValue.toLowerCase());
+        }
         break;
       case "startsWith":
-        conditionMet = userInput
-          .toLowerCase()
-          .startsWith(conditionValue.toLowerCase());
+        if (condition.caseSensitive) {
+          conditionMet = userInput.startsWith(conditionValue);
+        } else {
+          conditionMet = userInput
+            .toLowerCase()
+            .startsWith(conditionValue.toLowerCase());
+        }
+        break;
+      case "endsWith":
+        if (condition.caseSensitive) {
+          conditionMet = userInput.endsWith(conditionValue);
+        } else {
+          conditionMet = userInput
+            .toLowerCase()
+            .endsWith(conditionValue.toLowerCase());
+        }
+        break;
+      case "regex":
+        try {
+          const regex = new RegExp(
+            conditionValue,
+            condition.caseSensitive ? "" : "i"
+          );
+          conditionMet = regex.test(userInput);
+        } catch (error) {
+          this.logger.warn(`Неверное регулярное выражение: ${conditionValue}`);
+          conditionMet = false;
+        }
+        break;
+      case "greaterThan":
+        const num1 = parseFloat(userInput);
+        const num2 = parseFloat(conditionValue);
+        conditionMet = !isNaN(num1) && !isNaN(num2) && num1 > num2;
+        break;
+      case "lessThan":
+        const num3 = parseFloat(userInput);
+        const num4 = parseFloat(conditionValue);
+        conditionMet = !isNaN(num3) && !isNaN(num4) && num3 < num4;
+        break;
+      case "isEmpty":
+        conditionMet = !userInput || userInput.trim() === "";
+        break;
+      case "isNotEmpty":
+        conditionMet = userInput && userInput.trim() !== "";
         break;
       case ConditionOperator.VARIABLE_EQUALS:
         // Сравнение с переменной сессии
@@ -83,7 +128,13 @@ export class ConditionNodeHandler extends BaseNodeHandler {
 
     this.logger.log(`Результат условия: ${conditionMet ? "TRUE" : "FALSE"}`);
 
-    // Переходим к следующему узлу (в реальной реализации можно добавить trueNodeId/falseNodeId)
-    await this.moveToNextNode(context, currentNode.nodeId);
+    // Переходим к соответствующему узлу в зависимости от результата
+    if (conditionMet) {
+      // Переходим к узлу "true" если есть, иначе к следующему
+      await this.moveToNextNode(context, currentNode.nodeId, "true");
+    } else {
+      // Переходим к узлу "false" если есть, иначе к следующему
+      await this.moveToNextNode(context, currentNode.nodeId, "false");
+    }
   }
 }

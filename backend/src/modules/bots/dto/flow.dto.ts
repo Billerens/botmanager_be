@@ -84,35 +84,13 @@ export class FlowNodeDataDto {
   isInline?: boolean;
 
   @IsOptional()
-  @IsString()
-  condition?: string;
-
-  @IsOptional()
-  @IsEnum([
-    "equals",
-    "not_equals",
-    "exists",
-    "not_exists",
-    "contains",
-    "not_contains",
-    "startsWith",
-    "variable_equals",
-    "variable_contains",
-  ])
-  operator?:
-    | "equals"
-    | "not_equals"
-    | "exists"
-    | "not_exists"
-    | "contains"
-    | "not_contains"
-    | "startsWith"
-    | "variable_equals"
-    | "variable_contains";
-
-  @IsOptional()
-  @IsString()
-  value?: string;
+  @IsObject()
+  condition?: {
+    field: string;
+    operator: "equals" | "not_equals" | "exists" | "not_exists" | "contains" | "not_contains" | "startsWith" | "endsWith" | "regex" | "greaterThan" | "lessThan" | "isEmpty" | "isNotEmpty" | "variable_equals" | "variable_contains";
+    value: string;
+    caseSensitive?: boolean;
+  };
 
   @IsOptional()
   @IsString()

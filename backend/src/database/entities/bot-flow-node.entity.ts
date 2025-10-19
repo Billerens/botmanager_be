@@ -120,6 +120,8 @@ export class BotFlowNode {
       value: string;
       caseSensitive?: boolean;
     };
+    trueLabel?: string;
+    falseLabel?: string;
 
     // Для FORM нод
     form?: {

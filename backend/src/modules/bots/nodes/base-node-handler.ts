@@ -168,11 +168,13 @@ export abstract class BaseNodeHandler implements INodeHandler {
    */
   protected findNextNodeId(
     context: FlowContext,
-    currentNodeId: string
+    currentNodeId: string,
+    sourceHandle?: string
   ): string | null {
     // Ищем edge, который начинается с текущего узла
     const edge = context.flow.flowData?.edges?.find(
-      (edge) => edge.source === currentNodeId
+      (edge) => edge.source === currentNodeId && 
+      (!sourceHandle || edge.sourceHandle === sourceHandle)
     );
 
     if (edge) {
@@ -281,13 +283,39 @@ export abstract class BaseNodeHandler implements INodeHandler {
   }
 
   /**
+   * Переходит к конкретному узлу и выполняет его
+   */
+  protected async moveToNode(
+    context: FlowContext,
+    nodeId: string
+  ): Promise<void> {
+    const targetNode = context.flow.nodes.find(
+      (node) => node.nodeId === nodeId
+    );
+
+    if (targetNode) {
+      context.session.currentNodeId = nodeId;
+      context.session.lastActivity = new Date();
+
+      this.logger.log(`Переход к узлу: ${nodeId}`);
+      if (this.executeNodeCallback) {
+        context.currentNode = targetNode;
+        await this.executeNodeCallback(context);
+      }
+    } else {
+      this.logger.warn(`Узел с ID ${nodeId} не найден`);
+    }
+  }
+
+  /**
    * Переходит к следующему узлу и выполняет его
    */
   protected async moveToNextNode(
     context: FlowContext,
-    currentNodeId: string
+    currentNodeId: string,
+    sourceHandle?: string
   ): Promise<void> {
-    const nextNodeId = this.findNextNodeId(context, currentNodeId);
+    const nextNodeId = this.findNextNodeId(context, currentNodeId, sourceHandle);
     if (nextNodeId) {
       context.session.currentNodeId = nextNodeId;
       context.session.lastActivity = new Date();
