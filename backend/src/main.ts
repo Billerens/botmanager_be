@@ -107,7 +107,9 @@ async function bootstrap() {
   // Проверяем переменные окружения перед запуском
   checkCriticalEnvVars();
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: ["error", "warn", "log", "debug", "verbose"],
+  });
   const configService = app.get(ConfigService);
 
   // Безопасность

@@ -8,6 +8,10 @@ export class CustomLoggerService implements NestLoggerService {
   private logger: winston.Logger;
 
   constructor() {
+    const enableColors =
+      process.env.NODE_ENV === "development" &&
+      process.env.DISABLE_LOG_COLORS !== "true";
+
     this.logger = winston.createLogger({
       level: "info",
       format: winston.format.combine(
@@ -20,8 +24,14 @@ export class CustomLoggerService implements NestLoggerService {
         // Консольный вывод
         new winston.transports.Console({
           format: winston.format.combine(
-            winston.format.colorize(),
-            winston.format.simple()
+            winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+            enableColors
+              ? winston.format.colorize()
+              : winston.format.uncolorize(),
+            winston.format.printf(({ timestamp, level, message, context }) => {
+              const contextStr = context ? ` [${context}]` : "";
+              return `${timestamp} [${level}]${contextStr}: ${message}`;
+            })
           ),
         }),
         // Отправка в Loki (если доступен)
