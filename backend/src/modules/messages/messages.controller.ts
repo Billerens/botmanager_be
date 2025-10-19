@@ -34,12 +34,14 @@ export class MessagesController {
     @Request() req: any,
     @Query("page") page: number = 1,
     @Query("limit") limit: number = 50,
-    @Query("type") type?: "incoming" | "outgoing"
+    @Query("type") type?: "incoming" | "outgoing",
+    @Query("search") search?: string
   ) {
     return this.messagesService.getBotMessages(botId, req.user.id, {
       page,
       limit,
       type,
+      search,
     });
   }
 

@@ -12,6 +12,7 @@ interface MessageFilters {
   page: number;
   limit: number;
   type?: "incoming" | "outgoing";
+  search?: string;
 }
 
 interface DialogFilters {
@@ -74,7 +75,7 @@ export class MessagesService {
       throw new NotFoundException("Бот не найден");
     }
 
-    const { page, limit, type } = filters;
+    const { page, limit, type, search } = filters;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.messageRepository
@@ -87,6 +88,12 @@ export class MessagesService {
     if (type) {
       queryBuilder.andWhere("message.type = :type", {
         type: type === "incoming" ? MessageType.INCOMING : MessageType.OUTGOING,
+      });
+    }
+
+    if (search && search.trim()) {
+      queryBuilder.andWhere("message.text ILIKE :search", {
+        search: `%${search.trim()}%`,
       });
     }
 
