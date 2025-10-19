@@ -198,9 +198,31 @@ export abstract class BaseNodeHandler implements INodeHandler {
     this.logger.log(
       `Поиск следующего узла для выхода ${outputId} узла ${currentNodeId}`
     );
+
+    // Логируем структуру flow
+    this.logger.log(`=== СТРУКТУРА FLOW ===`);
+    this.logger.log(`Flow ID: ${context.flow.id}`);
     this.logger.log(
-      `Доступные edges: ${JSON.stringify(context.flow.flowData?.edges || [])}`
+      `Flow Data: ${JSON.stringify(context.flow.flowData, null, 2)}`
     );
+
+    // Логируем все edges
+    this.logger.log(`=== ВСЕ EDGES ===`);
+    if (context.flow.flowData?.edges) {
+      context.flow.flowData.edges.forEach((edge, index) => {
+        this.logger.log(`Edge ${index}: ${JSON.stringify(edge)}`);
+      });
+    } else {
+      this.logger.log(`Edges не найдены в flowData`);
+    }
+
+    // Логируем все узлы
+    this.logger.log(`=== ВСЕ УЗЛЫ ===`);
+    context.flow.nodes.forEach((node, index) => {
+      this.logger.log(
+        `Узел ${index}: ID=${node.nodeId}, Type=${node.type}, Data=${JSON.stringify(node.data)}`
+      );
+    });
 
     // Ищем edge, который начинается с текущего узла и конкретного выхода
     const edge = context.flow.flowData?.edges?.find(
@@ -215,6 +237,20 @@ export abstract class BaseNodeHandler implements INodeHandler {
     this.logger.warn(
       `Edge не найден для выхода ${outputId} узла ${currentNodeId}`
     );
+
+    // Попробуем найти edge без sourceHandle (fallback)
+    const fallbackEdge = context.flow.flowData?.edges?.find(
+      (edge) => edge.source === currentNodeId
+    );
+
+    if (fallbackEdge) {
+      this.logger.log(
+        `Найден fallback edge без sourceHandle: ${JSON.stringify(fallbackEdge)}`
+      );
+      return fallbackEdge.target;
+    }
+
+    this.logger.warn(`Fallback edge также не найден для узла ${currentNodeId}`);
     return null;
   }
 
