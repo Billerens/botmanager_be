@@ -599,22 +599,19 @@ export class MessagesService {
       .createQueryBuilder("message")
       .select([
         "message.telegramChatId as chatId",
-        "message.metadata->>'firstName' as firstName",
-        "message.metadata->>'lastName' as lastName",
-        "message.metadata->>'username' as username",
-        "message.metadata->>'languageCode' as languageCode",
-        "message.metadata->>'isBot' as isBot",
+        "COALESCE(message.metadata->>'firstName', '') as firstName",
+        "COALESCE(message.metadata->>'lastName', '') as lastName",
+        "COALESCE(message.metadata->>'username', '') as username",
+        "COALESCE(message.metadata->>'languageCode', '') as languageCode",
+        "COALESCE(message.metadata->>'isBot', 'false') as isBot",
         "MAX(message.createdAt) as lastActivityAt",
         "COUNT(*) as messageCount",
       ])
       .where("message.botId = :botId", { botId })
       .andWhere("message.type = :type", { type: MessageType.INCOMING })
+      .andWhere("message.telegramChatId IS NOT NULL")
+      .andWhere("message.telegramChatId != ''")
       .groupBy("message.telegramChatId")
-      .addGroupBy("message.metadata->>'firstName'")
-      .addGroupBy("message.metadata->>'lastName'")
-      .addGroupBy("message.metadata->>'username'")
-      .addGroupBy("message.metadata->>'languageCode'")
-      .addGroupBy("message.metadata->>'isBot'")
       .orderBy("lastActivityAt", "DESC")
       .offset(skip)
       .limit(limit);
@@ -636,23 +633,49 @@ export class MessagesService {
         .select("COUNT(DISTINCT message.telegramChatId)", "count")
         .where("message.botId = :botId", { botId })
         .andWhere("message.type = :type", { type: MessageType.INCOMING })
+        .andWhere("message.telegramChatId IS NOT NULL")
+        .andWhere("message.telegramChatId != ''")
         .getRawOne()
         .then((result) => parseInt(result.count) || 0),
     ]);
 
     // Преобразуем результат в нужный формат
-    const users: BotUser[] = rawUsers.map((raw) => ({
-      chatId: raw.chatId,
-      userInfo: {
-        firstName: raw.firstName || undefined,
-        lastName: raw.lastName || undefined,
-        username: raw.username || undefined,
-        languageCode: raw.languageCode || undefined,
-        isBot: raw.isBot === "true",
-      },
-      lastActivityAt: raw.lastActivityAt,
-      messageCount: parseInt(raw.messageCount) || 0,
-    }));
+    console.log("Raw users from DB:", rawUsers);
+
+    const users: BotUser[] = rawUsers
+      .filter((raw) => {
+        const isValid = raw.chatId && raw.chatId.trim() !== "";
+        if (!isValid) {
+          console.log("Filtered out user with invalid chatId:", raw);
+        }
+        return isValid;
+      })
+      .map((raw) => ({
+        chatId: raw.chatId,
+        userInfo: {
+          firstName:
+            raw.firstName && raw.firstName.trim() !== ""
+              ? raw.firstName
+              : undefined,
+          lastName:
+            raw.lastName && raw.lastName.trim() !== ""
+              ? raw.lastName
+              : undefined,
+          username:
+            raw.username && raw.username.trim() !== ""
+              ? raw.username
+              : undefined,
+          languageCode:
+            raw.languageCode && raw.languageCode.trim() !== ""
+              ? raw.languageCode
+              : undefined,
+          isBot: raw.isBot === "true",
+        },
+        lastActivityAt: raw.lastActivityAt,
+        messageCount: parseInt(raw.messageCount) || 0,
+      }));
+
+    console.log("Final users before return:", users);
 
     return {
       users,
@@ -692,7 +715,9 @@ export class MessagesService {
         break;
 
       case "specific":
-        recipientChatIds = data.recipients.specificUsers || [];
+        recipientChatIds = (data.recipients.specificUsers || []).filter(
+          (chatId) => chatId && chatId.trim() !== ""
+        );
         break;
 
       case "activity":
