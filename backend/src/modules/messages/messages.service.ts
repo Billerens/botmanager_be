@@ -640,14 +640,9 @@ export class MessagesService {
     ]);
 
     // Преобразуем результат в нужный формат
-    console.log("Raw users from DB:", rawUsers);
-
     const users: BotUser[] = rawUsers
       .filter((raw) => {
         const isValid = raw.chatId && raw.chatId.trim() !== "";
-        if (!isValid) {
-          console.log("Filtered out user with invalid chatId:", raw);
-        }
         return isValid;
       })
       .map((raw) => ({
@@ -675,8 +670,6 @@ export class MessagesService {
         messageCount: parseInt(raw.messageCount) || 0,
       }));
 
-    console.log("Final users before return:", users);
-
     return {
       users,
       pagination: {
@@ -698,20 +691,19 @@ export class MessagesService {
       throw new NotFoundException("Бот не найден");
     }
 
-    // Получаем список получателей
+    // Получаем список получателей используя данные из диалогов
     let recipientChatIds: string[] = [];
 
     switch (data.recipients.type) {
       case "all":
-        // Получаем всех пользователей, которые писали боту
-        const allMessages = await this.messageRepository
-          .createQueryBuilder("message")
-          .select("DISTINCT message.telegramChatId", "chatId")
-          .where("message.botId = :botId", { botId })
-          .andWhere("message.type = :type", { type: MessageType.INCOMING })
-          .getRawMany();
-
-        recipientChatIds = allMessages.map((msg) => msg.chatId);
+        // Получаем всех пользователей из диалогов
+        const allDialogs = await this.getBotDialogs(botId, userId, {
+          page: 1,
+          limit: 10000, // Большое число для получения всех диалогов
+          sortBy: "lastActivity",
+          sortOrder: "desc",
+        });
+        recipientChatIds = allDialogs.dialogs.map((dialog) => dialog.chatId);
         break;
 
       case "specific":
@@ -721,27 +713,28 @@ export class MessagesService {
         break;
 
       case "activity":
-        // Фильтруем по активности
-        const activityQuery = this.messageRepository
-          .createQueryBuilder("message")
-          .select("DISTINCT message.telegramChatId", "chatId")
-          .where("message.botId = :botId", { botId })
-          .andWhere("message.type = :type", { type: MessageType.INCOMING });
-
-        if (data.recipients.activityDate) {
-          if (data.recipients.activityType === "after") {
-            activityQuery.andWhere("message.createdAt >= :date", {
-              date: data.recipients.activityDate,
-            });
-          } else {
-            activityQuery.andWhere("message.createdAt <= :date", {
-              date: data.recipients.activityDate,
-            });
-          }
-        }
-
-        const activityMessages = await activityQuery.getRawMany();
-        recipientChatIds = activityMessages.map((msg) => msg.chatId);
+        // Получаем все диалоги и фильтруем по активности
+        const allDialogsForActivity = await this.getBotDialogs(botId, userId, {
+          page: 1,
+          limit: 10000,
+          sortBy: "lastActivity",
+          sortOrder: "desc",
+        });
+        
+        recipientChatIds = allDialogsForActivity.dialogs
+          .filter((dialog) => {
+            if (!data.recipients.activityDate) return true;
+            
+            const dialogDate = new Date(dialog.lastActivityAt);
+            const filterDate = new Date(data.recipients.activityDate);
+            
+            if (data.recipients.activityType === "after") {
+              return dialogDate >= filterDate;
+            } else {
+              return dialogDate <= filterDate;
+            }
+          })
+          .map((dialog) => dialog.chatId);
         break;
     }
 
