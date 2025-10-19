@@ -87,7 +87,22 @@ export class FlowNodeDataDto {
   @IsObject()
   condition?: {
     field: string;
-    operator: "equals" | "not_equals" | "exists" | "not_exists" | "contains" | "not_contains" | "startsWith" | "endsWith" | "regex" | "greaterThan" | "lessThan" | "isEmpty" | "isNotEmpty" | "variable_equals" | "variable_contains";
+    operator:
+      | "equals"
+      | "not_equals"
+      | "exists"
+      | "not_exists"
+      | "contains"
+      | "not_contains"
+      | "startsWith"
+      | "endsWith"
+      | "regex"
+      | "greaterThan"
+      | "lessThan"
+      | "isEmpty"
+      | "isNotEmpty"
+      | "variable_equals"
+      | "variable_contains";
     value: string;
     caseSensitive?: boolean;
   };
