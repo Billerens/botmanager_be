@@ -1,15 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
-import { BotFlow } from "../../../database/entities/bot-flow.entity";
-import {
-  BotFlowNode,
-  ConditionOperator,
-} from "../../../database/entities/bot-flow-node.entity";
-import { TelegramService } from "../../telegram/telegram.service";
-import { BotsService } from "../bots.service";
-import { CustomLoggerService } from "../../../common/logger.service";
-import { MessagesService } from "../../messages/messages.service";
+import { ConditionOperator } from "../../../database/entities/bot-flow-node.entity";
 import { FlowContext } from "./base-node-handler.interface";
 import { BaseNodeHandler } from "./base-node-handler";
 
@@ -49,7 +39,7 @@ export class ConditionNodeHandler extends BaseNodeHandler {
 
     switch (condition.operator) {
       case "equals":
-        conditionMet = userInput === conditionValue;
+        conditionMet = userInput == conditionValue;
         break;
       case "contains":
         if (condition.caseSensitive) {
