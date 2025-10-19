@@ -257,6 +257,14 @@ export class FlowEdgeDto {
 
   @IsOptional()
   @IsString()
+  sourceHandle?: string;
+
+  @IsOptional()
+  @IsString()
+  targetHandle?: string;
+
+  @IsOptional()
+  @IsString()
   type?: string;
 }
 
