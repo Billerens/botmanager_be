@@ -81,6 +81,15 @@ export class TelegramService {
       return response.data.result;
     } catch (error) {
       console.error("Ошибка получения информации о боте:", error.message);
+      console.error(
+        "Ошибка получения информации о боте:",
+        error.response?.data
+      );
+      console.error(
+        "Ошибка получения информации о боте:",
+        `${this.baseUrl}${token}/getMe`
+      );
+
       return null;
     }
   }
