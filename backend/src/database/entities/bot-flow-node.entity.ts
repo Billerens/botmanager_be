@@ -170,6 +170,8 @@ export class BotFlowNode {
       operation: "set" | "append" | "prepend" | "increment" | "decrement";
       scope?: string;
     };
+    // Для множественных переменных (новая упрощенная версия)
+    variables?: Record<string, string>;
 
     // Для FILE нод
     file?: {

@@ -19,106 +19,35 @@ export class VariableNodeHandler extends BaseNodeHandler {
   async execute(context: FlowContext): Promise<void> {
     const { currentNode, session } = context;
 
-    if (!currentNode?.data?.variable) {
-      this.logger.warn("Данные переменной не найдены");
-      return;
-    }
-
-    const variableData = currentNode.data.variable;
-    const { name, value, operation, scope } = variableData;
-
-    // Валидация данных
-    if (!name || name.trim() === "") {
-      this.logger.warn("Имя переменной не задано");
-      return;
-    }
-
-    // Валидация имени переменной (только буквы, цифры, подчеркивания, тире)
-    if (!/^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(name)) {
-      this.logger.warn(
-        `Некорректное имя переменной: ${name}. Используйте только буквы, цифры, подчеркивания и тире`
-      );
-      return;
-    }
-
     this.logger.log(`=== VARIABLE УЗЕЛ ВЫПОЛНЕНИЕ ===`);
     this.logger.log(`Узел ID: ${currentNode.nodeId}`);
     this.logger.log(`Пользователь: ${session.userId}`);
-    this.logger.log(`Переменная: ${name}`);
-    this.logger.log(`Операция: ${operation}`);
-    this.logger.log(`Область видимости: ${scope}`);
-    this.logger.log(`Значение: ${value}`);
 
-    // Получаем текущее значение переменной в зависимости от области видимости
-    let currentValue: string;
-    switch (scope) {
-      case "user":
-        // TODO: Реализовать хранение пользовательских переменных
-        this.logger.warn(
-          "Область видимости 'user' пока не реализована, используем 'session'"
-        );
-        currentValue = session.variables[name] || "";
-        break;
-      case "global":
-        // TODO: Реализовать хранение глобальных переменных
-        this.logger.warn(
-          "Область видимости 'global' пока не реализована, используем 'session'"
-        );
-        currentValue = session.variables[name] || "";
-        break;
-      case "session":
-      default:
-        currentValue = session.variables[name] || "";
-        break;
+    // Получаем переменные из данных узла
+    const variables = (currentNode.data as any)?.variables || {};
+
+    if (!variables || Object.keys(variables).length === 0) {
+      this.logger.warn("Переменные не заданы в узле");
+      await this.moveToNextNode(context, currentNode.nodeId);
+      return;
     }
 
-    this.logger.log(`Текущее значение: "${currentValue}"`);
+    this.logger.log(`Устанавливаем переменные: ${JSON.stringify(variables)}`);
 
-    // Выполняем операцию с переменной
-    let newValue: string;
-    switch (operation) {
-      case "set":
-        newValue = value || "";
-        break;
-      case "append":
-        newValue = currentValue + (value || "");
-        break;
-      case "prepend":
-        newValue = (value || "") + currentValue;
-        break;
-      case "increment":
-        const currentNum = parseFloat(currentValue) || 0;
-        newValue = (currentNum + 1).toString();
-        this.logger.log(`Увеличиваем ${currentNum} на 1 = ${newValue}`);
-        break;
-      case "decrement":
-        const currentNumDec = parseFloat(currentValue) || 0;
-        newValue = (currentNumDec - 1).toString();
-        this.logger.log(`Уменьшаем ${currentNumDec} на 1 = ${newValue}`);
-        break;
-      default:
-        this.logger.warn(`Неизвестная операция: ${operation}`);
-        return;
+    // Устанавливаем все переменные
+    for (const [key, value] of Object.entries(variables)) {
+      // Подставляем переменные в значение
+      const processedValue = this.substituteVariables(value as string, context);
+
+      // Сохраняем в сессию
+      session.variables[key] = processedValue;
+
+      this.logger.log(`Установлена переменная: ${key} = "${processedValue}"`);
     }
 
-    // Сохраняем новое значение в зависимости от области видимости
-    switch (scope) {
-      case "user":
-        // TODO: Реализовать хранение пользовательских переменных
-        session.variables[name] = newValue;
-        break;
-      case "global":
-        // TODO: Реализовать хранение глобальных переменных
-        session.variables[name] = newValue;
-        break;
-      case "session":
-      default:
-        session.variables[name] = newValue;
-        break;
-    }
-
-    this.logger.log(`Новое значение: "${newValue}"`);
-    this.logger.log(`Переменная ${name} = ${newValue}`);
+    this.logger.log(
+      `Все переменные сессии: ${JSON.stringify(session.variables)}`
+    );
 
     // Переходим к следующему узлу
     await this.moveToNextNode(context, currentNode.nodeId);
