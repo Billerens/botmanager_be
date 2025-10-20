@@ -22,6 +22,7 @@ export enum FlowNodeType {
   WEBHOOK = "webhook",
   RANDOM = "random",
   INTEGRATION = "integration",
+  ENDPOINT = "endpoint",
 }
 
 export class KeyboardButtonDto {
@@ -222,6 +223,13 @@ export class FlowNodeDataDto {
     service: "crm" | "email" | "analytics" | "payment" | "custom";
     action: string;
     config: Record<string, any>;
+  };
+
+  @IsOptional()
+  @IsObject()
+  endpoint?: {
+    url: string;
+    accessKey: string;
   };
 }
 
