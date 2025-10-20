@@ -148,9 +148,10 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
       for (const chatId of recipientChatIds) {
         try {
           this.logger.log(`Отправка сообщения пользователю ${chatId}`);
+          const decryptedToken = this.botsService.decryptToken(bot.token);
 
           const result = await this.telegramService.sendMessage(
-            bot.token,
+            decryptedToken,
             chatId,
             processedText,
             {
