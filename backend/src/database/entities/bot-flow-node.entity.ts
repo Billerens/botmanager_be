@@ -206,6 +206,7 @@ export class BotFlowNode {
     endpoint?: {
       url: string;
       accessKey: string;
+      waitingMessage?: string;
     };
 
     // Для BROADCAST нод

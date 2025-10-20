@@ -55,6 +55,11 @@ export class EndpointNodeHandler extends BaseNodeHandler {
     this.logger.log(`Пользователь: ${session.userId}`);
     this.logger.log(`URL: ${url}`);
 
+    // ВАЖНО: Устанавливаем currentNodeId на эту ноду, чтобы flow знал, где мы находимся
+    // Это необходимо, т.к. мы можем остановиться здесь в ожидании данных
+    session.currentNodeId = currentNode.nodeId;
+    session.lastActivity = new Date();
+
     // Проверка обязательных полей
     if (!url || url.trim() === "") {
       this.logger.error("URL эндпоинта не задан");
@@ -101,13 +106,40 @@ export class EndpointNodeHandler extends BaseNodeHandler {
       this.logger.log(
         `Данные из глобального хранилища загружены в сессию пользователя ${session.userId}`
       );
+
+      // Переходим к следующему узлу только если данные уже есть
+      await this.moveToNextNode(context, currentNode.nodeId);
     } else {
       this.logger.log(
         `Данные в глобальном хранилище эндпоинта не найдены. Ожидание запросов на эндпоинт.`
       );
-    }
+      this.logger.log(
+        `Flow остановлен на узле ${currentNode.nodeId}. Ожидается POST запрос на: ${endpointUrl}`
+      );
 
-    // Переходим к следующему узлу
-    await this.moveToNextNode(context, currentNode.nodeId);
+      // Отправляем пользователю информацию об ожидании данных
+      const waitingMessage =
+        currentNode.data?.endpoint?.waitingMessage ||
+        `⏳ Ожидание данных...\n\nОтправьте POST запрос на эндпоинт:\n<code>${endpointUrl}</code>\n\nВаш User ID: <code>${session.userId}</code>`;
+
+      try {
+        await this.telegramService.sendMessage(
+          context.bot.token,
+          context.message.chat.id.toString(),
+          waitingMessage,
+          { parse_mode: "HTML" }
+        );
+        this.logger.log(
+          `Отправлено сообщение об ожидании данных пользователю ${session.userId}`
+        );
+      } catch (error) {
+        this.logger.error(
+          `Ошибка при отправке сообщения об ожидании: ${error.message}`
+        );
+      }
+
+      // НЕ переходим к следующему узлу - flow остановлен и ждет данных
+      // Когда придет POST запрос, EndpointController продолжит выполнение
+    }
   }
 }

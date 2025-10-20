@@ -467,6 +467,101 @@ export class FlowExecutionService {
     return this.endpointDataStore.get(key);
   }
 
+  /**
+   * Продолжает выполнение flow для пользователя с текущей endpoint ноды
+   */
+  async continueFlowFromEndpoint(
+    botId: string,
+    userId: string,
+    nodeId: string
+  ): Promise<void> {
+    try {
+      const sessionKey = `${botId}-${userId}`;
+      const session = this.userSessions.get(sessionKey);
+
+      if (!session) {
+        this.logger.warn(
+          `Сессия не найдена для продолжения flow: ${sessionKey}`
+        );
+        return;
+      }
+
+      // Проверяем, что текущая нода - это endpoint нода, на которой остановился flow
+      if (session.currentNodeId !== nodeId) {
+        this.logger.warn(
+          `Текущая нода ${session.currentNodeId} не совпадает с endpoint нодой ${nodeId}`
+        );
+      }
+
+      this.logger.log(
+        `Продолжение flow для пользователя ${userId} с ноды ${nodeId}`
+      );
+
+      // Находим активный flow
+      const activeFlow = await this.botFlowRepository.findOne({
+        where: { botId: botId, status: FlowStatus.ACTIVE },
+        relations: ["nodes"],
+      });
+
+      if (!activeFlow) {
+        this.logger.warn(`Активный flow не найден для бота ${botId}`);
+        return;
+      }
+
+      // Находим текущую ноду
+      const currentNode = activeFlow.nodes.find(
+        (node) => node.nodeId === nodeId
+      );
+
+      if (!currentNode) {
+        this.logger.error(`Нода ${nodeId} не найдена в flow`);
+        return;
+      }
+
+      // Получаем бота (без проверки ownership, т.к. это внутренний вызов)
+      const bot = await this.botsService.findById(botId);
+      if (!bot) {
+        this.logger.error(`Бот ${botId} не найден`);
+        return;
+      }
+
+      // Создаем контекст выполнения
+      const context: FlowContext = {
+        bot,
+        user: { id: parseInt(userId), first_name: "API User" },
+        message: {
+          from: { id: parseInt(userId), first_name: "API User" },
+          chat: { id: parseInt(session.chatId) },
+          text: `[Endpoint Data Received: ${nodeId}]`,
+          message_id: Date.now(),
+        },
+        session,
+        flow: activeFlow,
+        currentNode,
+      };
+
+      // Получаем обработчик endpoint ноды
+      const handler = this.nodeHandlerService.getHandler("endpoint");
+
+      if (!handler) {
+        this.logger.error(`Обработчик для endpoint не найден`);
+        return;
+      }
+
+      // Выполняем endpoint ноду (она проверит наличие данных и перейдет дальше)
+      await handler.execute(context);
+
+      this.logger.log(
+        `Flow успешно продолжен для пользователя ${userId} с ноды ${nodeId}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Ошибка при продолжении flow с endpoint ноды: ${error.message}`,
+        error.stack
+      );
+    }
+  }
+
   // Вспомогательный метод для определения типа контента сообщения
   private getMessageContentType(message: any): string {
     if (message.photo) return "photo";

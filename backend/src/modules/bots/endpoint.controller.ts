@@ -145,7 +145,7 @@ export class EndpointController {
         this.logger.log(`Найден userId: ${userId}, сохраняем в сессию`);
 
         const sessionKey = `${botId}-${userId}`;
-        const userSession =
+        let userSession =
           this.flowExecutionService["userSessions"].get(sessionKey);
 
         if (userSession) {
@@ -158,41 +158,84 @@ export class EndpointController {
           );
 
           // Продолжаем выполнение flow с текущей ноды endpoint
-          // Создаем фиктивное сообщение для контекста
-          const mockMessage = {
-            from: { id: parseInt(userId), first_name: "API User" },
-            chat: { id: parseInt(userSession.chatId) },
-            text: `[Endpoint Data: ${nodeId}]`,
-            message_id: Date.now(),
-          };
+          this.logger.log(
+            `Продолжение выполнения flow для пользователя ${userId}...`
+          );
 
-          // Получаем бота
-          const bot = { id: botId };
+          // Запускаем продолжение flow асинхронно (не блокируем ответ)
+          this.flowExecutionService
+            .continueFlowFromEndpoint(botId, userId, nodeId)
+            .catch((error) => {
+              this.logger.error(
+                `Ошибка при продолжении flow: ${error.message}`,
+                error.stack
+              );
+            });
 
           return {
             success: true,
             message:
-              "Данные успешно получены и сохранены в сессию пользователя",
+              "Данные успешно получены и сохранены в сессию пользователя. Flow продолжен.",
             endpointId: nodeId,
             botId: botId,
             userId: userId,
             sessionFound: true,
+            flowContinued: true,
             timestamp: new Date().toISOString(),
             dataKeys: Object.keys(variables),
+            storage: "session_and_global",
           };
         } else {
-          this.logger.warn(`Сессия для пользователя ${userId} не найдена`);
+          this.logger.log(
+            `Сессия для пользователя ${userId} не найдена. Создаем новую и запускаем flow...`
+          );
+
+          // Создаем новую сессию для пользователя
+          // Используем userId как chatId, если chatId не передан отдельно
+          const chatId = body?.chatId || userId;
+
+          userSession = {
+            userId,
+            chatId,
+            botId,
+            currentNodeId: nodeId, // Начинаем с endpoint ноды
+            variables: { ...variables }, // Сразу добавляем данные из запроса
+            lastActivity: new Date(),
+          };
+
+          this.flowExecutionService["userSessions"].set(
+            sessionKey,
+            userSession
+          );
+
+          this.logger.log(
+            `Создана новая сессия для пользователя ${userId}. Запуск flow с endpoint ноды...`
+          );
+
+          // Запускаем flow с endpoint ноды
+          this.flowExecutionService
+            .continueFlowFromEndpoint(botId, userId, nodeId)
+            .catch((error) => {
+              this.logger.error(
+                `Ошибка при запуске flow: ${error.message}`,
+                error.stack
+              );
+            });
 
           return {
             success: true,
-            message: "Данные получены, но сессия пользователя не найдена",
+            message:
+              "Данные получены, сессия создана, flow запущен с endpoint ноды.",
             endpointId: nodeId,
             botId: botId,
             userId: userId,
             sessionFound: false,
-            note: "Пользователь должен сначала начать взаимодействие с ботом",
+            sessionCreated: true,
+            flowStarted: true,
             timestamp: new Date().toISOString(),
             dataKeys: Object.keys(variables),
+            storage: "session_and_global",
+            note: "Endpoint нода использована как точка входа в flow (вместо START)",
           };
         }
       }

@@ -231,6 +231,7 @@ export class FlowNodeDataDto {
   endpoint?: {
     url: string;
     accessKey: string;
+    waitingMessage?: string;
   };
 
   @IsOptional()
