@@ -24,6 +24,7 @@ export enum NodeType {
   WEBHOOK = "webhook",
   RANDOM = "random",
   INTEGRATION = "integration",
+  ENDPOINT = "endpoint",
 }
 
 export enum MessageNodeType {
@@ -198,6 +199,12 @@ export class BotFlowNode {
       action: string;
       config: Record<string, any>;
       responseMapping?: string;
+    };
+
+    // Для ENDPOINT нод
+    endpoint?: {
+      url: string;
+      accessKey: string;
     };
 
     // Общие настройки

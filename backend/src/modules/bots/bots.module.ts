@@ -11,6 +11,7 @@ import { PublicBotsController } from "./public-bots.controller";
 import { BotFlowsService } from "./bot-flows.service";
 import { BotFlowsController } from "./bot-flows.controller";
 import { FlowExecutionService } from "./flow-execution.service";
+import { EndpointController } from "./endpoint.controller";
 import { TelegramModule } from "../telegram/telegram.module";
 import { MessagesModule } from "../messages/messages.module";
 import { ProductsModule } from "../products/products.module";
@@ -30,6 +31,7 @@ import {
   WebhookNodeHandler,
   IntegrationNodeHandler,
   NewMessageNodeHandler,
+  EndpointNodeHandler,
 } from "./nodes";
 
 @Module({
@@ -58,8 +60,14 @@ import {
     WebhookNodeHandler,
     IntegrationNodeHandler,
     NewMessageNodeHandler,
+    EndpointNodeHandler,
   ],
-  controllers: [BotsController, PublicBotsController, BotFlowsController],
+  controllers: [
+    BotsController,
+    PublicBotsController,
+    BotFlowsController,
+    EndpointController,
+  ],
   exports: [BotsService, BotFlowsService, FlowExecutionService],
 })
 export class BotsModule {}

@@ -31,6 +31,7 @@ import {
   WebhookNodeHandler,
   IntegrationNodeHandler,
   NewMessageNodeHandler,
+  EndpointNodeHandler,
 } from "./nodes";
 
 export interface UserSession {
@@ -42,9 +43,17 @@ export interface UserSession {
   lastActivity: Date;
 }
 
+export interface EndpointData {
+  data: Record<string, any>;
+  receivedAt: Date;
+  requestCount: number;
+}
+
 @Injectable()
 export class FlowExecutionService {
   private userSessions = new Map<string, UserSession>();
+  // Глобальное хранилище данных эндпоинтов: ключ = "botId-nodeId"
+  private endpointDataStore = new Map<string, EndpointData>();
 
   constructor(
     @InjectRepository(BotFlow)
@@ -69,7 +78,8 @@ export class FlowExecutionService {
     private readonly randomNodeHandler: RandomNodeHandler,
     private readonly webhookNodeHandler: WebhookNodeHandler,
     private readonly integrationNodeHandler: IntegrationNodeHandler,
-    private readonly newMessageNodeHandler: NewMessageNodeHandler
+    private readonly newMessageNodeHandler: NewMessageNodeHandler,
+    private readonly endpointNodeHandler: EndpointNodeHandler
   ) {
     // Регистрируем все обработчики
     this.registerNodeHandlers();
@@ -104,6 +114,10 @@ export class FlowExecutionService {
       "new_message",
       this.newMessageNodeHandler
     );
+    this.nodeHandlerService.registerHandler(
+      "endpoint",
+      this.endpointNodeHandler
+    );
 
     // Устанавливаем callback для всех обработчиков
     const handlers = [
@@ -120,6 +134,7 @@ export class FlowExecutionService {
       this.webhookNodeHandler,
       this.integrationNodeHandler,
       this.newMessageNodeHandler,
+      this.endpointNodeHandler,
     ];
 
     handlers.forEach((handler) => {
@@ -405,6 +420,44 @@ export class FlowExecutionService {
         this.userSessions.delete(key);
       }
     }
+
+    // Очистка старых данных эндпоинтов (старше 7 дней)
+    const maxEndpointAge = 7 * 24 * 60 * 60 * 1000;
+    for (const [key, endpointData] of this.endpointDataStore.entries()) {
+      if (now.getTime() - endpointData.receivedAt.getTime() > maxEndpointAge) {
+        this.endpointDataStore.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Сохраняет данные эндпоинта в глобальное хранилище
+   */
+  saveEndpointData(
+    botId: string,
+    nodeId: string,
+    data: Record<string, any>
+  ): void {
+    const key = `${botId}-${nodeId}`;
+    const existingData = this.endpointDataStore.get(key);
+
+    this.endpointDataStore.set(key, {
+      data,
+      receivedAt: new Date(),
+      requestCount: existingData ? existingData.requestCount + 1 : 1,
+    });
+
+    this.logger.log(
+      `Данные эндпоинта сохранены в глобальное хранилище: ${key}`
+    );
+  }
+
+  /**
+   * Получает данные эндпоинта из глобального хранилища
+   */
+  getEndpointData(botId: string, nodeId: string): EndpointData | undefined {
+    const key = `${botId}-${nodeId}`;
+    return this.endpointDataStore.get(key);
   }
 
   // Вспомогательный метод для определения типа контента сообщения
