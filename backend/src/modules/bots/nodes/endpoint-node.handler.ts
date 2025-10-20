@@ -73,7 +73,7 @@ export class EndpointNodeHandler extends BaseNodeHandler {
     }
 
     // Сохраняем информацию об эндпоинте в переменные сессии
-    const endpointUrl = `/api/endpoint/${context.bot.id}/${currentNode.nodeId}/${url}`;
+    const endpointUrl = `/endpoint/${context.bot.id}/${currentNode.nodeId}/${url}`;
     session.variables[`endpoint_${currentNode.nodeId}_url`] = endpointUrl;
     session.variables[`endpoint_${currentNode.nodeId}_full_url`] =
       `${process.env.BACKEND_URL || "http://localhost:3000"}${endpointUrl}`;
