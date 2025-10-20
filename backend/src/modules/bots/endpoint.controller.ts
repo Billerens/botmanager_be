@@ -140,7 +140,24 @@ export class EndpointController {
       // ВСЕГДА сохраняем данные в глобальное хранилище эндпоинтов
       this.flowExecutionService.saveEndpointData(botId, nodeId, variables);
 
-      // Если передан userId, ТАКЖЕ сохраняем данные в сессию пользователя
+      // Находим все активные сессии, ожидающие данные от этого endpoint
+      const allSessions = this.flowExecutionService["userSessions"];
+      const sessionsToProcess: string[] = [];
+
+      // Ищем сессии, остановленные на этом endpoint узле
+      for (const [sessionKey, session] of allSessions.entries()) {
+        if (session.botId === botId && session.currentNodeId === nodeId) {
+          // Обновляем переменные в сессии
+          Object.assign(session.variables, variables);
+          session.lastActivity = new Date();
+          sessionsToProcess.push(session.userId);
+          this.logger.log(
+            `Найдена сессия пользователя ${session.userId}, ожидающая данные от endpoint ${nodeId}`
+          );
+        }
+      }
+
+      // Если передан userId, проверяем что его сессия тоже обновлена
       if (userId) {
         this.logger.log(`Найден userId: ${userId}, сохраняем в сессию`);
 
@@ -149,7 +166,7 @@ export class EndpointController {
           this.flowExecutionService["userSessions"].get(sessionKey);
 
         if (userSession) {
-          // Обновляем переменные в существующей сессии
+          // Обновляем переменные в существующей сессии (если еще не обновлена)
           Object.assign(userSession.variables, variables);
           userSession.lastActivity = new Date();
 
@@ -157,34 +174,10 @@ export class EndpointController {
             `Переменные сохранены в сессию пользователя ${userId}`
           );
 
-          // Продолжаем выполнение flow с текущей ноды endpoint
-          this.logger.log(
-            `Продолжение выполнения flow для пользователя ${userId}...`
-          );
-
-          // Запускаем продолжение flow асинхронно (не блокируем ответ)
-          this.flowExecutionService
-            .continueFlowFromEndpoint(botId, userId, nodeId)
-            .catch((error) => {
-              this.logger.error(
-                `Ошибка при продолжении flow: ${error.message}`,
-                error.stack
-              );
-            });
-
-          return {
-            success: true,
-            message:
-              "Данные успешно получены и сохранены в сессию пользователя. Flow продолжен.",
-            endpointId: nodeId,
-            botId: botId,
-            userId: userId,
-            sessionFound: true,
-            flowContinued: true,
-            timestamp: new Date().toISOString(),
-            dataKeys: Object.keys(variables),
-            storage: "session_and_global",
-          };
+          // Добавляем в список на обработку, если еще не добавлен
+          if (!sessionsToProcess.includes(userId)) {
+            sessionsToProcess.push(userId);
+          }
         } else {
           this.logger.log(
             `Сессия для пользователя ${userId} не найдена. Создаем новую и запускаем flow...`
@@ -240,15 +233,90 @@ export class EndpointController {
         }
       }
 
-      // Если userId не передан, возвращаем успешный ответ
-      // Данные уже сохранены в глобальное хранилище
+      // Запускаем продолжение flow для всех найденных сессий
+      if (sessionsToProcess.length > 0) {
+        this.logger.log(
+          `Запускаем продолжение flow для ${sessionsToProcess.length} сессий: ${sessionsToProcess.join(", ")}`
+        );
+
+        // Запускаем асинхронно для каждой сессии
+        for (const sessionUserId of sessionsToProcess) {
+          this.flowExecutionService
+            .continueFlowFromEndpoint(botId, sessionUserId, nodeId)
+            .catch((error) => {
+              this.logger.error(
+                `Ошибка при продолжении flow для пользователя ${sessionUserId}: ${error.message}`,
+                error.stack
+              );
+            });
+        }
+
+        return {
+          success: true,
+          message: `Данные получены и flow продолжен для ${sessionsToProcess.length} пользователей`,
+          endpointId: nodeId,
+          botId: botId,
+          sessionsProcessed: sessionsToProcess.length,
+          sessionUsers: sessionsToProcess,
+          timestamp: new Date().toISOString(),
+          dataKeys: Object.keys(variables),
+          storage: "session_and_global",
+        };
+      }
+
+      // Если нет активных сессий, создаем системную сессию и выполняем flow
+      this.logger.log(
+        `Нет активных сессий, ожидающих данные от endpoint ${nodeId}. Создаем системную сессию для выполнения flow.`
+      );
+
+      // Создаем временную системную сессию для выполнения flow
+      const systemUserId = `system_${Date.now()}`;
+      const systemSessionKey = `${botId}-${systemUserId}`;
+
+      const systemSession = {
+        userId: systemUserId,
+        chatId: systemUserId,
+        botId,
+        currentNodeId: nodeId,
+        variables: { ...variables },
+        lastActivity: new Date(),
+      };
+
+      this.flowExecutionService["userSessions"].set(
+        systemSessionKey,
+        systemSession
+      );
+
+      this.logger.log(
+        `Создана системная сессия ${systemUserId} для выполнения flow с endpoint ноды`
+      );
+
+      // Запускаем выполнение flow с endpoint ноды
+      this.flowExecutionService
+        .continueFlowFromEndpoint(botId, systemUserId, nodeId)
+        .then(() => {
+          // После выполнения удаляем системную сессию
+          this.flowExecutionService["userSessions"].delete(systemSessionKey);
+          this.logger.log(
+            `Системная сессия ${systemUserId} удалена после выполнения flow`
+          );
+        })
+        .catch((error) => {
+          this.logger.error(
+            `Ошибка при выполнении flow в системной сессии: ${error.message}`,
+            error.stack
+          );
+          // Удаляем системную сессию даже при ошибке
+          this.flowExecutionService["userSessions"].delete(systemSessionKey);
+        });
+
       return {
         success: true,
-        message:
-          "Данные успешно получены и сохранены в глобальное хранилище эндпоинта",
+        message: "Данные получены и flow запущен в системной сессии",
         endpointId: nodeId,
         botId: botId,
-        note: "Данные доступны через переменные эндпоинта для всех пользователей. Для привязки к конкретному пользователю передайте userId в теле запроса.",
+        systemSession: systemUserId,
+        note: "Flow выполняется автоматически без привязки к конкретному пользователю",
         timestamp: new Date().toISOString(),
         dataKeys: Object.keys(variables),
         storage: "global",

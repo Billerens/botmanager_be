@@ -71,6 +71,9 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
             .where("message.botId = :botId", { botId: bot.id })
             .andWhere("message.telegramChatId IS NOT NULL")
             .andWhere("message.telegramChatId != ''")
+            .andWhere("message.telegramChatId NOT LIKE :systemPattern", {
+              systemPattern: "system_%",
+            })
             .getRawMany();
 
           recipientChatIds = allUsers.map((user) => user.chatId);
@@ -78,7 +81,8 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
 
         case "specific":
           recipientChatIds = (broadcast.specificUsers || []).filter(
-            (chatId) => chatId && chatId.trim() !== ""
+            (chatId) =>
+              chatId && chatId.trim() !== "" && !chatId.startsWith("system_")
           );
           break;
 
@@ -91,6 +95,9 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
             .where("message.botId = :botId", { botId: bot.id })
             .andWhere("message.telegramChatId IS NOT NULL")
             .andWhere("message.telegramChatId != ''")
+            .andWhere("message.telegramChatId NOT LIKE :systemPattern", {
+              systemPattern: "system_%",
+            })
             .groupBy("message.telegramChatId");
 
           if (broadcast.activityDate) {
