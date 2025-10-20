@@ -32,6 +32,7 @@ import {
   IntegrationNodeHandler,
   NewMessageNodeHandler,
   EndpointNodeHandler,
+  BroadcastNodeHandler,
 } from "./nodes";
 
 @Module({
@@ -61,6 +62,7 @@ import {
     IntegrationNodeHandler,
     NewMessageNodeHandler,
     EndpointNodeHandler,
+    BroadcastNodeHandler,
   ],
   controllers: [
     BotsController,

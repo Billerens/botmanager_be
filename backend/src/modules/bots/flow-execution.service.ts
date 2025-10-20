@@ -32,6 +32,7 @@ import {
   IntegrationNodeHandler,
   NewMessageNodeHandler,
   EndpointNodeHandler,
+  BroadcastNodeHandler,
 } from "./nodes";
 
 export interface UserSession {
@@ -79,7 +80,8 @@ export class FlowExecutionService {
     private readonly webhookNodeHandler: WebhookNodeHandler,
     private readonly integrationNodeHandler: IntegrationNodeHandler,
     private readonly newMessageNodeHandler: NewMessageNodeHandler,
-    private readonly endpointNodeHandler: EndpointNodeHandler
+    private readonly endpointNodeHandler: EndpointNodeHandler,
+    private readonly broadcastNodeHandler: BroadcastNodeHandler
   ) {
     // Регистрируем все обработчики
     this.registerNodeHandlers();
@@ -118,6 +120,10 @@ export class FlowExecutionService {
       "endpoint",
       this.endpointNodeHandler
     );
+    this.nodeHandlerService.registerHandler(
+      "broadcast",
+      this.broadcastNodeHandler
+    );
 
     // Устанавливаем callback для всех обработчиков
     const handlers = [
@@ -135,6 +141,7 @@ export class FlowExecutionService {
       this.integrationNodeHandler,
       this.newMessageNodeHandler,
       this.endpointNodeHandler,
+      this.broadcastNodeHandler,
     ];
 
     handlers.forEach((handler) => {

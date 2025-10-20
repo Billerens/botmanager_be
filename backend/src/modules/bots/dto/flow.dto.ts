@@ -23,6 +23,7 @@ export enum FlowNodeType {
   RANDOM = "random",
   INTEGRATION = "integration",
   ENDPOINT = "endpoint",
+  BROADCAST = "broadcast",
 }
 
 export class KeyboardButtonDto {
@@ -230,6 +231,20 @@ export class FlowNodeDataDto {
   endpoint?: {
     url: string;
     accessKey: string;
+  };
+
+  @IsOptional()
+  @IsObject()
+  broadcast?: {
+    text: string;
+    buttons?: Array<{
+      text: string;
+      callbackData: string;
+    }>;
+    recipientType: "all" | "specific" | "activity";
+    specificUsers?: string[];
+    activityType?: "before" | "after";
+    activityDate?: string;
   };
 }
 

@@ -25,6 +25,7 @@ export enum NodeType {
   RANDOM = "random",
   INTEGRATION = "integration",
   ENDPOINT = "endpoint",
+  BROADCAST = "broadcast",
 }
 
 export enum MessageNodeType {
@@ -205,6 +206,19 @@ export class BotFlowNode {
     endpoint?: {
       url: string;
       accessKey: string;
+    };
+
+    // Для BROADCAST нод
+    broadcast?: {
+      text: string;
+      buttons?: Array<{
+        text: string;
+        callbackData: string;
+      }>;
+      recipientType: "all" | "specific" | "activity";
+      specificUsers?: string[]; // Chat IDs
+      activityType?: "before" | "after";
+      activityDate?: string; // ISO
     };
 
     // Общие настройки

@@ -239,6 +239,7 @@ export class BotFlowsService {
       webhook: NodeType.WEBHOOK,
       new_message: NodeType.NEW_MESSAGE,
       endpoint: NodeType.ENDPOINT,
+      broadcast: NodeType.BROADCAST,
     };
 
     if (!typeMap[type]) {

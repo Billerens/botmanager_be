@@ -17,3 +17,4 @@ export * from "./webhook-node.handler";
 export * from "./integration-node.handler";
 export * from "./new-message-node.handler";
 export * from "./endpoint-node.handler";
+export * from "./broadcast-node.handler";
