@@ -37,11 +37,6 @@ export class EmailService {
         user,
         pass: password,
       },
-      // Специальные настройки для Gmail
-      tls: {
-        rejectUnauthorized: false, // Для Gmail может потребоваться
-        ciphers: "SSLv3", // Совместимость с Gmail
-      },
       // Улучшенные таймауты для Gmail
       connectionTimeout: 10000, // 10 секунд на подключение (увеличено для Gmail)
       greetingTimeout: 5000, // 5 секунд на приветствие
@@ -188,46 +183,6 @@ export class EmailService {
         error.stack
       );
       this.logger.error(`Детали SMTP ошибки:`, error);
-
-      // Дополнительная диагностика для разных типов ошибок
-      if (error.message.includes("Connection timeout")) {
-        this.logger.error(
-          "🔴 ПРОБЛЕМА: SMTP сервер недоступен или неправильно настроен"
-        );
-        this.logger.error("Проверьте:");
-        this.logger.error("1. SMTP_HOST - правильный ли хост?");
-        this.logger.error("2. SMTP_PORT - правильный ли порт?");
-        this.logger.error("3. Сетевое соединение с SMTP сервером");
-        this.logger.error("4. Firewall не блокирует соединение");
-
-        // Специальные рекомендации для Gmail
-        if (host === "smtp.gmail.com") {
-          this.logger.error("📧 GMAIL СПЕЦИАЛЬНЫЕ ТРЕБОВАНИЯ:");
-          this.logger.error("1. Включите 2FA в Google аккаунте");
-          this.logger.error("2. Создайте App Password (не обычный пароль!)");
-          this.logger.error("3. Используйте App Password в SMTP_PASSWORD");
-          this.logger.error(
-            "4. Проверьте, что 'Less secure app access' отключен"
-          );
-        }
-      } else if (error.message.includes("Authentication failed")) {
-        this.logger.error("🔴 ПРОБЛЕМА: Неверные учетные данные SMTP");
-        this.logger.error("Проверьте SMTP_USER и SMTP_PASSWORD");
-
-        // Специальные рекомендации для Gmail
-        if (host === "smtp.gmail.com") {
-          this.logger.error("📧 GMAIL АУТЕНТИФИКАЦИЯ:");
-          this.logger.error("1. Используйте App Password, а не обычный пароль");
-          this.logger.error("2. App Password: 16 символов без пробелов");
-          this.logger.error(
-            "3. Создайте App Password: Google Account > Security > App passwords"
-          );
-        }
-      } else if (error.message.includes("ECONNREFUSED")) {
-        this.logger.error("🔴 ПРОБЛЕМА: Соединение отклонено SMTP сервером");
-        this.logger.error("Проверьте доступность SMTP сервера");
-      }
-
       throw error;
     }
   }
