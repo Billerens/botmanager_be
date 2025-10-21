@@ -238,7 +238,9 @@ export class FlowExecutionService {
           );
 
           if (!bot.isShop) {
-            this.logger.warn(`Бот ${bot.id} не является магазином (isShop=false)`);
+            this.logger.warn(
+              `Бот ${bot.id} не является магазином (isShop=false)`
+            );
           } else if (!bot.shopButtonTypes?.includes("command")) {
             this.logger.warn(
               `В настройках бота ${bot.id} не включена команда /shop. shopButtonTypes=${JSON.stringify(bot.shopButtonTypes)}`
@@ -593,6 +595,9 @@ export class FlowExecutionService {
         bot.shopUrl ||
         `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/shop/${bot.id}`;
 
+      // Расшифровываем токен бота
+      const decryptedToken = this.botsService.decryptToken(bot.token);
+
       // Отправляем сообщение с кнопкой для открытия магазина
       const keyboard = {
         inline_keyboard: [
@@ -608,7 +613,7 @@ export class FlowExecutionService {
       };
 
       await this.telegramService.sendMessage(
-        bot.token,
+        decryptedToken,
         message.chat.id.toString(),
         bot.shopDescription ||
           "Добро пожаловать в наш магазин! Нажмите кнопку ниже, чтобы открыть магазин.",
