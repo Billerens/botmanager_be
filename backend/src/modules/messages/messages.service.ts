@@ -748,7 +748,7 @@ export class MessagesService {
 
     switch (data.recipients.type) {
       case "all":
-        // Получаем всех пользователей из диалогов
+        // Получаем всех пользователей из диалогов (только приватные чаты)
         const allDialogs = await this.getBotDialogs(botId, userId, {
           page: 1,
           limit: 10000, // Большое число для получения всех диалогов
@@ -762,6 +762,32 @@ export class MessagesService {
         recipientChatIds = (data.recipients.specificUsers || []).filter(
           (chatId) => chatId && chatId.trim() !== ""
         );
+        break;
+
+      case "groups":
+        // Получаем все групповые чаты бота
+        const allGroups = await this.messageRepository
+          .createQueryBuilder("message")
+          .select("DISTINCT message.telegramChatId", "chatId")
+          .addSelect("message.metadata->>'chatType'", "chatType")
+          .addSelect("message.metadata->>'title'", "title")
+          .where("message.botId = :botId", { botId })
+          .andWhere("message.telegramChatId IS NOT NULL")
+          .andWhere("message.telegramChatId != ''")
+          .andWhere(
+            "message.metadata->>'chatType' IN ('group', 'supergroup', 'channel')"
+          )
+          .getRawMany();
+
+        console.log(`Найдено групп: ${allGroups.length}`, allGroups);
+        recipientChatIds = allGroups.map((group) => group.chatId);
+        break;
+
+      case "specific_groups":
+        recipientChatIds = (data.recipients.specificGroups || []).filter(
+          (chatId) => chatId && chatId.trim() !== ""
+        );
+        console.log(`Конкретные группы для рассылки:`, recipientChatIds);
         break;
 
       case "activity":
