@@ -179,6 +179,18 @@ async function bootstrap() {
   console.log(
     `📚 Swagger документация: http://${configService.get("app.host") || process.env.HOST || "localhost"}:${port}/api/docs`
   );
+
+  // Инициализация Telegram webhook
+  try {
+    const telegramWebhookService = app.get("TelegramWebhookService");
+    await telegramWebhookService.setWebhook();
+    console.log("🤖 Telegram webhook инициализирован");
+  } catch (error) {
+    console.warn(
+      "⚠️ Не удалось инициализировать Telegram webhook:",
+      error.message
+    );
+  }
 }
 
 bootstrap();
