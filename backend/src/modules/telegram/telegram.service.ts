@@ -152,6 +152,13 @@ export class TelegramService {
           command: "shop",
           description: "🛒 Открыть магазин",
         });
+        console.log(
+          `Добавлена команда /shop для бота ${bot.id} (isShop=${bot.isShop}, shopButtonTypes=${JSON.stringify(bot.shopButtonTypes)})`
+        );
+      } else {
+        console.log(
+          `Команда /shop НЕ добавлена для бота ${bot.id}: isShop=${bot.isShop}, shopButtonTypes=${JSON.stringify(bot.shopButtonTypes)}`
+        );
       }
 
       const response = await axios.post(
@@ -161,7 +168,7 @@ export class TelegramService {
         }
       );
 
-      console.log("Bot commands response:", response.data);
+      console.log("Bot commands установлены:", commands);
 
       // Устанавливаем Menu Button если он настроен
       if (bot.isShop && bot.shopButtonTypes?.includes("menu_button")) {

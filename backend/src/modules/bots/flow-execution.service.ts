@@ -231,15 +231,24 @@ export class FlowExecutionService {
           } else {
             this.logger.warn(`START узел не найден в flow`);
           }
-        } else if (
-          message.text === "/shop" &&
-          bot.isShop &&
-          bot.shopButtonTypes?.includes("command")
-        ) {
-          // Специальная обработка команды /shop для открытия магазина
-          this.logger.log(`Команда "/shop" - открываем магазин`);
-          await this.handleShopCommand(bot, message);
-          return; // Не обрабатываем через flow
+        } else if (message.text === "/shop") {
+          // Проверяем условия для команды /shop
+          this.logger.log(
+            `Получена команда "/shop". Проверка условий: isShop=${bot.isShop}, shopButtonTypes=${JSON.stringify(bot.shopButtonTypes)}`
+          );
+
+          if (!bot.isShop) {
+            this.logger.warn(`Бот ${bot.id} не является магазином (isShop=false)`);
+          } else if (!bot.shopButtonTypes?.includes("command")) {
+            this.logger.warn(
+              `В настройках бота ${bot.id} не включена команда /shop. shopButtonTypes=${JSON.stringify(bot.shopButtonTypes)}`
+            );
+          } else {
+            // Все условия выполнены - открываем магазин
+            this.logger.log(`Команда "/shop" - открываем магазин`);
+            await this.handleShopCommand(bot, message);
+            return; // Не обрабатываем через flow
+          }
         } else {
           this.logger.log(`Сообщение не "/start" - ищем NEW_MESSAGE узел`);
           // Для других сообщений ищем подходящий NEW_MESSAGE узел
