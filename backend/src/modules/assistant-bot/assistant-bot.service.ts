@@ -226,7 +226,7 @@ export class AssistantBotService implements OnModuleInit {
     }
 
     try {
-      const webhookUrl = `${this.configService.get("app.webhookBaseUrl")}/api/assistant-bot/webhook`;
+      const webhookUrl = `${this.configService.get("app.webhookBaseUrl")}/assistant-bot/webhook`;
       const url = `${this.getBotApiUrl()}/setWebhook`;
 
       this.logger.log(`🔧 Установка webhook: ${webhookUrl}`);
