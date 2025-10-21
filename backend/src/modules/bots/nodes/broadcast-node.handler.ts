@@ -46,7 +46,7 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
       return;
     }
 
-    const broadcast = currentNode.data.broadcast;
+    const broadcast = currentNode.data.broadcast as any;
     const startTime = new Date();
 
     this.logger.log(
@@ -64,7 +64,7 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
     try {
       switch (broadcast.recipientType) {
         case "all":
-          // Получаем всех уникальных пользователей бота
+          // Получаем всех уникальных пользователей бота (приватные чаты)
           const allUsers = await this.messageRepository
             .createQueryBuilder("message")
             .select("DISTINCT message.telegramChatId", "chatId")
@@ -74,6 +74,9 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
             .andWhere("message.telegramChatId NOT LIKE :systemPattern", {
               systemPattern: "system_%",
             })
+            .andWhere(
+              "message.metadata->>'chatType' = 'private' OR message.metadata->>'chatType' IS NULL"
+            )
             .getRawMany();
 
           recipientChatIds = allUsers.map((user) => user.chatId);
@@ -81,6 +84,34 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
 
         case "specific":
           recipientChatIds = (broadcast.specificUsers || []).filter(
+            (chatId) =>
+              chatId && chatId.trim() !== "" && !chatId.startsWith("system_")
+          );
+          break;
+
+        case "groups":
+          // Получаем все групповые чаты бота
+          const allGroups = await this.messageRepository
+            .createQueryBuilder("message")
+            .select("DISTINCT message.telegramChatId", "chatId")
+            .addSelect("message.metadata->>'chatType'", "chatType")
+            .addSelect("message.metadata->>'title'", "title")
+            .where("message.botId = :botId", { botId: bot.id })
+            .andWhere("message.telegramChatId IS NOT NULL")
+            .andWhere("message.telegramChatId != ''")
+            .andWhere("message.telegramChatId NOT LIKE :systemPattern", {
+              systemPattern: "system_%",
+            })
+            .andWhere(
+              "message.metadata->>'chatType' IN ('group', 'supergroup', 'channel')"
+            )
+            .getRawMany();
+
+          recipientChatIds = allGroups.map((group) => group.chatId);
+          break;
+
+        case "specific_groups":
+          recipientChatIds = (broadcast.specificGroups || []).filter(
             (chatId) =>
               chatId && chatId.trim() !== "" && !chatId.startsWith("system_")
           );
@@ -99,6 +130,16 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
               systemPattern: "system_%",
             })
             .groupBy("message.telegramChatId");
+
+          // Фильтр по типу чата если указан
+          if (broadcast.chatType) {
+            activityQuery.andWhere(
+              "message.metadata->>'chatType' = :chatType",
+              {
+                chatType: broadcast.chatType,
+              }
+            );
+          }
 
           if (broadcast.activityDate) {
             const filterDate = new Date(broadcast.activityDate);

@@ -121,6 +121,9 @@ export class TelegramController {
           languageCode: message.from.language_code,
           isBot: message.from.is_bot,
           replyToMessageId: message.reply_to_message?.message_id,
+          chatType: message.chat.type,
+          chatTitle: message.chat.title,
+          chatUsername: message.chat.username,
         },
       });
 

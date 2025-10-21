@@ -98,9 +98,35 @@ export class MessagesController {
     @Query("search") search?: string,
     @Query("sortBy")
     sortBy: "lastActivity" | "messageCount" | "createdAt" = "lastActivity",
-    @Query("sortOrder") sortOrder: "asc" | "desc" = "desc"
+    @Query("sortOrder") sortOrder: "asc" | "desc" = "desc",
+    @Query("chatType") chatType?: "private" | "group" | "supergroup" | "channel"
   ) {
     return this.messagesService.getBotDialogs(botId, req.user.id, {
+      page,
+      limit,
+      search,
+      sortBy,
+      sortOrder,
+      chatType,
+    });
+  }
+
+  @Get("bot/:botId/groups")
+  @ApiOperation({ summary: "Получить групповые чаты бота" })
+  @ApiResponse({ status: 200, description: "Групповые чаты получены" })
+  @ApiResponse({ status: 401, description: "Неавторизован" })
+  @ApiResponse({ status: 404, description: "Бот не найден" })
+  async getBotGroups(
+    @Param("botId", ParseUUIDPipe) botId: string,
+    @Request() req: any,
+    @Query("page") page: number = 1,
+    @Query("limit") limit: number = 50,
+    @Query("search") search?: string,
+    @Query("sortBy")
+    sortBy: "lastActivity" | "messageCount" | "createdAt" = "lastActivity",
+    @Query("sortOrder") sortOrder: "asc" | "desc" = "desc"
+  ) {
+    return this.messagesService.getBotGroups(botId, req.user.id, {
       page,
       limit,
       search,

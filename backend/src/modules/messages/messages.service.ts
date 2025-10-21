@@ -25,6 +25,7 @@ interface DialogFilters {
   search?: string;
   sortBy: "lastActivity" | "messageCount" | "createdAt";
   sortOrder: "asc" | "desc";
+  chatType?: "private" | "group" | "supergroup" | "channel";
 }
 
 interface UserFilters {
@@ -51,6 +52,11 @@ export interface Dialog {
     username?: string;
     languageCode?: string;
     isBot?: boolean;
+  };
+  chatInfo?: {
+    type: "private" | "group" | "supergroup" | "channel";
+    title?: string;
+    username?: string;
   };
   lastMessage: Message;
   messageCount: number;
@@ -321,7 +327,7 @@ export class MessagesService {
       throw new NotFoundException("Бот не найден");
     }
 
-    const { page, limit, search, sortBy, sortOrder } = filters;
+    const { page, limit, search, sortBy, sortOrder, chatType } = filters;
     const skip = (page - 1) * limit;
 
     // Создаем подзапрос для получения последнего сообщения каждого диалога
@@ -345,10 +351,17 @@ export class MessagesService {
       .where("message.botId = :botId", { botId })
       .groupBy("message.telegramChatId");
 
-    // Добавляем поиск по имени пользователя
+    // Фильтр по типу чата
+    if (chatType) {
+      queryBuilder.andWhere("message.metadata->>'chatType' = :chatType", {
+        chatType,
+      });
+    }
+
+    // Добавляем поиск по имени пользователя или названию группы
     if (search) {
       queryBuilder.andWhere(
-        "(message.metadata->>'firstName' ILIKE :search OR message.metadata->>'lastName' ILIKE :search OR message.metadata->>'username' ILIKE :search)",
+        "(message.metadata->>'firstName' ILIKE :search OR message.metadata->>'lastName' ILIKE :search OR message.metadata->>'username' ILIKE :search OR message.metadata->>'chatTitle' ILIKE :search)",
         { search: `%${search}%` }
       );
     }
@@ -460,6 +473,16 @@ export class MessagesService {
         return {
           chatId: rawDialog.chatid,
           userInfo: firstMessage.metadata || {},
+          chatInfo: {
+            type:
+              (firstMessage.metadata?.chatType as
+                | "private"
+                | "group"
+                | "supergroup"
+                | "channel") || "private",
+            title: firstMessage.metadata?.chatTitle,
+            username: firstMessage.metadata?.chatUsername,
+          },
           lastMessage,
           messageCount: parseInt(rawDialog.messagecount),
           unreadCount: parseInt(rawDialog.unreadcount) || 0,
@@ -467,7 +490,7 @@ export class MessagesService {
           createdAt: rawDialog.createdat,
         };
       })
-      .filter((dialog): dialog is Dialog => dialog !== null);
+      .filter((dialog) => dialog !== null) as Dialog[];
 
     // Получаем общее количество диалогов для пагинации
     const totalDialogsQuery = this.messageRepository
@@ -494,6 +517,14 @@ export class MessagesService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  async getBotGroups(botId: string, userId: string, filters: DialogFilters) {
+    // Используем getBotDialogs с фильтром только групповых чатов
+    return this.getBotDialogs(botId, userId, {
+      ...filters,
+      chatType: "group", // Фильтруем только группы
+    });
   }
 
   async getBotDialogStats(botId: string, userId: string): Promise<DialogStats> {

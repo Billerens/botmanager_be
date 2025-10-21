@@ -242,10 +242,17 @@ export class FlowNodeDataDto {
       text: string;
       callbackData: string;
     }>;
-    recipientType: "all" | "specific" | "activity";
+    recipientType:
+      | "all"
+      | "specific"
+      | "activity"
+      | "groups"
+      | "specific_groups";
     specificUsers?: string[];
+    specificGroups?: string[];
     activityType?: "before" | "after";
     activityDate?: string;
+    chatType?: "private" | "group" | "supergroup" | "channel";
   };
 }
 

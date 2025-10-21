@@ -87,6 +87,9 @@ export class Message {
     isBot?: boolean;
     replyToMessageId?: number;
     forwardFrom?: any;
+    chatType?: string;
+    chatTitle?: string;
+    chatUsername?: string;
   };
 
   @Column({ default: false })

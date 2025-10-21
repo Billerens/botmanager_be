@@ -18,13 +18,18 @@ export class BroadcastButtonDto {
 }
 
 export class BroadcastRecipientsDto {
-  @IsEnum(["all", "specific", "activity"])
-  type: "all" | "specific" | "activity";
+  @IsEnum(["all", "specific", "activity", "groups", "specific_groups"])
+  type: "all" | "specific" | "activity" | "groups" | "specific_groups";
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   specificUsers?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  specificGroups?: string[];
 
   @IsOptional()
   @IsEnum(["before", "after"])
@@ -33,6 +38,10 @@ export class BroadcastRecipientsDto {
   @IsOptional()
   @IsDateString()
   activityDate?: string;
+
+  @IsOptional()
+  @IsEnum(["private", "group", "supergroup", "channel"])
+  chatType?: "private" | "group" | "supergroup" | "channel";
 }
 
 export class BroadcastDto {
