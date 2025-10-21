@@ -37,12 +37,21 @@ export class EmailService {
         user,
         pass: password,
       },
+      // Добавляем таймауты для предотвращения долгого ожидания
+      connectionTimeout: 10000, // 10 секунд на подключение
+      greetingTimeout: 5000, // 5 секунд на приветствие
+      socketTimeout: 10000, // 10 секунд на операции с сокетом
     });
 
     this.logger.log(`Email сервис инициализирован: ${host}:${port}`);
   }
 
   async sendVerificationCode(email: string, code: string): Promise<void> {
+    const startTime = Date.now();
+    this.logger.log(`=== ОТПРАВКА EMAIL ВЕРИФИКАЦИИ ===`);
+    this.logger.log(`Email: ${email}`);
+    this.logger.log(`Код: ${code}`);
+
     if (!this.transporter) {
       this.logger.error(
         `Невозможно отправить email на ${email}: транспортер не инициализирован`
@@ -127,13 +136,25 @@ export class EmailService {
     };
 
     try {
+      this.logger.log(`Подготовка к отправке email через SMTP`);
+      const smtpStartTime = Date.now();
+
       await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Код верификации отправлен на ${email}`);
+
+      const smtpDuration = Date.now() - smtpStartTime;
+      const totalDuration = Date.now() - startTime;
+
+      this.logger.log(`Код верификации успешно отправлен на ${email}`);
+      this.logger.log(`SMTP время отправки: ${smtpDuration}ms`);
+      this.logger.log(`Общее время выполнения: ${totalDuration}ms`);
+      this.logger.log(`=== EMAIL ОТПРАВЛЕН ===`);
     } catch (error) {
+      const smtpDuration = Date.now() - startTime;
       this.logger.error(
-        `Ошибка при отправке email на ${email}: ${error.message}`,
+        `Ошибка при отправке email на ${email} за ${smtpDuration}ms: ${error.message}`,
         error.stack
       );
+      this.logger.error(`Детали SMTP ошибки:`, error);
       throw error;
     }
   }
@@ -229,4 +250,3 @@ export class EmailService {
     }
   }
 }
-

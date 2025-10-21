@@ -8,12 +8,14 @@ import {
   HttpStatus,
   NotFoundException,
   UnauthorizedException,
+  ForbiddenException,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { BotFlow, FlowStatus } from "../../database/entities/bot-flow.entity";
 import { BotFlowNode } from "../../database/entities/bot-flow-node.entity";
+import { Bot, BotStatus } from "../../database/entities/bot.entity";
 import { CustomLoggerService } from "../../common/logger.service";
 import { FlowExecutionService } from "./flow-execution.service";
 
@@ -25,6 +27,8 @@ export class EndpointController {
     private readonly botFlowRepository: Repository<BotFlow>,
     @InjectRepository(BotFlowNode)
     private readonly botFlowNodeRepository: Repository<BotFlowNode>,
+    @InjectRepository(Bot)
+    private readonly botRepository: Repository<Bot>,
     private readonly logger: CustomLoggerService,
     private readonly flowExecutionService: FlowExecutionService
   ) {}
@@ -40,6 +44,7 @@ export class EndpointController {
   @ApiParam({ name: "url", description: "URL эндпоинта из настроек ноды" })
   @ApiResponse({ status: 200, description: "Запрос успешно обработан" })
   @ApiResponse({ status: 401, description: "Неверный Access Key" })
+  @ApiResponse({ status: 403, description: "Бот неактивен" })
   @ApiResponse({ status: 404, description: "Эндпоинт не найден" })
   async handleEndpointRequest(
     @Param("botId") botId: string,
@@ -54,6 +59,23 @@ export class EndpointController {
     this.logger.log(`URL: ${url}`);
     this.logger.log(`Access Key: ${accessKey ? "***" : "не предоставлен"}`);
     this.logger.log(`Body: ${JSON.stringify(body, null, 2)}`);
+
+    // Проверяем статус бота
+    const bot = await this.botRepository.findOne({
+      where: { id: botId },
+    });
+
+    if (!bot) {
+      this.logger.error(`Бот ${botId} не найден`);
+      throw new NotFoundException("Бот не найден");
+    }
+
+    if (bot.status !== BotStatus.ACTIVE) {
+      this.logger.error(`Бот ${botId} неактивен (статус: ${bot.status})`);
+      throw new ForbiddenException(
+        `Бот неактивен. Текущий статус: ${bot.status}`
+      );
+    }
 
     // Находим активный flow для бота
     const activeFlow = await this.botFlowRepository.findOne({

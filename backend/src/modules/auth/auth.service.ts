@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -14,9 +15,12 @@ import { UsersService } from "../users/users.service";
 import { LoginDto, RegisterDto, ChangePasswordDto } from "./dto/auth.dto";
 import { JwtPayload } from "./interfaces/jwt-payload.interface";
 import { EmailService } from "../../common/email.service";
+import { VerificationRequiredResponseDto } from "./dto/auth-response.dto";
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -28,21 +32,58 @@ export class AuthService {
   async register(
     registerDto: RegisterDto
   ): Promise<{ user: User; message: string; requiresVerification: boolean }> {
+    const startTime = Date.now();
     const { email, password, firstName, lastName } = registerDto;
 
+    this.logger.log(`=== НАЧАЛО РЕГИСТРАЦИИ ===`);
+    this.logger.log(`Email: ${email}`);
+    this.logger.log(`Имя: ${firstName} ${lastName}`);
+
     // Проверяем, существует ли пользователь
+    this.logger.log(`Проверка существования пользователя с email: ${email}`);
     const existingUser = await this.userRepository.findOne({
       where: { email },
     });
     if (existingUser) {
+      this.logger.warn(`Пользователь с email ${email} уже существует`);
       throw new ConflictException("Пользователь с таким email уже существует");
     }
+    this.logger.log(
+      `Пользователь с email ${email} не найден, продолжаем регистрацию`
+    );
 
     // Генерируем 6-значный код верификации
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    this.logger.log(`Генерация кода верификации`);
+    const verificationCode = Math.floor(
+      100000 + Math.random() * 900000
+    ).toString();
     const verificationExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 минут
+    this.logger.log(`Код верификации: ${verificationCode}`);
+    this.logger.log(`Код истекает: ${verificationExpires.toISOString()}`);
 
-    // Создаем нового пользователя
+    // СНАЧАЛА отправляем код на email и ждем успешной отправки
+    this.logger.log(`Начало отправки email с кодом верификации`);
+    const emailStartTime = Date.now();
+
+    try {
+      await this.emailService.sendVerificationCode(email, verificationCode);
+      const emailDuration = Date.now() - emailStartTime;
+      this.logger.log(`Email успешно отправлен за ${emailDuration}ms`);
+    } catch (error) {
+      const emailDuration = Date.now() - emailStartTime;
+      this.logger.error(`Ошибка отправки email за ${emailDuration}ms:`, error);
+      this.logger.error(`Детали ошибки: ${error.message}`);
+      this.logger.error(`Stack trace: ${error.stack}`);
+      // Если email не удалось отправить, прерываем регистрацию
+      throw new BadRequestException(
+        `Не удалось отправить код верификации на email ${email}. Проверьте правильность email адреса.`
+      );
+    }
+
+    // ТОЛЬКО ПОСЛЕ успешной отправки email создаем пользователя
+    this.logger.log(
+      `Email отправлен успешно, создание пользователя в базе данных`
+    );
     const user = this.userRepository.create({
       email,
       password,
@@ -55,15 +96,14 @@ export class AuthService {
       isEmailVerified: false,
     });
 
+    this.logger.log(`Сохранение пользователя в базу данных`);
     const savedUser = await this.userRepository.save(user);
+    this.logger.log(`Пользователь сохранен с ID: ${savedUser.id}`);
 
-    // Отправляем код на email
-    try {
-      await this.emailService.sendVerificationCode(email, verificationCode);
-    } catch (error) {
-      // Логируем ошибку, но не прерываем процесс регистрации
-      console.error("Ошибка отправки email:", error);
-    }
+    const totalDuration = Date.now() - startTime;
+    this.logger.log(`=== РЕГИСТРАЦИЯ ЗАВЕРШЕНА ===`);
+    this.logger.log(`Общее время выполнения: ${totalDuration}ms`);
+    this.logger.log(`Пользователь ID: ${savedUser.id}`);
 
     return {
       user: savedUser,
@@ -74,7 +114,9 @@ export class AuthService {
 
   async login(
     loginDto: LoginDto
-  ): Promise<{ user: User; accessToken: string }> {
+  ): Promise<
+    { user: User; accessToken: string } | VerificationRequiredResponseDto
+  > {
     const { email, password } = loginDto;
 
     // Находим пользователя
@@ -91,9 +133,67 @@ export class AuthService {
 
     // Проверяем, верифицирован ли email
     if (!user.isEmailVerified) {
-      throw new UnauthorizedException(
-        "Email не подтвержден. Проверьте почту и введите код верификации."
+      this.logger.log(
+        `Пользователь ${email} не верифицирован, предлагаем ввести код подтверждения`
       );
+
+      // Проверяем, есть ли активный код верификации
+      const hasActiveCode =
+        user.emailVerificationCode &&
+        user.emailVerificationExpires &&
+        user.emailVerificationExpires > new Date();
+
+      if (hasActiveCode) {
+        this.logger.log(
+          `У пользователя ${email} есть активный код верификации`
+        );
+        return {
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            telegramId: user.telegramId,
+            telegramUsername: user.telegramUsername,
+            role: user.role,
+            isActive: user.isActive,
+            isEmailVerified: user.isEmailVerified,
+            lastLoginAt: user.lastLoginAt,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+          },
+          message:
+            "Email не подтвержден. Введите код верификации, отправленный на вашу почту.",
+          requiresVerification: true,
+          email: user.email,
+        };
+      } else {
+        this.logger.log(
+          `У пользователя ${email} нет активного кода верификации, отправляем новый`
+        );
+        // Отправляем новый код верификации
+        await this.resendVerificationEmail(email);
+        return {
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            telegramId: user.telegramId,
+            telegramUsername: user.telegramUsername,
+            role: user.role,
+            isActive: user.isActive,
+            isEmailVerified: user.isEmailVerified,
+            lastLoginAt: user.lastLoginAt,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+          },
+          message:
+            "Email не подтвержден. Новый код верификации отправлен на вашу почту.",
+          requiresVerification: true,
+          email: user.email,
+        };
+      }
     }
 
     // Проверяем, активен ли пользователь
@@ -280,20 +380,25 @@ export class AuthService {
     }
 
     // Генерируем новый код
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationCode = Math.floor(
+      100000 + Math.random() * 900000
+    ).toString();
     const verificationExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 минут
 
-    user.emailVerificationCode = verificationCode;
-    user.emailVerificationExpires = verificationExpires;
-    await this.userRepository.save(user);
-
-    // Отправляем код на email
+    // СНАЧАЛА отправляем код на email
     try {
       await this.emailService.sendVerificationCode(email, verificationCode);
     } catch (error) {
-      console.error("Ошибка отправки email:", error);
-      throw new BadRequestException("Не удалось отправить код на email");
+      this.logger.error(`Ошибка отправки повторного email на ${email}:`, error);
+      throw new BadRequestException(
+        `Не удалось отправить код верификации на email ${email}. Проверьте правильность email адреса.`
+      );
     }
+
+    // ТОЛЬКО ПОСЛЕ успешной отправки обновляем пользователя
+    user.emailVerificationCode = verificationCode;
+    user.emailVerificationExpires = verificationExpires;
+    await this.userRepository.save(user);
   }
 
   async refreshToken(userId: string): Promise<{ accessToken: string }> {

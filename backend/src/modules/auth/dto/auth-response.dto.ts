@@ -1,48 +1,68 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { UserRole } from '../../../database/entities/user.entity';
+import { ApiProperty } from "@nestjs/swagger";
+import { UserRole } from "../../../database/entities/user.entity";
 
 export class UserResponseDto {
-  @ApiProperty({ description: 'ID пользователя' })
+  @ApiProperty({ description: "ID пользователя" })
   id: string;
 
-  @ApiProperty({ description: 'Email пользователя' })
+  @ApiProperty({ description: "Email пользователя" })
   email: string;
 
-  @ApiProperty({ description: 'Имя' })
+  @ApiProperty({ description: "Имя" })
   firstName: string;
 
-  @ApiProperty({ description: 'Фамилия' })
+  @ApiProperty({ description: "Фамилия" })
   lastName: string;
 
-  @ApiProperty({ description: 'Telegram ID' })
+  @ApiProperty({ description: "Telegram ID" })
   telegramId: string;
 
-  @ApiProperty({ description: 'Telegram username' })
+  @ApiProperty({ description: "Telegram username" })
   telegramUsername: string;
 
-  @ApiProperty({ description: 'Роль пользователя', enum: UserRole })
+  @ApiProperty({ description: "Роль пользователя", enum: UserRole })
   role: UserRole;
 
-  @ApiProperty({ description: 'Активен ли пользователь' })
+  @ApiProperty({ description: "Активен ли пользователь" })
   isActive: boolean;
 
-  @ApiProperty({ description: 'Верифицирован ли email' })
+  @ApiProperty({ description: "Верифицирован ли email" })
   isEmailVerified: boolean;
 
-  @ApiProperty({ description: 'Дата последнего входа' })
+  @ApiProperty({ description: "Дата последнего входа" })
   lastLoginAt: Date;
 
-  @ApiProperty({ description: 'Дата создания' })
+  @ApiProperty({ description: "Дата создания" })
   createdAt: Date;
 
-  @ApiProperty({ description: 'Дата обновления' })
+  @ApiProperty({ description: "Дата обновления" })
   updatedAt: Date;
 }
 
 export class AuthResponseDto {
-  @ApiProperty({ description: 'Информация о пользователе', type: UserResponseDto })
+  @ApiProperty({
+    description: "Информация о пользователе",
+    type: UserResponseDto,
+  })
   user: UserResponseDto;
 
-  @ApiProperty({ description: 'JWT токен доступа' })
+  @ApiProperty({ description: "JWT токен доступа" })
   accessToken: string;
+}
+
+export class VerificationRequiredResponseDto {
+  @ApiProperty({
+    description: "Информация о пользователе",
+    type: UserResponseDto,
+  })
+  user: UserResponseDto;
+
+  @ApiProperty({ description: "Сообщение о необходимости верификации" })
+  message: string;
+
+  @ApiProperty({ description: "Требуется ли верификация email" })
+  requiresVerification: boolean;
+
+  @ApiProperty({ description: "Email пользователя для верификации" })
+  email: string;
 }

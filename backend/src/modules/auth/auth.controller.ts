@@ -9,6 +9,7 @@ import {
   Get,
   Query,
   Patch,
+  Logger,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -30,11 +31,16 @@ import {
   VerifyEmailCodeDto,
   UpdateProfileDto,
 } from "./dto/auth.dto";
-import { AuthResponseDto } from "./dto/auth-response.dto";
+import {
+  AuthResponseDto,
+  VerificationRequiredResponseDto,
+} from "./dto/auth-response.dto";
 
 @ApiTags("Аутентификация")
 @Controller("auth")
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(private readonly authService: AuthService) {}
 
   @Post("register")
@@ -49,8 +55,27 @@ export class AuthController {
     status: 409,
     description: "Пользователь с таким email уже существует",
   })
+  @ApiResponse({
+    status: 400,
+    description: "Не удалось отправить код верификации на email",
+  })
   async register(@Body() registerDto: RegisterDto) {
-    return this.authService.register(registerDto);
+    const startTime = Date.now();
+    this.logger.log(`=== КОНТРОЛЛЕР РЕГИСТРАЦИИ ===`);
+    this.logger.log(`Получен запрос на регистрацию: ${registerDto.email}`);
+
+    try {
+      const result = await this.authService.register(registerDto);
+      const duration = Date.now() - startTime;
+      this.logger.log(`Регистрация успешно завершена за ${duration}ms`);
+      this.logger.log(`Пользователь ID: ${result.user.id}`);
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      this.logger.error(`Ошибка регистрации за ${duration}ms:`, error);
+      this.logger.error(`Детали ошибки: ${error.message}`);
+      throw error;
+    }
   }
 
   @Post("login")
@@ -60,6 +85,11 @@ export class AuthController {
     status: 200,
     description: "Успешный вход",
     type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Требуется верификация email",
+    type: VerificationRequiredResponseDto,
   })
   @ApiResponse({ status: 401, description: "Неверные учетные данные" })
   async login(@Body() loginDto: LoginDto) {

@@ -61,6 +61,14 @@ export class TelegramController {
         return;
       }
 
+      // Проверяем статус бота
+      if (bot.status !== "active") {
+        this.logger.warn(
+          `Бот ${botId} неактивен (статус: ${bot.status}), игнорируем обновление`
+        );
+        return;
+      }
+
       // Обрабатываем обновление
       await this.processUpdate(bot, update);
 
