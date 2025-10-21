@@ -27,6 +27,7 @@ import {
   RequestPasswordResetDto,
   ResetPasswordDto,
   ResendVerificationDto,
+  VerifyEmailCodeDto,
   UpdateProfileDto,
 } from "./dto/auth.dto";
 import { AuthResponseDto } from "./dto/auth-response.dto";
@@ -115,7 +116,7 @@ export class AuthController {
   }
 
   @Get("verify-email")
-  @ApiOperation({ summary: "Верификация email" })
+  @ApiOperation({ summary: "Верификация email по токену (старый метод)" })
   @ApiResponse({ status: 200, description: "Email успешно верифицирован" })
   @ApiResponse({
     status: 400,
@@ -125,10 +126,32 @@ export class AuthController {
     return this.authService.verifyEmail(token);
   }
 
+  @Post("verify-email-code")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Верификация email по коду" })
+  @ApiResponse({
+    status: 200,
+    description: "Email успешно верифицирован, возвращает токен доступа",
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Неверный код или код истек",
+  })
+  async verifyEmailWithCode(@Body() verifyEmailCodeDto: VerifyEmailCodeDto) {
+    return this.authService.verifyEmailWithCode(
+      verifyEmailCodeDto.email,
+      verifyEmailCodeDto.code
+    );
+  }
+
   @Post("resend-verification")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Повторная отправка письма верификации" })
-  @ApiResponse({ status: 200, description: "Письмо верификации отправлено" })
+  @ApiOperation({ summary: "Повторная отправка кода верификации" })
+  @ApiResponse({
+    status: 200,
+    description: "Код верификации отправлен на email",
+  })
   @ApiResponse({
     status: 400,
     description: "Email уже верифицирован или пользователь не найден",
@@ -136,9 +159,8 @@ export class AuthController {
   async resendVerification(
     @Body() resendVerificationDto: ResendVerificationDto
   ) {
-    return this.authService.resendVerificationEmail(
-      resendVerificationDto.email
-    );
+    await this.authService.resendVerificationEmail(resendVerificationDto.email);
+    return { message: "Код верификации отправлен на email" };
   }
 
   @Get("me")

@@ -14,4 +14,12 @@ export default registerAs("app", () => ({
       ],
   webhookBaseUrl:
     process.env.WEBHOOK_BASE_URL || "https://api.botmanagertest.online",
+  smtp: {
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || "587", 10),
+    user: process.env.SMTP_USER,
+    password: process.env.SMTP_PASSWORD,
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+  },
+  frontendUrl: process.env.FRONTEND_URL || "http://localhost:3001",
 }));

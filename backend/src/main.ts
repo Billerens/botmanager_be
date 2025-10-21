@@ -58,6 +58,31 @@ const CRITICAL_ENV_VARS = [
     description: "Хост подключения к Frontend",
     example: "localhost или your-frontend-host.com",
   },
+  {
+    name: "SMTP_HOST",
+    description: "Хост SMTP сервера",
+    example: "smtp.example.com",
+  },
+  {
+    name: "SMTP_PORT",
+    description: "Порт SMTP сервера",
+    example: "587",
+  },
+  {
+    name: "SMTP_USER",
+    description: "Имя пользователя SMTP сервера",
+    example: "user@example.com",
+  },
+  {
+    name: "SMTP_PASSWORD",
+    description: "Пароль SMTP сервера",
+    example: "password123",
+  },
+  {
+    name: "SMTP_FROM",
+    description: "Email отправитель",
+    example: "noreply@example.com",
+  },
 ];
 
 // Функция проверки критически важных переменных окружения

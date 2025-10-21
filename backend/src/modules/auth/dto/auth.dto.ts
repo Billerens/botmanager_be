@@ -95,6 +95,26 @@ export class ResendVerificationDto {
   email: string;
 }
 
+export class VerifyEmailCodeDto {
+  @ApiProperty({
+    description: "Email пользователя",
+    example: "user@example.com",
+  })
+  @IsEmail({}, { message: "Некорректный email" })
+  email: string;
+
+  @ApiProperty({
+    description: "6-значный код верификации",
+    example: "123456",
+    minLength: 6,
+    maxLength: 6,
+  })
+  @IsString()
+  @MinLength(6, { message: "Код должен содержать 6 символов" })
+  @IsNotEmpty({ message: "Код верификации обязателен" })
+  code: string;
+}
+
 export class UpdateProfileDto {
   @IsOptional()
   @IsString()

@@ -67,6 +67,12 @@ export class User {
   emailVerificationToken: string;
 
   @Column({ nullable: true })
+  emailVerificationCode: string;
+
+  @Column({ nullable: true })
+  emailVerificationExpires: Date;
+
+  @Column({ nullable: true })
   passwordResetToken: string;
 
   @Column({ nullable: true })

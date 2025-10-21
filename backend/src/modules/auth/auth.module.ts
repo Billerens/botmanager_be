@@ -10,6 +10,7 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
 import { LocalStrategy } from "./strategies/local.strategy";
 import { UsersModule } from "../users/users.module";
 import { User } from "../../database/entities/user.entity";
+import { EmailService } from "../../common/email.service";
 
 @Module({
   imports: [
@@ -27,7 +28,7 @@ import { User } from "../../database/entities/user.entity";
       inject: [ConfigService],
     }),
   ],
-  providers: [AuthService, JwtStrategy, LocalStrategy],
+  providers: [AuthService, JwtStrategy, LocalStrategy, EmailService],
   controllers: [AuthController],
   exports: [AuthService],
 })
