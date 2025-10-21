@@ -37,13 +37,45 @@ export class EmailService {
         user,
         pass: password,
       },
-      // Добавляем таймауты для предотвращения долгого ожидания
-      connectionTimeout: 10000, // 10 секунд на подключение
+      // Специальные настройки для Gmail
+      tls: {
+        rejectUnauthorized: false, // Для Gmail может потребоваться
+        ciphers: "SSLv3", // Совместимость с Gmail
+      },
+      // Улучшенные таймауты для Gmail
+      connectionTimeout: 10000, // 10 секунд на подключение (увеличено для Gmail)
       greetingTimeout: 5000, // 5 секунд на приветствие
       socketTimeout: 10000, // 10 секунд на операции с сокетом
+      // Дополнительные настройки для лучшей диагностики
+      debug: process.env.NODE_ENV === "development", // Включаем debug в dev режиме
+      logger: process.env.NODE_ENV === "development", // Логируем в dev режиме
     });
 
     this.logger.log(`Email сервис инициализирован: ${host}:${port}`);
+
+    // Проверяем соединение при инициализации
+    this.verifyConnection();
+  }
+
+  private async verifyConnection(): Promise<void> {
+    if (!this.transporter) {
+      this.logger.warn(
+        "Transporter не инициализирован, пропускаем проверку соединения"
+      );
+      return;
+    }
+
+    try {
+      this.logger.log("Проверка соединения с SMTP сервером...");
+      await this.transporter.verify();
+      this.logger.log("✅ SMTP соединение успешно установлено");
+    } catch (error) {
+      this.logger.error("❌ Ошибка проверки SMTP соединения:", error);
+      this.logger.error("SMTP сервер недоступен или неправильно настроен");
+      this.logger.error(
+        "Проверьте настройки SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD"
+      );
+    }
   }
 
   async sendVerificationCode(email: string, code: string): Promise<void> {
@@ -52,16 +84,17 @@ export class EmailService {
     this.logger.log(`Email: ${email}`);
     this.logger.log(`Код: ${code}`);
 
+    // Проверяем, что transporter инициализирован
     if (!this.transporter) {
-      this.logger.error(
-        `Невозможно отправить email на ${email}: транспортер не инициализирован`
+      const error = new Error(
+        "SMTP transporter не инициализирован. Проверьте настройки SMTP."
       );
-      this.logger.warn(
-        `Код верификации для ${email}: ${code} (в продакшене будет отправлен на почту)`
-      );
-      return;
+      this.logger.error(error.message);
+      throw error;
     }
 
+    // Получаем настройки для диагностики
+    const host = this.configService.get<string>("SMTP_HOST");
     const from =
       this.configService.get<string>("SMTP_FROM") ||
       this.configService.get<string>("SMTP_USER");
@@ -155,6 +188,46 @@ export class EmailService {
         error.stack
       );
       this.logger.error(`Детали SMTP ошибки:`, error);
+
+      // Дополнительная диагностика для разных типов ошибок
+      if (error.message.includes("Connection timeout")) {
+        this.logger.error(
+          "🔴 ПРОБЛЕМА: SMTP сервер недоступен или неправильно настроен"
+        );
+        this.logger.error("Проверьте:");
+        this.logger.error("1. SMTP_HOST - правильный ли хост?");
+        this.logger.error("2. SMTP_PORT - правильный ли порт?");
+        this.logger.error("3. Сетевое соединение с SMTP сервером");
+        this.logger.error("4. Firewall не блокирует соединение");
+
+        // Специальные рекомендации для Gmail
+        if (host === "smtp.gmail.com") {
+          this.logger.error("📧 GMAIL СПЕЦИАЛЬНЫЕ ТРЕБОВАНИЯ:");
+          this.logger.error("1. Включите 2FA в Google аккаунте");
+          this.logger.error("2. Создайте App Password (не обычный пароль!)");
+          this.logger.error("3. Используйте App Password в SMTP_PASSWORD");
+          this.logger.error(
+            "4. Проверьте, что 'Less secure app access' отключен"
+          );
+        }
+      } else if (error.message.includes("Authentication failed")) {
+        this.logger.error("🔴 ПРОБЛЕМА: Неверные учетные данные SMTP");
+        this.logger.error("Проверьте SMTP_USER и SMTP_PASSWORD");
+
+        // Специальные рекомендации для Gmail
+        if (host === "smtp.gmail.com") {
+          this.logger.error("📧 GMAIL АУТЕНТИФИКАЦИЯ:");
+          this.logger.error("1. Используйте App Password, а не обычный пароль");
+          this.logger.error("2. App Password: 16 символов без пробелов");
+          this.logger.error(
+            "3. Создайте App Password: Google Account > Security > App passwords"
+          );
+        }
+      } else if (error.message.includes("ECONNREFUSED")) {
+        this.logger.error("🔴 ПРОБЛЕМА: Соединение отклонено SMTP сервером");
+        this.logger.error("Проверьте доступность SMTP сервера");
+      }
+
       throw error;
     }
   }
