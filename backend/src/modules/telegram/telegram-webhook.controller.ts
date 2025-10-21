@@ -78,4 +78,44 @@ export class TelegramWebhookController {
       return { ok: false };
     }
   }
+
+  @Post("get-webhook-info")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Получение информации о webhook" })
+  @ApiResponse({
+    status: 200,
+    description: "Информация о webhook",
+  })
+  async getWebhookInfo(): Promise<any> {
+    try {
+      const info = await this.telegramWebhookService.getWebhookInfo();
+      return { ok: true, data: info };
+    } catch (error) {
+      this.logger.error(
+        `Ошибка получения информации о webhook: ${error.message}`,
+        error.stack
+      );
+      return { ok: false, error: error.message };
+    }
+  }
+
+  @Post("delete-webhook")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Удаление webhook (для тестирования)" })
+  @ApiResponse({
+    status: 200,
+    description: "Webhook удален",
+  })
+  async deleteWebhook(): Promise<{ ok: boolean }> {
+    try {
+      await this.telegramWebhookService.deleteWebhook();
+      return { ok: true };
+    } catch (error) {
+      this.logger.error(
+        `Ошибка удаления webhook: ${error.message}`,
+        error.stack
+      );
+      return { ok: false };
+    }
+  }
 }
