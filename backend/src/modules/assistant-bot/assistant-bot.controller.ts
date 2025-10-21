@@ -10,10 +10,7 @@ import {
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 
-import {
-  AssistantBotService,
-  TelegramUpdate,
-} from "./assistant-bot.service";
+import { AssistantBotService, TelegramUpdate } from "./assistant-bot.service";
 
 /**
  * Контроллер для бота-ассистента BotManager
@@ -24,9 +21,7 @@ import {
 export class AssistantBotController {
   private readonly logger = new Logger(AssistantBotController.name);
 
-  constructor(
-    private readonly assistantBotService: AssistantBotService
-  ) {}
+  constructor(private readonly assistantBotService: AssistantBotService) {}
 
   @Get("health")
   @HttpCode(HttpStatus.OK)
@@ -67,57 +62,4 @@ export class AssistantBotController {
       return { ok: false };
     }
   }
-
-  @Post("setup-webhook")
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Установка webhook" })
-  @ApiResponse({
-    status: 200,
-    description: "Webhook установлен",
-  })
-  async setupWebhook(): Promise<{ ok: boolean }> {
-    try {
-      await this.assistantBotService.setupWebhook();
-      return { ok: true };
-    } catch (error) {
-      this.logger.error(
-        `❌ Ошибка установки webhook: ${error.message}`,
-        error.stack
-      );
-      return { ok: false };
-    }
-  }
-
-  @Post("webhook-info")
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Информация о webhook" })
-  async getWebhookInfo(): Promise<any> {
-    try {
-      const info = await this.assistantBotService.getWebhookInfo();
-      return { ok: true, data: info };
-    } catch (error) {
-      this.logger.error(
-        `❌ Ошибка получения info: ${error.message}`,
-        error.stack
-      );
-      return { ok: false, error: error.message };
-    }
-  }
-
-  @Post("delete-webhook")
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Удаление webhook" })
-  async deleteWebhook(): Promise<{ ok: boolean }> {
-    try {
-      await this.assistantBotService.deleteWebhook();
-      return { ok: true };
-    } catch (error) {
-      this.logger.error(
-        `❌ Ошибка удаления webhook: ${error.message}`,
-        error.stack
-      );
-      return { ok: false };
-    }
-  }
 }
-
