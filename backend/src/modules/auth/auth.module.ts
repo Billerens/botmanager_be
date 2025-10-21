@@ -11,6 +11,7 @@ import { LocalStrategy } from "./strategies/local.strategy";
 import { UsersModule } from "../users/users.module";
 import { User } from "../../database/entities/user.entity";
 import { TelegramValidationService } from "../../common/telegram-validation.service";
+import { TelegramUserInfoService } from "../../common/telegram-userinfo.service";
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { TelegramValidationService } from "../../common/telegram-validation.serv
     JwtStrategy,
     LocalStrategy,
     TelegramValidationService,
+    TelegramUserInfoService,
   ],
   controllers: [AuthController],
   exports: [AuthService],

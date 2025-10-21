@@ -10,6 +10,8 @@ import {
   Query,
   Patch,
   Logger,
+  Param,
+  BadRequestException,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -19,6 +21,7 @@ import {
 } from "@nestjs/swagger";
 
 import { AuthService } from "./auth.service";
+import { TelegramUserInfoService } from "../../common/telegram-userinfo.service";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { LocalAuthGuard } from "./guards/local-auth.guard";
 import {
@@ -41,7 +44,39 @@ import {
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly telegramUserInfoService: TelegramUserInfoService
+  ) {}
+
+  @Get("telegram-user-info/:telegramId")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Получение информации о пользователе Telegram" })
+  @ApiResponse({
+    status: 200,
+    description: "Информация о пользователе Telegram",
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Не удалось получить информацию о пользователе",
+  })
+  async getTelegramUserInfo(@Param("telegramId") telegramId: string) {
+    const userInfo = await this.telegramUserInfoService.getUserInfo(telegramId);
+
+    if (!userInfo) {
+      throw new BadRequestException(
+        "Не удалось получить информацию о пользователе. Убедитесь, что вы начали диалог с ботом."
+      );
+    }
+
+    return {
+      telegramId: userInfo.id.toString(),
+      telegramUsername: userInfo.username,
+      firstName: userInfo.first_name,
+      lastName: userInfo.last_name,
+      languageCode: userInfo.language_code,
+    };
+  }
 
   @Post("register")
   @HttpCode(HttpStatus.CREATED)
