@@ -216,10 +216,17 @@ export class BotFlowNode {
         text: string;
         callbackData: string;
       }>;
-      recipientType: "all" | "specific" | "activity";
-      specificUsers?: string[]; // Chat IDs
+      recipientType:
+        | "all"
+        | "specific"
+        | "activity"
+        | "groups"
+        | "specific_groups";
+      specificUsers?: string[];
+      specificGroups?: string[];
       activityType?: "before" | "after";
-      activityDate?: string; // ISO
+      activityDate?: string;
+      chatType?: "private" | "group" | "supergroup" | "channel";
     };
 
     // Общие настройки
