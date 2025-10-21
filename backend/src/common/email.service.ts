@@ -67,6 +67,11 @@ export class EmailService {
       this.logger.error(
         "Проверьте настройки SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD"
       );
+      console.log(this.configService.get("SMTP_HOST"));
+      console.log(this.configService.get("SMTP_PORT"));
+      console.log(this.configService.get("SMTP_USER"));
+      console.log(this.configService.get("SMTP_PASSWORD"));
+      console.log(this.configService.get("SMTP_FROM"));
     }
   }
 
