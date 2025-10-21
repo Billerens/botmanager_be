@@ -32,7 +32,10 @@ export class User {
   id: string;
 
   @Column({ unique: true })
-  email: string;
+  telegramId: string;
+
+  @Column({ nullable: true })
+  telegramUsername: string;
 
   @Column()
   @Exclude()
@@ -43,12 +46,6 @@ export class User {
 
   @Column({ nullable: true })
   lastName: string;
-
-  @Column({ nullable: true })
-  telegramId: string;
-
-  @Column({ nullable: true })
-  telegramUsername: string;
 
   @Column({
     type: "enum",
@@ -61,16 +58,13 @@ export class User {
   isActive: boolean;
 
   @Column({ default: false })
-  isEmailVerified: boolean;
+  isTelegramVerified: boolean;
 
   @Column({ nullable: true })
-  emailVerificationToken: string;
+  telegramVerificationCode: string;
 
   @Column({ nullable: true })
-  emailVerificationCode: string;
-
-  @Column({ nullable: true })
-  emailVerificationExpires: Date;
+  telegramVerificationExpires: Date;
 
   @Column({ nullable: true })
   passwordResetToken: string;

@@ -28,7 +28,7 @@ import {
   RequestPasswordResetDto,
   ResetPasswordDto,
   ResendVerificationDto,
-  VerifyEmailCodeDto,
+  VerifyTelegramCodeDto,
   UpdateProfileDto,
 } from "./dto/auth.dto";
 import {
@@ -53,16 +53,16 @@ export class AuthController {
   })
   @ApiResponse({
     status: 409,
-    description: "Пользователь с таким email уже существует",
+    description: "Пользователь с таким Telegram ID уже существует",
   })
   @ApiResponse({
     status: 400,
-    description: "Не удалось отправить код верификации на email",
+    description: "Не удалось отправить код верификации в Telegram",
   })
   async register(@Body() registerDto: RegisterDto) {
     const startTime = Date.now();
     this.logger.log(`=== КОНТРОЛЛЕР РЕГИСТРАЦИИ ===`);
-    this.logger.log(`Получен запрос на регистрацию: ${registerDto.email}`);
+    this.logger.log(`Получен запрос на регистрацию: ${registerDto.telegramId}`);
 
     try {
       const result = await this.authService.register(registerDto);
@@ -88,7 +88,7 @@ export class AuthController {
   })
   @ApiResponse({
     status: 200,
-    description: "Требуется верификация email",
+    description: "Требуется верификация Telegram",
     type: VerificationRequiredResponseDto,
   })
   @ApiResponse({ status: 401, description: "Неверные учетные данные" })
@@ -127,7 +127,9 @@ export class AuthController {
   async requestPasswordReset(
     @Body() requestPasswordResetDto: RequestPasswordResetDto
   ) {
-    return this.authService.requestPasswordReset(requestPasswordResetDto.email);
+    return this.authService.requestPasswordReset(
+      requestPasswordResetDto.telegramId
+    );
   }
 
   @Post("reset-password")
@@ -145,33 +147,24 @@ export class AuthController {
     );
   }
 
-  @Get("verify-email")
-  @ApiOperation({ summary: "Верификация email по токену (старый метод)" })
-  @ApiResponse({ status: 200, description: "Email успешно верифицирован" })
-  @ApiResponse({
-    status: 400,
-    description: "Недействительный токен верификации",
-  })
-  async verifyEmail(@Query("token") token: string) {
-    return this.authService.verifyEmail(token);
-  }
-
-  @Post("verify-email-code")
+  @Post("verify-telegram-code")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Верификация email по коду" })
+  @ApiOperation({ summary: "Верификация Telegram по коду" })
   @ApiResponse({
     status: 200,
-    description: "Email успешно верифицирован, возвращает токен доступа",
+    description: "Telegram успешно верифицирован, возвращает токен доступа",
     type: AuthResponseDto,
   })
   @ApiResponse({
     status: 400,
     description: "Неверный код или код истек",
   })
-  async verifyEmailWithCode(@Body() verifyEmailCodeDto: VerifyEmailCodeDto) {
-    return this.authService.verifyEmailWithCode(
-      verifyEmailCodeDto.email,
-      verifyEmailCodeDto.code
+  async verifyTelegramWithCode(
+    @Body() verifyTelegramCodeDto: VerifyTelegramCodeDto
+  ) {
+    return this.authService.verifyTelegramWithCode(
+      verifyTelegramCodeDto.telegramId,
+      verifyTelegramCodeDto.code
     );
   }
 
@@ -180,17 +173,19 @@ export class AuthController {
   @ApiOperation({ summary: "Повторная отправка кода верификации" })
   @ApiResponse({
     status: 200,
-    description: "Код верификации отправлен на email",
+    description: "Код верификации отправлен в Telegram",
   })
   @ApiResponse({
     status: 400,
-    description: "Email уже верифицирован или пользователь не найден",
+    description: "Telegram уже верифицирован или пользователь не найден",
   })
   async resendVerification(
     @Body() resendVerificationDto: ResendVerificationDto
   ) {
-    await this.authService.resendVerificationEmail(resendVerificationDto.email);
-    return { message: "Код верификации отправлен на email" };
+    await this.authService.resendVerificationCode(
+      resendVerificationDto.telegramId
+    );
+    return { message: "Код верификации отправлен в Telegram" };
   }
 
   @Get("me")

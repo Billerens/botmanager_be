@@ -12,9 +12,15 @@ import * as crypto from "crypto";
 
 import { User, UserRole } from "../../database/entities/user.entity";
 import { UsersService } from "../users/users.service";
-import { LoginDto, RegisterDto, ChangePasswordDto } from "./dto/auth.dto";
+import {
+  LoginDto,
+  RegisterDto,
+  ChangePasswordDto,
+  VerifyTelegramCodeDto,
+  ResendVerificationDto,
+} from "./dto/auth.dto";
 import { JwtPayload } from "./interfaces/jwt-payload.interface";
-import { EmailService } from "../../common/email.service";
+import { TelegramValidationService } from "../../common/telegram-validation.service";
 import { VerificationRequiredResponseDto } from "./dto/auth-response.dto";
 
 @Injectable()
@@ -26,30 +32,38 @@ export class AuthService {
     private userRepository: Repository<User>,
     private usersService: UsersService,
     private jwtService: JwtService,
-    private emailService: EmailService
+    private telegramValidationService: TelegramValidationService
   ) {}
 
   async register(
     registerDto: RegisterDto
   ): Promise<{ user: User; message: string; requiresVerification: boolean }> {
     const startTime = Date.now();
-    const { email, password, firstName, lastName } = registerDto;
+    const { telegramId, telegramUsername, password, firstName, lastName } =
+      registerDto;
 
     this.logger.log(`=== НАЧАЛО РЕГИСТРАЦИИ ===`);
-    this.logger.log(`Email: ${email}`);
+    this.logger.log(`Telegram ID: ${telegramId}`);
+    this.logger.log(`Telegram Username: ${telegramUsername || "не указан"}`);
     this.logger.log(`Имя: ${firstName} ${lastName}`);
 
     // Проверяем, существует ли пользователь
-    this.logger.log(`Проверка существования пользователя с email: ${email}`);
+    this.logger.log(
+      `Проверка существования пользователя с Telegram ID: ${telegramId}`
+    );
     const existingUser = await this.userRepository.findOne({
-      where: { email },
+      where: { telegramId },
     });
     if (existingUser) {
-      this.logger.warn(`Пользователь с email ${email} уже существует`);
-      throw new ConflictException("Пользователь с таким email уже существует");
+      this.logger.warn(
+        `Пользователь с Telegram ID ${telegramId} уже существует`
+      );
+      throw new ConflictException(
+        "Пользователь с таким Telegram ID уже существует"
+      );
     }
     this.logger.log(
-      `Пользователь с email ${email} не найден, продолжаем регистрацию`
+      `Пользователь с Telegram ID ${telegramId} не найден, продолжаем регистрацию`
     );
 
     // Генерируем 6-значный код верификации
@@ -61,39 +75,50 @@ export class AuthService {
     this.logger.log(`Код верификации: ${verificationCode}`);
     this.logger.log(`Код истекает: ${verificationExpires.toISOString()}`);
 
-    // СНАЧАЛА отправляем код на email и ждем успешной отправки
-    this.logger.log(`Начало отправки email с кодом верификации`);
-    const emailStartTime = Date.now();
+    // СНАЧАЛА отправляем код в Telegram и ждем успешной отправки
+    this.logger.log(`Начало отправки кода верификации в Telegram`);
+    const telegramStartTime = Date.now();
 
     try {
-      await this.emailService.sendVerificationCode(email, verificationCode);
-      const emailDuration = Date.now() - emailStartTime;
-      this.logger.log(`Email успешно отправлен за ${emailDuration}ms`);
+      const sent = await this.telegramValidationService.sendVerificationCode(
+        telegramId,
+        verificationCode
+      );
+      if (!sent) {
+        throw new Error("Не удалось отправить код в Telegram");
+      }
+      const telegramDuration = Date.now() - telegramStartTime;
+      this.logger.log(
+        `Код успешно отправлен в Telegram за ${telegramDuration}ms`
+      );
     } catch (error) {
-      const emailDuration = Date.now() - emailStartTime;
-      this.logger.error(`Ошибка отправки email за ${emailDuration}ms:`, error);
+      const telegramDuration = Date.now() - telegramStartTime;
+      this.logger.error(
+        `Ошибка отправки кода в Telegram за ${telegramDuration}ms:`,
+        error
+      );
       this.logger.error(`Детали ошибки: ${error.message}`);
       this.logger.error(`Stack trace: ${error.stack}`);
-      // Если email не удалось отправить, прерываем регистрацию
+      // Если код не удалось отправить, прерываем регистрацию
       throw new BadRequestException(
-        `Не удалось отправить код верификации на email ${email}. Проверьте правильность email адреса.`
+        `Не удалось отправить код верификации в Telegram. Проверьте правильность Telegram ID и убедитесь, что вы начали диалог с ботом.`
       );
     }
 
-    // ТОЛЬКО ПОСЛЕ успешной отправки email создаем пользователя
+    // ТОЛЬКО ПОСЛЕ успешной отправки создаем пользователя
     this.logger.log(
-      `Email отправлен успешно, создание пользователя в базе данных`
+      `Код отправлен успешно, создание пользователя в базе данных`
     );
     const user = this.userRepository.create({
-      email,
+      telegramId,
+      telegramUsername,
       password,
       firstName,
       lastName,
       role: UserRole.OWNER,
-      emailVerificationToken: crypto.randomBytes(32).toString("hex"), // Оставляем для совместимости
-      emailVerificationCode: verificationCode,
-      emailVerificationExpires: verificationExpires,
-      isEmailVerified: false,
+      telegramVerificationCode: verificationCode,
+      telegramVerificationExpires: verificationExpires,
+      isTelegramVerified: false,
     });
 
     this.logger.log(`Сохранение пользователя в базу данных`);
@@ -107,7 +132,7 @@ export class AuthService {
 
     return {
       user: savedUser,
-      message: "Код верификации отправлен на email",
+      message: "Код верификации отправлен в Telegram",
       requiresVerification: true,
     };
   }
@@ -117,81 +142,79 @@ export class AuthService {
   ): Promise<
     { user: User; accessToken: string } | VerificationRequiredResponseDto
   > {
-    const { email, password } = loginDto;
+    const { telegramId, password } = loginDto;
 
     // Находим пользователя
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await this.userRepository.findOne({ where: { telegramId } });
     if (!user) {
-      throw new UnauthorizedException("Неверный email или пароль");
+      throw new UnauthorizedException("Неверный Telegram ID или пароль");
     }
 
     // Проверяем пароль
     const isPasswordValid = await user.validatePassword(password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException("Неверный email или пароль");
+      throw new UnauthorizedException("Неверный Telegram ID или пароль");
     }
 
-    // Проверяем, верифицирован ли email
-    if (!user.isEmailVerified) {
+    // Проверяем, верифицирован ли Telegram
+    if (!user.isTelegramVerified) {
       this.logger.log(
-        `Пользователь ${email} не верифицирован, предлагаем ввести код подтверждения`
+        `Пользователь ${telegramId} не верифицирован, предлагаем ввести код подтверждения`
       );
 
       // Проверяем, есть ли активный код верификации
       const hasActiveCode =
-        user.emailVerificationCode &&
-        user.emailVerificationExpires &&
-        user.emailVerificationExpires > new Date();
+        user.telegramVerificationCode &&
+        user.telegramVerificationExpires &&
+        user.telegramVerificationExpires > new Date();
 
       if (hasActiveCode) {
         this.logger.log(
-          `У пользователя ${email} есть активный код верификации`
+          `У пользователя ${telegramId} есть активный код верификации`
         );
         return {
           user: {
             id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
             telegramId: user.telegramId,
             telegramUsername: user.telegramUsername,
+            firstName: user.firstName,
+            lastName: user.lastName,
             role: user.role,
             isActive: user.isActive,
-            isEmailVerified: user.isEmailVerified,
+            isTelegramVerified: user.isTelegramVerified,
             lastLoginAt: user.lastLoginAt,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
           },
           message:
-            "Email не подтвержден. Введите код верификации, отправленный на вашу почту.",
+            "Telegram не подтвержден. Введите код верификации, отправленный в Telegram.",
           requiresVerification: true,
-          email: user.email,
+          telegramId: user.telegramId,
         };
       } else {
         this.logger.log(
-          `У пользователя ${email} нет активного кода верификации, отправляем новый`
+          `У пользователя ${telegramId} нет активного кода верификации, отправляем новый`
         );
         // Отправляем новый код верификации
-        await this.resendVerificationEmail(email);
+        await this.resendVerificationCode(telegramId);
         return {
           user: {
             id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
             telegramId: user.telegramId,
             telegramUsername: user.telegramUsername,
+            firstName: user.firstName,
+            lastName: user.lastName,
             role: user.role,
             isActive: user.isActive,
-            isEmailVerified: user.isEmailVerified,
+            isTelegramVerified: user.isTelegramVerified,
             lastLoginAt: user.lastLoginAt,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
           },
           message:
-            "Email не подтвержден. Новый код верификации отправлен на вашу почту.",
+            "Telegram не подтвержден. Новый код верификации отправлен в Telegram.",
           requiresVerification: true,
-          email: user.email,
+          telegramId: user.telegramId,
         };
       }
     }
@@ -208,7 +231,7 @@ export class AuthService {
     // Генерируем JWT токен
     const payload: JwtPayload = {
       sub: user.id,
-      email: user.email,
+      telegramId: user.telegramId,
       role: user.role,
     };
 
@@ -220,8 +243,11 @@ export class AuthService {
     };
   }
 
-  async validateUser(email: string, password: string): Promise<User | null> {
-    const user = await this.userRepository.findOne({ where: { email } });
+  async validateUser(
+    telegramId: string,
+    password: string
+  ): Promise<User | null> {
+    const user = await this.userRepository.findOne({ where: { telegramId } });
     if (user && (await user.validatePassword(password))) {
       return user;
     }
@@ -260,8 +286,8 @@ export class AuthService {
     await this.userRepository.save(user);
   }
 
-  async requestPasswordReset(email: string): Promise<void> {
-    const user = await this.userRepository.findOne({ where: { email } });
+  async requestPasswordReset(telegramId: string): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { telegramId } });
     if (!user) {
       // Не раскрываем информацию о существовании пользователя
       return;
@@ -275,8 +301,8 @@ export class AuthService {
     user.passwordResetExpires = resetExpires;
     await this.userRepository.save(user);
 
-    // Здесь должна быть отправка email с токеном
-    // TODO: Реализовать отправку email
+    // Здесь должна быть отправка сообщения в Telegram с токеном
+    // TODO: Реализовать отправку сообщения в Telegram
   }
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
@@ -303,61 +329,51 @@ export class AuthService {
     await this.userRepository.save(user);
   }
 
-  async verifyEmail(token: string): Promise<void> {
-    const user = await this.userRepository.findOne({
-      where: {
-        emailVerificationToken: token,
-      },
-    });
-
-    if (!user) {
-      throw new BadRequestException("Недействительный токен верификации");
-    }
-
-    user.isEmailVerified = true;
-    user.emailVerificationToken = null;
-    await this.userRepository.save(user);
-  }
-
-  async verifyEmailWithCode(
-    email: string,
+  async verifyTelegramWithCode(
+    telegramId: string,
     code: string
   ): Promise<{ user: User; accessToken: string }> {
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await this.userRepository.findOne({ where: { telegramId } });
 
     if (!user) {
       throw new BadRequestException("Пользователь не найден");
     }
 
-    if (user.isEmailVerified) {
-      throw new BadRequestException("Email уже верифицирован");
+    if (user.isTelegramVerified) {
+      throw new BadRequestException("Telegram уже верифицирован");
     }
 
-    if (!user.emailVerificationCode) {
+    if (!user.telegramVerificationCode) {
       throw new BadRequestException("Код верификации не найден");
     }
 
     if (
-      user.emailVerificationExpires &&
-      user.emailVerificationExpires < new Date()
+      user.telegramVerificationExpires &&
+      user.telegramVerificationExpires < new Date()
     ) {
       throw new BadRequestException("Код верификации истек");
     }
 
-    if (user.emailVerificationCode !== code) {
+    if (user.telegramVerificationCode !== code) {
       throw new BadRequestException("Неверный код верификации");
     }
 
-    // Верифицируем email и очищаем код
-    user.isEmailVerified = true;
-    user.emailVerificationCode = null;
-    user.emailVerificationExpires = null;
+    // Верифицируем telegram и очищаем код
+    user.isTelegramVerified = true;
+    user.telegramVerificationCode = null;
+    user.telegramVerificationExpires = null;
     await this.userRepository.save(user);
+
+    // Отправляем приветственное сообщение
+    await this.telegramValidationService.sendWelcomeMessage(
+      telegramId,
+      user.firstName
+    );
 
     // Генерируем JWT токен для автоматического входа
     const payload: JwtPayload = {
       sub: user.id,
-      email: user.email,
+      telegramId: user.telegramId,
       role: user.role,
     };
 
@@ -369,14 +385,14 @@ export class AuthService {
     };
   }
 
-  async resendVerificationEmail(email: string): Promise<void> {
-    const user = await this.userRepository.findOne({ where: { email } });
+  async resendVerificationCode(telegramId: string): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { telegramId } });
     if (!user) {
       throw new BadRequestException("Пользователь не найден");
     }
 
-    if (user.isEmailVerified) {
-      throw new BadRequestException("Email уже верифицирован");
+    if (user.isTelegramVerified) {
+      throw new BadRequestException("Telegram уже верифицирован");
     }
 
     // Генерируем новый код
@@ -385,19 +401,28 @@ export class AuthService {
     ).toString();
     const verificationExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 минут
 
-    // СНАЧАЛА отправляем код на email
+    // СНАЧАЛА отправляем код в Telegram
     try {
-      await this.emailService.sendVerificationCode(email, verificationCode);
+      const sent = await this.telegramValidationService.sendVerificationCode(
+        telegramId,
+        verificationCode
+      );
+      if (!sent) {
+        throw new Error("Не удалось отправить код в Telegram");
+      }
     } catch (error) {
-      this.logger.error(`Ошибка отправки повторного email на ${email}:`, error);
+      this.logger.error(
+        `Ошибка отправки повторного кода в Telegram для ${telegramId}:`,
+        error
+      );
       throw new BadRequestException(
-        `Не удалось отправить код верификации на email ${email}. Проверьте правильность email адреса.`
+        `Не удалось отправить код верификации в Telegram. Проверьте правильность Telegram ID и убедитесь, что вы начали диалог с ботом.`
       );
     }
 
     // ТОЛЬКО ПОСЛЕ успешной отправки обновляем пользователя
-    user.emailVerificationCode = verificationCode;
-    user.emailVerificationExpires = verificationExpires;
+    user.telegramVerificationCode = verificationCode;
+    user.telegramVerificationExpires = verificationExpires;
     await this.userRepository.save(user);
   }
 
@@ -409,7 +434,7 @@ export class AuthService {
 
     const payload: JwtPayload = {
       sub: user.id,
-      email: user.email,
+      telegramId: user.telegramId,
       role: user.role,
     };
 

@@ -1,19 +1,23 @@
-import {
-  IsEmail,
-  IsString,
-  MinLength,
-  IsOptional,
-  IsNotEmpty,
-} from "class-validator";
+import { IsString, MinLength, IsOptional, IsNotEmpty } from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
 
 export class RegisterDto {
   @ApiProperty({
-    description: "Email пользователя",
-    example: "user@example.com",
+    description: "Telegram ID пользователя (число)",
+    example: "123456789",
   })
-  @IsEmail({}, { message: "Некорректный email" })
-  email: string;
+  @IsString()
+  @IsNotEmpty({ message: "Telegram ID обязателен" })
+  telegramId: string;
+
+  @ApiProperty({
+    description: "Telegram username пользователя (необязательно)",
+    example: "username",
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  telegramUsername?: string;
 
   @ApiProperty({ description: "Пароль", example: "password123", minLength: 6 })
   @IsString()
@@ -33,11 +37,12 @@ export class RegisterDto {
 
 export class LoginDto {
   @ApiProperty({
-    description: "Email пользователя",
-    example: "user@example.com",
+    description: "Telegram ID пользователя",
+    example: "123456789",
   })
-  @IsEmail({}, { message: "Некорректный email" })
-  email: string;
+  @IsString()
+  @IsNotEmpty({ message: "Telegram ID обязателен" })
+  telegramId: string;
 
   @ApiProperty({ description: "Пароль", example: "password123" })
   @IsString()
@@ -63,11 +68,12 @@ export class ChangePasswordDto {
 
 export class RequestPasswordResetDto {
   @ApiProperty({
-    description: "Email пользователя",
-    example: "user@example.com",
+    description: "Telegram ID пользователя",
+    example: "123456789",
   })
-  @IsEmail({}, { message: "Некорректный email" })
-  email: string;
+  @IsString()
+  @IsNotEmpty({ message: "Telegram ID обязателен" })
+  telegramId: string;
 }
 
 export class ResetPasswordDto {
@@ -88,20 +94,22 @@ export class ResetPasswordDto {
 
 export class ResendVerificationDto {
   @ApiProperty({
-    description: "Email пользователя",
-    example: "user@example.com",
+    description: "Telegram ID пользователя",
+    example: "123456789",
   })
-  @IsEmail({}, { message: "Некорректный email" })
-  email: string;
+  @IsString()
+  @IsNotEmpty({ message: "Telegram ID обязателен" })
+  telegramId: string;
 }
 
-export class VerifyEmailCodeDto {
+export class VerifyTelegramCodeDto {
   @ApiProperty({
-    description: "Email пользователя",
-    example: "user@example.com",
+    description: "Telegram ID пользователя",
+    example: "123456789",
   })
-  @IsEmail({}, { message: "Некорректный email" })
-  email: string;
+  @IsString()
+  @IsNotEmpty({ message: "Telegram ID обязателен" })
+  telegramId: string;
 
   @ApiProperty({
     description: "6-значный код верификации",

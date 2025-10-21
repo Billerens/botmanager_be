@@ -5,8 +5,11 @@ export class UserResponseDto {
   @ApiProperty({ description: "ID пользователя" })
   id: string;
 
-  @ApiProperty({ description: "Email пользователя" })
-  email: string;
+  @ApiProperty({ description: "Telegram ID пользователя" })
+  telegramId: string;
+
+  @ApiProperty({ description: "Telegram username пользователя" })
+  telegramUsername: string;
 
   @ApiProperty({ description: "Имя" })
   firstName: string;
@@ -14,20 +17,14 @@ export class UserResponseDto {
   @ApiProperty({ description: "Фамилия" })
   lastName: string;
 
-  @ApiProperty({ description: "Telegram ID" })
-  telegramId: string;
-
-  @ApiProperty({ description: "Telegram username" })
-  telegramUsername: string;
-
   @ApiProperty({ description: "Роль пользователя", enum: UserRole })
   role: UserRole;
 
   @ApiProperty({ description: "Активен ли пользователь" })
   isActive: boolean;
 
-  @ApiProperty({ description: "Верифицирован ли email" })
-  isEmailVerified: boolean;
+  @ApiProperty({ description: "Верифицирован ли Telegram" })
+  isTelegramVerified: boolean;
 
   @ApiProperty({ description: "Дата последнего входа" })
   lastLoginAt: Date;
@@ -60,9 +57,9 @@ export class VerificationRequiredResponseDto {
   @ApiProperty({ description: "Сообщение о необходимости верификации" })
   message: string;
 
-  @ApiProperty({ description: "Требуется ли верификация email" })
+  @ApiProperty({ description: "Требуется ли верификация Telegram" })
   requiresVerification: boolean;
 
-  @ApiProperty({ description: "Email пользователя для верификации" })
-  email: string;
+  @ApiProperty({ description: "Telegram ID пользователя для верификации" })
+  telegramId: string;
 }

@@ -10,7 +10,7 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
 import { LocalStrategy } from "./strategies/local.strategy";
 import { UsersModule } from "../users/users.module";
 import { User } from "../../database/entities/user.entity";
-import { EmailService } from "../../common/email.service";
+import { TelegramValidationService } from "../../common/telegram-validation.service";
 
 @Module({
   imports: [
@@ -28,7 +28,12 @@ import { EmailService } from "../../common/email.service";
       inject: [ConfigService],
     }),
   ],
-  providers: [AuthService, JwtStrategy, LocalStrategy, EmailService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    LocalStrategy,
+    TelegramValidationService,
+  ],
   controllers: [AuthController],
   exports: [AuthService],
 })
