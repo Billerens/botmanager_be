@@ -188,7 +188,7 @@ export class TelegramWebhookService {
       this.logger.warn(
         "TELEGRAM_BOT_TOKEN не установлен, webhook не будет установлен"
       );
-      return;
+      throw new Error("TELEGRAM_BOT_TOKEN не установлен");
     }
 
     try {
