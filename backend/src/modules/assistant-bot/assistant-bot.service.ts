@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
@@ -30,9 +30,15 @@ export interface TelegramUpdate {
   };
 }
 
+/**
+ * Сервис для бота-ассистента BotManager
+ * Обрабатывает команды /start и помогает пользователям с регистрацией
+ *
+ * OnModuleInit - автоматически устанавливает webhook при старте модуля
+ */
 @Injectable()
-export class TelegramWebhookService {
-  private readonly logger = new Logger(TelegramWebhookService.name);
+export class AssistantBotService implements OnModuleInit {
+  private readonly logger = new Logger(AssistantBotService.name);
   private readonly botToken: string;
   private readonly telegramApiUrl: string;
 
@@ -48,11 +54,29 @@ export class TelegramWebhookService {
     );
 
     if (!this.botToken) {
-      this.logger.error(
-        "TELEGRAM_BOT_TOKEN не установлен. Функционал Telegram webhook будет недоступен."
+      this.logger.warn(
+        "TELEGRAM_BOT_TOKEN не установлен. Бот-ассистент будет недоступен."
       );
-    } else {
-      this.logger.log("✅ TELEGRAM_BOT_TOKEN установлен");
+    }
+  }
+
+  /**
+   * Автоматически вызывается NestJS при инициализации модуля
+   * Устанавливает webhook для бота
+   */
+  async onModuleInit() {
+    if (!this.botToken) {
+      this.logger.warn("Пропуск установки webhook - токен не настроен");
+      return;
+    }
+
+    try {
+      this.logger.log("🤖 Автоматическая установка webhook бота-ассистента...");
+      await this.setupWebhook();
+      this.logger.log("🎉 Бот-ассистент готов к работе!");
+    } catch (error) {
+      this.logger.warn(`⚠️ Не удалось установить webhook: ${error.message}`);
+      this.logger.warn("📝 Webhook можно установить вручную через API");
     }
   }
 
@@ -60,16 +84,16 @@ export class TelegramWebhookService {
     return `${this.telegramApiUrl}${this.botToken}`;
   }
 
-  async handleWebhook(update: TelegramUpdate): Promise<void> {
+  async handleUpdate(update: TelegramUpdate): Promise<void> {
     try {
-      this.logger.log(`📩 Получен webhook: ${JSON.stringify(update)}`);
+      this.logger.log(`📩 Получено обновление: ${JSON.stringify(update)}`);
 
       if (update.message?.text) {
         await this.handleMessage(update.message);
       }
     } catch (error) {
       this.logger.error(
-        `❌ Ошибка обработки webhook: ${error.message}`,
+        `❌ Ошибка обработки обновления: ${error.message}`,
         error.stack
       );
     }
@@ -83,18 +107,14 @@ export class TelegramWebhookService {
     const { text, from, chat } = message;
     const telegramId = from.id.toString();
 
-    this.logger.log(`📨 Обработка сообщения от ${telegramId}: ${text}`);
+    this.logger.log(`📨 Сообщение от ${telegramId}: ${text}`);
 
     // Обрабатываем команду /start
     if (text === "/start") {
-      this.logger.log(
-        `🚀 Обработка команды /start от пользователя ${telegramId}`
-      );
+      this.logger.log(`🚀 Команда /start от пользователя ${telegramId}`);
       await this.handleStartCommand(telegramId, from, chat);
     } else {
-      this.logger.log(
-        `ℹ️ Получено сообщение, но это не команда /start: ${text}`
-      );
+      this.logger.log(`ℹ️ Неизвестная команда: ${text}`);
     }
   }
 
@@ -117,9 +137,7 @@ export class TelegramWebhookService {
         await this.sendWelcomeBackMessage(chat.id, from.first_name);
       } else {
         // Новый пользователь - показываем инструкции по регистрации
-        this.logger.log(
-          `📝 Новый пользователь, отправка инструкций по регистрации`
-        );
+        this.logger.log(`📝 Новый пользователь, отправка инструкций`);
         await this.sendRegistrationInstructions(
           chat.id,
           from.first_name,
@@ -128,7 +146,7 @@ export class TelegramWebhookService {
       }
     } catch (error) {
       this.logger.error(
-        `❌ Ошибка обработки команды /start для ${telegramId}: ${error.message}`,
+        `❌ Ошибка обработки /start для ${telegramId}: ${error.message}`,
         error.stack
       );
     }
@@ -140,9 +158,7 @@ export class TelegramWebhookService {
   ): Promise<void> {
     const message = `Привет, ${firstName}! 👋\n\nДобро пожаловать обратно в BotManager! Ваш аккаунт уже зарегистрирован и готов к использованию.\n\nДля управления ботами перейдите в веб-интерфейс: ${this.configService.get("app.frontendUrl")}`;
 
-    this.logger.log(
-      `📤 Отправка приветственного сообщения пользователю ${chatId}`
-    );
+    this.logger.log(`📤 Отправка приветствия пользователю ${chatId}`);
     await this.sendMessage(chatId, message);
   }
 
@@ -153,9 +169,7 @@ export class TelegramWebhookService {
   ): Promise<void> {
     const message = `Привет, ${firstName}! 👋\n\nДобро пожаловать в BotManager! 🚀\n\nДля начала работы с нашим сервисом вам необходимо зарегистрироваться.\n\n📋 Ваш Telegram ID: \`${telegramId}\`\n\n🔗 Перейдите по ссылке для регистрации:\n${this.configService.get("app.frontendUrl")}/register\n\n📝 Инструкция по регистрации:\n1. Откройте ссылку выше\n2. Введите ваш Telegram ID: \`${telegramId}\`\n3. Заполните остальные поля\n4. Подтвердите регистрацию кодом, который мы отправим\n\nПосле регистрации вы сможете создавать и управлять Telegram ботами! 🤖`;
 
-    this.logger.log(
-      `📤 Отправка инструкций по регистрации пользователю ${chatId}`
-    );
+    this.logger.log(`📤 Отправка инструкций пользователю ${chatId}`);
     await this.sendMessage(chatId, message, { parse_mode: "Markdown" });
   }
 
@@ -166,15 +180,14 @@ export class TelegramWebhookService {
   ): Promise<boolean> {
     if (!this.botToken) {
       this.logger.warn(
-        `⚠️ Попытка отправить сообщение без TELEGRAM_BOT_TOKEN для chatId: ${chatId}`
+        `⚠️ Нет токена для отправки сообщения chatId: ${chatId}`
       );
       return false;
     }
 
     try {
       const url = `${this.getBotApiUrl()}/sendMessage`;
-      this.logger.debug(`🌐 Отправка запроса к Telegram API: ${url}`);
-      this.logger.debug(`💬 Текст сообщения: ${text.substring(0, 100)}...`);
+      this.logger.debug(`🌐 POST ${url}`);
 
       const response = await axios.post(url, {
         chat_id: chatId,
@@ -183,24 +196,22 @@ export class TelegramWebhookService {
       });
 
       if (response.data.ok) {
-        this.logger.log(
-          `✅ Сообщение успешно отправлено в Telegram для chatId: ${chatId}`
-        );
+        this.logger.log(`✅ Сообщение отправлено chatId: ${chatId}`);
         return true;
       } else {
         this.logger.error(
-          `❌ Ошибка отправки сообщения в Telegram для chatId ${chatId}: ${response.data.description}`
+          `❌ Ошибка отправки chatId ${chatId}: ${response.data.description}`
         );
         return false;
       }
     } catch (error) {
       this.logger.error(
-        `❌ Исключение при отправке сообщения в Telegram для chatId ${chatId}: ${error.message}`,
+        `❌ Исключение при отправке chatId ${chatId}: ${error.message}`,
         error.stack
       );
       if (error.response) {
         this.logger.error(
-          `📄 Ответ Telegram API: ${JSON.stringify(error.response.data)}`
+          `📄 Telegram API ответ: ${JSON.stringify(error.response.data)}`
         );
       }
       return false;
@@ -208,16 +219,14 @@ export class TelegramWebhookService {
   }
 
   // Метод для установки webhook (вызывается при запуске приложения)
-  async setWebhook(): Promise<void> {
+  async setupWebhook(): Promise<void> {
     if (!this.botToken) {
-      this.logger.warn(
-        "TELEGRAM_BOT_TOKEN не установлен, webhook не будет установлен"
-      );
+      this.logger.warn("TELEGRAM_BOT_TOKEN не установлен");
       throw new Error("TELEGRAM_BOT_TOKEN не установлен");
     }
 
     try {
-      const webhookUrl = `${this.configService.get("app.webhookBaseUrl")}/api/telegram/webhook`;
+      const webhookUrl = `${this.configService.get("app.webhookBaseUrl")}/api/assistant-bot/webhook`;
       const url = `${this.getBotApiUrl()}/setWebhook`;
 
       this.logger.log(`🔧 Установка webhook: ${webhookUrl}`);
@@ -228,13 +237,11 @@ export class TelegramWebhookService {
       });
 
       if (response.data.ok) {
-        this.logger.log("✅ Webhook успешно установлен");
+        this.logger.log("✅ Webhook установлен успешно");
 
         // Получаем информацию о webhook для проверки
         const webhookInfo = await this.getWebhookInfo();
-        this.logger.log(
-          `📊 Информация о webhook: ${JSON.stringify(webhookInfo)}`
-        );
+        this.logger.log(`📊 Webhook info: ${JSON.stringify(webhookInfo)}`);
       } else {
         this.logger.error(
           `❌ Ошибка установки webhook: ${response.data.description}`
@@ -249,7 +256,6 @@ export class TelegramWebhookService {
     }
   }
 
-  // Метод для получения информации о webhook
   async getWebhookInfo(): Promise<any> {
     if (!this.botToken) {
       throw new Error("TELEGRAM_BOT_TOKEN не установлен");
@@ -262,19 +268,14 @@ export class TelegramWebhookService {
       if (response.data.ok) {
         return response.data.result;
       } else {
-        throw new Error(
-          `Ошибка получения информации о webhook: ${response.data.description}`
-        );
+        throw new Error(`Ошибка getWebhookInfo: ${response.data.description}`);
       }
     } catch (error) {
-      this.logger.error(
-        `Ошибка получения информации о webhook: ${error.message}`
-      );
+      this.logger.error(`Ошибка getWebhookInfo: ${error.message}`);
       throw error;
     }
   }
 
-  // Метод для удаления webhook (для тестирования)
   async deleteWebhook(): Promise<void> {
     if (!this.botToken) {
       throw new Error("TELEGRAM_BOT_TOKEN не установлен");
@@ -285,7 +286,7 @@ export class TelegramWebhookService {
       const response = await axios.post(url);
 
       if (response.data.ok) {
-        this.logger.log("✅ Webhook успешно удален");
+        this.logger.log("✅ Webhook удален");
       } else {
         this.logger.error(
           `❌ Ошибка удаления webhook: ${response.data.description}`

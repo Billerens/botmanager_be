@@ -17,6 +17,7 @@ import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { WebSocketModule } from "./modules/websocket/websocket.module";
 import { QueueModule } from "./modules/queue/queue.module";
 import { TelegramModule } from "./modules/telegram/telegram.module";
+import { AssistantBotModule } from "./modules/assistant-bot/assistant-bot.module";
 import { SubscriptionModule } from "./modules/subscription/subscription.module";
 import { UploadModule } from "./modules/upload/upload.module";
 
@@ -58,7 +59,8 @@ import { UploadModule } from "./modules/upload/upload.module";
     AnalyticsModule,
     WebSocketModule,
     QueueModule,
-    TelegramModule,
+    TelegramModule, // Управление ботами пользователей
+    AssistantBotModule, // Наш собственный бот-ассистент
     SubscriptionModule,
     UploadModule,
   ],

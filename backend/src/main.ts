@@ -5,7 +5,6 @@ import { ConfigService } from "@nestjs/config";
 import helmet from "helmet";
 import compression from "compression";
 import { AppModule } from "./app.module";
-import { TelegramWebhookService } from "./modules/telegram/telegram-webhook.service";
 
 // Критически важные переменные окружения
 const CRITICAL_ENV_VARS = [
@@ -180,24 +179,6 @@ async function bootstrap() {
   console.log(
     `📚 Swagger документация: http://${configService.get("app.host") || process.env.HOST || "localhost"}:${port}/api/docs`
   );
-
-  // Инициализация Telegram webhook
-  try {
-    console.log("🔍 Попытка инициализации Telegram webhook...");
-    const telegramWebhookService = app.get(TelegramWebhookService);
-    console.log("✅ TelegramWebhookService найден");
-
-    await telegramWebhookService.setWebhook();
-    console.log("🤖 Telegram webhook инициализирован");
-  } catch (error) {
-    console.warn(
-      "⚠️ Не удалось инициализировать Telegram webhook:",
-      error.message
-    );
-    console.warn(
-      "📝 Это не критично для работы приложения, webhook можно установить вручную"
-    );
-  }
 }
 
 bootstrap();
