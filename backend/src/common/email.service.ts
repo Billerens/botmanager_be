@@ -17,7 +17,6 @@ export class EmailService {
     const port = this.configService.get<number>("SMTP_PORT");
     const user = this.configService.get<string>("SMTP_USER");
     const password = this.configService.get<string>("SMTP_PASSWORD");
-    const from = this.configService.get<string>("SMTP_FROM");
 
     if (!host || !port || !user || !password) {
       this.logger.warn(
@@ -32,6 +31,7 @@ export class EmailService {
     this.transporter = nodemailer.createTransport({
       host,
       port,
+      service: host === "smtp.gmail.com" ? "gmail" : undefined,
       secure: port === 465, // true для 465, false для других портов
       auth: {
         user,
@@ -41,9 +41,6 @@ export class EmailService {
       connectionTimeout: 10000, // 10 секунд на подключение (увеличено для Gmail)
       greetingTimeout: 5000, // 5 секунд на приветствие
       socketTimeout: 10000, // 10 секунд на операции с сокетом
-      // Дополнительные настройки для лучшей диагностики
-      debug: process.env.NODE_ENV === "development", // Включаем debug в dev режиме
-      logger: process.env.NODE_ENV === "development", // Логируем в dev режиме
     });
 
     this.logger.log(`Email сервис инициализирован: ${host}:${port}`);
