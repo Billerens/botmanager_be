@@ -64,8 +64,8 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
     try {
       switch (broadcast.recipientType) {
         case "all":
-          // Получаем всех уникальных пользователей бота (приватные чаты)
-          const allUsers = await this.messageRepository
+          // Получаем всех пользователей бота
+          const allUsersQuery = this.messageRepository
             .createQueryBuilder("message")
             .select("DISTINCT message.telegramChatId", "chatId")
             .where("message.botId = :botId", { botId: bot.id })
@@ -73,12 +73,20 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
             .andWhere("message.telegramChatId != ''")
             .andWhere("message.telegramChatId NOT LIKE :systemPattern", {
               systemPattern: "system_%",
-            })
-            .andWhere(
-              "message.metadata->>'chatType' = 'private' OR message.metadata->>'chatType' IS NULL"
-            )
-            .getRawMany();
+            });
 
+          // Если указан конкретный тип чата - фильтруем по нему
+          if (broadcast.chatType) {
+            allUsersQuery.andWhere(
+              "message.metadata->>'chatType' = :chatType",
+              {
+                chatType: broadcast.chatType,
+              }
+            );
+          }
+          // Если тип чата не указан - берем ВСЕ чаты (приватные + группы)
+
+          const allUsers = await allUsersQuery.getRawMany();
           recipientChatIds = allUsers.map((user) => user.chatId);
           break;
 
@@ -91,7 +99,7 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
 
         case "groups":
           // Получаем все групповые чаты бота
-          const allGroups = await this.messageRepository
+          const allGroupsQuery = this.messageRepository
             .createQueryBuilder("message")
             .select("DISTINCT message.telegramChatId", "chatId")
             .addSelect("message.metadata->>'chatType'", "chatType")
@@ -101,12 +109,24 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
             .andWhere("message.telegramChatId != ''")
             .andWhere("message.telegramChatId NOT LIKE :systemPattern", {
               systemPattern: "system_%",
-            })
-            .andWhere(
-              "message.metadata->>'chatType' IN ('group', 'supergroup', 'channel')"
-            )
-            .getRawMany();
+            });
 
+          // Если указан конкретный тип чата - фильтруем по нему
+          if (broadcast.chatType) {
+            allGroupsQuery.andWhere(
+              "message.metadata->>'chatType' = :chatType",
+              {
+                chatType: broadcast.chatType,
+              }
+            );
+          } else {
+            // Если не указан - берем все типы групп
+            allGroupsQuery.andWhere(
+              "message.metadata->>'chatType' IN ('group', 'supergroup', 'channel')"
+            );
+          }
+
+          const allGroups = await allGroupsQuery.getRawMany();
           recipientChatIds = allGroups.map((group) => group.chatId);
           break;
 
