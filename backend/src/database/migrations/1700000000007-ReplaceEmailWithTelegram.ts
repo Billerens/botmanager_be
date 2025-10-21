@@ -31,28 +31,40 @@ export class ReplaceEmailWithTelegram1700000000007
       );
     }
 
-    const telegramUsernameExists = await queryRunner.hasColumn("users", "telegramUsername");
+    const telegramUsernameExists = await queryRunner.hasColumn(
+      "users",
+      "telegramUsername"
+    );
     if (!telegramUsernameExists) {
       await queryRunner.query(
         `ALTER TABLE "users" ADD "telegramUsername" character varying`
       );
     }
 
-    const isTelegramVerifiedExists = await queryRunner.hasColumn("users", "isTelegramVerified");
+    const isTelegramVerifiedExists = await queryRunner.hasColumn(
+      "users",
+      "isTelegramVerified"
+    );
     if (!isTelegramVerifiedExists) {
       await queryRunner.query(
         `ALTER TABLE "users" ADD "isTelegramVerified" boolean NOT NULL DEFAULT false`
       );
     }
 
-    const telegramVerificationCodeExists = await queryRunner.hasColumn("users", "telegramVerificationCode");
+    const telegramVerificationCodeExists = await queryRunner.hasColumn(
+      "users",
+      "telegramVerificationCode"
+    );
     if (!telegramVerificationCodeExists) {
       await queryRunner.query(
         `ALTER TABLE "users" ADD "telegramVerificationCode" character varying`
       );
     }
 
-    const telegramVerificationExpiresExists = await queryRunner.hasColumn("users", "telegramVerificationExpires");
+    const telegramVerificationExpiresExists = await queryRunner.hasColumn(
+      "users",
+      "telegramVerificationExpires"
+    );
     if (!telegramVerificationExpiresExists) {
       await queryRunner.query(
         `ALTER TABLE "users" ADD "telegramVerificationExpires" TIMESTAMP`
@@ -66,7 +78,7 @@ export class ReplaceEmailWithTelegram1700000000007
         WHERE tablename = 'users' AND indexname = 'IDX_users_telegram_id'
       )
     `);
-    
+
     if (!telegramIndexExists[0].exists) {
       await queryRunner.query(
         `CREATE UNIQUE INDEX "IDX_users_telegram_id" ON "users" ("telegramId")`
@@ -82,11 +94,11 @@ export class ReplaceEmailWithTelegram1700000000007
         WHERE tablename = 'users' AND indexname = 'IDX_users_telegram_id'
       )
     `);
-    
+
     if (telegramIndexExists[0].exists) {
       await queryRunner.query(`DROP INDEX "IDX_users_telegram_id"`);
     }
-    
+
     await queryRunner.query(
       `ALTER TABLE "users" DROP COLUMN IF EXISTS "telegramVerificationExpires"`
     );
@@ -111,28 +123,40 @@ export class ReplaceEmailWithTelegram1700000000007
       );
     }
 
-    const isEmailVerifiedExists = await queryRunner.hasColumn("users", "isEmailVerified");
+    const isEmailVerifiedExists = await queryRunner.hasColumn(
+      "users",
+      "isEmailVerified"
+    );
     if (!isEmailVerifiedExists) {
       await queryRunner.query(
         `ALTER TABLE "users" ADD "isEmailVerified" boolean NOT NULL DEFAULT false`
       );
     }
 
-    const emailVerificationTokenExists = await queryRunner.hasColumn("users", "emailVerificationToken");
+    const emailVerificationTokenExists = await queryRunner.hasColumn(
+      "users",
+      "emailVerificationToken"
+    );
     if (!emailVerificationTokenExists) {
       await queryRunner.query(
         `ALTER TABLE "users" ADD "emailVerificationToken" character varying`
       );
     }
 
-    const emailVerificationCodeExists = await queryRunner.hasColumn("users", "emailVerificationCode");
+    const emailVerificationCodeExists = await queryRunner.hasColumn(
+      "users",
+      "emailVerificationCode"
+    );
     if (!emailVerificationCodeExists) {
       await queryRunner.query(
         `ALTER TABLE "users" ADD "emailVerificationCode" character varying`
       );
     }
 
-    const emailVerificationExpiresExists = await queryRunner.hasColumn("users", "emailVerificationExpires");
+    const emailVerificationExpiresExists = await queryRunner.hasColumn(
+      "users",
+      "emailVerificationExpires"
+    );
     if (!emailVerificationExpiresExists) {
       await queryRunner.query(
         `ALTER TABLE "users" ADD "emailVerificationExpires" TIMESTAMP`
@@ -146,7 +170,7 @@ export class ReplaceEmailWithTelegram1700000000007
         WHERE tablename = 'users' AND indexname = 'IDX_users_email'
       )
     `);
-    
+
     if (!emailIndexExists[0].exists) {
       await queryRunner.query(
         `CREATE UNIQUE INDEX "IDX_users_email" ON "users" ("email")`
