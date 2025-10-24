@@ -35,5 +35,9 @@
     "@aws-sdk/s3-request-presigner": "^3.908.0",
     "@types/multer": "^2.0.0",
     "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6"
   }
 }

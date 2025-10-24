@@ -1,6 +1,6 @@
 import { IsEnum, IsString, IsNotEmpty, Length, Matches } from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
-import { TwoFactorType } from "../../database/entities/user.entity";
+import { TwoFactorType } from "../../../database/entities/user.entity";
 
 export class InitializeTelegramTwoFactorDto {
   @ApiProperty({ description: "Telegram ID пользователя" })
