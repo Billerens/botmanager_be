@@ -81,10 +81,10 @@ export class InitializeTwoFactorResponseDto {
   secret?: string;
 
   @ApiProperty({ description: "Код верификации для подтверждения настройки" })
-  verificationCode: string;
+  verificationCode?: string;
 
   @ApiProperty({ description: "Время истечения кода верификации" })
-  expiresAt: Date;
+  expiresAt?: Date;
 }
 
 export class EnableTwoFactorResponseDto {
