@@ -237,6 +237,22 @@ export class AuthService {
         `Пользователь ${telegramId} имеет включенную 2FA, требуется дополнительная проверка`
       );
 
+      // Для Telegram отправляем код подтверждения
+      if (user.twoFactorType === "telegram") {
+        try {
+          await this.twoFactorService.sendTelegramTwoFactorCode(user.id);
+          this.logger.log(
+            `Код 2FA отправлен в Telegram для пользователя ${telegramId}`
+          );
+        } catch (error) {
+          this.logger.error(
+            `Ошибка отправки кода 2FA в Telegram для пользователя ${telegramId}:`,
+            error
+          );
+          // Не прерываем процесс, пользователь может использовать резервные коды
+        }
+      }
+
       return {
         user: {
           id: user.id,
@@ -253,7 +269,10 @@ export class AuthService {
           isTwoFactorEnabled: user.isTwoFactorEnabled,
           twoFactorType: user.twoFactorType,
         },
-        message: "Требуется код двухфакторной аутентификации",
+        message:
+          user.twoFactorType === "telegram"
+            ? "Код двухфакторной аутентификации отправлен в Telegram"
+            : "Требуется код двухфакторной аутентификации",
         requiresTwoFactor: true,
         telegramId: user.telegramId,
       };
