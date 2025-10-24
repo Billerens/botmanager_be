@@ -59,14 +59,35 @@ export class TwoFactorService {
       );
     }
 
-    // Проверяем код верификации
-    if (
-      !user.twoFactorVerificationCode ||
-      user.twoFactorVerificationCode !== verificationCode ||
-      !user.twoFactorVerificationExpires ||
-      user.twoFactorVerificationExpires < new Date()
-    ) {
-      throw new BadRequestException("Неверный или истекший код верификации");
+    // Проверяем код верификации в зависимости от типа 2FA
+    if (twoFactorType === TwoFactorType.GOOGLE_AUTHENTICATOR) {
+      // Для Google Authenticator проверяем код через TOTP
+      if (!user.twoFactorSecret) {
+        throw new BadRequestException("Секрет 2FA не найден");
+      }
+
+      const isValidCode = speakeasy.totp.verify({
+        secret: user.twoFactorSecret,
+        encoding: "base32",
+        token: verificationCode,
+        window: 2, // Допускаем отклонение в 2 периода (60 секунд)
+      });
+
+      if (!isValidCode) {
+        throw new BadRequestException(
+          "Неверный код двухфакторной аутентификации"
+        );
+      }
+    } else {
+      // Для Telegram проверяем сохраненный код верификации
+      if (
+        !user.twoFactorVerificationCode ||
+        user.twoFactorVerificationCode !== verificationCode ||
+        !user.twoFactorVerificationExpires ||
+        user.twoFactorVerificationExpires < new Date()
+      ) {
+        throw new BadRequestException("Неверный или истекший код верификации");
+      }
     }
 
     // Генерируем резервные коды
@@ -258,8 +279,6 @@ export class TwoFactorService {
    */
   async initializeGoogleAuthenticatorTwoFactor(userId: string): Promise<{
     secret: string;
-    verificationCode: string;
-    expiresAt: Date;
   }> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
@@ -275,20 +294,12 @@ export class TwoFactorService {
     // Генерируем секрет
     const secret = this.generateGoogleAuthenticatorSecret(userId);
 
-    // Генерируем код верификации для подтверждения настройки
-    const verificationCode = Math.floor(
-      100000 + Math.random() * 900000
-    ).toString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 минут
-
-    // Сохраняем временные данные
+    // Сохраняем временные данные (только секрет, код верификации не нужен)
     user.twoFactorSecret = secret;
-    user.twoFactorVerificationCode = verificationCode;
-    user.twoFactorVerificationExpires = expiresAt;
     user.twoFactorType = TwoFactorType.GOOGLE_AUTHENTICATOR;
     await this.userRepository.save(user);
 
-    return { secret, verificationCode, expiresAt };
+    return { secret };
   }
 
   /**
