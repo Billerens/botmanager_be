@@ -21,6 +21,7 @@ import {
 } from "@nestjs/swagger";
 
 import { AuthService } from "./auth.service";
+import { TwoFactorService } from "./two-factor.service";
 import { TelegramUserInfoService } from "../../common/telegram-userinfo.service";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { LocalAuthGuard } from "./guards/local-auth.guard";
@@ -35,6 +36,17 @@ import {
   UpdateProfileDto,
 } from "./dto/auth.dto";
 import {
+  InitializeTelegramTwoFactorDto,
+  InitializeGoogleAuthenticatorTwoFactorDto,
+  EnableTwoFactorDto,
+  DisableTwoFactorDto,
+  VerifyTwoFactorCodeDto,
+  SendTwoFactorCodeDto,
+  TwoFactorStatusResponseDto,
+  InitializeTwoFactorResponseDto,
+  EnableTwoFactorResponseDto,
+} from "./dto/two-factor.dto";
+import {
   AuthResponseDto,
   VerificationRequiredResponseDto,
 } from "./dto/auth-response.dto";
@@ -46,6 +58,7 @@ export class AuthController {
 
   constructor(
     private readonly authService: AuthService,
+    private readonly twoFactorService: TwoFactorService,
     private readonly telegramUserInfoService: TelegramUserInfoService
   ) {}
 
@@ -243,5 +256,148 @@ export class AuthController {
     @Body() updateProfileDto: UpdateProfileDto
   ) {
     return this.authService.updateProfile(req.user.id, updateProfileDto);
+  }
+
+  // === 2FA ЭНДПОИНТЫ ===
+
+  @Get("2fa/status")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Получение статуса двухфакторной аутентификации" })
+  @ApiResponse({
+    status: 200,
+    description: "Статус 2FA",
+    type: TwoFactorStatusResponseDto,
+  })
+  async getTwoFactorStatus(
+    @Request() req
+  ): Promise<TwoFactorStatusResponseDto> {
+    return this.twoFactorService.getTwoFactorStatus(req.user.id);
+  }
+
+  @Post("2fa/initialize/telegram")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Инициализация 2FA через Telegram" })
+  @ApiResponse({
+    status: 200,
+    description: "Код верификации отправлен в Telegram",
+    type: InitializeTwoFactorResponseDto,
+  })
+  async initializeTelegramTwoFactor(
+    @Request() req
+  ): Promise<InitializeTwoFactorResponseDto> {
+    return this.twoFactorService.initializeTelegramTwoFactor(req.user.id);
+  }
+
+  @Post("2fa/initialize/google-authenticator")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Инициализация 2FA через Google Authenticator" })
+  @ApiResponse({
+    status: 200,
+    description: "Секрет для Google Authenticator сгенерирован",
+    type: InitializeTwoFactorResponseDto,
+  })
+  async initializeGoogleAuthenticatorTwoFactor(
+    @Request() req
+  ): Promise<InitializeTwoFactorResponseDto> {
+    return this.twoFactorService.initializeGoogleAuthenticatorTwoFactor(
+      req.user.id
+    );
+  }
+
+  @Post("2fa/enable")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Включение двухфакторной аутентификации" })
+  @ApiResponse({
+    status: 200,
+    description: "2FA успешно включена",
+    type: EnableTwoFactorResponseDto,
+  })
+  async enableTwoFactor(
+    @Request() req,
+    @Body() enableTwoFactorDto: EnableTwoFactorDto
+  ): Promise<EnableTwoFactorResponseDto> {
+    return this.twoFactorService.enableTwoFactor(
+      req.user.id,
+      enableTwoFactorDto.twoFactorType,
+      enableTwoFactorDto.verificationCode
+    );
+  }
+
+  @Post("2fa/disable")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Отключение двухфакторной аутентификации" })
+  @ApiResponse({
+    status: 200,
+    description: "2FA успешно отключена",
+  })
+  async disableTwoFactor(
+    @Request() req,
+    @Body() disableTwoFactorDto: DisableTwoFactorDto
+  ): Promise<{ message: string }> {
+    await this.twoFactorService.disableTwoFactor(
+      req.user.id,
+      disableTwoFactorDto.password
+    );
+    return { message: "Двухфакторная аутентификация отключена" };
+  }
+
+  @Post("2fa/verify")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Проверка кода двухфакторной аутентификации" })
+  @ApiResponse({
+    status: 200,
+    description: "Код проверен",
+  })
+  async verifyTwoFactorCode(
+    @Body() verifyTwoFactorCodeDto: VerifyTwoFactorCodeDto
+  ): Promise<{ isValid: boolean; isBackupCode?: boolean }> {
+    // Этот эндпоинт будет использоваться при логине
+    // userId будет передаваться в теле запроса
+    const { userId } = verifyTwoFactorCodeDto as any;
+    return this.twoFactorService.verifyTwoFactorCode(
+      userId,
+      verifyTwoFactorCodeDto.code
+    );
+  }
+
+  @Post("2fa/send-telegram-code")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Отправка кода 2FA в Telegram" })
+  @ApiResponse({
+    status: 200,
+    description: "Код отправлен в Telegram",
+  })
+  async sendTelegramTwoFactorCode(
+    @Request() req
+  ): Promise<{ message: string }> {
+    await this.twoFactorService.sendTelegramTwoFactorCode(req.user.id);
+    return { message: "Код отправлен в Telegram" };
+  }
+
+  @Post("2fa/complete-login")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Завершение логина с проверкой 2FA" })
+  @ApiResponse({
+    status: 200,
+    description: "Логин успешно завершен",
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неверный код 2FA",
+  })
+  async completeLoginWithTwoFactor(
+    @Body() body: { userId: string; twoFactorCode: string }
+  ) {
+    return this.authService.completeLoginWithTwoFactor(
+      body.userId,
+      body.twoFactorCode
+    );
   }
 }

@@ -6,6 +6,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 
 import { AuthService } from "./auth.service";
 import { AuthController } from "./auth.controller";
+import { TwoFactorService } from "./two-factor.service";
 import { JwtStrategy } from "./strategies/jwt.strategy";
 import { LocalStrategy } from "./strategies/local.strategy";
 import { UsersModule } from "../users/users.module";
@@ -31,6 +32,7 @@ import { TelegramUserInfoService } from "../../common/telegram-userinfo.service"
   ],
   providers: [
     AuthService,
+    TwoFactorService,
     JwtStrategy,
     LocalStrategy,
     TelegramValidationService,

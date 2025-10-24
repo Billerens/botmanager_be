@@ -26,6 +26,11 @@ export enum SubscriptionPlan {
   PRO = "pro",
 }
 
+export enum TwoFactorType {
+  TELEGRAM = "telegram",
+  GOOGLE_AUTHENTICATOR = "google_authenticator",
+}
+
 @Entity("users")
 export class User {
   @PrimaryGeneratedColumn("uuid")
@@ -74,6 +79,30 @@ export class User {
 
   @Column({ nullable: true })
   lastLoginAt: Date;
+
+  // 2FA поля
+  @Column({ default: false })
+  isTwoFactorEnabled: boolean;
+
+  @Column({
+    type: "enum",
+    enum: TwoFactorType,
+    nullable: true,
+  })
+  twoFactorType: TwoFactorType;
+
+  @Column({ nullable: true })
+  @Exclude()
+  twoFactorSecret: string;
+
+  @Column({ nullable: true })
+  twoFactorBackupCodes: string;
+
+  @Column({ nullable: true })
+  twoFactorVerificationCode: string;
+
+  @Column({ nullable: true })
+  twoFactorVerificationExpires: Date;
 
   @CreateDateColumn()
   createdAt: Date;

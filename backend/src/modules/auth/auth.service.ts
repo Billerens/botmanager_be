@@ -12,6 +12,7 @@ import * as crypto from "crypto";
 
 import { User, UserRole } from "../../database/entities/user.entity";
 import { UsersService } from "../users/users.service";
+import { TwoFactorService } from "./two-factor.service";
 import {
   LoginDto,
   RegisterDto,
@@ -21,7 +22,10 @@ import {
 } from "./dto/auth.dto";
 import { JwtPayload } from "./interfaces/jwt-payload.interface";
 import { TelegramValidationService } from "../../common/telegram-validation.service";
-import { VerificationRequiredResponseDto } from "./dto/auth-response.dto";
+import {
+  VerificationRequiredResponseDto,
+  TwoFactorRequiredResponseDto,
+} from "./dto/auth-response.dto";
 
 @Injectable()
 export class AuthService {
@@ -32,7 +36,8 @@ export class AuthService {
     private userRepository: Repository<User>,
     private usersService: UsersService,
     private jwtService: JwtService,
-    private telegramValidationService: TelegramValidationService
+    private telegramValidationService: TelegramValidationService,
+    private twoFactorService: TwoFactorService
   ) {}
 
   async register(
@@ -140,7 +145,9 @@ export class AuthService {
   async login(
     loginDto: LoginDto
   ): Promise<
-    { user: User; accessToken: string } | VerificationRequiredResponseDto
+    | { user: User; accessToken: string }
+    | VerificationRequiredResponseDto
+    | TwoFactorRequiredResponseDto
   > {
     const { telegramId, password } = loginDto;
 
@@ -222,6 +229,34 @@ export class AuthService {
     // Проверяем, активен ли пользователь
     if (!user.isActive) {
       throw new UnauthorizedException("Аккаунт заблокирован");
+    }
+
+    // Проверяем, включена ли 2FA
+    if (user.isTwoFactorEnabled) {
+      this.logger.log(
+        `Пользователь ${telegramId} имеет включенную 2FA, требуется дополнительная проверка`
+      );
+
+      return {
+        user: {
+          id: user.id,
+          telegramId: user.telegramId,
+          telegramUsername: user.telegramUsername,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          isActive: user.isActive,
+          isTelegramVerified: user.isTelegramVerified,
+          lastLoginAt: user.lastLoginAt,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+          isTwoFactorEnabled: user.isTwoFactorEnabled,
+          twoFactorType: user.twoFactorType,
+        },
+        message: "Требуется код двухфакторной аутентификации",
+        requiresTwoFactor: true,
+        telegramId: user.telegramId,
+      };
     }
 
     // Обновляем время последнего входа
@@ -460,5 +495,52 @@ export class AuthService {
     }
 
     return await this.userRepository.save(user);
+  }
+
+  /**
+   * Завершает логин с проверкой 2FA
+   */
+  async completeLoginWithTwoFactor(
+    userId: string,
+    twoFactorCode: string
+  ): Promise<{ user: User; accessToken: string }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException("Пользователь не найден или неактивен");
+    }
+
+    if (!user.isTwoFactorEnabled) {
+      throw new BadRequestException("Двухфакторная аутентификация не включена");
+    }
+
+    // Проверяем код 2FA
+    const verificationResult = await this.twoFactorService.verifyTwoFactorCode(
+      userId,
+      twoFactorCode
+    );
+
+    if (!verificationResult.isValid) {
+      throw new UnauthorizedException(
+        "Неверный код двухфакторной аутентификации"
+      );
+    }
+
+    // Обновляем время последнего входа
+    user.lastLoginAt = new Date();
+    await this.userRepository.save(user);
+
+    // Генерируем JWT токен
+    const payload: JwtPayload = {
+      sub: user.id,
+      telegramId: user.telegramId,
+      role: user.role,
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+
+    return {
+      user,
+      accessToken,
+    };
   }
 }

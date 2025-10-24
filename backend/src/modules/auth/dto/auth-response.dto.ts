@@ -1,5 +1,8 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { UserRole } from "../../../database/entities/user.entity";
+import {
+  UserRole,
+  TwoFactorType,
+} from "../../../database/entities/user.entity";
 
 export class UserResponseDto {
   @ApiProperty({ description: "ID пользователя" })
@@ -34,6 +37,16 @@ export class UserResponseDto {
 
   @ApiProperty({ description: "Дата обновления" })
   updatedAt: Date;
+
+  @ApiProperty({ description: "Включена ли двухфакторная аутентификация" })
+  isTwoFactorEnabled?: boolean;
+
+  @ApiProperty({
+    description: "Тип двухфакторной аутентификации",
+    enum: TwoFactorType,
+    required: false,
+  })
+  twoFactorType?: TwoFactorType;
 }
 
 export class AuthResponseDto {
@@ -61,5 +74,22 @@ export class VerificationRequiredResponseDto {
   requiresVerification: boolean;
 
   @ApiProperty({ description: "Telegram ID пользователя для верификации" })
+  telegramId: string;
+}
+
+export class TwoFactorRequiredResponseDto {
+  @ApiProperty({
+    description: "Информация о пользователе",
+    type: UserResponseDto,
+  })
+  user: UserResponseDto;
+
+  @ApiProperty({ description: "Сообщение о необходимости 2FA" })
+  message: string;
+
+  @ApiProperty({ description: "Требуется ли двухфакторная аутентификация" })
+  requiresTwoFactor: boolean;
+
+  @ApiProperty({ description: "Telegram ID пользователя для 2FA" })
   telegramId: string;
 }
