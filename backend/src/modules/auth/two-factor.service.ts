@@ -22,7 +22,7 @@ export class TwoFactorService {
    */
   generateGoogleAuthenticatorSecret(userId: string): string {
     const secret = speakeasy.generateSecret({
-      name: `BotManager (${userId})`,
+      name: `BotManager`,
       issuer: "BotManager",
       length: 32,
     });
