@@ -341,7 +341,7 @@ export class AuthController {
   ): Promise<{ message: string }> {
     await this.twoFactorService.disableTwoFactor(
       req.user.id,
-      disableTwoFactorDto.password
+      disableTwoFactorDto.verificationCode
     );
     return { message: "Двухфакторная аутентификация отключена" };
   }

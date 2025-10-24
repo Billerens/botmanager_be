@@ -33,10 +33,15 @@ export class EnableTwoFactorDto {
 }
 
 export class DisableTwoFactorDto {
-  @ApiProperty({ description: "Текущий пароль пользователя" })
+  @ApiProperty({
+    description:
+      "Код двухфакторной аутентификации для подтверждения отключения",
+  })
   @IsString()
   @IsNotEmpty()
-  password: string;
+  @Length(6, 6)
+  @Matches(/^\d+$/, { message: "Код должен содержать только цифры" })
+  verificationCode: string;
 }
 
 export class VerifyTwoFactorCodeDto {

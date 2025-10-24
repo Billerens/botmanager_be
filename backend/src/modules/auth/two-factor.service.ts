@@ -91,7 +91,10 @@ export class TwoFactorService {
   /**
    * Отключает 2FA для пользователя
    */
-  async disableTwoFactor(userId: string, password: string): Promise<void> {
+  async disableTwoFactor(
+    userId: string,
+    verificationCode: string
+  ): Promise<void> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new BadRequestException("Пользователь не найден");
@@ -101,10 +104,15 @@ export class TwoFactorService {
       throw new BadRequestException("Двухфакторная аутентификация не включена");
     }
 
-    // Проверяем пароль
-    const isPasswordValid = await user.validatePassword(password);
-    if (!isPasswordValid) {
-      throw new BadRequestException("Неверный пароль");
+    // Проверяем код двухфакторной аутентификации
+    const isValidCode = await this.verifyTwoFactorCode(
+      userId,
+      verificationCode
+    );
+    if (!isValidCode) {
+      throw new BadRequestException(
+        "Неверный код двухфакторной аутентификации"
+      );
     }
 
     // Отключаем 2FA
