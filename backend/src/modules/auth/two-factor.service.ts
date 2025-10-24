@@ -89,6 +89,61 @@ export class TwoFactorService {
   }
 
   /**
+   * Инициализирует отключение 2FA для Telegram (отправляет код подтверждения)
+   */
+  async initializeDisableTelegramTwoFactor(userId: string): Promise<{
+    verificationCode: string;
+    expiresAt: Date;
+  }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new BadRequestException("Пользователь не найден");
+    }
+
+    if (!user.isTwoFactorEnabled) {
+      throw new BadRequestException("Двухфакторная аутентификация не включена");
+    }
+
+    if (user.twoFactorType !== TwoFactorType.TELEGRAM) {
+      throw new BadRequestException("2FA не настроена через Telegram");
+    }
+
+    if (!user.telegramId) {
+      throw new BadRequestException("Telegram ID не найден");
+    }
+
+    // Генерируем код верификации для отключения
+    const verificationCode = Math.floor(
+      100000 + Math.random() * 900000
+    ).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 минут
+
+    // Отправляем код в Telegram
+    try {
+      const sent = await this.telegramValidationService.sendVerificationCode(
+        user.telegramId,
+        verificationCode
+      );
+      if (!sent) {
+        throw new Error("Не удалось отправить код в Telegram");
+      }
+    } catch (error) {
+      this.logger.error(
+        `Ошибка отправки кода отключения 2FA в Telegram для пользователя ${userId}:`,
+        error
+      );
+      throw new BadRequestException("Не удалось отправить код в Telegram");
+    }
+
+    // Сохраняем временные данные для отключения
+    user.twoFactorVerificationCode = verificationCode;
+    user.twoFactorVerificationExpires = expiresAt;
+    await this.userRepository.save(user);
+
+    return { verificationCode, expiresAt };
+  }
+
+  /**
    * Отключает 2FA для пользователя
    */
   async disableTwoFactor(
@@ -104,15 +159,29 @@ export class TwoFactorService {
       throw new BadRequestException("Двухфакторная аутентификация не включена");
     }
 
-    // Проверяем код двухфакторной аутентификации
-    const isValidCode = await this.verifyTwoFactorCode(
-      userId,
-      verificationCode
-    );
-    if (!isValidCode) {
-      throw new BadRequestException(
-        "Неверный код двухфакторной аутентификации"
+    // Для Telegram проверяем специальный код отключения
+    if (user.twoFactorType === TwoFactorType.TELEGRAM) {
+      if (
+        !user.twoFactorVerificationCode ||
+        !user.twoFactorVerificationExpires ||
+        new Date() > user.twoFactorVerificationExpires ||
+        user.twoFactorVerificationCode !== verificationCode
+      ) {
+        throw new BadRequestException(
+          "Неверный или истекший код подтверждения отключения"
+        );
+      }
+    } else {
+      // Для Google Authenticator используем стандартную проверку
+      const isValidCode = await this.verifyTwoFactorCode(
+        userId,
+        verificationCode
       );
+      if (!isValidCode) {
+        throw new BadRequestException(
+          "Неверный код двухфакторной аутентификации"
+        );
+      }
     }
 
     // Отключаем 2FA

@@ -327,6 +327,24 @@ export class AuthController {
     );
   }
 
+  @Post("2fa/disable/initialize")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      "Инициализация отключения двухфакторной аутентификации через Telegram",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Код подтверждения отправлен в Telegram",
+  })
+  async initializeDisableTwoFactor(
+    @Request() req
+  ): Promise<{ message: string }> {
+    await this.twoFactorService.initializeDisableTelegramTwoFactor(req.user.id);
+    return { message: "Код подтверждения отправлен в Telegram" };
+  }
+
   @Post("2fa/disable")
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
