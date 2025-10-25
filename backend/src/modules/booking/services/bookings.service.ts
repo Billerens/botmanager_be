@@ -2,14 +2,12 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, Between, MoreThan, In } from "typeorm";
 import {
   Booking,
   BookingStatus,
-  BookingSource,
 } from "../../../database/entities/booking.entity";
 import { TimeSlot } from "../../../database/entities/time-slot.entity";
 import { Specialist } from "../../../database/entities/specialist.entity";

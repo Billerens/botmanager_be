@@ -352,13 +352,13 @@ export class AddBookingSystem1700000000010 implements MigrationInterface {
             name: "status",
             type: "enum",
             enum: ["pending", "confirmed", "cancelled", "completed", "no_show"],
-            default: "pending",
+            default: "'pending'",
           },
           {
             name: "source",
             type: "enum",
             enum: ["telegram_bot", "mini_app", "website", "phone", "other"],
-            default: "mini_app",
+            default: "'mini_app'",
           },
           {
             name: "confirmedAt",
