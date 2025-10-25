@@ -23,6 +23,10 @@ import {
   BotStatsResponseDto,
 } from "./modules/bots/dto/bot-response.dto";
 import {
+  PublicShopBotResponseDto,
+  PublicBookingBotResponseDto,
+} from "./modules/bots/dto/public-bot-response.dto";
+import {
   ProductResponseDto,
   ProductStatsResponseDto,
   ErrorResponseDto as ProductErrorDto,
@@ -240,6 +244,8 @@ async function bootstrap() {
       // Bot DTOs
       BotResponseDto,
       BotStatsResponseDto,
+      PublicShopBotResponseDto,
+      PublicBookingBotResponseDto,
 
       // Product DTOs
       ProductResponseDto,

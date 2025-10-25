@@ -22,7 +22,7 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { UploadService } from "./upload.service";
 import { UploadResponseDto } from "./dto/upload-response.dto";
 
-@ApiTags("Upload")
+@ApiTags("Загрузка файлов")
 @Controller("upload")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
