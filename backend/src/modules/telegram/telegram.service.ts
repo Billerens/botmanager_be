@@ -148,9 +148,10 @@ export class TelegramService {
 
       // Добавляем команду магазина если он включен и команда настроена
       if (bot.isShop && bot.shopButtonTypes?.includes("command")) {
+        const commandSettings = bot.shopButtonSettings?.command;
         commands.push({
           command: "shop",
-          description: "🛒 Открыть магазин",
+          description: commandSettings?.description || "🛒 Открыть магазин",
         });
         console.log(
           `Добавлена команда /shop для бота ${bot.id} (isShop=${bot.isShop}, shopButtonTypes=${JSON.stringify(bot.shopButtonTypes)})`
@@ -163,9 +164,10 @@ export class TelegramService {
 
       // Добавляем команду бронирования если оно включено и команда настроена
       if (bot.isBookingEnabled && bot.bookingButtonTypes?.includes("command")) {
+        const commandSettings = bot.bookingButtonSettings?.command;
         commands.push({
           command: "booking",
-          description: "📅 Записаться на прием",
+          description: commandSettings?.description || "📅 Записаться на прием",
         });
         console.log(
           `Добавлена команда /booking для бота ${bot.id} (isBookingEnabled=${bot.isBookingEnabled}, bookingButtonTypes=${JSON.stringify(bot.bookingButtonTypes)})`

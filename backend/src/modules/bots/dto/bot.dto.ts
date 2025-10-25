@@ -8,6 +8,7 @@ import {
   IsObject,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { ButtonSettingsDto } from "./command-button-settings.dto";
 
 export class CreateBotDto {
   @ApiProperty({ description: "Название бота", example: "Мой Telegram бот" })
@@ -65,7 +66,6 @@ export class UpdateBotDto {
   @IsOptional()
   @IsBoolean()
   isShop?: boolean;
-
 
   @ApiPropertyOptional({
     description: "URL логотипа магазина",
@@ -125,12 +125,76 @@ export class UpdateBotDto {
 
   @ApiPropertyOptional({
     description: "Настройки для разных типов кнопок",
-    example: {
-      menu_button: { text: "Магазин" },
-      inline_button: { text: "🛒 Купить" },
-    },
+    type: ButtonSettingsDto,
   })
   @IsOptional()
   @IsObject()
-  shopButtonSettings?: Record<string, any>;
+  shopButtonSettings?: ButtonSettingsDto;
+
+  // Поля для системы бронирования
+  @ApiPropertyOptional({
+    description: "Включить систему бронирования для бота",
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isBookingEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    description: "URL логотипа для системы бронирования",
+    example: "https://example.com/booking-logo.png",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500, { message: "URL логотипа не должен превышать 500 символов" })
+  bookingLogoUrl?: string;
+
+  @ApiPropertyOptional({
+    description: "Заголовок для системы бронирования",
+    example: "Записаться на прием",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100, {
+    message: "Заголовок бронирования не должен превышать 100 символов",
+  })
+  bookingTitle?: string;
+
+  @ApiPropertyOptional({
+    description: "Описание для системы бронирования",
+    example: "Выберите удобное время для записи к специалисту",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500, {
+    message: "Описание бронирования не должно превышать 500 символов",
+  })
+  bookingDescription?: string;
+
+  @ApiPropertyOptional({
+    description: "Кастомные CSS стили для системы бронирования",
+    example:
+      ".booking-header { background: linear-gradient(45deg, #4ecdc4, #44a08d); }",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000, { message: "CSS стили не должны превышать 2000 символов" })
+  bookingCustomStyles?: string;
+
+  @ApiPropertyOptional({
+    description: "Типы кнопок для системы бронирования",
+    example: ["menu_button", "command"],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  bookingButtonTypes?: string[];
+
+  @ApiPropertyOptional({
+    description: "Настройки для разных типов кнопок бронирования",
+    type: ButtonSettingsDto,
+  })
+  @IsOptional()
+  @IsObject()
+  bookingButtonSettings?: ButtonSettingsDto;
 }

@@ -1,4 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
+import { ButtonSettingsDto } from "./command-button-settings.dto";
 
 export class BotResponseDto {
   @ApiProperty({
@@ -95,13 +96,60 @@ export class BotResponseDto {
 
   @ApiProperty({
     description: "Настройки для разных типов кнопок",
-    example: {
-      menu_button: { text: "Магазин" },
-      inline_button: { text: "🛒 Купить" },
-    },
+    type: ButtonSettingsDto,
     required: false,
   })
-  shopButtonSettings?: Record<string, any>;
+  shopButtonSettings?: ButtonSettingsDto;
+
+  @ApiProperty({
+    description: "Включена ли система бронирования",
+    example: false,
+    required: false,
+  })
+  isBookingEnabled?: boolean;
+
+  @ApiProperty({
+    description: "URL логотипа для системы бронирования",
+    example: "https://example.com/booking-logo.png",
+    required: false,
+  })
+  bookingLogoUrl?: string;
+
+  @ApiProperty({
+    description: "Заголовок для системы бронирования",
+    example: "Записаться на прием",
+    required: false,
+  })
+  bookingTitle?: string;
+
+  @ApiProperty({
+    description: "Описание для системы бронирования",
+    example: "Выберите удобное время для записи к специалисту",
+    required: false,
+  })
+  bookingDescription?: string;
+
+  @ApiProperty({
+    description: "Кастомные CSS стили для системы бронирования",
+    example:
+      ".booking-header { background: linear-gradient(45deg, #4ecdc4, #44a08d); }",
+    required: false,
+  })
+  bookingCustomStyles?: string;
+
+  @ApiProperty({
+    description: "Типы кнопок для системы бронирования",
+    example: ["menu_button", "command"],
+    required: false,
+  })
+  bookingButtonTypes?: string[];
+
+  @ApiProperty({
+    description: "Настройки для разных типов кнопок бронирования",
+    type: ButtonSettingsDto,
+    required: false,
+  })
+  bookingButtonSettings?: ButtonSettingsDto;
 }
 
 export class BotStatsResponseDto {

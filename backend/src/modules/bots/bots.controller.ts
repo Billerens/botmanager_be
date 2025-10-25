@@ -22,6 +22,7 @@ import { BotsService } from "./bots.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { CreateBotDto, UpdateBotDto } from "./dto/bot.dto";
 import { BotResponseDto, BotStatsResponseDto } from "./dto/bot-response.dto";
+import { ButtonSettingsDto } from "./dto/command-button-settings.dto";
 
 @ApiTags("Боты")
 @Controller("bots")
@@ -109,7 +110,7 @@ export class BotsController {
       shopDescription?: string;
       shopCustomStyles?: string;
       shopButtonTypes?: string[];
-      shopButtonSettings?: Record<string, any>;
+      shopButtonSettings?: ButtonSettingsDto;
     },
     @Request() req
   ) {
@@ -130,7 +131,7 @@ export class BotsController {
       bookingLogoUrl?: string;
       bookingCustomStyles?: string;
       bookingButtonTypes?: string[];
-      bookingButtonSettings?: Record<string, any>;
+      bookingButtonSettings?: ButtonSettingsDto;
       bookingSettings?: any;
     },
     @Request() req

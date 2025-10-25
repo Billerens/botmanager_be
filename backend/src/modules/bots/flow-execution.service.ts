@@ -618,12 +618,20 @@ export class FlowExecutionService {
       // Расшифровываем токен бота
       const decryptedToken = this.botsService.decryptToken(bot.token);
 
+      // Получаем настройки команды
+      const commandSettings = bot.shopButtonSettings?.command;
+      const buttonText = commandSettings?.text || "🛒 Открыть магазин";
+      const messageText =
+        commandSettings?.messageText ||
+        bot.shopDescription ||
+        "Добро пожаловать в наш магазин! Нажмите кнопку ниже, чтобы открыть магазин.";
+
       // Отправляем сообщение с кнопкой для открытия магазина
       const keyboard = {
         inline_keyboard: [
           [
             {
-              text: "🛒 Открыть магазин",
+              text: buttonText,
               web_app: {
                 url: shopUrl,
               },
@@ -635,8 +643,7 @@ export class FlowExecutionService {
       await this.telegramService.sendMessage(
         decryptedToken,
         message.chat.id.toString(),
-        bot.shopDescription ||
-          "Добро пожаловать в наш магазин! Нажмите кнопку ниже, чтобы открыть магазин.",
+        messageText,
         { reply_markup: keyboard }
       );
 
@@ -660,12 +667,20 @@ export class FlowExecutionService {
       // Расшифровываем токен бота
       const decryptedToken = this.botsService.decryptToken(bot.token);
 
+      // Получаем настройки команды
+      const commandSettings = bot.bookingButtonSettings?.command;
+      const buttonText = commandSettings?.text || "📅 Записаться на прием";
+      const messageText =
+        commandSettings?.messageText ||
+        bot.bookingDescription ||
+        "Добро пожаловать в нашу систему бронирования! Нажмите кнопку ниже, чтобы записаться на прием.";
+
       // Отправляем сообщение с кнопкой для открытия системы бронирования
       const keyboard = {
         inline_keyboard: [
           [
             {
-              text: "📅 Записаться на прием",
+              text: buttonText,
               web_app: {
                 url: bookingUrl,
               },
@@ -677,8 +692,7 @@ export class FlowExecutionService {
       await this.telegramService.sendMessage(
         decryptedToken,
         message.chat.id.toString(),
-        bot.bookingDescription ||
-          "Добро пожаловать в нашу систему бронирования! Нажмите кнопку ниже, чтобы записаться на прием.",
+        messageText,
         { reply_markup: keyboard }
       );
 
