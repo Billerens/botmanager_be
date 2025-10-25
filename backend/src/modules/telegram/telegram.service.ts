@@ -217,6 +217,12 @@ export class TelegramService {
    */
   private async setMenuButton(token: string, bot: Bot): Promise<void> {
     try {
+      // Проверяем, что токен не пустой
+      if (!token || token.trim() === "") {
+        console.error("Ошибка установки Menu Button: пустой токен");
+        return;
+      }
+
       const buttonText =
         bot.shopButtonSettings?.menu_button?.text || "🛒 Магазин";
 
@@ -237,6 +243,11 @@ export class TelegramService {
       console.log("Menu button set successfully");
     } catch (error) {
       console.error("Ошибка установки Menu Button:", error.message);
+      // Добавляем более детальную информацию об ошибке
+      if (error.response) {
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
+      }
     }
   }
 
@@ -245,6 +256,12 @@ export class TelegramService {
    */
   private async setBookingMenuButton(token: string, bot: Bot): Promise<void> {
     try {
+      // Проверяем, что токен не пустой
+      if (!token || token.trim() === "") {
+        console.error("Ошибка установки Booking Menu Button: пустой токен");
+        return;
+      }
+
       const buttonText =
         bot.bookingButtonSettings?.menu_button?.text || "📅 Записаться";
 
@@ -265,6 +282,11 @@ export class TelegramService {
       console.log("Booking Menu button set successfully");
     } catch (error) {
       console.error("Ошибка установки Booking Menu Button:", error.message);
+      // Добавляем более детальную информацию об ошибке
+      if (error.response) {
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
+      }
     }
   }
 
@@ -273,13 +295,23 @@ export class TelegramService {
    */
   private async clearMenuButton(token: string): Promise<void> {
     try {
-      await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {
-        menu_button: null,
-      });
+      // Проверяем, что токен не пустой
+      if (!token || token.trim() === "") {
+        console.error("Ошибка очистки Menu Button: пустой токен");
+        return;
+      }
+
+      // Для очистки Menu Button нужно передать пустой объект или не передавать menu_button вообще
+      await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {});
 
       console.log("Menu button cleared successfully");
     } catch (error) {
       console.error("Ошибка очистки Menu Button:", error.message);
+      // Добавляем более детальную информацию об ошибке
+      if (error.response) {
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
+      }
     }
   }
 
