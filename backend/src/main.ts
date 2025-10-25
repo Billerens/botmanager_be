@@ -7,6 +7,75 @@ import helmet from "helmet";
 import compression from "compression";
 import { AppModule } from "./app.module";
 
+// Импорты всех DTO для Swagger
+import {
+  UserResponseDto,
+  AuthResponseDto,
+  VerificationRequiredResponseDto,
+} from "./modules/auth/dto/auth-response.dto";
+import {
+  TwoFactorStatusResponseDto,
+  InitializeTwoFactorResponseDto,
+  EnableTwoFactorResponseDto,
+} from "./modules/auth/dto/two-factor.dto";
+import {
+  BotResponseDto,
+  BotStatsResponseDto,
+} from "./modules/bots/dto/bot-response.dto";
+import {
+  ProductResponseDto,
+  ProductStatsResponseDto,
+  ErrorResponseDto as ProductErrorDto,
+  UpdateStockResponseDto,
+  ToggleActiveResponseDto,
+  DeleteResponseDto as ProductDeleteDto,
+} from "./modules/products/dto/product-response.dto";
+import {
+  MessageResponseDto,
+  BroadcastResponseDto,
+  MessageStatsResponseDto,
+  DialogResponseDto,
+  GroupResponseDto,
+  UserResponseDto as MessageUserDto,
+  DialogStatsResponseDto,
+  BroadcastStatusResponseDto,
+  ErrorResponseDto as MessageErrorDto,
+} from "./modules/messages/dto/message-response.dto";
+import {
+  LeadResponseDto,
+  LeadStatsResponseDto,
+  ErrorResponseDto as LeadErrorDto,
+  DeleteResponseDto as LeadDeleteDto,
+} from "./modules/leads/dto/lead-response.dto";
+import { SubscriptionResponseDto } from "./modules/subscription/dto/subscription-response.dto";
+import { DashboardStatsResponseDto } from "./modules/analytics/dto/analytics-response.dto";
+import { ActivityLogResponseDto } from "./modules/activity-log/dto/activity-log-response.dto";
+import {
+  TelegramWebhookResponseDto,
+  TelegramBotInfoResponseDto,
+  TelegramMessageResponseDto,
+  TelegramCallbackResponseDto,
+} from "./modules/telegram/dto/telegram-response.dto";
+import { UploadResponseDto } from "./modules/upload/dto/upload-response.dto";
+import {
+  SpecialistResponseDto,
+  ServiceResponseDto,
+  TimeSlotResponseDto,
+  BookingResponseDto,
+  BookingStatsResponseDto,
+  ErrorResponseDto as BookingErrorDto,
+  DeleteResponseDto as BookingDeleteDto,
+  CleanupResponseDto,
+  ScheduleResponseDto,
+} from "./modules/booking/dto/booking-response.dto";
+import {
+  UserStatsResponseDto,
+  ErrorResponseDto as UserErrorDto,
+  UpdateRoleResponseDto,
+  ToggleActiveResponseDto as UserToggleDto,
+  DeleteResponseDto as UserDeleteDto,
+} from "./modules/users/dto/user-response.dto";
+
 // Критически важные переменные окружения
 const CRITICAL_ENV_VARS = [
   {
@@ -159,7 +228,80 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config, {
-    extraModels: [],
+    extraModels: [
+      // Auth DTOs
+      UserResponseDto,
+      AuthResponseDto,
+      VerificationRequiredResponseDto,
+      TwoFactorStatusResponseDto,
+      InitializeTwoFactorResponseDto,
+      EnableTwoFactorResponseDto,
+
+      // Bot DTOs
+      BotResponseDto,
+      BotStatsResponseDto,
+
+      // Product DTOs
+      ProductResponseDto,
+      ProductStatsResponseDto,
+      ProductErrorDto,
+      UpdateStockResponseDto,
+      ToggleActiveResponseDto,
+      ProductDeleteDto,
+
+      // Message DTOs
+      MessageResponseDto,
+      BroadcastResponseDto,
+      MessageStatsResponseDto,
+      DialogResponseDto,
+      GroupResponseDto,
+      MessageUserDto,
+      DialogStatsResponseDto,
+      BroadcastStatusResponseDto,
+      MessageErrorDto,
+
+      // Lead DTOs
+      LeadResponseDto,
+      LeadStatsResponseDto,
+      LeadErrorDto,
+      LeadDeleteDto,
+
+      // Subscription DTOs
+      SubscriptionResponseDto,
+
+      // Analytics DTOs
+      DashboardStatsResponseDto,
+
+      // Activity Log DTOs
+      ActivityLogResponseDto,
+
+      // Telegram DTOs
+      TelegramWebhookResponseDto,
+      TelegramBotInfoResponseDto,
+      TelegramMessageResponseDto,
+      TelegramCallbackResponseDto,
+
+      // Upload DTOs
+      UploadResponseDto,
+
+      // Booking DTOs
+      SpecialistResponseDto,
+      ServiceResponseDto,
+      TimeSlotResponseDto,
+      BookingResponseDto,
+      BookingStatsResponseDto,
+      BookingErrorDto,
+      BookingDeleteDto,
+      CleanupResponseDto,
+      ScheduleResponseDto,
+
+      // User DTOs
+      UserStatsResponseDto,
+      UserErrorDto,
+      UpdateRoleResponseDto,
+      UserToggleDto,
+      UserDeleteDto,
+    ],
   });
   SwaggerModule.setup("api/docs", app, document);
 
