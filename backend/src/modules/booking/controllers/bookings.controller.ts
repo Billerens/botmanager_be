@@ -37,15 +37,19 @@ export class BookingsController {
   @ApiOperation({ summary: "Создать бронирование" })
   @ApiResponse({ status: 201, description: "Бронирование создано" })
   @ApiResponse({ status: 400, description: "Неверные данные" })
-  async create(@Body() createBookingDto: CreateBookingDto, @Request() req) {
-    return this.bookingsService.create(createBookingDto, req.user.botId);
+  async create(
+    @Body() createBookingDto: CreateBookingDto,
+    @Query("botId") botId: string,
+    @Request() req
+  ) {
+    return this.bookingsService.create(createBookingDto, botId);
   }
 
   @Get()
   @ApiOperation({ summary: "Получить список бронирований" })
   @ApiResponse({ status: 200, description: "Список бронирований получен" })
-  async findAll(@Request() req) {
-    return this.bookingsService.findAll(req.user.botId);
+  async findAll(@Query("botId") botId: string, @Request() req) {
+    return this.bookingsService.findAll(botId);
   }
 
   @Get("specialist/:specialistId")
@@ -56,9 +60,10 @@ export class BookingsController {
   })
   async findBySpecialist(
     @Param("specialistId") specialistId: string,
+    @Query("botId") botId: string,
     @Request() req
   ) {
-    return this.bookingsService.findBySpecialist(specialistId, req.user.botId);
+    return this.bookingsService.findBySpecialist(specialistId, botId);
   }
 
   @Get("date-range")
@@ -67,18 +72,23 @@ export class BookingsController {
   async findByDateRange(
     @Query("startDate") startDate: string,
     @Query("endDate") endDate: string,
+    @Query("botId") botId: string,
     @Request() req
   ) {
     const start = new Date(startDate);
     const end = new Date(endDate);
-    return this.bookingsService.findByDateRange(req.user.botId, start, end);
+    return this.bookingsService.findByDateRange(botId, start, end);
   }
 
   @Get("status/:status")
   @ApiOperation({ summary: "Получить бронирования по статусу" })
   @ApiResponse({ status: 200, description: "Бронирования по статусу получены" })
-  async getByStatus(@Param("status") status: BookingStatus, @Request() req) {
-    return this.bookingsService.getBookingsByStatus(req.user.botId, status);
+  async getByStatus(
+    @Param("status") status: BookingStatus,
+    @Query("botId") botId: string,
+    @Request() req
+  ) {
+    return this.bookingsService.getBookingsByStatus(botId, status);
   }
 
   @Get("upcoming")
@@ -87,27 +97,32 @@ export class BookingsController {
     status: 200,
     description: "Предстоящие бронирования получены",
   })
-  async getUpcoming(@Query("limit") limit: string, @Request() req) {
+  async getUpcoming(
+    @Query("limit") limit: string,
+    @Query("botId") botId: string,
+    @Request() req
+  ) {
     const limitNumber = limit ? parseInt(limit, 10) : 10;
-    return this.bookingsService.getUpcomingBookings(
-      req.user.botId,
-      limitNumber
-    );
+    return this.bookingsService.getUpcomingBookings(botId, limitNumber);
   }
 
   @Get("statistics")
   @ApiOperation({ summary: "Получить статистику бронирований" })
   @ApiResponse({ status: 200, description: "Статистика получена" })
-  async getStatistics(@Request() req) {
-    return this.bookingsService.getStatistics(req.user.botId);
+  async getStatistics(@Query("botId") botId: string, @Request() req) {
+    return this.bookingsService.getStatistics(botId);
   }
 
   @Get(":id")
   @ApiOperation({ summary: "Получить бронирование по ID" })
   @ApiResponse({ status: 200, description: "Бронирование найдено" })
   @ApiResponse({ status: 404, description: "Бронирование не найдено" })
-  async findOne(@Param("id") id: string, @Request() req) {
-    return this.bookingsService.findOne(id, req.user.botId);
+  async findOne(
+    @Param("id") id: string,
+    @Query("botId") botId: string,
+    @Request() req
+  ) {
+    return this.bookingsService.findOne(id, botId);
   }
 
   @Put(":id")
@@ -117,9 +132,10 @@ export class BookingsController {
   async update(
     @Param("id") id: string,
     @Body() updateBookingDto: UpdateBookingDto,
+    @Query("botId") botId: string,
     @Request() req
   ) {
-    return this.bookingsService.update(id, updateBookingDto, req.user.botId);
+    return this.bookingsService.update(id, updateBookingDto, botId);
   }
 
   @Post(":id/confirm")
@@ -129,9 +145,10 @@ export class BookingsController {
   async confirm(
     @Param("id") id: string,
     @Body() confirmBookingDto: ConfirmBookingDto,
+    @Query("botId") botId: string,
     @Request() req
   ) {
-    return this.bookingsService.confirm(id, confirmBookingDto, req.user.botId);
+    return this.bookingsService.confirm(id, confirmBookingDto, botId);
   }
 
   @Post(":id/cancel")
@@ -144,9 +161,10 @@ export class BookingsController {
   async cancel(
     @Param("id") id: string,
     @Body() cancelBookingDto: CancelBookingDto,
+    @Query("botId") botId: string,
     @Request() req
   ) {
-    return this.bookingsService.cancel(id, cancelBookingDto, req.user.botId);
+    return this.bookingsService.cancel(id, cancelBookingDto, botId);
   }
 
   @Post(":id/complete")
@@ -155,23 +173,35 @@ export class BookingsController {
     status: 200,
     description: "Бронирование отмечено как завершенное",
   })
-  async markAsCompleted(@Param("id") id: string, @Request() req) {
-    return this.bookingsService.markAsCompleted(id, req.user.botId);
+  async markAsCompleted(
+    @Param("id") id: string,
+    @Query("botId") botId: string,
+    @Request() req
+  ) {
+    return this.bookingsService.markAsCompleted(id, botId);
   }
 
   @Post(":id/no-show")
   @ApiOperation({ summary: "Отметить бронирование как неявка" })
   @ApiResponse({ status: 200, description: "Бронирование отмечено как неявка" })
-  async markAsNoShow(@Param("id") id: string, @Request() req) {
-    return this.bookingsService.markAsNoShow(id, req.user.botId);
+  async markAsNoShow(
+    @Param("id") id: string,
+    @Query("botId") botId: string,
+    @Request() req
+  ) {
+    return this.bookingsService.markAsNoShow(id, botId);
   }
 
   @Delete(":id")
   @ApiOperation({ summary: "Удалить бронирование" })
   @ApiResponse({ status: 200, description: "Бронирование удалено" })
   @ApiResponse({ status: 404, description: "Бронирование не найдено" })
-  async remove(@Param("id") id: string, @Request() req) {
-    await this.bookingsService.remove(id, req.user.botId);
+  async remove(
+    @Param("id") id: string,
+    @Query("botId") botId: string,
+    @Request() req
+  ) {
+    await this.bookingsService.remove(id, botId);
     return { message: "Бронирование удалено" };
   }
 }

@@ -36,8 +36,12 @@ export class TimeSlotsController {
   @ApiOperation({ summary: "Создать таймслот" })
   @ApiResponse({ status: 201, description: "Таймслот создан" })
   @ApiResponse({ status: 400, description: "Неверные данные" })
-  async create(@Body() createTimeSlotDto: CreateTimeSlotDto, @Request() req) {
-    return this.timeSlotsService.create(createTimeSlotDto, req.user.botId);
+  async create(
+    @Body() createTimeSlotDto: CreateTimeSlotDto,
+    @Query("botId") botId: string,
+    @Request() req
+  ) {
+    return this.timeSlotsService.create(createTimeSlotDto, botId);
   }
 
   @Post("generate")
@@ -46,19 +50,17 @@ export class TimeSlotsController {
   @ApiResponse({ status: 400, description: "Неверные данные" })
   async generate(
     @Body() generateTimeSlotsDto: GenerateTimeSlotsDto,
+    @Query("botId") botId: string,
     @Request() req
   ) {
-    return this.timeSlotsService.generateTimeSlots(
-      generateTimeSlotsDto,
-      req.user.botId
-    );
+    return this.timeSlotsService.generateTimeSlots(generateTimeSlotsDto, botId);
   }
 
   @Get()
   @ApiOperation({ summary: "Получить список таймслотов" })
   @ApiResponse({ status: 200, description: "Список таймслотов получен" })
-  async findAll(@Request() req) {
-    return this.timeSlotsService.findAll(req.user.botId);
+  async findAll(@Query("botId") botId: string, @Request() req) {
+    return this.timeSlotsService.findAll(botId);
   }
 
   @Get("specialist/:specialistId")
@@ -66,24 +68,33 @@ export class TimeSlotsController {
   @ApiResponse({ status: 200, description: "Таймслоты специалиста получены" })
   async findBySpecialist(
     @Param("specialistId") specialistId: string,
+    @Query("botId") botId: string,
     @Request() req
   ) {
-    return this.timeSlotsService.findBySpecialist(specialistId, req.user.botId);
+    return this.timeSlotsService.findBySpecialist(specialistId, botId);
   }
 
   @Get("available")
   @ApiOperation({ summary: "Получить доступные таймслоты" })
   @ApiResponse({ status: 200, description: "Доступные таймслоты получены" })
-  async getAvailable(@Query() query: GetAvailableSlotsDto, @Request() req) {
-    return this.timeSlotsService.findAvailableSlots(query, req.user.botId);
+  async getAvailable(
+    @Query() query: GetAvailableSlotsDto,
+    @Query("botId") botId: string,
+    @Request() req
+  ) {
+    return this.timeSlotsService.findAvailableSlots(query, botId);
   }
 
   @Get(":id")
   @ApiOperation({ summary: "Получить таймслот по ID" })
   @ApiResponse({ status: 200, description: "Таймслот найден" })
   @ApiResponse({ status: 404, description: "Таймслот не найден" })
-  async findOne(@Param("id") id: string, @Request() req) {
-    return this.timeSlotsService.findOne(id, req.user.botId);
+  async findOne(
+    @Param("id") id: string,
+    @Query("botId") botId: string,
+    @Request() req
+  ) {
+    return this.timeSlotsService.findOne(id, botId);
   }
 
   @Put(":id")
@@ -93,17 +104,22 @@ export class TimeSlotsController {
   async update(
     @Param("id") id: string,
     @Body() updateTimeSlotDto: UpdateTimeSlotDto,
+    @Query("botId") botId: string,
     @Request() req
   ) {
-    return this.timeSlotsService.update(id, updateTimeSlotDto, req.user.botId);
+    return this.timeSlotsService.update(id, updateTimeSlotDto, botId);
   }
 
   @Delete(":id")
   @ApiOperation({ summary: "Удалить таймслот" })
   @ApiResponse({ status: 200, description: "Таймслот удален" })
   @ApiResponse({ status: 404, description: "Таймслот не найден" })
-  async remove(@Param("id") id: string, @Request() req) {
-    await this.timeSlotsService.remove(id, req.user.botId);
+  async remove(
+    @Param("id") id: string,
+    @Query("botId") botId: string,
+    @Request() req
+  ) {
+    await this.timeSlotsService.remove(id, botId);
     return { message: "Таймслот удален" };
   }
 
