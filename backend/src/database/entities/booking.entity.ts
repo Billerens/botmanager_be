@@ -106,6 +106,7 @@ export class Booking {
   serviceId: string;
 
   @OneToOne(() => TimeSlot, (timeSlot) => timeSlot.booking)
+  @JoinColumn({ name: "timeSlotId" })
   timeSlot: TimeSlot;
 
   @Column()
