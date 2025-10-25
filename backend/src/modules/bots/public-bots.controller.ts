@@ -10,8 +10,22 @@ export class PublicBotsController {
   @Get("bots/:id/shop")
   @ApiOperation({ summary: "Получить данные бота для публичного магазина" })
   @ApiResponse({ status: 200, description: "Данные бота получены" })
-  @ApiResponse({ status: 404, description: "Бот не найден или магазин не активен" })
+  @ApiResponse({
+    status: 404,
+    description: "Бот не найден или магазин не активен",
+  })
   async getBotForShop(@Param("id") id: string) {
     return this.botsService.getPublicBotForShop(id);
+  }
+
+  @Get("bots/:id/booking")
+  @ApiOperation({ summary: "Получить данные бота для публичного бронирования" })
+  @ApiResponse({ status: 200, description: "Данные бота получены" })
+  @ApiResponse({
+    status: 404,
+    description: "Бот не найден или бронирование не активно",
+  })
+  async getBotForBooking(@Param("id") id: string) {
+    return this.botsService.getPublicBotForBooking(id);
   }
 }

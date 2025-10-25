@@ -139,17 +139,84 @@ export class BotsService {
     return savedBot;
   }
 
+  async updateBookingSettings(
+    id: string,
+    bookingSettings: {
+      isBookingEnabled?: boolean;
+      bookingTitle?: string;
+      bookingDescription?: string;
+      bookingLogoUrl?: string;
+      bookingCustomStyles?: string;
+      bookingButtonTypes?: string[];
+      bookingButtonSettings?: Record<string, any>;
+      bookingSettings?: any;
+    },
+    userId: string
+  ): Promise<Bot> {
+    const bot = await this.findOne(id, userId);
+
+    // Обновляем настройки бронирования
+    Object.assign(bot, bookingSettings);
+
+    // Если бронирование отключается, очищаем связанные поля
+    if (bookingSettings.isBookingEnabled === false) {
+      bot.bookingTitle = null;
+      bot.bookingDescription = null;
+      bot.bookingLogoUrl = null;
+      bot.bookingCustomStyles = null;
+      bot.bookingButtonTypes = null;
+      bot.bookingButtonSettings = null;
+    }
+
+    const savedBot = await this.botRepository.save(bot);
+
+    // Обновляем команды бота в Telegram
+    try {
+      const token = this.decryptToken(bot.token);
+      await this.telegramService.setBotCommands(token, savedBot);
+    } catch (error) {
+      console.error("Ошибка обновления команд бота:", error.message);
+    }
+
+    return savedBot;
+  }
+
   /**
-   * Получить публичные данные бота для магазина (без авторизации)
+   * Получить публичные данные бота для бронирования (без авторизации)
    */
-  async getPublicBotForShop(botId: string): Promise<any> {
+  async getPublicBotForBooking(botId: string): Promise<any> {
     const bot = await this.botRepository.findOne({
-      where: { 
+      where: {
         id: botId,
         status: BotStatus.ACTIVE,
-        isShop: true 
+        isBookingEnabled: true,
       },
-      relations: ["products"]
+      relations: ["specialists", "specialists.services"],
+    });
+
+    if (!bot) {
+      return null;
+    }
+
+    return {
+      id: bot.id,
+      name: bot.name,
+      username: bot.username,
+      bookingTitle: bot.bookingTitle || bot.name,
+      bookingDescription: bot.bookingDescription || bot.description,
+      bookingLogoUrl: bot.bookingLogoUrl,
+      bookingCustomStyles: bot.bookingCustomStyles,
+      specialists: bot.specialists?.filter((s) => s.isActive) || [],
+    };
+  }
+  async getPublicBotForShop(botId: string): Promise<any> {
+    const bot = await this.botRepository.findOne({
+      where: {
+        id: botId,
+        status: BotStatus.ACTIVE,
+        isShop: true,
+      },
+      relations: ["products"],
     });
 
     if (!bot) {
@@ -168,7 +235,7 @@ export class BotsService {
       shopButtonTypes: bot.shopButtonTypes,
       shopButtonSettings: bot.shopButtonSettings,
       shopUrl: bot.shopUrl,
-      products: bot.products?.filter(product => product.isActive) || []
+      products: bot.products?.filter((product) => product.isActive) || [],
     };
   }
 

@@ -43,32 +43,12 @@ export class BotsController {
     return this.botsService.findAll(req.user.id);
   }
 
-  @Get(":id")
-  @ApiOperation({ summary: "Получить бота по ID" })
-  @ApiResponse({ status: 200, description: "Бот найден" })
-  @ApiResponse({ status: 404, description: "Бот не найден" })
-  async findOne(@Param("id") id: string, @Request() req) {
-    return this.botsService.findOne(id, req.user.id);
-  }
-
   @Get(":id/stats")
   @ApiOperation({ summary: "Получить статистику бота" })
   @ApiResponse({ status: 200, description: "Статистика бота получена" })
   @ApiResponse({ status: 404, description: "Бот не найден" })
   async getStats(@Param("id") id: string, @Request() req) {
     return this.botsService.getStats(id, req.user.id);
-  }
-
-  @Patch(":id")
-  @ApiOperation({ summary: "Обновить бота" })
-  @ApiResponse({ status: 200, description: "Бот обновлен" })
-  @ApiResponse({ status: 404, description: "Бот не найден" })
-  async update(
-    @Param("id") id: string,
-    @Body() updateBotDto: UpdateBotDto,
-    @Request() req
-  ) {
-    return this.botsService.update(id, updateBotDto, req.user.id);
   }
 
   @Patch(":id/activate")
@@ -111,6 +91,52 @@ export class BotsController {
     @Request() req
   ) {
     return this.botsService.updateShopSettings(id, shopSettings, req.user.id);
+  }
+
+  @Patch(":id/booking-settings")
+  @ApiOperation({ summary: "Обновить настройки бронирования бота" })
+  @ApiResponse({ status: 200, description: "Настройки бронирования обновлены" })
+  @ApiResponse({ status: 404, description: "Бот не найден" })
+  async updateBookingSettings(
+    @Param("id") id: string,
+    @Body()
+    bookingSettings: {
+      isBookingEnabled?: boolean;
+      bookingTitle?: string;
+      bookingDescription?: string;
+      bookingLogoUrl?: string;
+      bookingCustomStyles?: string;
+      bookingButtonTypes?: string[];
+      bookingButtonSettings?: Record<string, any>;
+      bookingSettings?: any;
+    },
+    @Request() req
+  ) {
+    return this.botsService.updateBookingSettings(
+      id,
+      bookingSettings,
+      req.user.id
+    );
+  }
+
+  @Get(":id")
+  @ApiOperation({ summary: "Получить бота по ID" })
+  @ApiResponse({ status: 200, description: "Бот найден" })
+  @ApiResponse({ status: 404, description: "Бот не найден" })
+  async findOne(@Param("id") id: string, @Request() req) {
+    return this.botsService.findOne(id, req.user.id);
+  }
+
+  @Patch(":id")
+  @ApiOperation({ summary: "Обновить бота" })
+  @ApiResponse({ status: 200, description: "Бот обновлен" })
+  @ApiResponse({ status: 404, description: "Бот не найден" })
+  async update(
+    @Param("id") id: string,
+    @Body() updateBotDto: UpdateBotDto,
+    @Request() req
+  ) {
+    return this.botsService.update(id, updateBotDto, req.user.id);
   }
 
   @Delete(":id")
