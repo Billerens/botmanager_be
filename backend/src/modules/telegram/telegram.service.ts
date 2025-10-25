@@ -187,17 +187,19 @@ export class TelegramService {
 
       console.log("Bot commands установлены:", commands);
 
-      // Устанавливаем Menu Button если он настроен
-      if (bot.isShop && bot.shopButtonTypes?.includes("menu_button")) {
-        await this.setMenuButton(token, bot);
-      }
+      // Определяем, какой Menu Button должен быть активен
+      const hasShopMenuButton =
+        bot.isShop && bot.shopButtonTypes?.includes("menu_button");
+      const hasBookingMenuButton =
+        bot.isBookingEnabled && bot.bookingButtonTypes?.includes("menu_button");
 
-      // Устанавливаем Menu Button для бронирования если он настроен
-      if (
-        bot.isBookingEnabled &&
-        bot.bookingButtonTypes?.includes("menu_button")
-      ) {
+      if (hasShopMenuButton) {
+        await this.setMenuButton(token, bot);
+      } else if (hasBookingMenuButton) {
         await this.setBookingMenuButton(token, bot);
+      } else {
+        // Если ни один Menu Button не включен, очищаем его
+        await this.clearMenuButton(token);
       }
 
       return response.data.ok;
@@ -263,6 +265,21 @@ export class TelegramService {
       console.log("Booking Menu button set successfully");
     } catch (error) {
       console.error("Ошибка установки Booking Menu Button:", error.message);
+    }
+  }
+
+  /**
+   * Очищает Menu Button (удаляет его)
+   */
+  private async clearMenuButton(token: string): Promise<void> {
+    try {
+      await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {
+        menu_button: null,
+      });
+
+      console.log("Menu button cleared successfully");
+    } catch (error) {
+      console.error("Ошибка очистки Menu Button:", error.message);
     }
   }
 
