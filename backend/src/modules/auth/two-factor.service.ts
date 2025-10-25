@@ -333,8 +333,9 @@ export class TwoFactorService {
     if (user.twoFactorType === TwoFactorType.GOOGLE_AUTHENTICATOR) {
       const isValid = speakeasy.totp.verify({
         secret: user.twoFactorSecret,
+        encoding: "base32",
         token: code,
-        window: 1, // Разрешаем отклонение в ±1 период
+        window: 2, // Разрешаем отклонение в ±2 периода (60 секунд)
       });
 
       return { isValid };
