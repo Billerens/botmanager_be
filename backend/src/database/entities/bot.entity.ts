@@ -124,7 +124,6 @@ export class Bot {
   @OneToMany(() => Specialist, (specialist) => specialist.bot)
   specialists: Specialist[];
 
-
   // Поля для магазина
   @Column({ default: false })
   isShop: boolean;

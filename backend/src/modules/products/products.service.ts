@@ -41,13 +41,7 @@ export class ProductsService {
     createProductDto: CreateProductDto
   ): Promise<Product> {
     // Проверяем, что бот принадлежит пользователю
-    const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
-    });
-
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
-    }
+    await this.validateBotOwnership(botId, userId);
 
     this.logger.log(
       `Creating product with ${createProductDto.images?.length || 0} images`
@@ -63,13 +57,7 @@ export class ProductsService {
 
   async findAll(botId: string, userId: string, filters: ProductFiltersDto) {
     // Проверяем, что бот принадлежит пользователю
-    const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
-    });
-
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
-    }
+    await this.validateBotOwnership(botId, userId);
 
     // Устанавливаем значения по умолчанию если они не переданы
     const page = filters.page || 1;
@@ -117,13 +105,7 @@ export class ProductsService {
 
   async findOne(id: string, botId: string, userId: string): Promise<Product> {
     // Проверяем, что бот принадлежит пользователю
-    const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
-    });
-
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
-    }
+    await this.validateBotOwnership(botId, userId);
 
     const product = await this.productRepository.findOne({
       where: { id, botId },
@@ -187,13 +169,7 @@ export class ProductsService {
     userId: string
   ): Promise<ProductStats> {
     // Проверяем, что бот принадлежит пользователю
-    const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
-    });
-
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
-    }
+    await this.validateBotOwnership(botId, userId);
 
     const [
       totalProducts,
@@ -243,5 +219,18 @@ export class ProductsService {
 
     product.isActive = !product.isActive;
     return await this.productRepository.save(product);
+  }
+
+  private async validateBotOwnership(
+    botId: string,
+    userId: string
+  ): Promise<void> {
+    const bot = await this.botRepository.findOne({
+      where: { id: botId, ownerId: userId },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
   }
 }

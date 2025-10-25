@@ -65,10 +65,18 @@ export class SpecialistsService {
     });
   }
 
-  async findOne(id: string, botId: string): Promise<Specialist> {
+  async findOne(
+    id: string,
+    botId: string,
+    includeRelations: boolean = true
+  ): Promise<Specialist> {
+    const relations = includeRelations
+      ? ["services", "timeSlots", "bookings"]
+      : [];
+
     const specialist = await this.specialistRepository.findOne({
       where: { id, botId },
-      relations: ["services", "timeSlots", "bookings"],
+      relations,
     });
 
     if (!specialist) {

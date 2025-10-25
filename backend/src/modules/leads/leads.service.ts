@@ -1,15 +1,15 @@
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
 
-import { Lead, LeadStatus } from '../../database/entities/lead.entity';
-import { CreateLeadDto, UpdateLeadDto } from './dto/lead.dto';
+import { Lead, LeadStatus } from "../../database/entities/lead.entity";
+import { CreateLeadDto, UpdateLeadDto } from "./dto/lead.dto";
 
 @Injectable()
 export class LeadsService {
   constructor(
     @InjectRepository(Lead)
-    private leadRepository: Repository<Lead>,
+    private leadRepository: Repository<Lead>
   ) {}
 
   async create(createLeadDto: CreateLeadDto): Promise<Lead> {
@@ -17,10 +17,14 @@ export class LeadsService {
     return this.leadRepository.save(lead);
   }
 
-  async findAll(botId: string, page: number = 1, limit: number = 50): Promise<Lead[]> {
+  async findAll(
+    botId: string,
+    page: number = 1,
+    limit: number = 50
+  ): Promise<Lead[]> {
     return this.leadRepository.find({
       where: { botId },
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
       skip: (page - 1) * limit,
       take: limit,
     });
@@ -48,14 +52,24 @@ export class LeadsService {
     qualified: number;
     closed: number;
   }> {
-    const leads = await this.leadRepository.find({ where: { botId } });
-    
+    const [total, newCount, contacted, qualified, closed] = await Promise.all([
+      this.leadRepository.count({ where: { botId } }),
+      this.leadRepository.count({ where: { botId, status: LeadStatus.NEW } }),
+      this.leadRepository.count({
+        where: { botId, status: LeadStatus.CONTACTED },
+      }),
+      this.leadRepository.count({
+        where: { botId, status: LeadStatus.QUALIFIED },
+      }),
+      this.leadRepository.count({ where: { botId, isClosed: true } }),
+    ]);
+
     return {
-      total: leads.length,
-      new: leads.filter(l => l.status === LeadStatus.NEW).length,
-      contacted: leads.filter(l => l.status === LeadStatus.CONTACTED).length,
-      qualified: leads.filter(l => l.status === LeadStatus.QUALIFIED).length,
-      closed: leads.filter(l => l.isClosed).length,
+      total,
+      new: newCount,
+      contacted,
+      qualified,
+      closed,
     };
   }
 }

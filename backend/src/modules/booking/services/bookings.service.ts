@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Between, MoreThan } from "typeorm";
+import { Repository, Between, MoreThan, In } from "typeorm";
 import {
   Booking,
   BookingStatus,
@@ -332,59 +332,71 @@ export class BookingsService {
           startTime: Between(reminderTime, reminderEndTime),
         },
       },
-      relations: ["specialist", "service", "timeSlot", "specialist.bot"],
+      relations: ["specialist", "service", "timeSlot"],
     });
   }
 
+  /**
+   * Получить записи бота с данными бота для уведомлений
+   * Используется когда нужен доступ к настройкам бота через записи
+   */
+  async getBookingsForReminderWithBotData(): Promise<Array<Booking & { bot: Bot }>> {
+    const bookings = await this.getBookingsForReminder();
+    
+    // Получаем уникальные botId из специалистов
+    const botIds = [...new Set(bookings.map(b => b.specialist.botId))];
+    
+    // Загружаем ботов одним запросом
+    const bots = await this.botRepository.find({
+      where: { id: In(botIds) }
+    });
+    
+    // Создаем Map для быстрого поиска ботов
+    const botMap = new Map(bots.map(bot => [bot.id, bot]));
+    
+    // Добавляем данные бота к записям
+    return bookings.map(booking => ({
+      ...booking,
+      bot: botMap.get(booking.specialist.botId)
+    } as Booking & { bot: Bot }));
+  }
+
   async getStatistics(botId: string): Promise<any> {
-    const totalBookings = await this.bookingRepository.count({
-      where: { specialist: { botId } },
-    });
+    const stats = await this.bookingRepository
+      .createQueryBuilder("booking")
+      .leftJoin("booking.specialist", "specialist")
+      .select([
+        "COUNT(*) as total",
+        "COUNT(CASE WHEN booking.status = :confirmed THEN 1 END) as confirmed",
+        "COUNT(CASE WHEN booking.status = :completed THEN 1 END) as completed",
+        "COUNT(CASE WHEN booking.status = :cancelled THEN 1 END) as cancelled",
+        "COUNT(CASE WHEN booking.status = :noShow THEN 1 END) as noShow",
+      ])
+      .where("specialist.botId = :botId", { botId })
+      .setParameters({
+        confirmed: BookingStatus.CONFIRMED,
+        completed: BookingStatus.COMPLETED,
+        cancelled: BookingStatus.CANCELLED,
+        noShow: BookingStatus.NO_SHOW,
+      })
+      .getRawOne();
 
-    const confirmedBookings = await this.bookingRepository.count({
-      where: {
-        specialist: { botId },
-        status: BookingStatus.CONFIRMED,
-      },
-    });
-
-    const completedBookings = await this.bookingRepository.count({
-      where: {
-        specialist: { botId },
-        status: BookingStatus.COMPLETED,
-      },
-    });
-
-    const cancelledBookings = await this.bookingRepository.count({
-      where: {
-        specialist: { botId },
-        status: BookingStatus.CANCELLED,
-      },
-    });
-
-    const noShowBookings = await this.bookingRepository.count({
-      where: {
-        specialist: { botId },
-        status: BookingStatus.NO_SHOW,
-      },
-    });
+    const total = parseInt(stats.total) || 0;
+    const confirmed = parseInt(stats.confirmed) || 0;
+    const completed = parseInt(stats.completed) || 0;
+    const cancelled = parseInt(stats.cancelled) || 0;
+    const noShow = parseInt(stats.noShow) || 0;
 
     return {
-      total: totalBookings,
-      confirmed: confirmedBookings,
-      completed: completedBookings,
-      cancelled: cancelledBookings,
-      noShow: noShowBookings,
-      confirmationRate:
-        totalBookings > 0 ? (confirmedBookings / totalBookings) * 100 : 0,
-      completionRate:
-        confirmedBookings > 0
-          ? (completedBookings / confirmedBookings) * 100
-          : 0,
-      cancellationRate:
-        totalBookings > 0 ? (cancelledBookings / totalBookings) * 100 : 0,
-      noShowRate:
-        confirmedBookings > 0 ? (noShowBookings / confirmedBookings) * 100 : 0,
+      total,
+      confirmed,
+      completed,
+      cancelled,
+      noShow,
+      confirmationRate: total > 0 ? (confirmed / total) * 100 : 0,
+      completionRate: confirmed > 0 ? (completed / confirmed) * 100 : 0,
+      cancellationRate: total > 0 ? (cancelled / total) * 100 : 0,
+      noShowRate: confirmed > 0 ? (noShow / confirmed) * 100 : 0,
     };
   }
 }
