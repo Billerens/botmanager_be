@@ -37,7 +37,7 @@ import {
   ErrorResponseDto,
 } from "./dto/message-response.dto";
 
-@ApiTags("messages")
+@ApiTags("Сообщения")
 @Controller("messages")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()

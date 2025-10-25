@@ -36,7 +36,7 @@ import {
 } from "./dto/product-response.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 
-@ApiTags("Products")
+@ApiTags("Продукты")
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller("bots/:botId/products")

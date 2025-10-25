@@ -20,7 +20,7 @@ import { UseGuards } from "@nestjs/common";
 import { BotFlowsService } from "./bot-flows.service";
 import { CreateFlowDto, UpdateFlowDto } from "./dto/flow.dto";
 
-@ApiTags("bot-flows")
+@ApiTags("Диалоги бота")
 @Controller("bots/:botId/flows")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
