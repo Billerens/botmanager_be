@@ -161,6 +161,21 @@ export class TelegramService {
         );
       }
 
+      // Добавляем команду бронирования если оно включено и команда настроена
+      if (bot.isBookingEnabled && bot.bookingButtonTypes?.includes("command")) {
+        commands.push({
+          command: "booking",
+          description: "📅 Записаться на прием",
+        });
+        console.log(
+          `Добавлена команда /booking для бота ${bot.id} (isBookingEnabled=${bot.isBookingEnabled}, bookingButtonTypes=${JSON.stringify(bot.bookingButtonTypes)})`
+        );
+      } else {
+        console.log(
+          `Команда /booking НЕ добавлена для бота ${bot.id}: isBookingEnabled=${bot.isBookingEnabled}, bookingButtonTypes=${JSON.stringify(bot.bookingButtonTypes)}`
+        );
+      }
+
       const response = await axios.post(
         `${this.baseUrl}${token}/setMyCommands`,
         {
@@ -173,6 +188,14 @@ export class TelegramService {
       // Устанавливаем Menu Button если он настроен
       if (bot.isShop && bot.shopButtonTypes?.includes("menu_button")) {
         await this.setMenuButton(token, bot);
+      }
+
+      // Устанавливаем Menu Button для бронирования если он настроен
+      if (
+        bot.isBookingEnabled &&
+        bot.bookingButtonTypes?.includes("menu_button")
+      ) {
+        await this.setBookingMenuButton(token, bot);
       }
 
       return response.data.ok;
@@ -210,6 +233,34 @@ export class TelegramService {
       console.log("Menu button set successfully");
     } catch (error) {
       console.error("Ошибка установки Menu Button:", error.message);
+    }
+  }
+
+  /**
+   * Устанавливает Menu Button для бронирования
+   */
+  private async setBookingMenuButton(token: string, bot: Bot): Promise<void> {
+    try {
+      const buttonText =
+        bot.bookingButtonSettings?.menu_button?.text || "📅 Записаться";
+
+      const bookingUrl =
+        bot.bookingUrl ||
+        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/booking/${bot.id}`;
+
+      await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {
+        menu_button: {
+          type: "web_app",
+          text: buttonText,
+          web_app: {
+            url: bookingUrl,
+          },
+        },
+      });
+
+      console.log("Booking Menu button set successfully");
+    } catch (error) {
+      console.error("Ошибка установки Booking Menu Button:", error.message);
     }
   }
 

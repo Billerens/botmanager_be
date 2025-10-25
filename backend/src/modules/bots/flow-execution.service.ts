@@ -251,6 +251,26 @@ export class FlowExecutionService {
             await this.handleShopCommand(bot, message);
             return; // Не обрабатываем через flow
           }
+        } else if (message.text === "/booking") {
+          // Проверяем условия для команды /booking
+          this.logger.log(
+            `Получена команда "/booking". Проверка условий: isBookingEnabled=${bot.isBookingEnabled}, bookingButtonTypes=${JSON.stringify(bot.bookingButtonTypes)}`
+          );
+
+          if (!bot.isBookingEnabled) {
+            this.logger.warn(
+              `Бот ${bot.id} не имеет включенного бронирования (isBookingEnabled=false)`
+            );
+          } else if (!bot.bookingButtonTypes?.includes("command")) {
+            this.logger.warn(
+              `В настройках бота ${bot.id} не включена команда /booking. bookingButtonTypes=${JSON.stringify(bot.bookingButtonTypes)}`
+            );
+          } else {
+            // Все условия выполнены - открываем бронирование
+            this.logger.log(`Команда "/booking" - открываем бронирование`);
+            await this.handleBookingCommand(bot, message);
+            return; // Не обрабатываем через flow
+          }
         } else {
           this.logger.log(`Сообщение не "/start" - ищем NEW_MESSAGE узел`);
           // Для других сообщений ищем подходящий NEW_MESSAGE узел
@@ -625,6 +645,50 @@ export class FlowExecutionService {
       );
     } catch (error) {
       this.logger.error(`Ошибка при обработке команды /shop: ${error.message}`);
+    }
+  }
+
+  /**
+   * Обрабатывает команду /booking для открытия системы бронирования
+   */
+  private async handleBookingCommand(bot: any, message: any): Promise<void> {
+    try {
+      const bookingUrl =
+        bot.bookingUrl ||
+        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/booking/${bot.id}`;
+
+      // Расшифровываем токен бота
+      const decryptedToken = this.botsService.decryptToken(bot.token);
+
+      // Отправляем сообщение с кнопкой для открытия системы бронирования
+      const keyboard = {
+        inline_keyboard: [
+          [
+            {
+              text: "📅 Записаться на прием",
+              web_app: {
+                url: bookingUrl,
+              },
+            },
+          ],
+        ],
+      };
+
+      await this.telegramService.sendMessage(
+        decryptedToken,
+        message.chat.id.toString(),
+        bot.bookingDescription ||
+          "Добро пожаловать в нашу систему бронирования! Нажмите кнопку ниже, чтобы записаться на прием.",
+        { reply_markup: keyboard }
+      );
+
+      this.logger.log(
+        `Отправлено сообщение с бронированием для пользователя ${message.from.id}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Ошибка при обработке команды /booking: ${error.message}`
+      );
     }
   }
 }

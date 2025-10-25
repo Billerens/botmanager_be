@@ -31,7 +31,7 @@ export class Service {
   @Column({ default: true })
   isActive: boolean;
 
-  @Column({ type: "json", nullable: true })
+  @Column({ nullable: true })
   category: string;
 
   @Column({ type: "json", nullable: true })
