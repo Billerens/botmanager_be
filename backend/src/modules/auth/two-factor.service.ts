@@ -137,7 +137,7 @@ export class TwoFactorService {
     const verificationCode = Math.floor(
       100000 + Math.random() * 900000
     ).toString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 минут
+    const expiresAt = new Date(Date.now() + 1 * 60 * 1000); // 1 минута
 
     // Отправляем код в Telegram
     try {
@@ -244,7 +244,7 @@ export class TwoFactorService {
     const verificationCode = Math.floor(
       100000 + Math.random() * 900000
     ).toString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 минут
+    const expiresAt = new Date(Date.now() + 1 * 60 * 1000); // 1 минута
 
     // Отправляем код в Telegram
     try {

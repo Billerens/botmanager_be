@@ -28,7 +28,7 @@ export class TelegramValidationService {
     }
 
     try {
-      const message = `🔐 Код подтверждения для BotManager\n\nВаш код: <b>${code}</b>\n\nКод действителен 15 минут.`;
+      const message = `🔐 Код подтверждения для BotManager\n\nВаш код: <b>${code}</b>\n\nКод действителен 1 минуту.`;
 
       const response = await axios.post(
         `https://api.telegram.org/bot${this.botToken}/sendMessage`,
