@@ -9,6 +9,10 @@ import { BotFlow } from "./entities/bot-flow.entity";
 import { BotFlowNode } from "./entities/bot-flow-node.entity";
 import { ActivityLog } from "./entities/activity-log.entity";
 import { Product } from "./entities/product.entity";
+import { Specialist } from "./entities/specialist.entity";
+import { Service } from "./entities/service.entity";
+import { TimeSlot } from "./entities/time-slot.entity";
+import { Booking } from "./entities/booking.entity";
 
 // Загружаем переменные окружения
 config();
@@ -32,6 +36,10 @@ export const AppDataSource = new DataSource({
     BotFlowNode,
     ActivityLog,
     Product,
+    Specialist,
+    Service,
+    TimeSlot,
+    Booking,
   ],
   migrations: ["src/database/migrations/*.ts"],
   subscribers: ["src/database/subscribers/*.ts"],

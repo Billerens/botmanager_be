@@ -105,8 +105,8 @@ export class Booking {
   @Column()
   serviceId: string;
 
-  @OneToOne("TimeSlot", "booking")
-  timeSlot: any;
+  @OneToOne(() => TimeSlot, (timeSlot) => timeSlot.booking)
+  timeSlot: TimeSlot;
 
   @Column()
   timeSlotId: string;

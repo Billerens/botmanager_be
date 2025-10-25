@@ -15,7 +15,6 @@ import { BotFlow } from "./bot-flow.entity";
 import { ActivityLog } from "./activity-log.entity";
 import { Product } from "./product.entity";
 import { Specialist } from "./specialist.entity";
-import { Booking } from "./booking.entity";
 
 export enum BotStatus {
   ACTIVE = "active",
@@ -125,8 +124,6 @@ export class Bot {
   @OneToMany(() => Specialist, (specialist) => specialist.bot)
   specialists: Specialist[];
 
-  @OneToMany(() => Booking, (booking) => booking.specialist.bot)
-  bookings: Booking[];
 
   // Поля для магазина
   @Column({ default: false })

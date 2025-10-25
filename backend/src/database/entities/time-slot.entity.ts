@@ -9,6 +9,7 @@ import {
   JoinColumn,
 } from "typeorm";
 import { Specialist } from "./specialist.entity";
+import { Booking } from "./booking.entity";
 
 @Entity("time_slots")
 export class TimeSlot {
@@ -46,8 +47,8 @@ export class TimeSlot {
   @Column()
   specialistId: string;
 
-  @OneToOne("Booking", "timeSlot")
-  booking: any;
+  @OneToOne(() => Booking, (booking) => booking.timeSlot)
+  booking: Booking;
 
   // Методы для работы с временем
   getDuration(): number {

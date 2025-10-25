@@ -9,6 +9,9 @@ import {
   JoinColumn,
 } from "typeorm";
 import { Bot } from "./bot.entity";
+import { Service } from "./service.entity";
+import { Booking } from "./booking.entity";
+import { TimeSlot } from "./time-slot.entity";
 
 export interface WorkingHours {
   monday: DaySchedule;
@@ -88,14 +91,14 @@ export class Specialist {
   @Column()
   botId: string;
 
-  @OneToMany("Service", "specialist")
-  services: any[];
+  @OneToMany(() => Service, (service) => service.specialist)
+  services: Service[];
 
-  @OneToMany("Booking", "specialist")
-  bookings: any[];
+  @OneToMany(() => Booking, (booking) => booking.specialist)
+  bookings: Booking[];
 
-  @OneToMany("TimeSlot", "specialist")
-  timeSlots: any[];
+  @OneToMany(() => TimeSlot, (timeSlot) => timeSlot.specialist)
+  timeSlots: TimeSlot[];
 
   // Методы для работы с временем
   isWorkingAt(date: Date): boolean {

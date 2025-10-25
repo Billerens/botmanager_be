@@ -9,6 +9,7 @@ import {
   JoinColumn,
 } from "typeorm";
 import { Specialist } from "./specialist.entity";
+import { Booking } from "./booking.entity";
 
 @Entity("services")
 export class Service {
@@ -58,8 +59,8 @@ export class Service {
   @Column()
   specialistId: string;
 
-  @OneToMany("Booking", "service")
-  bookings: any[];
+  @OneToMany(() => Booking, (booking) => booking.service)
+  bookings: Booking[];
 
   // Методы
   getFormattedPrice(): string {
