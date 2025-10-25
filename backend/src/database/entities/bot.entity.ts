@@ -14,11 +14,38 @@ import { Lead } from "./lead.entity";
 import { BotFlow } from "./bot-flow.entity";
 import { ActivityLog } from "./activity-log.entity";
 import { Product } from "./product.entity";
+import { Specialist } from "./specialist.entity";
+import { Booking } from "./booking.entity";
 
 export enum BotStatus {
   ACTIVE = "active",
   INACTIVE = "inactive",
   ERROR = "error",
+}
+
+export interface BookingSettings {
+  // Основные настройки
+  allowOnlineBooking: boolean;
+  requireConfirmation: boolean;
+  allowCancellation: boolean;
+  cancellationTimeLimit: number; // в часах
+
+  // Уведомления
+  sendReminders: boolean;
+  reminderTime: number; // в часах до записи
+  sendConfirmations: boolean;
+
+  // Ограничения
+  maxAdvanceBooking: number; // дней вперед
+  minAdvanceBooking: number; // часов вперед
+
+  // Форма записи
+  requiredFields: string[];
+  optionalFields: string[];
+
+  // Интеграции
+  calendarIntegration: boolean;
+  paymentIntegration: boolean;
 }
 
 @Entity("bots")
@@ -95,6 +122,12 @@ export class Bot {
   @OneToMany(() => Product, (product) => product.bot)
   products: Product[];
 
+  @OneToMany(() => Specialist, (specialist) => specialist.bot)
+  specialists: Specialist[];
+
+  @OneToMany(() => Booking, (booking) => booking.specialist.bot)
+  bookings: Booking[];
+
   // Поля для магазина
   @Column({ default: false })
   isShop: boolean;
@@ -119,6 +152,31 @@ export class Bot {
   @Column({ type: "json", nullable: true })
   shopButtonSettings: Record<string, any>;
 
+  // Поля для системы бронирования
+  @Column({ default: false })
+  isBookingEnabled: boolean;
+
+  @Column({ nullable: true })
+  bookingTitle: string;
+
+  @Column({ type: "text", nullable: true })
+  bookingDescription: string;
+
+  @Column({ nullable: true })
+  bookingLogoUrl: string;
+
+  @Column({ type: "text", nullable: true })
+  bookingCustomStyles: string;
+
+  @Column({ type: "json", nullable: true })
+  bookingButtonTypes: string[];
+
+  @Column({ type: "json", nullable: true })
+  bookingButtonSettings: Record<string, any>;
+
+  @Column({ type: "json", nullable: true })
+  bookingSettings: BookingSettings;
+
   // Методы
   get isActive(): boolean {
     return this.status === BotStatus.ACTIVE;
@@ -132,5 +190,29 @@ export class Bot {
     const frontendUrl =
       process.env.FRONTEND_URL || "https://botmanagertest.online";
     return `${frontendUrl}/shop/${this.id}`;
+  }
+
+  get bookingUrl(): string {
+    const frontendUrl =
+      process.env.FRONTEND_URL || "https://botmanagertest.online";
+    return `${frontendUrl}/booking/${this.id}`;
+  }
+
+  get defaultBookingSettings(): BookingSettings {
+    return {
+      allowOnlineBooking: true,
+      requireConfirmation: true,
+      allowCancellation: true,
+      cancellationTimeLimit: 2,
+      sendReminders: true,
+      reminderTime: 24,
+      sendConfirmations: true,
+      maxAdvanceBooking: 30,
+      minAdvanceBooking: 2,
+      requiredFields: ["clientName", "clientPhone"],
+      optionalFields: ["clientEmail", "notes"],
+      calendarIntegration: false,
+      paymentIntegration: false,
+    };
   }
 }

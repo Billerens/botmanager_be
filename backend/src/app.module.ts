@@ -20,6 +20,7 @@ import { TelegramModule } from "./modules/telegram/telegram.module";
 import { AssistantBotModule } from "./modules/assistant-bot/assistant-bot.module";
 import { SubscriptionModule } from "./modules/subscription/subscription.module";
 import { UploadModule } from "./modules/upload/upload.module";
+import { BookingModule } from "./modules/booking/booking.module";
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { UploadModule } from "./modules/upload/upload.module";
     AssistantBotModule, // Наш собственный бот-ассистент
     SubscriptionModule,
     UploadModule,
+    BookingModule, // Система бронирования
   ],
 })
 export class AppModule {}
