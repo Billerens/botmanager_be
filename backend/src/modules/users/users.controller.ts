@@ -9,83 +9,172 @@ import {
   UseGuards,
   Query,
   Request,
-} from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+} from "@nestjs/common";
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+  getSchemaPath,
+} from "@nestjs/swagger";
 
-import { UsersService } from './users.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { UpdateUserDto, UpdateUserRoleDto } from './dto/user.dto';
-import { UserRole } from '../../database/entities/user.entity';
+import { UsersService } from "./users.service";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { UpdateUserDto, UpdateUserRoleDto } from "./dto/user.dto";
+import { UserRole } from "../../database/entities/user.entity";
+import {
+  UserResponseDto,
+  UserStatsResponseDto,
+  ErrorResponseDto,
+  UpdateRoleResponseDto,
+  ToggleActiveResponseDto,
+  DeleteResponseDto,
+} from "./dto/user-response.dto";
 
-@ApiTags('Пользователи')
-@Controller('users')
+@ApiTags("Пользователи")
+@Controller("users")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Получить список всех пользователей' })
-  @ApiResponse({ status: 200, description: 'Список пользователей получен' })
+  @ApiOperation({ summary: "Получить список всех пользователей" })
+  @ApiResponse({
+    status: 200,
+    description: "Список пользователей получен",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(UserResponseDto),
+      },
+    },
+  })
   async findAll() {
     return this.usersService.findAll();
   }
 
-  @Get('search')
-  @ApiOperation({ summary: 'Поиск пользователей' })
-  @ApiQuery({ name: 'q', description: 'Поисковый запрос' })
-  @ApiResponse({ status: 200, description: 'Результаты поиска' })
-  async search(@Query('q') query: string) {
+  @Get("search")
+  @ApiOperation({ summary: "Поиск пользователей" })
+  @ApiQuery({ name: "q", description: "Поисковый запрос" })
+  @ApiResponse({
+    status: 200,
+    description: "Результаты поиска",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(UserResponseDto),
+      },
+    },
+  })
+  async search(@Query("q") query: string) {
     return this.usersService.search(query);
   }
 
-  @Get('stats')
-  @ApiOperation({ summary: 'Получить статистику пользователей' })
-  @ApiResponse({ status: 200, description: 'Статистика пользователей' })
+  @Get("stats")
+  @ApiOperation({ summary: "Получить статистику пользователей" })
+  @ApiResponse({
+    status: 200,
+    description: "Статистика пользователей",
+    schema: {
+      $ref: getSchemaPath(UserStatsResponseDto),
+    },
+  })
   async getStats() {
     return this.usersService.getStats();
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Получить пользователя по ID' })
-  @ApiResponse({ status: 200, description: 'Пользователь найден' })
-  @ApiResponse({ status: 404, description: 'Пользователь не найден' })
-  async findOne(@Param('id') id: string) {
+  @Get(":id")
+  @ApiOperation({ summary: "Получить пользователя по ID" })
+  @ApiResponse({
+    status: 200,
+    description: "Пользователь найден",
+    schema: {
+      $ref: getSchemaPath(UserResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Пользователь не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  async findOne(@Param("id") id: string) {
     return this.usersService.findOne(id);
   }
 
-  @Patch(':id')
-  @ApiOperation({ summary: 'Обновить пользователя' })
-  @ApiResponse({ status: 200, description: 'Пользователь обновлен' })
-  @ApiResponse({ status: 404, description: 'Пользователь не найден' })
-  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+  @Patch(":id")
+  @ApiOperation({ summary: "Обновить пользователя" })
+  @ApiResponse({
+    status: 200,
+    description: "Пользователь обновлен",
+    schema: {
+      $ref: getSchemaPath(UserResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Пользователь не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  async update(@Param("id") id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }
 
-  @Patch(':id/role')
-  @ApiOperation({ summary: 'Изменить роль пользователя' })
-  @ApiResponse({ status: 200, description: 'Роль пользователя изменена' })
-  @ApiResponse({ status: 404, description: 'Пользователь не найден' })
+  @Patch(":id/role")
+  @ApiOperation({ summary: "Изменить роль пользователя" })
+  @ApiResponse({
+    status: 200,
+    description: "Роль пользователя изменена",
+    schema: {
+      $ref: getSchemaPath(UpdateRoleResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Пользователь не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async updateRole(
-    @Param('id') id: string,
-    @Body() updateUserRoleDto: UpdateUserRoleDto,
+    @Param("id") id: string,
+    @Body() updateUserRoleDto: UpdateUserRoleDto
   ) {
     return this.usersService.updateRole(id, updateUserRoleDto);
   }
 
-  @Patch(':id/toggle-active')
-  @ApiOperation({ summary: 'Переключить статус активности пользователя' })
-  @ApiResponse({ status: 200, description: 'Статус активности изменен' })
-  @ApiResponse({ status: 404, description: 'Пользователь не найден' })
-  async toggleActive(@Param('id') id: string) {
+  @Patch(":id/toggle-active")
+  @ApiOperation({ summary: "Переключить статус активности пользователя" })
+  @ApiResponse({
+    status: 200,
+    description: "Статус активности изменен",
+    schema: {
+      $ref: getSchemaPath(ToggleActiveResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Пользователь не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  async toggleActive(@Param("id") id: string) {
     return this.usersService.toggleActive(id);
   }
 
-  @Delete(':id')
-  @ApiOperation({ summary: 'Удалить пользователя' })
-  @ApiResponse({ status: 200, description: 'Пользователь удален' })
-  @ApiResponse({ status: 404, description: 'Пользователь не найден' })
-  async remove(@Param('id') id: string) {
+  @Delete(":id")
+  @ApiOperation({ summary: "Удалить пользователя" })
+  @ApiResponse({
+    status: 200,
+    description: "Пользователь удален",
+    schema: {
+      $ref: getSchemaPath(DeleteResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Пользователь не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  async remove(@Param("id") id: string) {
     return this.usersService.delete(id);
   }
 }

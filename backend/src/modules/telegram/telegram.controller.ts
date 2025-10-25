@@ -8,7 +8,12 @@ import {
   HttpStatus,
   Logger,
 } from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  getSchemaPath,
+} from "@nestjs/swagger";
 
 import { TelegramService, TelegramUpdate } from "./telegram.service";
 import { BotsService } from "../bots/bots.service";
@@ -24,6 +29,12 @@ import {
   MessageType,
   MessageContentType,
 } from "../../database/entities/message.entity";
+import {
+  TelegramWebhookResponseDto,
+  TelegramBotInfoResponseDto,
+  TelegramMessageResponseDto,
+  TelegramCallbackResponseDto,
+} from "./dto/telegram-response.dto";
 
 @ApiTags("Telegram Webhook")
 @Controller("telegram")
@@ -42,7 +53,13 @@ export class TelegramController {
   @Post("webhook/:botId")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Webhook для получения обновлений от Telegram" })
-  @ApiResponse({ status: 200, description: "Обновление обработано" })
+  @ApiResponse({
+    status: 200,
+    description: "Обновление обработано",
+    schema: {
+      $ref: getSchemaPath(TelegramWebhookResponseDto),
+    },
+  })
   async handleWebhook(
     @Param("botId") botId: string,
     @Body() update: TelegramUpdate,

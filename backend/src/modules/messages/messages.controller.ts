@@ -19,11 +19,23 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiConsumes,
+  getSchemaPath,
 } from "@nestjs/swagger";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { MessagesService } from "./messages.service";
 import { BroadcastDto } from "./dto/broadcast.dto";
+import {
+  MessageResponseDto,
+  BroadcastResponseDto,
+  MessageStatsResponseDto,
+  DialogResponseDto,
+  GroupResponseDto,
+  UserResponseDto,
+  DialogStatsResponseDto,
+  BroadcastStatusResponseDto,
+  ErrorResponseDto,
+} from "./dto/message-response.dto";
 
 @ApiTags("messages")
 @Controller("messages")
@@ -34,9 +46,26 @@ export class MessagesController {
 
   @Get("bot/:botId")
   @ApiOperation({ summary: "Получить историю сообщений бота" })
-  @ApiResponse({ status: 200, description: "История сообщений получена" })
-  @ApiResponse({ status: 401, description: "Неавторизован" })
-  @ApiResponse({ status: 404, description: "Бот не найден" })
+  @ApiResponse({
+    status: 200,
+    description: "История сообщений получена",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(MessageResponseDto),
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неавторизован",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Бот не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async getBotMessages(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any,
@@ -55,9 +84,26 @@ export class MessagesController {
 
   @Get("bot/:botId/dialog/:chatId")
   @ApiOperation({ summary: "Получить диалог с конкретным пользователем" })
-  @ApiResponse({ status: 200, description: "Диалог получен" })
-  @ApiResponse({ status: 401, description: "Неавторизован" })
-  @ApiResponse({ status: 404, description: "Бот или диалог не найден" })
+  @ApiResponse({
+    status: 200,
+    description: "Диалог получен",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(MessageResponseDto),
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неавторизован",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Бот или диалог не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async getDialog(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Param("chatId") chatId: string,
@@ -73,9 +119,23 @@ export class MessagesController {
 
   @Get("bot/:botId/stats")
   @ApiOperation({ summary: "Получить статистику сообщений бота" })
-  @ApiResponse({ status: 200, description: "Статистика получена" })
-  @ApiResponse({ status: 401, description: "Неавторизован" })
-  @ApiResponse({ status: 404, description: "Бот не найден" })
+  @ApiResponse({
+    status: 200,
+    description: "Статистика получена",
+    schema: {
+      $ref: getSchemaPath(MessageStatsResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неавторизован",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Бот не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async getBotMessageStats(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any
@@ -87,9 +147,26 @@ export class MessagesController {
   @ApiOperation({
     summary: "Получить список диалогов бота (сгруппированные по пользователям)",
   })
-  @ApiResponse({ status: 200, description: "Список диалогов получен" })
-  @ApiResponse({ status: 401, description: "Неавторизован" })
-  @ApiResponse({ status: 404, description: "Бот не найден" })
+  @ApiResponse({
+    status: 200,
+    description: "Список диалогов получен",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(DialogResponseDto),
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неавторизован",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Бот не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async getBotDialogs(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any,
@@ -113,9 +190,26 @@ export class MessagesController {
 
   @Get("bot/:botId/groups")
   @ApiOperation({ summary: "Получить групповые чаты бота" })
-  @ApiResponse({ status: 200, description: "Групповые чаты получены" })
-  @ApiResponse({ status: 401, description: "Неавторизован" })
-  @ApiResponse({ status: 404, description: "Бот не найден" })
+  @ApiResponse({
+    status: 200,
+    description: "Групповые чаты получены",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(GroupResponseDto),
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неавторизован",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Бот не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async getBotGroups(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any,
@@ -137,9 +231,23 @@ export class MessagesController {
 
   @Get("bot/:botId/dialog-stats")
   @ApiOperation({ summary: "Получить статистику диалогов бота" })
-  @ApiResponse({ status: 200, description: "Статистика диалогов получена" })
-  @ApiResponse({ status: 401, description: "Неавторизован" })
-  @ApiResponse({ status: 404, description: "Бот не найден" })
+  @ApiResponse({
+    status: 200,
+    description: "Статистика диалогов получена",
+    schema: {
+      $ref: getSchemaPath(DialogStatsResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неавторизован",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Бот не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async getBotDialogStats(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any
@@ -149,9 +257,33 @@ export class MessagesController {
 
   @Delete("bot/:botId/dialog/:chatId")
   @ApiOperation({ summary: "Удалить диалог с пользователем" })
-  @ApiResponse({ status: 200, description: "Диалог удален" })
-  @ApiResponse({ status: 401, description: "Неавторизован" })
-  @ApiResponse({ status: 404, description: "Бот или диалог не найден" })
+  @ApiResponse({
+    status: 200,
+    description: "Диалог удален",
+    schema: {
+      type: "object",
+      properties: {
+        success: {
+          type: "boolean",
+          example: true,
+        },
+        message: {
+          type: "string",
+          example: "Диалог успешно удален",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неавторизован",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Бот или диалог не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async deleteDialog(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Param("chatId") chatId: string,
@@ -162,9 +294,26 @@ export class MessagesController {
 
   @Get("bot/:botId/users")
   @ApiOperation({ summary: "Получить список пользователей бота" })
-  @ApiResponse({ status: 200, description: "Список пользователей получен" })
-  @ApiResponse({ status: 401, description: "Неавторизован" })
-  @ApiResponse({ status: 404, description: "Бот не найден" })
+  @ApiResponse({
+    status: 200,
+    description: "Список пользователей получен",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(UserResponseDto),
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неавторизован",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Бот не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async getBotUsers(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any,
@@ -195,9 +344,23 @@ export class MessagesController {
   @UseInterceptors(FileInterceptor("image"))
   @ApiOperation({ summary: "Отправить рассылку" })
   @ApiConsumes("multipart/form-data")
-  @ApiResponse({ status: 200, description: "Рассылка отправлена" })
-  @ApiResponse({ status: 401, description: "Неавторизован" })
-  @ApiResponse({ status: 404, description: "Бот не найден" })
+  @ApiResponse({
+    status: 200,
+    description: "Рассылка отправлена",
+    schema: {
+      $ref: getSchemaPath(BroadcastStatusResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неавторизован",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Бот не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async sendBroadcast(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any,

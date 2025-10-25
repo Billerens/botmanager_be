@@ -18,6 +18,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  getSchemaPath,
 } from "@nestjs/swagger";
 
 import { AuthService } from "./auth.service";
@@ -97,7 +98,9 @@ export class AuthController {
   @ApiResponse({
     status: 201,
     description: "Пользователь успешно зарегистрирован",
-    type: AuthResponseDto,
+    schema: {
+      $ref: getSchemaPath(AuthResponseDto),
+    },
   })
   @ApiResponse({
     status: 409,
@@ -132,12 +135,16 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: "Успешный вход",
-    type: AuthResponseDto,
+    schema: {
+      $ref: getSchemaPath(AuthResponseDto),
+    },
   })
   @ApiResponse({
     status: 200,
     description: "Требуется верификация Telegram",
-    type: VerificationRequiredResponseDto,
+    schema: {
+      $ref: getSchemaPath(VerificationRequiredResponseDto),
+    },
   })
   @ApiResponse({ status: 401, description: "Неверные учетные данные" })
   async login(@Body() loginDto: LoginDto) {
@@ -201,7 +208,9 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: "Telegram успешно верифицирован, возвращает токен доступа",
-    type: AuthResponseDto,
+    schema: {
+      $ref: getSchemaPath(AuthResponseDto),
+    },
   })
   @ApiResponse({
     status: 400,
@@ -267,7 +276,9 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: "Статус 2FA",
-    type: TwoFactorStatusResponseDto,
+    schema: {
+      $ref: getSchemaPath(TwoFactorStatusResponseDto),
+    },
   })
   async getTwoFactorStatus(
     @Request() req
@@ -282,7 +293,9 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: "Код верификации отправлен в Telegram",
-    type: InitializeTwoFactorResponseDto,
+    schema: {
+      $ref: getSchemaPath(InitializeTwoFactorResponseDto),
+    },
   })
   async initializeTelegramTwoFactor(
     @Request() req
@@ -297,7 +310,9 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: "Секрет для Google Authenticator сгенерирован",
-    type: InitializeTwoFactorResponseDto,
+    schema: {
+      $ref: getSchemaPath(InitializeTwoFactorResponseDto),
+    },
   })
   async initializeGoogleAuthenticatorTwoFactor(
     @Request() req
@@ -314,7 +329,9 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: "2FA успешно включена",
-    type: EnableTwoFactorResponseDto,
+    schema: {
+      $ref: getSchemaPath(EnableTwoFactorResponseDto),
+    },
   })
   async enableTwoFactor(
     @Request() req,
@@ -404,7 +421,9 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: "Логин успешно завершен",
-    type: AuthResponseDto,
+    schema: {
+      $ref: getSchemaPath(AuthResponseDto),
+    },
   })
   @ApiResponse({
     status: 401,

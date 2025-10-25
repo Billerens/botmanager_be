@@ -18,6 +18,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  getSchemaPath,
 } from "@nestjs/swagger";
 import { ProductsService } from "./products.service";
 import {
@@ -25,6 +26,14 @@ import {
   UpdateProductDto,
   ProductFiltersDto,
 } from "./dto/product.dto";
+import {
+  ProductResponseDto,
+  ProductStatsResponseDto,
+  ErrorResponseDto,
+  UpdateStockResponseDto,
+  ToggleActiveResponseDto,
+  DeleteResponseDto,
+} from "./dto/product-response.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 
 @ApiTags("Products")
@@ -36,8 +45,18 @@ export class ProductsController {
 
   @Post()
   @ApiOperation({ summary: "Создать товар" })
-  @ApiResponse({ status: 201, description: "Товар успешно создан" })
-  @ApiResponse({ status: 404, description: "Бот не найден" })
+  @ApiResponse({
+    status: 201,
+    description: "Товар успешно создан",
+    schema: {
+      $ref: getSchemaPath(ProductResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Бот не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   create(
     @Param("botId") botId: string,
     @Request() req: any,
@@ -49,7 +68,16 @@ export class ProductsController {
 
   @Get()
   @ApiOperation({ summary: "Получить список товаров бота" })
-  @ApiResponse({ status: 200, description: "Список товаров получен" })
+  @ApiResponse({
+    status: 200,
+    description: "Список товаров получен",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(ProductResponseDto),
+      },
+    },
+  })
   findAll(
     @Param("botId") botId: string,
     @Request() req: any,
@@ -60,15 +88,31 @@ export class ProductsController {
 
   @Get("stats")
   @ApiOperation({ summary: "Получить статистику товаров бота" })
-  @ApiResponse({ status: 200, description: "Статистика получена" })
+  @ApiResponse({
+    status: 200,
+    description: "Статистика получена",
+    schema: {
+      $ref: getSchemaPath(ProductStatsResponseDto),
+    },
+  })
   getStats(@Param("botId") botId: string, @Request() req: any) {
     return this.productsService.getBotProductStats(botId, req.user.id);
   }
 
   @Get(":id")
   @ApiOperation({ summary: "Получить товар по ID" })
-  @ApiResponse({ status: 200, description: "Товар найден" })
-  @ApiResponse({ status: 404, description: "Товар не найден" })
+  @ApiResponse({
+    status: 200,
+    description: "Товар найден",
+    schema: {
+      $ref: getSchemaPath(ProductResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Товар не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   findOne(
     @Param("botId") botId: string,
     @Param("id") id: string,
@@ -79,8 +123,18 @@ export class ProductsController {
 
   @Patch(":id")
   @ApiOperation({ summary: "Обновить товар" })
-  @ApiResponse({ status: 200, description: "Товар обновлен" })
-  @ApiResponse({ status: 404, description: "Товар не найден" })
+  @ApiResponse({
+    status: 200,
+    description: "Товар обновлен",
+    schema: {
+      $ref: getSchemaPath(ProductResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Товар не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   update(
     @Param("botId") botId: string,
     @Param("id") id: string,
@@ -98,8 +152,18 @@ export class ProductsController {
 
   @Patch(":id/stock")
   @ApiOperation({ summary: "Обновить количество товара на складе" })
-  @ApiResponse({ status: 200, description: "Количество обновлено" })
-  @ApiResponse({ status: 404, description: "Товар не найден" })
+  @ApiResponse({
+    status: 200,
+    description: "Количество обновлено",
+    schema: {
+      $ref: getSchemaPath(UpdateStockResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Товар не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   updateStock(
     @Param("botId") botId: string,
     @Param("id") id: string,
@@ -116,8 +180,18 @@ export class ProductsController {
 
   @Patch(":id/toggle-active")
   @ApiOperation({ summary: "Переключить активность товара" })
-  @ApiResponse({ status: 200, description: "Активность переключена" })
-  @ApiResponse({ status: 404, description: "Товар не найден" })
+  @ApiResponse({
+    status: 200,
+    description: "Активность переключена",
+    schema: {
+      $ref: getSchemaPath(ToggleActiveResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Товар не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   toggleActive(
     @Param("botId") botId: string,
     @Param("id") id: string,
@@ -129,8 +203,18 @@ export class ProductsController {
   @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: "Удалить товар" })
-  @ApiResponse({ status: 204, description: "Товар удален" })
-  @ApiResponse({ status: 404, description: "Товар не найден" })
+  @ApiResponse({
+    status: 204,
+    description: "Товар удален",
+    schema: {
+      $ref: getSchemaPath(DeleteResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Товар не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   remove(
     @Param("botId") botId: string,
     @Param("id") id: string,

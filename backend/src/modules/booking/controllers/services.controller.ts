@@ -15,9 +15,15 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  getSchemaPath,
 } from "@nestjs/swagger";
 import { ServicesService } from "../services/services.service";
 import { CreateServiceDto, UpdateServiceDto } from "../dto/booking.dto";
+import {
+  ServiceResponseDto,
+  ErrorResponseDto,
+  DeleteResponseDto,
+} from "../dto/booking-response.dto";
 import { JwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
 
 @ApiTags("Услуги")
@@ -29,8 +35,18 @@ export class ServicesController {
 
   @Post()
   @ApiOperation({ summary: "Создать услугу" })
-  @ApiResponse({ status: 201, description: "Услуга создана" })
-  @ApiResponse({ status: 400, description: "Неверные данные" })
+  @ApiResponse({
+    status: 201,
+    description: "Услуга создана",
+    schema: {
+      $ref: getSchemaPath(ServiceResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Неверные данные",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async create(
     @Body() createServiceDto: CreateServiceDto,
     @Query("botId") botId: string,
@@ -41,14 +57,32 @@ export class ServicesController {
 
   @Get()
   @ApiOperation({ summary: "Получить список услуг" })
-  @ApiResponse({ status: 200, description: "Список услуг получен" })
+  @ApiResponse({
+    status: 200,
+    description: "Список услуг получен",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(ServiceResponseDto),
+      },
+    },
+  })
   async findAll(@Query("botId") botId: string, @Request() req) {
     return this.servicesService.findAll(botId);
   }
 
   @Get("specialist/:specialistId")
   @ApiOperation({ summary: "Получить услуги специалиста" })
-  @ApiResponse({ status: 200, description: "Услуги специалиста получены" })
+  @ApiResponse({
+    status: 200,
+    description: "Услуги специалиста получены",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(ServiceResponseDto),
+      },
+    },
+  })
   async findBySpecialist(
     @Param("specialistId") specialistId: string,
     @Query("botId") botId: string,
@@ -59,7 +93,16 @@ export class ServicesController {
 
   @Get("category/:category")
   @ApiOperation({ summary: "Получить услуги по категории" })
-  @ApiResponse({ status: 200, description: "Услуги по категории получены" })
+  @ApiResponse({
+    status: 200,
+    description: "Услуги по категории получены",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(ServiceResponseDto),
+      },
+    },
+  })
   async getByCategory(
     @Param("category") category: string,
     @Query("botId") botId: string,
@@ -70,7 +113,16 @@ export class ServicesController {
 
   @Get("popular")
   @ApiOperation({ summary: "Получить популярные услуги" })
-  @ApiResponse({ status: 200, description: "Популярные услуги получены" })
+  @ApiResponse({
+    status: 200,
+    description: "Популярные услуги получены",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(ServiceResponseDto),
+      },
+    },
+  })
   async getPopular(
     @Query("limit") limit: string,
     @Query("botId") botId: string,
@@ -82,8 +134,18 @@ export class ServicesController {
 
   @Get(":id")
   @ApiOperation({ summary: "Получить услугу по ID" })
-  @ApiResponse({ status: 200, description: "Услуга найдена" })
-  @ApiResponse({ status: 404, description: "Услуга не найдена" })
+  @ApiResponse({
+    status: 200,
+    description: "Услуга найдена",
+    schema: {
+      $ref: getSchemaPath(ServiceResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Услуга не найдена",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async findOne(
     @Param("id") id: string,
     @Query("botId") botId: string,
@@ -94,8 +156,18 @@ export class ServicesController {
 
   @Put(":id")
   @ApiOperation({ summary: "Обновить услугу" })
-  @ApiResponse({ status: 200, description: "Услуга обновлена" })
-  @ApiResponse({ status: 404, description: "Услуга не найдена" })
+  @ApiResponse({
+    status: 200,
+    description: "Услуга обновлена",
+    schema: {
+      $ref: getSchemaPath(ServiceResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Услуга не найдена",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async update(
     @Param("id") id: string,
     @Body() updateServiceDto: UpdateServiceDto,
@@ -107,8 +179,18 @@ export class ServicesController {
 
   @Delete(":id")
   @ApiOperation({ summary: "Удалить услугу" })
-  @ApiResponse({ status: 200, description: "Услуга удалена" })
-  @ApiResponse({ status: 404, description: "Услуга не найдена" })
+  @ApiResponse({
+    status: 200,
+    description: "Услуга удалена",
+    schema: {
+      $ref: getSchemaPath(DeleteResponseDto),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Услуга не найдена",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
   async remove(
     @Param("id") id: string,
     @Query("botId") botId: string,

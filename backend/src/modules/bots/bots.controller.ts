@@ -15,11 +15,13 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiExcludeEndpoint,
+  getSchemaPath,
 } from "@nestjs/swagger";
 
 import { BotsService } from "./bots.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { CreateBotDto, UpdateBotDto } from "./dto/bot.dto";
+import { BotResponseDto, BotStatsResponseDto } from "./dto/bot-response.dto";
 
 @ApiTags("Боты")
 @Controller("bots")
@@ -30,7 +32,13 @@ export class BotsController {
 
   @Post()
   @ApiOperation({ summary: "Создать нового бота" })
-  @ApiResponse({ status: 201, description: "Бот успешно создан" })
+  @ApiResponse({
+    status: 201,
+    description: "Бот успешно создан",
+    schema: {
+      $ref: getSchemaPath(BotResponseDto),
+    },
+  })
   @ApiResponse({ status: 400, description: "Неверные данные или токен" })
   async create(@Body() createBotDto: CreateBotDto, @Request() req) {
     return this.botsService.create(createBotDto, req.user.id);
@@ -38,14 +46,29 @@ export class BotsController {
 
   @Get()
   @ApiOperation({ summary: "Получить список всех ботов пользователя" })
-  @ApiResponse({ status: 200, description: "Список ботов получен" })
+  @ApiResponse({
+    status: 200,
+    description: "Список ботов получен",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(BotResponseDto),
+      },
+    },
+  })
   async findAll(@Request() req) {
     return this.botsService.findAll(req.user.id);
   }
 
   @Get(":id/stats")
   @ApiOperation({ summary: "Получить статистику бота" })
-  @ApiResponse({ status: 200, description: "Статистика бота получена" })
+  @ApiResponse({
+    status: 200,
+    description: "Статистика бота получена",
+    schema: {
+      $ref: getSchemaPath(BotStatsResponseDto),
+    },
+  })
   @ApiResponse({ status: 404, description: "Бот не найден" })
   async getStats(@Param("id") id: string, @Request() req) {
     return this.botsService.getStats(id, req.user.id);

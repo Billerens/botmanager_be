@@ -15,9 +15,12 @@ import {
   ApiOperation,
   ApiConsumes,
   ApiBearerAuth,
+  ApiResponse,
+  getSchemaPath,
 } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { UploadService } from "./upload.service";
+import { UploadResponseDto } from "./dto/upload-response.dto";
 
 @ApiTags("Upload")
 @Controller("upload")
@@ -30,6 +33,53 @@ export class UploadController {
   @UseInterceptors(FilesInterceptor("images", 10)) // Максимум 10 файлов
   @ApiOperation({ summary: "Загрузить изображения продукта" })
   @ApiConsumes("multipart/form-data")
+  @ApiResponse({
+    status: 200,
+    description: "Изображения продукта загружены",
+    schema: {
+      type: "object",
+      properties: {
+        success: {
+          type: "boolean",
+          example: true,
+        },
+        message: {
+          type: "string",
+          example: "Successfully uploaded 3 images",
+        },
+        imageUrls: {
+          type: "array",
+          items: {
+            $ref: getSchemaPath(UploadResponseDto),
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Ошибка загрузки файлов",
+    schema: {
+      type: "object",
+      properties: {
+        success: {
+          type: "boolean",
+          example: false,
+        },
+        message: {
+          type: "string",
+          example: "No files uploaded",
+        },
+        imageUrls: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+          example: [],
+        },
+      },
+    },
+  })
   async uploadProductImages(
     @UploadedFiles() files: Array<Express.Multer.File>,
     @Request() req: any
@@ -61,6 +111,40 @@ export class UploadController {
 
   @Delete("product-images")
   @ApiOperation({ summary: "Удалить изображения продукта" })
+  @ApiResponse({
+    status: 200,
+    description: "Изображения продукта удалены",
+    schema: {
+      type: "object",
+      properties: {
+        success: {
+          type: "boolean",
+          example: true,
+        },
+        message: {
+          type: "string",
+          example: "Successfully deleted 2 images",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Ошибка удаления файлов",
+    schema: {
+      type: "object",
+      properties: {
+        success: {
+          type: "boolean",
+          example: false,
+        },
+        message: {
+          type: "string",
+          example: "No image URLs provided",
+        },
+      },
+    },
+  })
   async deleteProductImages(
     @Body() body: { imageUrls: string[] },
     @Request() req: any
@@ -91,6 +175,53 @@ export class UploadController {
   @UseInterceptors(FileInterceptor("logo"))
   @ApiOperation({ summary: "Загрузить логотип магазина" })
   @ApiConsumes("multipart/form-data")
+  @ApiResponse({
+    status: 200,
+    description: "Логотип магазина загружен",
+    schema: {
+      type: "object",
+      properties: {
+        success: {
+          type: "boolean",
+          example: true,
+        },
+        message: {
+          type: "string",
+          example: "Successfully uploaded shop logo",
+        },
+        imageUrls: {
+          type: "array",
+          items: {
+            $ref: getSchemaPath(UploadResponseDto),
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Ошибка загрузки логотипа",
+    schema: {
+      type: "object",
+      properties: {
+        success: {
+          type: "boolean",
+          example: false,
+        },
+        message: {
+          type: "string",
+          example: "No file uploaded",
+        },
+        imageUrls: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+          example: [],
+        },
+      },
+    },
+  })
   async uploadShopLogo(
     @UploadedFile() file: Express.Multer.File,
     @Request() req: any
