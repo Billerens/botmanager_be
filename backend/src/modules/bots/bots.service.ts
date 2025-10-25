@@ -13,6 +13,7 @@ import * as crypto from "crypto";
 import { Bot, BotStatus } from "../../database/entities/bot.entity";
 import { User } from "../../database/entities/user.entity";
 import { CreateBotDto, UpdateBotDto } from "./dto/bot.dto";
+import { ButtonSettingsDto } from "./dto/command-button-settings.dto";
 import { TelegramService } from "../telegram/telegram.service";
 
 @Injectable()
@@ -107,11 +108,14 @@ export class BotsService {
       shopDescription?: string;
       shopCustomStyles?: string;
       shopButtonTypes?: string[];
-      shopButtonSettings?: Record<string, any>;
+      shopButtonSettings?: ButtonSettingsDto;
     },
     userId: string
   ): Promise<Bot> {
     const bot = await this.findOne(id, userId);
+
+    // Валидация Menu Button конфликта
+    this.validateMenuButtonConflict(bot, shopSettings.shopButtonTypes, "shop");
 
     // Обновляем настройки магазина
     Object.assign(bot, shopSettings);
@@ -148,12 +152,19 @@ export class BotsService {
       bookingLogoUrl?: string;
       bookingCustomStyles?: string;
       bookingButtonTypes?: string[];
-      bookingButtonSettings?: Record<string, any>;
+      bookingButtonSettings?: ButtonSettingsDto;
       bookingSettings?: any;
     },
     userId: string
   ): Promise<Bot> {
     const bot = await this.findOne(id, userId);
+
+    // Валидация Menu Button конфликта
+    this.validateMenuButtonConflict(
+      bot,
+      bookingSettings.bookingButtonTypes,
+      "booking"
+    );
 
     // Обновляем настройки бронирования
     Object.assign(bot, bookingSettings);
@@ -386,5 +397,49 @@ export class BotsService {
     decrypted += decipher.final("utf8");
 
     return decrypted;
+  }
+
+  /**
+   * Валидирует конфликт Menu Button между магазином и бронированием
+   * @param bot - объект бота
+   * @param newButtonTypes - новые типы кнопок для проверки
+   * @param module - модуль, для которого проверяется конфликт ('shop' или 'booking')
+   */
+  private validateMenuButtonConflict(
+    bot: Bot,
+    newButtonTypes: string[] | undefined,
+    module: "shop" | "booking"
+  ): void {
+    // Если новые типы кнопок не переданы, пропускаем валидацию
+    if (!newButtonTypes) {
+      return;
+    }
+
+    // Проверяем, пытается ли пользователь включить menu_button
+    const isTryingToEnableMenuButton = newButtonTypes.includes("menu_button");
+
+    if (!isTryingToEnableMenuButton) {
+      return; // Если не пытается включить menu_button, конфликта нет
+    }
+
+    // Проверяем конфликт в зависимости от модуля
+    if (module === "shop") {
+      // Если пытаемся включить menu_button для магазина, проверяем бронирование
+      if (
+        bot.isBookingEnabled &&
+        bot.bookingButtonTypes?.includes("menu_button")
+      ) {
+        throw new BadRequestException(
+          "Menu Button уже включен для системы бронирования. В Telegram боте может быть только одна Menu Button. Сначала отключите Menu Button в настройках бронирования."
+        );
+      }
+    } else if (module === "booking") {
+      // Если пытаемся включить menu_button для бронирования, проверяем магазин
+      if (bot.isShop && bot.shopButtonTypes?.includes("menu_button")) {
+        throw new BadRequestException(
+          "Menu Button уже включен для магазина. В Telegram боте может быть только одна Menu Button. Сначала отключите Menu Button в настройках магазина."
+        );
+      }
+    }
   }
 }
