@@ -340,25 +340,30 @@ export class BookingsService {
    * Получить записи бота с данными бота для уведомлений
    * Используется когда нужен доступ к настройкам бота через записи
    */
-  async getBookingsForReminderWithBotData(): Promise<Array<Booking & { bot: Bot }>> {
+  async getBookingsForReminderWithBotData(): Promise<
+    Array<Booking & { bot: Bot }>
+  > {
     const bookings = await this.getBookingsForReminder();
-    
+
     // Получаем уникальные botId из специалистов
-    const botIds = [...new Set(bookings.map(b => b.specialist.botId))];
-    
+    const botIds = [...new Set(bookings.map((b) => b.specialist.botId))];
+
     // Загружаем ботов одним запросом
     const bots = await this.botRepository.find({
-      where: { id: In(botIds) }
+      where: { id: In(botIds) },
     });
-    
+
     // Создаем Map для быстрого поиска ботов
-    const botMap = new Map(bots.map(bot => [bot.id, bot]));
-    
+    const botMap = new Map(bots.map((bot) => [bot.id, bot]));
+
     // Добавляем данные бота к записям
-    return bookings.map(booking => ({
-      ...booking,
-      bot: botMap.get(booking.specialist.botId)
-    } as Booking & { bot: Bot }));
+    return bookings.map(
+      (booking) =>
+        ({
+          ...booking,
+          bot: botMap.get(booking.specialist.botId),
+        }) as Booking & { bot: Bot }
+    );
   }
 
   async getStatistics(botId: string): Promise<any> {
