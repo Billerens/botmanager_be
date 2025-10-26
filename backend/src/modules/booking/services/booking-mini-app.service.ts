@@ -395,73 +395,149 @@ export class BookingMiniAppService {
         throw new BadRequestException("Некорректный ID объединенного слота");
       }
 
-      const firstSlotId = parts[1];
+      // Проверяем, объединены ли виртуальные слоты
+      const isMergedVirtual = parts[1] === "virtual";
 
-      // Получаем первый слот, чтобы получить информацию о времени
-      const firstSlot = await this.timeSlotRepository.findOne({
-        where: { id: firstSlotId },
-      });
+      let firstSlot: TimeSlot;
 
-      if (!firstSlot) {
-        throw new NotFoundException("Первый слот не найден");
-      }
-
-      // Находим все последовательные свободные слоты в нужном временном диапазоне
-      const requiredDurationMs = service.duration * 60 * 1000;
-      const endTime = new Date(
-        firstSlot.startTime.getTime() + requiredDurationMs
-      );
-
-      // Загружаем все доступные слоты в этом временном диапазоне
-      const availableSlots = await this.timeSlotRepository
-        .createQueryBuilder("slot")
-        .where("slot.specialistId = :specialistId", {
-          specialistId: createBookingDto.specialistId,
-        })
-        .andWhere("slot.startTime >= :startTime", {
-          startTime: firstSlot.startTime,
-        })
-        .andWhere("slot.startTime < :endTime", { endTime })
-        .andWhere("slot.isAvailable = :isAvailable", { isAvailable: true })
-        .andWhere("slot.isBooked = :isBooked", { isBooked: false })
-        .orderBy("slot.startTime", "ASC")
-        .getMany();
-
-      if (availableSlots.length === 0) {
-        throw new NotFoundException(
-          "Не найдено доступных слотов для бронирования"
-        );
-      }
-
-      // Проверяем, что слоты последовательные и покрывают всю необходимую длительность
-      let accumulatedDuration = 0;
-      let currentEndTime = new Date(firstSlot.startTime);
-
-      for (const slot of availableSlots) {
-        // Проверяем последовательность (допускаем разрыв до 1 минуты)
-        const gap = slot.startTime.getTime() - currentEndTime.getTime();
-        const maxGapMs = 1 * 60 * 1000; // 1 минута
-
-        if (gap > maxGapMs) {
-          throw new NotFoundException("Слоты не являются последовательными");
+      if (isMergedVirtual) {
+        // Merged из виртуальных слотов
+        // Формат: merged_virtual_startMs1_endMs1_virtual_startMs2_endMs2_...
+        // Извлекаем все пары virtual_startMs_endMs
+        const virtualSlotIds: string[] = [];
+        for (let i = 1; i < parts.length; i += 3) {
+          if (parts[i] === "virtual" && parts[i + 1] && parts[i + 2]) {
+            virtualSlotIds.push(`virtual_${parts[i + 1]}_${parts[i + 2]}`);
+          }
         }
 
-        slotsToBook.push(slot);
-        const slotDuration = slot.endTime.getTime() - slot.startTime.getTime();
-        accumulatedDuration += slotDuration;
-        currentEndTime = new Date(slot.endTime);
-
-        // Если набрали достаточную длительность
-        if (accumulatedDuration >= requiredDurationMs) {
-          break;
+        if (virtualSlotIds.length === 0) {
+          throw new BadRequestException(
+            "Не удалось извлечь виртуальные слоты из ID"
+          );
         }
-      }
 
-      // Проверяем, что набрали достаточную длительность
-      if (accumulatedDuration < requiredDurationMs) {
-        throw new NotFoundException(
-          `Недостаточно последовательных слотов для услуги длительностью ${service.duration} минут`
+        // Создаем физические слоты для каждого виртуального
+        for (const virtualId of virtualSlotIds) {
+          const virtualParts = virtualId.split("_");
+          const startTimeMs = parseInt(virtualParts[1]);
+          const endTimeMs = parseInt(virtualParts[2]);
+
+          if (isNaN(startTimeMs) || isNaN(endTimeMs)) {
+            throw new BadRequestException(
+              "Некорректное время в виртуальном слоте"
+            );
+          }
+
+          const startTime = new Date(startTimeMs);
+          const endTime = new Date(endTimeMs);
+
+          // Проверяем, не существует ли уже слот с таким временем
+          let existingSlot = await this.timeSlotRepository.findOne({
+            where: {
+              specialistId: createBookingDto.specialistId,
+              startTime,
+              endTime,
+            },
+          });
+
+          if (!existingSlot) {
+            // Создаем новый физический слот
+            existingSlot = this.timeSlotRepository.create({
+              specialistId: createBookingDto.specialistId,
+              startTime,
+              endTime,
+              isAvailable: true,
+              isBooked: false,
+            });
+            existingSlot = await this.timeSlotRepository.save(existingSlot);
+          }
+
+          // Проверяем доступность
+          if (existingSlot.isBooked || !existingSlot.isAvailable) {
+            throw new NotFoundException(
+              `Слот ${virtualId} уже забронирован или недоступен`
+            );
+          }
+
+          slotsToBook.push(existingSlot);
+        }
+
+        // Первый слот для основного бронирования
+        firstSlot = slotsToBook[0];
+      } else {
+        // Merged из физических слотов
+        const firstSlotId = parts[1];
+
+        // Получаем первый слот, чтобы получить информацию о времени
+        const foundFirstSlot = await this.timeSlotRepository.findOne({
+          where: { id: firstSlotId },
+        });
+
+        if (!foundFirstSlot) {
+          throw new NotFoundException("Первый слот не найден");
+        }
+
+        firstSlot = foundFirstSlot;
+
+        // Находим все последовательные свободные слоты в нужном временном диапазоне
+        const requiredDurationMs = service.duration * 60 * 1000;
+        const endTime = new Date(
+          firstSlot.startTime.getTime() + requiredDurationMs
         );
+
+        // Загружаем все доступные слоты в этом временном диапазоне
+        const availableSlots = await this.timeSlotRepository
+          .createQueryBuilder("slot")
+          .where("slot.specialistId = :specialistId", {
+            specialistId: createBookingDto.specialistId,
+          })
+          .andWhere("slot.startTime >= :startTime", {
+            startTime: firstSlot.startTime,
+          })
+          .andWhere("slot.startTime < :endTime", { endTime })
+          .andWhere("slot.isAvailable = :isAvailable", { isAvailable: true })
+          .andWhere("slot.isBooked = :isBooked", { isBooked: false })
+          .orderBy("slot.startTime", "ASC")
+          .getMany();
+
+        if (availableSlots.length === 0) {
+          throw new NotFoundException(
+            "Не найдено доступных слотов для бронирования"
+          );
+        }
+
+        // Проверяем, что слоты последовательные и покрывают всю необходимую длительность
+        let accumulatedDuration = 0;
+        let currentEndTime = new Date(firstSlot.startTime);
+
+        for (const slot of availableSlots) {
+          // Проверяем последовательность (допускаем разрыв до 1 минуты)
+          const gap = slot.startTime.getTime() - currentEndTime.getTime();
+          const maxGapMs = 1 * 60 * 1000; // 1 минута
+
+          if (gap > maxGapMs) {
+            throw new NotFoundException("Слоты не являются последовательными");
+          }
+
+          slotsToBook.push(slot);
+          const slotDuration =
+            slot.endTime.getTime() - slot.startTime.getTime();
+          accumulatedDuration += slotDuration;
+          currentEndTime = new Date(slot.endTime);
+
+          // Если набрали достаточную длительность
+          if (accumulatedDuration >= requiredDurationMs) {
+            break;
+          }
+        }
+
+        // Проверяем, что набрали достаточную длительность
+        if (accumulatedDuration < requiredDurationMs) {
+          throw new NotFoundException(
+            `Недостаточно последовательных слотов для услуги длительностью ${service.duration} минут`
+          );
+        }
       }
 
       // Используем первый слот как основной timeSlot для бронирования
