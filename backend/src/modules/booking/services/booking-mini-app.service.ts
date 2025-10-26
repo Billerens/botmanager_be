@@ -139,6 +139,21 @@ export class BookingMiniAppService {
       }
     }
 
+    // Определяем диапазон поиска
+    let startDate: Date;
+    let endDate: Date;
+
+    if (date) {
+      startDate = new Date(date);
+      endDate = new Date(date);
+      endDate.setUTCDate(endDate.getUTCDate() + 1);
+    } else {
+      startDate = new Date();
+      endDate = new Date();
+      endDate.setUTCDate(endDate.getUTCDate() + 30); // 30 дней вперед
+    }
+
+    // Загружаем физически существующие слоты
     let query = this.timeSlotRepository
       .createQueryBuilder("timeSlot")
       .leftJoinAndSelect("timeSlot.specialist", "specialist")
@@ -146,21 +161,27 @@ export class BookingMiniAppService {
       .andWhere("specialist.botId = :botId", { botId })
       .andWhere("timeSlot.isAvailable = :isAvailable", { isAvailable: true })
       .andWhere("timeSlot.isBooked = :isBooked", { isBooked: false })
+      .andWhere("timeSlot.startTime >= :startDate", { startDate })
+      .andWhere("timeSlot.startTime < :endDate", { endDate })
       .andWhere("timeSlot.startTime > :now", { now: new Date() })
       .orderBy("timeSlot.startTime", "ASC");
 
-    // Фильтр по дате
-    if (date) {
-      const startDate = new Date(date);
-      const endDate = new Date(date);
-      endDate.setUTCDate(endDate.getUTCDate() + 1);
+    const existingSlots = await query.getMany();
 
-      query = query
-        .andWhere("timeSlot.startTime >= :startDate", { startDate })
-        .andWhere("timeSlot.startTime < :endDate", { endDate });
+    // Если нет физических слотов для конкретной даты, генерируем виртуальные
+    let availableSlots: TimeSlot[] = [];
+
+    if (existingSlots.length === 0 && date) {
+      // Генерируем виртуальные слоты на указанную дату
+      const targetDate = new Date(date);
+      const virtualSlots = await this.generateVirtualSlotsForDay(
+        specialist,
+        targetDate
+      );
+      availableSlots = virtualSlots;
+    } else {
+      availableSlots = existingSlots;
     }
-
-    const availableSlots = await query.getMany();
 
     // Если услуга указана, объединяем последовательные слоты
     if (serviceDuration && availableSlots.length > 0) {
@@ -168,6 +189,91 @@ export class BookingMiniAppService {
     }
 
     return availableSlots;
+  }
+
+  /**
+   * Генерирует виртуальные слоты на день без сохранения в БД
+   */
+  private async generateVirtualSlotsForDay(
+    specialist: any,
+    date: Date
+  ): Promise<TimeSlot[]> {
+    const dayOfWeek = this.getDayOfWeek(date);
+    const workingHours = specialist.workingHours?.[dayOfWeek];
+
+    if (!workingHours || !workingHours.isWorking) {
+      return [];
+    }
+
+    const slots: TimeSlot[] = [];
+    const duration = specialist.defaultSlotDuration;
+    const buffer = specialist.bufferTime || 0;
+
+    const startTime = this.parseTime(workingHours.startTime, date);
+    const endTime = this.parseTime(workingHours.endTime, date);
+    const now = new Date();
+
+    let currentTime = new Date(startTime);
+
+    while (currentTime < endTime) {
+      const slotEndTime = new Date(
+        currentTime.getTime() + duration * 60 * 1000
+      );
+
+      if (slotEndTime > endTime) {
+        break;
+      }
+
+      // Пропускаем слоты в прошлом
+      if (slotEndTime <= now) {
+        currentTime = new Date(slotEndTime.getTime() + buffer * 60 * 1000);
+        continue;
+      }
+
+      // Проверяем перерывы
+      const breaks = workingHours.breaks || specialist.breakTimes || [];
+      const isOnBreak = breaks.some((breakTime: any) => {
+        const breakStart = this.parseTime(breakTime.startTime, date);
+        const breakEnd = this.parseTime(breakTime.endTime, date);
+        return currentTime < breakEnd && slotEndTime > breakStart;
+      });
+
+      if (!isOnBreak) {
+        // Создаем виртуальный слот
+        const virtualSlot = new TimeSlot();
+        virtualSlot.specialistId = specialist.id;
+        virtualSlot.specialist = specialist;
+        virtualSlot.startTime = new Date(currentTime);
+        virtualSlot.endTime = new Date(slotEndTime);
+        virtualSlot.isAvailable = true;
+        virtualSlot.isBooked = false;
+        slots.push(virtualSlot);
+      }
+
+      currentTime = new Date(slotEndTime.getTime() + buffer * 60 * 1000);
+    }
+
+    return slots;
+  }
+
+  private getDayOfWeek(date: Date): string {
+    const days = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+    return days[date.getUTCDay()];
+  }
+
+  private parseTime(timeStr: string, date: Date): Date {
+    const [hours, minutes] = timeStr.split(":").map(Number);
+    const result = new Date(date);
+    result.setUTCHours(hours, minutes, 0, 0);
+    return result;
   }
 
   /**

@@ -157,17 +157,33 @@ export class TimeSlotsService {
     const endDate = new Date(date);
     endDate.setUTCDate(endDate.getUTCDate() + 1);
 
-    // Загружаем все доступные слоты за день
-    const availableSlots = await this.timeSlotRepository.find({
+    // Загружаем физические слоты за день (если есть исключения)
+    const physicalSlots = await this.timeSlotRepository.find({
       where: {
         specialistId,
         startTime: Between(startDate, endDate),
-        isAvailable: true,
-        isBooked: false,
       },
       relations: ["specialist"],
       order: { startTime: "ASC" },
     });
+
+    // Генерируем виртуальные слоты с учетом перерывов
+    const targetDate = new Date(date);
+    const duration = specialist.defaultSlotDuration;
+    const buffer = specialist.bufferTime;
+
+    const virtualSlots = await this.generateVirtualSlotsForDay(
+      specialist,
+      targetDate,
+      duration,
+      buffer
+    );
+
+    // Объединяем виртуальные и физические слоты
+    const availableSlots = this.mergePhysicalAndVirtualSlots(
+      virtualSlots,
+      physicalSlots
+    );
 
     // Если услуга не указана или слотов нет, возвращаем как есть
     if (!serviceDuration || availableSlots.length === 0) {
@@ -176,6 +192,51 @@ export class TimeSlotsService {
 
     // Объединяем последовательные слоты для создания слотов нужной длительности
     return this.mergeConsecutiveSlots(availableSlots, serviceDuration);
+  }
+
+  /**
+   * Объединяет виртуальные и физические слоты, приоритет у физических
+   */
+  private mergePhysicalAndVirtualSlots(
+    virtualSlots: TimeSlot[],
+    physicalSlots: TimeSlot[]
+  ): TimeSlot[] {
+    // Создаем Map для быстрого поиска физических слотов по времени
+    const physicalSlotsMap = new Map<string, TimeSlot>();
+    physicalSlots.forEach((slot) => {
+      const key = `${slot.startTime.toISOString()}_${slot.endTime.toISOString()}`;
+      physicalSlotsMap.set(key, slot);
+    });
+
+    const resultSlots: TimeSlot[] = [];
+
+    // Проходим по виртуальным слотам
+    for (const virtualSlot of virtualSlots) {
+      const key = `${virtualSlot.startTime.toISOString()}_${virtualSlot.endTime.toISOString()}`;
+      const physicalSlot = physicalSlotsMap.get(key);
+
+      if (physicalSlot) {
+        // Если есть физический слот, используем его (он может быть недоступен - исключение)
+        if (physicalSlot.isAvailable && !physicalSlot.isBooked) {
+          resultSlots.push(physicalSlot);
+        }
+        physicalSlotsMap.delete(key);
+      } else {
+        // Иначе используем виртуальный слот
+        resultSlots.push(virtualSlot);
+      }
+    }
+
+    // Добавляем оставшиеся физические слоты (которые не совпали с виртуальными)
+    physicalSlotsMap.forEach((slot) => {
+      if (slot.isAvailable && !slot.isBooked) {
+        resultSlots.push(slot);
+      }
+    });
+
+    return resultSlots.sort(
+      (a, b) => a.startTime.getTime() - b.startTime.getTime()
+    );
   }
 
   /**
