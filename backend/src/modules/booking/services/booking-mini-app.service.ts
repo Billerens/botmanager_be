@@ -153,35 +153,44 @@ export class BookingMiniAppService {
       endDate.setUTCDate(endDate.getUTCDate() + 30); // 30 дней вперед
     }
 
-    // Загружаем физически существующие слоты
-    let query = this.timeSlotRepository
+    // Загружаем ВСЕ физически существующие слоты (включая забронированные)
+    // чтобы корректно исключить их при генерации виртуальных
+    const allPhysicalSlots = await this.timeSlotRepository
       .createQueryBuilder("timeSlot")
       .leftJoinAndSelect("timeSlot.specialist", "specialist")
       .where("specialist.id = :specialistId", { specialistId })
       .andWhere("specialist.botId = :botId", { botId })
-      .andWhere("timeSlot.isAvailable = :isAvailable", { isAvailable: true })
-      .andWhere("timeSlot.isBooked = :isBooked", { isBooked: false })
       .andWhere("timeSlot.startTime >= :startDate", { startDate })
       .andWhere("timeSlot.startTime < :endDate", { endDate })
       .andWhere("timeSlot.startTime > :now", { now: new Date() })
-      .orderBy("timeSlot.startTime", "ASC");
+      .orderBy("timeSlot.startTime", "ASC")
+      .getMany();
 
-    const existingSlots = await query.getMany();
+    // Генерируем виртуальные слоты для конкретной даты
+    let allSlots: TimeSlot[] = [];
 
-    // Если нет физических слотов для конкретной даты, генерируем виртуальные
-    let availableSlots: TimeSlot[] = [];
-
-    if (existingSlots.length === 0 && date) {
-      // Генерируем виртуальные слоты на указанную дату
+    if (date) {
       const targetDate = new Date(date);
+      // Генерируем виртуальные слоты, исключая временные промежутки с физическими слотами
       const virtualSlots = await this.generateVirtualSlotsForDay(
         specialist,
-        targetDate
+        targetDate,
+        allPhysicalSlots // передаем физические слоты для исключения
       );
-      availableSlots = virtualSlots;
+
+      // Объединяем физические и виртуальные слоты
+      allSlots = [...allPhysicalSlots, ...virtualSlots].sort(
+        (a, b) => a.startTime.getTime() - b.startTime.getTime()
+      );
     } else {
-      availableSlots = existingSlots;
+      // Если дата не указана, возвращаем только физические слоты
+      allSlots = allPhysicalSlots;
     }
+
+    // Фильтруем только доступные и не забронированные слоты
+    const availableSlots = allSlots.filter(
+      (slot) => slot.isAvailable && !slot.isBooked
+    );
 
     // Если услуга указана, объединяем последовательные слоты
     if (serviceDuration && availableSlots.length > 0) {
@@ -193,10 +202,14 @@ export class BookingMiniAppService {
 
   /**
    * Генерирует виртуальные слоты на день без сохранения в БД
+   * @param specialist специалист
+   * @param date дата для генерации
+   * @param existingPhysicalSlots существующие физические слоты для исключения перекрытий
    */
   private async generateVirtualSlotsForDay(
     specialist: any,
-    date: Date
+    date: Date,
+    existingPhysicalSlots: TimeSlot[] = []
   ): Promise<TimeSlot[]> {
     const dayOfWeek = this.getDayOfWeek(date);
     const workingHours = specialist.workingHours?.[dayOfWeek];
@@ -238,8 +251,24 @@ export class BookingMiniAppService {
         return currentTime < breakEnd && slotEndTime > breakStart;
       });
 
-      if (!isOnBreak) {
-        // Создаем виртуальный слот
+      if (isOnBreak) {
+        currentTime = new Date(slotEndTime.getTime() + buffer * 60 * 1000);
+        continue;
+      }
+
+      // Проверяем, не перекрывается ли виртуальный слот с физическим
+      const overlapsWithPhysical = existingPhysicalSlots.some(
+        (physicalSlot) => {
+          // Проверяем пересечение временных интервалов
+          return (
+            currentTime < physicalSlot.endTime &&
+            slotEndTime > physicalSlot.startTime
+          );
+        }
+      );
+
+      if (!overlapsWithPhysical) {
+        // Создаем виртуальный слот только если он не перекрывается с физическим
         const virtualSlot = new TimeSlot();
         // Генерируем временный ID на основе времени для виртуальных слотов
         virtualSlot.id = `virtual_${currentTime.getTime()}_${slotEndTime.getTime()}`;
