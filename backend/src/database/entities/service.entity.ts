@@ -4,9 +4,9 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
+  ManyToMany,
   OneToMany,
-  JoinColumn,
+  JoinTable,
 } from "typeorm";
 import { Specialist } from "./specialist.entity";
 import { Booking } from "./booking.entity";
@@ -53,14 +53,15 @@ export class Service {
   updatedAt: Date;
 
   // Связи
-  @ManyToOne(() => Specialist, (specialist) => specialist.services, {
-    onDelete: "CASCADE",
+  @ManyToMany(() => Specialist, (specialist) => specialist.services, {
+    cascade: false,
   })
-  @JoinColumn({ name: "specialistId" })
-  specialist: Specialist;
-
-  @Column()
-  specialistId: string;
+  @JoinTable({
+    name: "service_specialists",
+    joinColumn: { name: "serviceId", referencedColumnName: "id" },
+    inverseJoinColumn: { name: "specialistId", referencedColumnName: "id" },
+  })
+  specialists: Specialist[];
 
   @OneToMany(() => Booking, (booking) => booking.service)
   bookings: Booking[];

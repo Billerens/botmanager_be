@@ -162,8 +162,9 @@ export class CreateServiceDto {
   @IsObject()
   metadata?: Record<string, any>;
 
-  @IsString()
-  specialistId: string;
+  @IsArray()
+  @IsString({ each: true })
+  specialistIds: string[];
 }
 
 export class UpdateServiceDto {
@@ -210,6 +211,11 @@ export class UpdateServiceDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, any>;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  specialistIds?: string[];
 }
 
 export class CreateTimeSlotDto {

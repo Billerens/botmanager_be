@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Repository, In } from "typeorm";
 import { Service } from "../../../database/entities/service.entity";
 import { Specialist } from "../../../database/entities/specialist.entity";
 import { CreateServiceDto, UpdateServiceDto } from "../dto/booking.dto";
@@ -23,28 +23,32 @@ export class ServicesService {
     createServiceDto: CreateServiceDto,
     botId: string
   ): Promise<Service> {
-    // Проверяем, что специалист существует и принадлежит боту
-    const specialist = await this.specialistRepository.findOne({
-      where: { id: createServiceDto.specialistId, botId },
+    // Проверяем, что все специалисты существуют и принадлежат боту
+    const specialists = await this.specialistRepository.findBy({
+      id: In(createServiceDto.specialistIds),
+      botId,
     });
 
-    if (!specialist) {
-      throw new NotFoundException("Специалист не найден");
+    if (specialists.length !== createServiceDto.specialistIds.length) {
+      throw new NotFoundException("Один или несколько специалистов не найдены");
     }
 
-    const service = this.serviceRepository.create(createServiceDto);
+    const { specialistIds, ...serviceData } = createServiceDto;
+    const service = this.serviceRepository.create({
+      ...serviceData,
+      specialists,
+    });
     return this.serviceRepository.save(service);
   }
 
   async findAll(botId: string): Promise<Service[]> {
-    return this.serviceRepository.find({
-      where: {
-        specialist: { botId },
-        isActive: true,
-      },
-      relations: ["specialist"],
-      order: { name: "ASC" },
-    });
+    return this.serviceRepository
+      .createQueryBuilder("service")
+      .leftJoinAndSelect("service.specialists", "specialist")
+      .where("specialist.botId = :botId", { botId })
+      .andWhere("service.isActive = :isActive", { isActive: true })
+      .orderBy("service.name", "ASC")
+      .getMany();
   }
 
   async findBySpecialist(
@@ -60,24 +64,23 @@ export class ServicesService {
       throw new NotFoundException("Специалист не найден");
     }
 
-    return this.serviceRepository.find({
-      where: {
-        specialistId,
-        isActive: true,
-      },
-      relations: ["specialist"],
-      order: { name: "ASC" },
-    });
+    return this.serviceRepository
+      .createQueryBuilder("service")
+      .leftJoinAndSelect("service.specialists", "specialist")
+      .where("specialist.id = :specialistId", { specialistId })
+      .andWhere("service.isActive = :isActive", { isActive: true })
+      .orderBy("service.name", "ASC")
+      .getMany();
   }
 
   async findOne(id: string, botId: string): Promise<Service> {
-    const service = await this.serviceRepository.findOne({
-      where: {
-        id,
-        specialist: { botId },
-      },
-      relations: ["specialist", "bookings"],
-    });
+    const service = await this.serviceRepository
+      .createQueryBuilder("service")
+      .leftJoinAndSelect("service.specialists", "specialist")
+      .leftJoinAndSelect("service.bookings", "bookings")
+      .where("service.id = :id", { id })
+      .andWhere("specialist.botId = :botId", { botId })
+      .getOne();
 
     if (!service) {
       throw new NotFoundException("Услуга не найдена");
@@ -93,7 +96,24 @@ export class ServicesService {
   ): Promise<Service> {
     const service = await this.findOne(id, botId);
 
-    Object.assign(service, updateServiceDto);
+    // Если обновляются специалисты, проверяем их существование
+    if (updateServiceDto.specialistIds) {
+      const specialists = await this.specialistRepository.findBy({
+        id: In(updateServiceDto.specialistIds),
+        botId,
+      });
+
+      if (specialists.length !== updateServiceDto.specialistIds.length) {
+        throw new NotFoundException(
+          "Один или несколько специалистов не найдены"
+        );
+      }
+
+      service.specialists = specialists;
+    }
+
+    const { specialistIds, ...serviceData } = updateServiceDto;
+    Object.assign(service, serviceData);
 
     return this.serviceRepository.save(service);
   }
@@ -126,7 +146,7 @@ export class ServicesService {
   ): Promise<Service[]> {
     const query = this.serviceRepository
       .createQueryBuilder("service")
-      .leftJoin("service.specialist", "specialist")
+      .leftJoinAndSelect("service.specialists", "specialist")
       .where("specialist.botId = :botId", { botId })
       .andWhere("service.isActive = :isActive", { isActive: true });
 
@@ -143,11 +163,12 @@ export class ServicesService {
   ): Promise<Service[]> {
     return this.serviceRepository
       .createQueryBuilder("service")
-      .leftJoin("service.specialist", "specialist")
+      .leftJoinAndSelect("service.specialists", "specialist")
       .leftJoin("service.bookings", "booking")
       .where("specialist.botId = :botId", { botId })
       .andWhere("service.isActive = :isActive", { isActive: true })
       .groupBy("service.id")
+      .addGroupBy("specialist.id")
       .orderBy("COUNT(booking.id)", "DESC")
       .limit(limit)
       .getMany();

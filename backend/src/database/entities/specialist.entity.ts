@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  ManyToMany,
   OneToMany,
   JoinColumn,
 } from "typeorm";
@@ -91,7 +92,7 @@ export class Specialist {
   @Column()
   botId: string;
 
-  @OneToMany(() => Service, (service) => service.specialist)
+  @ManyToMany(() => Service, (service) => service.specialists)
   services: Service[];
 
   @OneToMany(() => Booking, (booking) => booking.specialist)
