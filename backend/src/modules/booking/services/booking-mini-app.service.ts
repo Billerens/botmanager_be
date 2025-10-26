@@ -241,6 +241,8 @@ export class BookingMiniAppService {
       if (!isOnBreak) {
         // Создаем виртуальный слот
         const virtualSlot = new TimeSlot();
+        // Генерируем временный ID на основе времени для виртуальных слотов
+        virtualSlot.id = `virtual_${currentTime.getTime()}_${slotEndTime.getTime()}`;
         virtualSlot.specialistId = specialist.id;
         virtualSlot.specialist = specialist;
         virtualSlot.startTime = new Date(currentTime);

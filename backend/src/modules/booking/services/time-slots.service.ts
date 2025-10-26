@@ -547,6 +547,8 @@ export class TimeSlotsService {
       if (!isOnBreak) {
         // Создаем виртуальный слот без проверки конфликтов
         const virtualSlot = new TimeSlot();
+        // Генерируем временный ID на основе времени для виртуальных слотов
+        virtualSlot.id = `virtual_${currentTime.getTime()}_${slotEndTime.getTime()}`;
         virtualSlot.specialistId = specialist.id;
         virtualSlot.startTime = new Date(currentTime);
         virtualSlot.endTime = new Date(slotEndTime);
