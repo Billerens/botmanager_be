@@ -124,11 +124,28 @@ export class BookingMiniAppService {
       throw new NotFoundException("Специалист не найден");
     }
 
+    // Получаем длительность услуги
+    let serviceDuration: number | null = null;
+    if (serviceId) {
+      const service = await this.serviceRepository
+        .createQueryBuilder("service")
+        .innerJoin("service.specialists", "specialist")
+        .where("service.id = :serviceId", { serviceId })
+        .andWhere("specialist.id = :specialistId", { specialistId })
+        .getOne();
+
+      if (service) {
+        serviceDuration = service.duration;
+      }
+    }
+
     let query = this.timeSlotRepository
       .createQueryBuilder("timeSlot")
-      .leftJoin("timeSlot.specialist", "specialist")
+      .leftJoinAndSelect("timeSlot.specialist", "specialist")
       .where("specialist.id = :specialistId", { specialistId })
       .andWhere("specialist.botId = :botId", { botId })
+      .andWhere("timeSlot.isAvailable = :isAvailable", { isAvailable: true })
+      .andWhere("timeSlot.isBooked = :isBooked", { isBooked: false })
       .andWhere("timeSlot.startTime > :now", { now: new Date() })
       .orderBy("timeSlot.startTime", "ASC");
 
@@ -143,26 +160,87 @@ export class BookingMiniAppService {
         .andWhere("timeSlot.startTime < :endDate", { endDate });
     }
 
-    // Фильтр по услуге (проверяем длительность)
-    if (serviceId) {
-      const service = await this.serviceRepository
-        .createQueryBuilder("service")
-        .innerJoin("service.specialists", "specialist")
-        .where("service.id = :serviceId", { serviceId })
-        .andWhere("specialist.id = :specialistId", { specialistId })
-        .getOne();
+    const availableSlots = await query.getMany();
 
-      if (service) {
-        query = query.andWhere(
-          "EXTRACT(EPOCH FROM (timeSlot.endTime - timeSlot.startTime)) >= :duration",
-          {
-            duration: service.duration * 60, // конвертируем минуты в секунды
-          }
-        );
+    // Если услуга указана, объединяем последовательные слоты
+    if (serviceDuration && availableSlots.length > 0) {
+      return this.mergeConsecutiveSlots(availableSlots, serviceDuration);
+    }
+
+    return availableSlots;
+  }
+
+  /**
+   * Объединяет последовательные слоты в слоты нужной длительности
+   */
+  private mergeConsecutiveSlots(
+    slots: TimeSlot[],
+    requiredDuration: number
+  ): TimeSlot[] {
+    if (slots.length === 0) {
+      return [];
+    }
+
+    const mergedSlots: TimeSlot[] = [];
+    const requiredDurationMs = requiredDuration * 60 * 1000; // в миллисекундах
+
+    // Проходим по всем слотам и пытаемся найти последовательности нужной длины
+    for (let i = 0; i < slots.length; i++) {
+      const startSlot = slots[i];
+      let currentEndTime = new Date(startSlot.endTime);
+      let currentDuration =
+        startSlot.endTime.getTime() - startSlot.startTime.getTime();
+
+      // Если текущий слот уже подходит по длительности
+      if (currentDuration >= requiredDurationMs) {
+        mergedSlots.push(startSlot);
+        continue;
+      }
+
+      // Пытаемся найти последовательные слоты
+      let consecutiveSlots = [startSlot];
+      for (let j = i + 1; j < slots.length; j++) {
+        const nextSlot = slots[j];
+
+        // Проверяем, что следующий слот идет сразу после текущего (или с допустимым gap)
+        const timeDiff =
+          nextSlot.startTime.getTime() - currentEndTime.getTime();
+        const maxGapMs = 1 * 60 * 1000; // максимальный разрыв 1 минута
+
+        if (timeDiff > maxGapMs) {
+          // Слоты не последовательные, прерываем
+          break;
+        }
+
+        consecutiveSlots.push(nextSlot);
+        currentEndTime = new Date(nextSlot.endTime);
+        currentDuration =
+          currentEndTime.getTime() - startSlot.startTime.getTime();
+
+        // Если набрали нужную длительность
+        if (currentDuration >= requiredDurationMs) {
+          // Создаем виртуальный объединенный слот
+          const mergedSlot = new TimeSlot();
+          mergedSlot.id = `merged_${startSlot.id}_${nextSlot.id}`;
+          mergedSlot.specialistId = startSlot.specialistId;
+          mergedSlot.specialist = startSlot.specialist;
+          mergedSlot.startTime = new Date(startSlot.startTime);
+          mergedSlot.endTime = new Date(currentEndTime);
+          mergedSlot.isAvailable = true;
+          mergedSlot.isBooked = false;
+          // Сохраняем информацию о составных слотах в metadata
+          mergedSlot.metadata = {
+            mergedSlotIds: consecutiveSlots.map((s) => s.id),
+            isMerged: true,
+          };
+
+          mergedSlots.push(mergedSlot);
+          break;
+        }
       }
     }
 
-    return query.getMany();
+    return mergedSlots;
   }
 
   async createPublicBooking(
@@ -195,17 +273,74 @@ export class BookingMiniAppService {
       );
     }
 
-    const timeSlot = await this.timeSlotRepository.findOne({
-      where: {
-        id: createBookingDto.timeSlotId,
-        specialistId: createBookingDto.specialistId,
-        isAvailable: true,
-        isBooked: false,
-      },
-    });
+    // Проверяем, является ли это объединенным слотом
+    const isMergedSlot = createBookingDto.timeSlotId.startsWith("merged_");
+    let timeSlot: TimeSlot | null = null;
+    let slotsToBook: TimeSlot[] = [];
 
-    if (!timeSlot) {
-      throw new NotFoundException("Таймслот недоступен для бронирования");
+    if (isMergedSlot) {
+      // Извлекаем ID составных слотов из metadata
+      // Формат: merged_{firstSlotId}_{lastSlotId}
+      const parts = createBookingDto.timeSlotId.split("_");
+      if (parts.length < 3) {
+        throw new BadRequestException("Некорректный ID объединенного слота");
+      }
+
+      const firstSlotId = parts[1];
+
+      // Получаем первый слот, чтобы получить информацию о времени
+      const firstSlot = await this.timeSlotRepository.findOne({
+        where: { id: firstSlotId },
+      });
+
+      if (!firstSlot) {
+        throw new NotFoundException("Первый слот не найден");
+      }
+
+      // Находим все последовательные слоты для этого времени и длительности
+      const requiredDurationMs = service.duration * 60 * 1000;
+      let currentTime = new Date(firstSlot.startTime);
+      let accumulatedDuration = 0;
+
+      while (accumulatedDuration < requiredDurationMs) {
+        const nextSlot = await this.timeSlotRepository.findOne({
+          where: {
+            specialistId: createBookingDto.specialistId,
+            startTime: currentTime,
+            isAvailable: true,
+            isBooked: false,
+          },
+        });
+
+        if (!nextSlot) {
+          throw new NotFoundException(
+            "Один из необходимых слотов недоступен для бронирования"
+          );
+        }
+
+        slotsToBook.push(nextSlot);
+        accumulatedDuration += nextSlot.getDuration();
+        currentTime = new Date(nextSlot.endTime);
+      }
+
+      // Используем первый слот как основной timeSlot для бронирования
+      timeSlot = firstSlot;
+    } else {
+      // Обычный слот
+      timeSlot = await this.timeSlotRepository.findOne({
+        where: {
+          id: createBookingDto.timeSlotId,
+          specialistId: createBookingDto.specialistId,
+          isAvailable: true,
+          isBooked: false,
+        },
+      });
+
+      if (!timeSlot) {
+        throw new NotFoundException("Таймслот недоступен для бронирования");
+      }
+
+      slotsToBook = [timeSlot];
     }
 
     // Проверяем, что время слота не в прошлом
@@ -223,14 +358,6 @@ export class BookingMiniAppService {
       throw new BadRequestException("В указанное время у специалиста перерыв");
     }
 
-    // Проверяем длительность услуги
-    const slotDuration = timeSlot.getDuration();
-    if (slotDuration < service.duration) {
-      throw new BadRequestException(
-        "Длительность слота меньше длительности услуги"
-      );
-    }
-
     // Создаем бронирование
     const booking = this.bookingRepository.create({
       ...createBookingDto,
@@ -246,9 +373,11 @@ export class BookingMiniAppService {
 
     const savedBooking = await this.bookingRepository.save(booking);
 
-    // Помечаем слот как забронированный
-    timeSlot.isBooked = true;
-    await this.timeSlotRepository.save(timeSlot);
+    // Помечаем все слоты как забронированные
+    for (const slot of slotsToBook) {
+      slot.isBooked = true;
+      await this.timeSlotRepository.save(slot);
+    }
 
     return savedBooking;
   }

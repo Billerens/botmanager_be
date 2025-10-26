@@ -157,7 +157,8 @@ export class TimeSlotsService {
     const endDate = new Date(date);
     endDate.setUTCDate(endDate.getUTCDate() + 1);
 
-    return this.timeSlotRepository.find({
+    // Загружаем все доступные слоты за день
+    const availableSlots = await this.timeSlotRepository.find({
       where: {
         specialistId,
         startTime: Between(startDate, endDate),
@@ -167,6 +168,84 @@ export class TimeSlotsService {
       relations: ["specialist"],
       order: { startTime: "ASC" },
     });
+
+    // Если услуга не указана или слотов нет, возвращаем как есть
+    if (!serviceDuration || availableSlots.length === 0) {
+      return availableSlots;
+    }
+
+    // Объединяем последовательные слоты для создания слотов нужной длительности
+    return this.mergeConsecutiveSlots(availableSlots, serviceDuration);
+  }
+
+  /**
+   * Объединяет последовательные слоты в слоты нужной длительности
+   */
+  private mergeConsecutiveSlots(
+    slots: TimeSlot[],
+    requiredDuration: number
+  ): TimeSlot[] {
+    if (slots.length === 0) {
+      return [];
+    }
+
+    const mergedSlots: TimeSlot[] = [];
+    const requiredDurationMs = requiredDuration * 60 * 1000; // в миллисекундах
+
+    // Проходим по всем слотам и пытаемся найти последовательности нужной длины
+    for (let i = 0; i < slots.length; i++) {
+      const startSlot = slots[i];
+      let currentEndTime = new Date(startSlot.endTime);
+      let currentDuration = startSlot.endTime.getTime() - startSlot.startTime.getTime();
+
+      // Если текущий слот уже подходит по длительности
+      if (currentDuration >= requiredDurationMs) {
+        mergedSlots.push(startSlot);
+        continue;
+      }
+
+      // Пытаемся найти последовательные слоты
+      let consecutiveSlots = [startSlot];
+      for (let j = i + 1; j < slots.length; j++) {
+        const nextSlot = slots[j];
+
+        // Проверяем, что следующий слот идет сразу после текущего (или с допустимым gap)
+        const timeDiff = nextSlot.startTime.getTime() - currentEndTime.getTime();
+        const maxGapMs = 1 * 60 * 1000; // максимальный разрыв 1 минута
+
+        if (timeDiff > maxGapMs) {
+          // Слоты не последовательные, прерываем
+          break;
+        }
+
+        consecutiveSlots.push(nextSlot);
+        currentEndTime = new Date(nextSlot.endTime);
+        currentDuration = currentEndTime.getTime() - startSlot.startTime.getTime();
+
+        // Если набрали нужную длительность
+        if (currentDuration >= requiredDurationMs) {
+          // Создаем виртуальный объединенный слот
+          const mergedSlot = new TimeSlot();
+          mergedSlot.id = `merged_${startSlot.id}_${nextSlot.id}`;
+          mergedSlot.specialistId = startSlot.specialistId;
+          mergedSlot.specialist = startSlot.specialist;
+          mergedSlot.startTime = new Date(startSlot.startTime);
+          mergedSlot.endTime = new Date(currentEndTime);
+          mergedSlot.isAvailable = true;
+          mergedSlot.isBooked = false;
+          // Сохраняем информацию о составных слотах в metadata
+          mergedSlot.metadata = {
+            mergedSlotIds: consecutiveSlots.map(s => s.id),
+            isMerged: true,
+          };
+
+          mergedSlots.push(mergedSlot);
+          break;
+        }
+      }
+    }
+
+    return mergedSlots;
   }
 
   async findOne(id: string, botId: string): Promise<TimeSlot> {
