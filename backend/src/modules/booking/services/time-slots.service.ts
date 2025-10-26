@@ -226,14 +226,25 @@ export class TimeSlotsService {
     date: string,
     botId: string
   ): Promise<TimeSlot[]> {
+    console.log("previewTimeSlots called:", { specialistId, date, botId });
+
     // Проверяем, что специалист принадлежит боту
     const specialist = await this.specialistRepository.findOne({
       where: { id: specialistId, botId },
     });
 
     if (!specialist) {
+      console.log("Specialist not found");
       throw new NotFoundException("Специалист не найден");
     }
+
+    console.log("Specialist found:", {
+      id: specialist.id,
+      name: specialist.name,
+      defaultSlotDuration: specialist.defaultSlotDuration,
+      bufferTime: specialist.bufferTime,
+      workingHours: specialist.workingHours,
+    });
 
     const targetDate = new Date(date);
     const duration = specialist.defaultSlotDuration;
@@ -246,6 +257,8 @@ export class TimeSlotsService {
       duration,
       buffer
     );
+
+    console.log("Virtual slots generated:", virtualSlots.length);
 
     // Загружаем реальные слоты из БД для этого дня
     const startOfDay = new Date(targetDate);
@@ -290,9 +303,14 @@ export class TimeSlotsService {
       resultSlots.push(slot);
     });
 
-    return resultSlots.sort(
+    const sortedSlots = resultSlots.sort(
       (a, b) => a.startTime.getTime() - b.startTime.getTime()
     );
+
+    console.log(
+      `Returning ${sortedSlots.length} total slots (${virtualSlots.length} virtual + ${existingSlots.length} existing)`
+    );
+    return sortedSlots;
   }
 
   async generateTimeSlots(
@@ -345,15 +363,29 @@ export class TimeSlotsService {
     buffer: number
   ): Promise<TimeSlot[]> {
     const dayOfWeek = this.getDayOfWeek(date);
+    console.log("generateVirtualSlotsForDay:", {
+      date: date.toISOString(),
+      dayOfWeek,
+      duration,
+      buffer,
+    });
+
     const daySchedule = specialist.getWorkingHoursForDay(dayOfWeek);
+    console.log("Day schedule:", daySchedule);
 
     if (!daySchedule || !daySchedule.isWorking) {
+      console.log("Specialist is not working on this day");
       return [];
     }
 
     const slots: TimeSlot[] = [];
     const startTime = this.parseTime(daySchedule.startTime, date);
     const endTime = this.parseTime(daySchedule.endTime, date);
+
+    console.log("Working hours:", {
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+    });
 
     let currentTime = new Date(startTime);
 
@@ -390,6 +422,7 @@ export class TimeSlotsService {
       currentTime = new Date(slotEndTime.getTime() + buffer * 60 * 1000);
     }
 
+    console.log(`Generated ${slots.length} virtual slots`);
     return slots;
   }
 
