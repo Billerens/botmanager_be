@@ -280,7 +280,10 @@ export class TimeSlotsService {
       }
 
       // Проверяем, что слот не попадает на перерыв
-      const isOnBreak = specialist.breakTimes?.some((breakTime) => {
+      // Сначала проверяем перерывы конкретного дня (они переопределяют глобальные)
+      const breaks = daySchedule.breaks || specialist.breakTimes || [];
+
+      const isOnBreak = breaks.some((breakTime) => {
         const breakStart = this.parseTime(breakTime.startTime, date);
         const breakEnd = this.parseTime(breakTime.endTime, date);
         return currentTime < breakEnd && slotEndTime > breakStart;

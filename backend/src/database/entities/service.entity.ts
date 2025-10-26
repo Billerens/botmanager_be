@@ -22,6 +22,9 @@ export class Service {
   @Column({ type: "text", nullable: true })
   description: string;
 
+  @Column({ nullable: true })
+  imageUrl: string;
+
   @Column({ type: "decimal", precision: 10, scale: 2, nullable: true })
   price: number;
 

@@ -95,4 +95,82 @@ export class UploadService {
       throw error;
     }
   }
+
+  /**
+   * Загружает логотип системы бронирования в S3
+   */
+  async uploadBookingLogo(file: {
+    buffer: Buffer;
+    originalname: string;
+    mimetype: string;
+  }): Promise<string> {
+    try {
+      this.logger.log(`Uploading booking logo: ${file.originalname}`);
+
+      const imageUrl = await this.s3Service.uploadFile(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        "booking-logos"
+      );
+
+      this.logger.log(`Successfully uploaded booking logo: ${imageUrl}`);
+      return imageUrl;
+    } catch (error) {
+      this.logger.error(`Error uploading booking logo: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Загружает аватар специалиста в S3
+   */
+  async uploadSpecialistAvatar(file: {
+    buffer: Buffer;
+    originalname: string;
+    mimetype: string;
+  }): Promise<string> {
+    try {
+      this.logger.log(`Uploading specialist avatar: ${file.originalname}`);
+
+      const imageUrl = await this.s3Service.uploadFile(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        "specialist-avatars"
+      );
+
+      this.logger.log(`Successfully uploaded specialist avatar: ${imageUrl}`);
+      return imageUrl;
+    } catch (error) {
+      this.logger.error(`Error uploading specialist avatar: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Загружает изображение услуги в S3
+   */
+  async uploadServiceImage(file: {
+    buffer: Buffer;
+    originalname: string;
+    mimetype: string;
+  }): Promise<string> {
+    try {
+      this.logger.log(`Uploading service image: ${file.originalname}`);
+
+      const imageUrl = await this.s3Service.uploadFile(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        "service-images"
+      );
+
+      this.logger.log(`Successfully uploaded service image: ${imageUrl}`);
+      return imageUrl;
+    } catch (error) {
+      this.logger.error(`Error uploading service image: ${error.message}`);
+      throw error;
+    }
+  }
 }

@@ -22,6 +22,12 @@ export enum BotStatus {
   ERROR = "error",
 }
 
+export interface GlobalBreak {
+  startTime: string; // "12:00" в UTC
+  endTime: string; // "13:00" в UTC
+  reason?: string; // "Обеденный перерыв"
+}
+
 export interface BookingSettings {
   // Основные настройки
   allowOnlineBooking: boolean;
@@ -45,6 +51,9 @@ export interface BookingSettings {
   // Интеграции
   calendarIntegration: boolean;
   paymentIntegration: boolean;
+
+  // Глобальные перерывы для всех специалистов
+  globalBreaks?: GlobalBreak[];
 }
 
 @Entity("bots")

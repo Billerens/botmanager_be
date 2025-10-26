@@ -250,4 +250,127 @@ export class UploadController {
       };
     }
   }
+
+  @Post("booking-logo")
+  @UseInterceptors(FileInterceptor("logo"))
+  @ApiOperation({ summary: "Загрузить логотип системы бронирования" })
+  @ApiConsumes("multipart/form-data")
+  @ApiResponse({
+    status: 200,
+    description: "Логотип системы бронирования загружен",
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Ошибка загрузки логотипа",
+  })
+  async uploadBookingLogo(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: any
+  ) {
+    if (!file) {
+      return {
+        success: false,
+        message: "No file uploaded",
+        imageUrls: [],
+      };
+    }
+
+    try {
+      const imageUrl = await this.uploadService.uploadBookingLogo(file);
+
+      return {
+        success: true,
+        message: "Successfully uploaded booking logo",
+        imageUrls: [imageUrl],
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+        imageUrls: [],
+      };
+    }
+  }
+
+  @Post("specialist-avatar")
+  @UseInterceptors(FileInterceptor("avatar"))
+  @ApiOperation({ summary: "Загрузить аватар специалиста" })
+  @ApiConsumes("multipart/form-data")
+  @ApiResponse({
+    status: 200,
+    description: "Аватар специалиста загружен",
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Ошибка загрузки аватара",
+  })
+  async uploadSpecialistAvatar(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: any
+  ) {
+    if (!file) {
+      return {
+        success: false,
+        message: "No file uploaded",
+        imageUrls: [],
+      };
+    }
+
+    try {
+      const imageUrl = await this.uploadService.uploadSpecialistAvatar(file);
+
+      return {
+        success: true,
+        message: "Successfully uploaded specialist avatar",
+        imageUrls: [imageUrl],
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+        imageUrls: [],
+      };
+    }
+  }
+
+  @Post("service-image")
+  @UseInterceptors(FileInterceptor("image"))
+  @ApiOperation({ summary: "Загрузить изображение услуги" })
+  @ApiConsumes("multipart/form-data")
+  @ApiResponse({
+    status: 200,
+    description: "Изображение услуги загружено",
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Ошибка загрузки изображения",
+  })
+  async uploadServiceImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: any
+  ) {
+    if (!file) {
+      return {
+        success: false,
+        message: "No file uploaded",
+        imageUrls: [],
+      };
+    }
+
+    try {
+      const imageUrl = await this.uploadService.uploadServiceImage(file);
+
+      return {
+        success: true,
+        message: "Successfully uploaded service image",
+        imageUrls: [imageUrl],
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+        imageUrls: [],
+      };
+    }
+  }
 }
