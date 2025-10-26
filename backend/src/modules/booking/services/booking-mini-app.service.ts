@@ -187,17 +187,33 @@ export class BookingMiniAppService {
       allSlots = allPhysicalSlots;
     }
 
-    // Фильтруем только доступные и не забронированные слоты
-    const availableSlots = allSlots.filter(
-      (slot) => slot.isAvailable && !slot.isBooked
-    );
+    // Если услуга указана, объединяем последовательные СВОБОДНЫЕ слоты
+    // и добавляем занятые слоты к результату
+    if (serviceDuration) {
+      const availableSlots = allSlots.filter(
+        (slot) => slot.isAvailable && !slot.isBooked
+      );
+      const bookedSlots = allSlots.filter(
+        (slot) => !slot.isAvailable || slot.isBooked
+      );
 
-    // Если услуга указана, объединяем последовательные слоты
-    if (serviceDuration && availableSlots.length > 0) {
-      return this.mergeConsecutiveSlots(availableSlots, serviceDuration);
+      if (availableSlots.length > 0) {
+        const mergedAvailableSlots = this.mergeConsecutiveSlots(
+          availableSlots,
+          serviceDuration
+        );
+        // Возвращаем объединенные свободные слоты + занятые слоты
+        return [...mergedAvailableSlots, ...bookedSlots].sort(
+          (a, b) => a.startTime.getTime() - b.startTime.getTime()
+        );
+      }
+
+      // Если нет свободных слотов для объединения, возвращаем только занятые
+      return bookedSlots;
     }
 
-    return availableSlots;
+    // Если услуга не указана, возвращаем ВСЕ слоты (и свободные, и занятые)
+    return allSlots;
   }
 
   /**
