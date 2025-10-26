@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner, TableColumn } from "typeorm";
 
-export class AddImageUrlToServices1700000000011
-  implements MigrationInterface
-{
+export class AddImageUrlToServices1700000000011 implements MigrationInterface {
   name = "AddImageUrlToServices1700000000011";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -22,4 +20,3 @@ export class AddImageUrlToServices1700000000011
     await queryRunner.dropColumn("services", "imageUrl");
   }
 }
-
