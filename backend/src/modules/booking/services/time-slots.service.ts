@@ -134,9 +134,12 @@ export class TimeSlotsService {
     // Если указана услуга, проверяем её длительность
     let serviceDuration = specialist.defaultSlotDuration;
     if (serviceId) {
-      const service = await this.serviceRepository.findOne({
-        where: { id: serviceId, specialistId },
-      });
+      const service = await this.serviceRepository
+        .createQueryBuilder("service")
+        .innerJoin("service.specialists", "specialist")
+        .where("service.id = :serviceId", { serviceId })
+        .andWhere("specialist.id = :specialistId", { specialistId })
+        .getOne();
       if (service) {
         serviceDuration = service.duration;
       }

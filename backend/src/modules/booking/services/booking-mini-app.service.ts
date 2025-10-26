@@ -73,14 +73,17 @@ export class BookingMiniAppService {
   }
 
   async getPublicServices(botId: string): Promise<Service[]> {
-    return this.serviceRepository.find({
-      where: {
-        specialist: { botId },
-        isActive: true,
-      },
-      relations: ["specialist"],
-      order: { name: "ASC" },
-    });
+    return this.serviceRepository
+      .createQueryBuilder("service")
+      .innerJoin("service.specialists", "specialist")
+      .where("specialist.botId = :botId", { botId })
+      .andWhere("service.isActive = :isActive", { isActive: true })
+      .andWhere("specialist.isActive = :specialistActive", {
+        specialistActive: true,
+      })
+      .leftJoinAndSelect("service.specialists", "allSpecialists")
+      .orderBy("service.name", "ASC")
+      .getMany();
   }
 
   async getPublicServicesBySpecialist(
@@ -96,14 +99,14 @@ export class BookingMiniAppService {
       throw new NotFoundException("Специалист не найден");
     }
 
-    return this.serviceRepository.find({
-      where: {
-        specialistId,
-        isActive: true,
-      },
-      relations: ["specialist"],
-      order: { name: "ASC" },
-    });
+    return this.serviceRepository
+      .createQueryBuilder("service")
+      .innerJoin("service.specialists", "specialist")
+      .where("specialist.id = :specialistId", { specialistId })
+      .andWhere("service.isActive = :isActive", { isActive: true })
+      .leftJoinAndSelect("service.specialists", "allSpecialists")
+      .orderBy("service.name", "ASC")
+      .getMany();
   }
 
   async getPublicTimeSlots(
@@ -144,9 +147,12 @@ export class BookingMiniAppService {
 
     // Фильтр по услуге (проверяем длительность)
     if (serviceId) {
-      const service = await this.serviceRepository.findOne({
-        where: { id: serviceId, specialistId },
-      });
+      const service = await this.serviceRepository
+        .createQueryBuilder("service")
+        .innerJoin("service.specialists", "specialist")
+        .where("service.id = :serviceId", { serviceId })
+        .andWhere("specialist.id = :specialistId", { specialistId })
+        .getOne();
 
       if (service) {
         query = query.andWhere(
@@ -174,15 +180,21 @@ export class BookingMiniAppService {
       throw new NotFoundException("Специалист не найден");
     }
 
-    const service = await this.serviceRepository.findOne({
-      where: {
-        id: createBookingDto.serviceId,
+    const service = await this.serviceRepository
+      .createQueryBuilder("service")
+      .innerJoin("service.specialists", "specialist")
+      .where("service.id = :serviceId", {
+        serviceId: createBookingDto.serviceId,
+      })
+      .andWhere("specialist.id = :specialistId", {
         specialistId: createBookingDto.specialistId,
-      },
-    });
+      })
+      .getOne();
 
     if (!service) {
-      throw new NotFoundException("Услуга не найдена");
+      throw new NotFoundException(
+        "Услуга не найдена или не связана с этим специалистом"
+      );
     }
 
     const timeSlot = await this.timeSlotRepository.findOne({

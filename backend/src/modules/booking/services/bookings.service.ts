@@ -48,15 +48,21 @@ export class BookingsService {
       throw new NotFoundException("Специалист не найден");
     }
 
-    const service = await this.serviceRepository.findOne({
-      where: {
-        id: createBookingDto.serviceId,
+    const service = await this.serviceRepository
+      .createQueryBuilder("service")
+      .innerJoin("service.specialists", "specialist")
+      .where("service.id = :serviceId", {
+        serviceId: createBookingDto.serviceId,
+      })
+      .andWhere("specialist.id = :specialistId", {
         specialistId: createBookingDto.specialistId,
-      },
-    });
+      })
+      .getOne();
 
     if (!service) {
-      throw new NotFoundException("Услуга не найдена");
+      throw new NotFoundException(
+        "Услуга не найдена или не связана с этим специалистом"
+      );
     }
 
     const timeSlot = await this.timeSlotRepository.findOne({
