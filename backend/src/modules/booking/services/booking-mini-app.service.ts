@@ -381,8 +381,9 @@ export class BookingMiniAppService {
       );
     }
 
-    // Проверяем, является ли это объединенным слотом
+    // Проверяем тип слота
     const isMergedSlot = createBookingDto.timeSlotId.startsWith("merged_");
+    const isVirtualSlot = createBookingDto.timeSlotId.startsWith("virtual_");
     let timeSlot: TimeSlot | null = null;
     let slotsToBook: TimeSlot[] = [];
 
@@ -465,8 +466,45 @@ export class BookingMiniAppService {
 
       // Используем первый слот как основной timeSlot для бронирования
       timeSlot = firstSlot;
+    } else if (isVirtualSlot) {
+      // Виртуальный слот - создаем его в БД перед бронированием
+      // Извлекаем время из ID: virtual_startTimeMs_endTimeMs
+      const parts = createBookingDto.timeSlotId.split("_");
+      if (parts.length !== 3) {
+        throw new BadRequestException("Некорректный ID виртуального слота");
+      }
+
+      const startTimeMs = parseInt(parts[1]);
+      const endTimeMs = parseInt(parts[2]);
+
+      if (isNaN(startTimeMs) || isNaN(endTimeMs)) {
+        throw new BadRequestException(
+          "Некорректное время в ID виртуального слота"
+        );
+      }
+
+      const startTime = new Date(startTimeMs);
+      const endTime = new Date(endTimeMs);
+
+      // Проверяем, что слот не в прошлом
+      if (endTime <= new Date()) {
+        throw new BadRequestException("Нельзя забронировать время в прошлом");
+      }
+
+      // Создаем физический слот для бронирования
+      timeSlot = this.timeSlotRepository.create({
+        specialistId: createBookingDto.specialistId,
+        startTime,
+        endTime,
+        isAvailable: true,
+        isBooked: false,
+      });
+
+      // Сохраняем слот в БД
+      timeSlot = await this.timeSlotRepository.save(timeSlot);
+      slotsToBook = [timeSlot];
     } else {
-      // Обычный слот
+      // Физический слот из БД
       timeSlot = await this.timeSlotRepository.findOne({
         where: {
           id: createBookingDto.timeSlotId,
