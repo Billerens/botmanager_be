@@ -363,12 +363,16 @@ export class TimeSlotsService {
     const existingSlotsMap = new Map<string, TimeSlot>();
     existingSlots.forEach((slot) => {
       const key = `${slot.startTime.toISOString()}_${slot.endTime.toISOString()}`;
-      
+
       // Если у слота нет прямой связи с бронированием, но он является составным слотом
-      if (!slot.booking && slot.isBooked && mergedSlotBookingsMap.has(slot.id)) {
+      if (
+        !slot.booking &&
+        slot.isBooked &&
+        mergedSlotBookingsMap.has(slot.id)
+      ) {
         slot.booking = mergedSlotBookingsMap.get(slot.id);
       }
-      
+
       existingSlotsMap.set(key, slot);
     });
 
