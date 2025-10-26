@@ -129,8 +129,6 @@ export class BookingMiniAppService {
       .leftJoin("timeSlot.specialist", "specialist")
       .where("specialist.id = :specialistId", { specialistId })
       .andWhere("specialist.botId = :botId", { botId })
-      .andWhere("timeSlot.isAvailable = :isAvailable", { isAvailable: true })
-      .andWhere("timeSlot.isBooked = :isBooked", { isBooked: false })
       .andWhere("timeSlot.startTime > :now", { now: new Date() })
       .orderBy("timeSlot.startTime", "ASC");
 

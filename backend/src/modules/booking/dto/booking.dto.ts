@@ -363,6 +363,9 @@ export class GenerateTimeSlotsDto {
 
 export class GetAvailableSlotsDto {
   @IsString()
+  botId: string;
+
+  @IsString()
   specialistId: string;
 
   @IsOptional()

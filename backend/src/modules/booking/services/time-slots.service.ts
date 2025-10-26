@@ -52,14 +52,22 @@ export class TimeSlotsService {
       );
     }
 
-    // Проверяем, что специалист работает в это время
-    if (!specialist.isWorkingAt(startTime)) {
-      throw new BadRequestException("Специалист не работает в указанное время");
-    }
+    // Для доступных слотов проверяем рабочее время и перерывы
+    // Для недоступных слотов (исключения) пропускаем эти проверки
+    if (createTimeSlotDto.isAvailable !== false) {
+      // Проверяем, что специалист работает в это время
+      if (!specialist.isWorkingAt(startTime)) {
+        throw new BadRequestException(
+          "Специалист не работает в указанное время"
+        );
+      }
 
-    // Проверяем, что нет перерыва в это время
-    if (specialist.isOnBreak(startTime)) {
-      throw new BadRequestException("В указанное время у специалиста перерыв");
+      // Проверяем, что нет перерыва в это время
+      if (specialist.isOnBreak(startTime)) {
+        throw new BadRequestException(
+          "В указанное время у специалиста перерыв"
+        );
+      }
     }
 
     // Проверяем конфликты с существующими слотами
@@ -212,6 +220,81 @@ export class TimeSlotsService {
     await this.timeSlotRepository.remove(timeSlot);
   }
 
+  // Метод для предпросмотра слотов (виртуальные + реальные)
+  async previewTimeSlots(
+    specialistId: string,
+    date: string,
+    botId: string
+  ): Promise<TimeSlot[]> {
+    // Проверяем, что специалист принадлежит боту
+    const specialist = await this.specialistRepository.findOne({
+      where: { id: specialistId, botId },
+    });
+
+    if (!specialist) {
+      throw new NotFoundException("Специалист не найден");
+    }
+
+    const targetDate = new Date(date);
+    const duration = specialist.defaultSlotDuration;
+    const buffer = specialist.bufferTime;
+
+    // Генерируем виртуальные слоты для дня (не сохраняя в БД)
+    const virtualSlots = await this.generateVirtualSlotsForDay(
+      specialist,
+      targetDate,
+      duration,
+      buffer
+    );
+
+    // Загружаем реальные слоты из БД для этого дня
+    const startOfDay = new Date(targetDate);
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setUTCHours(23, 59, 59, 999);
+
+    const existingSlots = await this.timeSlotRepository.find({
+      where: {
+        specialistId: specialist.id,
+        startTime: Between(startOfDay, endOfDay),
+      },
+      order: { startTime: "ASC" },
+    });
+
+    // Создаем Map для быстрого поиска существующих слотов по времени
+    const existingSlotsMap = new Map<string, TimeSlot>();
+    existingSlots.forEach((slot) => {
+      const key = `${slot.startTime.toISOString()}_${slot.endTime.toISOString()}`;
+      existingSlotsMap.set(key, slot);
+    });
+
+    // Объединяем виртуальные и реальные слоты
+    const resultSlots: TimeSlot[] = [];
+
+    for (const virtualSlot of virtualSlots) {
+      const key = `${virtualSlot.startTime.toISOString()}_${virtualSlot.endTime.toISOString()}`;
+      const existingSlot = existingSlotsMap.get(key);
+
+      if (existingSlot) {
+        // Если слот существует в БД, используем его
+        resultSlots.push(existingSlot);
+        existingSlotsMap.delete(key);
+      } else {
+        // Иначе используем виртуальный слот
+        resultSlots.push(virtualSlot);
+      }
+    }
+
+    // Добавляем оставшиеся реальные слоты (которые не совпали с виртуальными)
+    existingSlotsMap.forEach((slot) => {
+      resultSlots.push(slot);
+    });
+
+    return resultSlots.sort(
+      (a, b) => a.startTime.getTime() - b.startTime.getTime()
+    );
+  }
+
   async generateTimeSlots(
     generateTimeSlotsDto: GenerateTimeSlotsDto,
     botId: string
@@ -252,6 +335,62 @@ export class TimeSlotsService {
 
     // Сохраняем все слоты
     return this.timeSlotRepository.save(slots);
+  }
+
+  // Генерирует виртуальные слоты (не сохраняя в БД) для предпросмотра
+  private async generateVirtualSlotsForDay(
+    specialist: Specialist,
+    date: Date,
+    duration: number,
+    buffer: number
+  ): Promise<TimeSlot[]> {
+    const dayOfWeek = this.getDayOfWeek(date);
+    const daySchedule = specialist.getWorkingHoursForDay(dayOfWeek);
+
+    if (!daySchedule || !daySchedule.isWorking) {
+      return [];
+    }
+
+    const slots: TimeSlot[] = [];
+    const startTime = this.parseTime(daySchedule.startTime, date);
+    const endTime = this.parseTime(daySchedule.endTime, date);
+
+    let currentTime = new Date(startTime);
+
+    while (currentTime < endTime) {
+      const slotEndTime = new Date(
+        currentTime.getTime() + duration * 60 * 1000
+      );
+
+      if (slotEndTime > endTime) {
+        break;
+      }
+
+      // Проверяем, что слот не попадает на перерыв
+      const breaks = daySchedule.breaks || specialist.breakTimes || [];
+
+      const isOnBreak = breaks.some((breakTime) => {
+        const breakStart = this.parseTime(breakTime.startTime, date);
+        const breakEnd = this.parseTime(breakTime.endTime, date);
+        return currentTime < breakEnd && slotEndTime > breakStart;
+      });
+
+      if (!isOnBreak) {
+        // Создаем виртуальный слот без проверки конфликтов
+        const virtualSlot = new TimeSlot();
+        virtualSlot.specialistId = specialist.id;
+        virtualSlot.startTime = new Date(currentTime);
+        virtualSlot.endTime = new Date(slotEndTime);
+        virtualSlot.isAvailable = true;
+        virtualSlot.isBooked = false;
+        slots.push(virtualSlot);
+      }
+
+      // Переходим к следующему слоту с учетом буферного времени
+      currentTime = new Date(slotEndTime.getTime() + buffer * 60 * 1000);
+    }
+
+    return slots;
   }
 
   private async generateSlotsForDay(

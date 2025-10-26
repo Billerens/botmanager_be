@@ -122,6 +122,27 @@ export class TimeSlotsController {
     return this.timeSlotsService.findBySpecialist(specialistId, botId);
   }
 
+  @Get("preview")
+  @ApiOperation({ summary: "Предпросмотр таймслотов (виртуальные + реальные)" })
+  @ApiResponse({
+    status: 200,
+    description: "Таймслоты получены",
+    schema: {
+      type: "array",
+      items: {
+        $ref: getSchemaPath(TimeSlotResponseDto),
+      },
+    },
+  })
+  async previewSlots(
+    @Query("specialistId") specialistId: string,
+    @Query("date") date: string,
+    @Query("botId") botId: string,
+    @Request() req
+  ) {
+    return this.timeSlotsService.previewTimeSlots(specialistId, date, botId);
+  }
+
   @Get("available")
   @ApiOperation({ summary: "Получить доступные таймслоты" })
   @ApiResponse({
