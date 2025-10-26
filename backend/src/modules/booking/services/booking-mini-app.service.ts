@@ -393,6 +393,7 @@ export class BookingMiniAppService {
     // Создаем бронирование
     const booking = this.bookingRepository.create({
       ...createBookingDto,
+      timeSlotId: timeSlot.id, // Используем реальный ID первого слота вместо merged_...
       status: BookingStatus.PENDING,
       source: BookingSource.MINI_APP,
     });
