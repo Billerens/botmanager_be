@@ -297,30 +297,62 @@ export class BookingMiniAppService {
         throw new NotFoundException("Первый слот не найден");
       }
 
-      // Находим все последовательные слоты для этого времени и длительности
+      // Находим все последовательные свободные слоты в нужном временном диапазоне
       const requiredDurationMs = service.duration * 60 * 1000;
-      let currentTime = new Date(firstSlot.startTime);
+      const endTime = new Date(
+        firstSlot.startTime.getTime() + requiredDurationMs
+      );
+
+      // Загружаем все доступные слоты в этом временном диапазоне
+      const availableSlots = await this.timeSlotRepository
+        .createQueryBuilder("slot")
+        .where("slot.specialistId = :specialistId", {
+          specialistId: createBookingDto.specialistId,
+        })
+        .andWhere("slot.startTime >= :startTime", {
+          startTime: firstSlot.startTime,
+        })
+        .andWhere("slot.startTime < :endTime", { endTime })
+        .andWhere("slot.isAvailable = :isAvailable", { isAvailable: true })
+        .andWhere("slot.isBooked = :isBooked", { isBooked: false })
+        .orderBy("slot.startTime", "ASC")
+        .getMany();
+
+      if (availableSlots.length === 0) {
+        throw new NotFoundException(
+          "Не найдено доступных слотов для бронирования"
+        );
+      }
+
+      // Проверяем, что слоты последовательные и покрывают всю необходимую длительность
       let accumulatedDuration = 0;
+      let currentEndTime = new Date(firstSlot.startTime);
 
-      while (accumulatedDuration < requiredDurationMs) {
-        const nextSlot = await this.timeSlotRepository.findOne({
-          where: {
-            specialistId: createBookingDto.specialistId,
-            startTime: currentTime,
-            isAvailable: true,
-            isBooked: false,
-          },
-        });
+      for (const slot of availableSlots) {
+        // Проверяем последовательность (допускаем разрыв до 1 минуты)
+        const gap = slot.startTime.getTime() - currentEndTime.getTime();
+        const maxGapMs = 1 * 60 * 1000; // 1 минута
 
-        if (!nextSlot) {
-          throw new NotFoundException(
-            "Один из необходимых слотов недоступен для бронирования"
-          );
+        if (gap > maxGapMs) {
+          throw new NotFoundException("Слоты не являются последовательными");
         }
 
-        slotsToBook.push(nextSlot);
-        accumulatedDuration += nextSlot.getDuration();
-        currentTime = new Date(nextSlot.endTime);
+        slotsToBook.push(slot);
+        const slotDuration = slot.endTime.getTime() - slot.startTime.getTime();
+        accumulatedDuration += slotDuration;
+        currentEndTime = new Date(slot.endTime);
+
+        // Если набрали достаточную длительность
+        if (accumulatedDuration >= requiredDurationMs) {
+          break;
+        }
+      }
+
+      // Проверяем, что набрали достаточную длительность
+      if (accumulatedDuration < requiredDurationMs) {
+        throw new NotFoundException(
+          `Недостаточно последовательных слотов для услуги длительностью ${service.duration} минут`
+        );
       }
 
       // Используем первый слот как основной timeSlot для бронирования
