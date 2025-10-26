@@ -245,15 +245,8 @@ export class BookingsService {
 
     booking.cancel(cancelBookingDto.cancellationReason);
 
-    // Освобождаем слот
-    const timeSlot = await this.timeSlotRepository.findOne({
-      where: { id: booking.timeSlotId },
-    });
-
-    if (timeSlot) {
-      timeSlot.isBooked = false;
-      await this.timeSlotRepository.save(timeSlot);
-    }
+    // Освобождаем все составные слоты
+    await this.freeBookingSlots(booking);
 
     return this.bookingRepository.save(booking);
   }
@@ -277,17 +270,37 @@ export class BookingsService {
   async remove(id: string, botId: string): Promise<void> {
     const booking = await this.findOne(id, botId);
 
-    // Освобождаем слот
-    const timeSlot = await this.timeSlotRepository.findOne({
-      where: { id: booking.timeSlotId },
-    });
-
-    if (timeSlot) {
-      timeSlot.isBooked = false;
-      await this.timeSlotRepository.save(timeSlot);
-    }
+    // Освобождаем все составные слоты
+    await this.freeBookingSlots(booking);
 
     await this.bookingRepository.remove(booking);
+  }
+
+  /**
+   * Освобождает все слоты, связанные с бронированием
+   * (включая составные слоты для объединенных бронирований)
+   */
+  private async freeBookingSlots(booking: Booking): Promise<void> {
+    const slotIdsToFree: string[] = [];
+
+    // Проверяем, есть ли информация о составных слотах в metadata
+    if (booking.clientData?.mergedSlotIds) {
+      slotIdsToFree.push(...booking.clientData.mergedSlotIds);
+    } else {
+      // Если нет информации о составных слотах, освобождаем только основной
+      slotIdsToFree.push(booking.timeSlotId);
+    }
+
+    // Освобождаем все слоты
+    for (const slotId of slotIdsToFree) {
+      const slot = await this.timeSlotRepository.findOne({
+        where: { id: slotId },
+      });
+      if (slot) {
+        slot.isBooked = false;
+        await this.timeSlotRepository.save(slot);
+      }
+    }
   }
 
   async getBookingsByStatus(

@@ -371,6 +371,14 @@ export class BookingMiniAppService {
       booking.generateConfirmationCode();
     }
 
+    // Сохраняем информацию о всех составных слотах в metadata бронирования
+    if (slotsToBook.length > 1) {
+      booking.clientData = {
+        ...booking.clientData,
+        mergedSlotIds: slotsToBook.map((s) => s.id),
+      };
+    }
+
     const savedBooking = await this.bookingRepository.save(booking);
 
     // Помечаем все слоты как забронированные
@@ -421,14 +429,26 @@ export class BookingMiniAppService {
 
     booking.cancel(reason);
 
-    // Освобождаем слот
-    const timeSlot = await this.timeSlotRepository.findOne({
-      where: { id: booking.timeSlotId },
-    });
+    // Освобождаем все составные слоты
+    const slotIdsToFree: string[] = [];
 
-    if (timeSlot) {
-      timeSlot.isBooked = false;
-      await this.timeSlotRepository.save(timeSlot);
+    // Проверяем, есть ли информация о составных слотах в metadata
+    if (booking.clientData?.mergedSlotIds) {
+      slotIdsToFree.push(...booking.clientData.mergedSlotIds);
+    } else {
+      // Если нет информации о составных слотах, освобождаем только основной
+      slotIdsToFree.push(booking.timeSlotId);
+    }
+
+    // Освобождаем все слоты
+    for (const slotId of slotIdsToFree) {
+      const slot = await this.timeSlotRepository.findOne({
+        where: { id: slotId },
+      });
+      if (slot) {
+        slot.isBooked = false;
+        await this.timeSlotRepository.save(slot);
+      }
     }
 
     return this.bookingRepository.save(booking);

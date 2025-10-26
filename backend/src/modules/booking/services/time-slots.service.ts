@@ -196,7 +196,8 @@ export class TimeSlotsService {
     for (let i = 0; i < slots.length; i++) {
       const startSlot = slots[i];
       let currentEndTime = new Date(startSlot.endTime);
-      let currentDuration = startSlot.endTime.getTime() - startSlot.startTime.getTime();
+      let currentDuration =
+        startSlot.endTime.getTime() - startSlot.startTime.getTime();
 
       // Если текущий слот уже подходит по длительности
       if (currentDuration >= requiredDurationMs) {
@@ -210,7 +211,8 @@ export class TimeSlotsService {
         const nextSlot = slots[j];
 
         // Проверяем, что следующий слот идет сразу после текущего (или с допустимым gap)
-        const timeDiff = nextSlot.startTime.getTime() - currentEndTime.getTime();
+        const timeDiff =
+          nextSlot.startTime.getTime() - currentEndTime.getTime();
         const maxGapMs = 1 * 60 * 1000; // максимальный разрыв 1 минута
 
         if (timeDiff > maxGapMs) {
@@ -220,7 +222,8 @@ export class TimeSlotsService {
 
         consecutiveSlots.push(nextSlot);
         currentEndTime = new Date(nextSlot.endTime);
-        currentDuration = currentEndTime.getTime() - startSlot.startTime.getTime();
+        currentDuration =
+          currentEndTime.getTime() - startSlot.startTime.getTime();
 
         // Если набрали нужную длительность
         if (currentDuration >= requiredDurationMs) {
@@ -235,7 +238,7 @@ export class TimeSlotsService {
           mergedSlot.isBooked = false;
           // Сохраняем информацию о составных слотах в metadata
           mergedSlot.metadata = {
-            mergedSlotIds: consecutiveSlots.map(s => s.id),
+            mergedSlotIds: consecutiveSlots.map((s) => s.id),
             isMerged: true,
           };
 
@@ -341,10 +344,31 @@ export class TimeSlotsService {
       order: { startTime: "ASC" },
     });
 
+    // Загружаем все бронирования на этот день для поиска составных слотов
+    const bookingsOnDay = existingSlots
+      .filter((slot) => slot.booking)
+      .map((slot) => slot.booking!);
+
+    // Создаем Map для поиска бронирований по составным слотам
+    const mergedSlotBookingsMap = new Map<string, any>();
+    bookingsOnDay.forEach((booking) => {
+      if (booking.clientData?.mergedSlotIds) {
+        booking.clientData.mergedSlotIds.forEach((slotId: string) => {
+          mergedSlotBookingsMap.set(slotId, booking);
+        });
+      }
+    });
+
     // Создаем Map для быстрого поиска существующих слотов по времени
     const existingSlotsMap = new Map<string, TimeSlot>();
     existingSlots.forEach((slot) => {
       const key = `${slot.startTime.toISOString()}_${slot.endTime.toISOString()}`;
+      
+      // Если у слота нет прямой связи с бронированием, но он является составным слотом
+      if (!slot.booking && slot.isBooked && mergedSlotBookingsMap.has(slot.id)) {
+        slot.booking = mergedSlotBookingsMap.get(slot.id);
+      }
+      
       existingSlotsMap.set(key, slot);
     });
 
