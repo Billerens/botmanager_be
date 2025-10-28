@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { BullModule } from "@nestjs/bull";
 import { ThrottlerModule } from "@nestjs/throttler";
+import { ScheduleModule } from "@nestjs/schedule";
 
 import { DatabaseModule } from "./database/database.module";
 import databaseConfig from "./config/database.config";
@@ -38,6 +39,9 @@ import { BookingModule } from "./modules/booking/booking.module";
         limit: 100, // 100 запросов в минуту
       },
     ]),
+
+    // Планировщик задач (для cron jobs)
+    ScheduleModule.forRoot(),
 
     // База данных
     DatabaseModule,

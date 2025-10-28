@@ -30,7 +30,7 @@ export enum BookingSource {
 
 export interface BookingReminder {
   timeValue: number; // Числовое значение (например, 1, 2, 24)
-  timeUnit: 'minutes' | 'hours' | 'days'; // Единица измерения
+  timeUnit: "minutes" | "hours" | "days"; // Единица измерения
   sent: boolean; // Было ли отправлено уведомление
   sentAt?: Date; // Время отправки уведомления
   scheduledFor?: Date; // Запланированное время отправки
@@ -76,10 +76,10 @@ export class Booking {
   })
   source: BookingSource;
 
-  @Column({ type: "timestamp", nullable: true })
+  @Column({ type: "timestamptz", nullable: true })
   confirmedAt: Date; // Время подтверждения в UTC
 
-  @Column({ type: "timestamp", nullable: true })
+  @Column({ type: "timestamptz", nullable: true })
   cancelledAt: Date; // Время отмены в UTC
 
   @Column({ type: "text", nullable: true })
@@ -91,7 +91,7 @@ export class Booking {
   @Column({ type: "text", nullable: true })
   confirmationCode: string; // Код для подтверждения записи
 
-  @Column({ type: "timestamp", nullable: true })
+  @Column({ type: "timestamptz", nullable: true })
   confirmationCodeExpires: Date; // Срок действия кода подтверждения
 
   @CreateDateColumn()

@@ -13,6 +13,7 @@ import { TimeSlotsService } from "./services/time-slots.service";
 import { BookingsService } from "./services/bookings.service";
 import { BookingMiniAppService } from "./services/booking-mini-app.service";
 import { BookingNotificationsService } from "./services/booking-notifications.service";
+import { BookingReminderSchedulerService } from "./services/booking-reminder-scheduler.service";
 
 // Контроллеры
 import { SpecialistsController } from "./controllers/specialists.controller";
@@ -49,6 +50,7 @@ import { QueueModule } from "../queue/queue.module";
     BookingMiniAppService,
     BookingNotificationsService,
     BookingReminderProcessor,
+    BookingReminderSchedulerService,
   ],
   exports: [
     SpecialistsService,
@@ -57,6 +59,14 @@ import { QueueModule } from "../queue/queue.module";
     BookingsService,
     BookingMiniAppService,
     BookingNotificationsService,
+    BookingReminderSchedulerService,
   ],
 })
-export class BookingModule {}
+export class BookingModule {
+  constructor(
+    private readonly reminderScheduler: BookingReminderSchedulerService
+  ) {
+    // Восстанавливаем напоминания при старте приложения
+    this.reminderScheduler.restoreRemindersOnStartup();
+  }
+}

@@ -50,7 +50,16 @@ export class BookingNotificationsService {
       return;
     }
 
+    // Убеждаемся, что работаем с UTC временем
     const bookingTime = new Date(fullBooking.timeSlot.startTime);
+    const now = new Date();
+
+    this.logger.log(
+      `Scheduling reminders for booking ${booking.id}:
+       Booking time: ${bookingTime.toISOString()}
+       Current time: ${now.toISOString()}
+       Time until booking: ${Math.floor((bookingTime.getTime() - now.getTime()) / 1000 / 60)} minutes`
+    );
 
     // Планируем каждое напоминание
     for (let i = 0; i < fullBooking.reminders.length; i++) {
@@ -69,18 +78,24 @@ export class BookingNotificationsService {
       // Обновляем запланированное время
       fullBooking.reminders[i].scheduledFor = scheduledTime;
 
-      const delayInMs = scheduledTime.getTime() - Date.now();
+      const delayInMs = scheduledTime.getTime() - now.getTime();
+
+      this.logger.log(
+        `Reminder ${i}: ${reminder.timeValue} ${reminder.timeUnit} before booking
+         Scheduled for: ${scheduledTime.toISOString()}
+         Delay: ${Math.floor(delayInMs / 1000 / 60)} minutes (${delayInMs}ms)`
+      );
 
       if (delayInMs <= 0) {
         // Время уже прошло - отправляем сразу
         this.logger.log(
-          `Reminder time has passed, sending immediately for booking ${booking.id}`
+          `Reminder time has passed (${Math.abs(Math.floor(delayInMs / 1000 / 60))} minutes ago), sending immediately for booking ${booking.id}`
         );
         await this.sendReminder(fullBooking, i);
       } else {
         // Добавляем в очередь с задержкой
         this.logger.log(
-          `Scheduling reminder for booking ${booking.id} in ${delayInMs}ms`
+          `Scheduling reminder for booking ${booking.id} in ${Math.floor(delayInMs / 1000 / 60)} minutes`
         );
         await this.queueService.addBookingReminderJob(
           {

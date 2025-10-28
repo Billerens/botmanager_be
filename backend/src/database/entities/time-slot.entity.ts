@@ -16,10 +16,10 @@ export class TimeSlot {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ type: "timestamp" })
+  @Column({ type: "timestamptz" })
   startTime: Date; // Время начала в UTC
 
-  @Column({ type: "timestamp" })
+  @Column({ type: "timestamptz" })
   endTime: Date; // Время окончания в UTC
 
   @Column({ default: true })
