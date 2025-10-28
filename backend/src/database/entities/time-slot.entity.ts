@@ -47,9 +47,6 @@ export class TimeSlot {
   @Column()
   specialistId: string;
 
-  @OneToOne(() => Booking, (booking) => booking.timeSlot)
-  booking: Booking;
-
   // Методы для работы с временем
   getDuration(): number {
     return Math.floor(

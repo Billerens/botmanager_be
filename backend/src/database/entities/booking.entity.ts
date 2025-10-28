@@ -119,7 +119,7 @@ export class Booking {
   @Column()
   serviceId: string;
 
-  @OneToOne(() => TimeSlot, (timeSlot) => timeSlot.booking)
+  @ManyToOne(() => TimeSlot, { onDelete: "CASCADE" })
   @JoinColumn({ name: "timeSlotId" })
   timeSlot: TimeSlot;
 
