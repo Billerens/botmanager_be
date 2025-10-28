@@ -153,8 +153,9 @@ export class BookingMiniAppService {
       endDate.setUTCDate(endDate.getUTCDate() + 30); // 30 дней вперед
     }
 
-    // Загружаем ВСЕ физически существующие слоты (включая забронированные)
+    // Загружаем ВСЕ физически существующие слоты (включая забронированные и прошедшие)
     // чтобы корректно исключить их при генерации виртуальных
+    // Фильтрация прошедших слотов происходит на фронтенде, учитывая timezone пользователя
     const allPhysicalSlots = await this.timeSlotRepository
       .createQueryBuilder("timeSlot")
       .leftJoinAndSelect("timeSlot.specialist", "specialist")
@@ -162,7 +163,6 @@ export class BookingMiniAppService {
       .andWhere("specialist.botId = :botId", { botId })
       .andWhere("timeSlot.startTime >= :startDate", { startDate })
       .andWhere("timeSlot.startTime < :endDate", { endDate })
-      .andWhere("timeSlot.startTime > :now", { now: new Date() })
       .orderBy("timeSlot.startTime", "ASC")
       .getMany();
 
