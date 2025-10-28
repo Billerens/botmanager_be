@@ -496,13 +496,13 @@ export class BookingMiniAppService {
               isBooked: false,
             });
             existingSlot = await this.timeSlotRepository.save(existingSlot);
-          }
-
-          // Проверяем доступность
-          if (existingSlot.isBooked || !existingSlot.isAvailable) {
-            throw new NotFoundException(
-              `Слот ${virtualId} уже забронирован или недоступен`
-            );
+          } else {
+            // Проверяем доступность существующего слота
+            if (existingSlot.isBooked || !existingSlot.isAvailable) {
+              throw new BadRequestException(
+                `Слот ${virtualId} уже забронирован или недоступен`
+              );
+            }
           }
 
           slotsToBook.push(existingSlot);
@@ -612,17 +612,37 @@ export class BookingMiniAppService {
         throw new BadRequestException("Нельзя забронировать время в прошлом");
       }
 
-      // Создаем физический слот для бронирования
-      timeSlot = this.timeSlotRepository.create({
-        specialistId: createBookingDto.specialistId,
-        startTime,
-        endTime,
-        isAvailable: true,
-        isBooked: false,
+      // Проверяем, не существует ли уже слот с таким временем
+      let existingSlot = await this.timeSlotRepository.findOne({
+        where: {
+          specialistId: createBookingDto.specialistId,
+          startTime,
+          endTime,
+        },
       });
 
-      // Сохраняем слот в БД
-      timeSlot = await this.timeSlotRepository.save(timeSlot);
+      if (!existingSlot) {
+        // Создаем физический слот для бронирования
+        timeSlot = this.timeSlotRepository.create({
+          specialistId: createBookingDto.specialistId,
+          startTime,
+          endTime,
+          isAvailable: true,
+          isBooked: false,
+        });
+
+        // Сохраняем слот в БД
+        timeSlot = await this.timeSlotRepository.save(timeSlot);
+      } else {
+        // Проверяем доступность существующего слота
+        if (existingSlot.isBooked || !existingSlot.isAvailable) {
+          throw new BadRequestException(
+            "Выбранное время уже забронировано или недоступно"
+          );
+        }
+        timeSlot = existingSlot;
+      }
+
       slotsToBook = [timeSlot];
     } else {
       // Физический слот из БД
