@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  forwardRef,
+  Inject,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, Between, MoreThan } from "typeorm";
@@ -15,6 +17,7 @@ import {
   BookingSource,
 } from "../../../database/entities/booking.entity";
 import { CreateBookingDto } from "../dto/booking.dto";
+import { BookingNotificationsService } from "./booking-notifications.service";
 
 @Injectable()
 export class BookingMiniAppService {
@@ -28,7 +31,9 @@ export class BookingMiniAppService {
     @InjectRepository(TimeSlot)
     private timeSlotRepository: Repository<TimeSlot>,
     @InjectRepository(Booking)
-    private bookingRepository: Repository<Booking>
+    private bookingRepository: Repository<Booking>,
+    @Inject(forwardRef(() => BookingNotificationsService))
+    private notificationsService: BookingNotificationsService
   ) {}
 
   async getPublicBotForBooking(botId: string): Promise<any> {
@@ -745,6 +750,16 @@ export class BookingMiniAppService {
     for (const slot of slotsToBook) {
       slot.isBooked = true;
       await this.timeSlotRepository.save(slot);
+    }
+
+    // Планируем напоминания если они указаны
+    if (savedBooking.reminders && savedBooking.reminders.length > 0) {
+      try {
+        await this.notificationsService.scheduleReminders(savedBooking);
+      } catch (error) {
+        console.error("Failed to schedule reminders:", error);
+        // Не прерываем создание бронирования из-за ошибки планирования
+      }
     }
 
     return savedBooking;

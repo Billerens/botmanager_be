@@ -84,13 +84,15 @@ export class BookingReminderSchedulerService {
               );
 
           // Проверяем, нужно ли отправлять сейчас
-          // Отправляем, если время наступило (с буфером 1 минута)
+          // Отправляем, если время наступило (с буфером в обе стороны для надежности)
+          const timeDiff = scheduledFor.getTime() - now.getTime();
+          // Отправляем если уведомление должно было прийти в последние 10 минут И ещё не отправлено
           const shouldSend =
-            scheduledFor.getTime() - now.getTime() <= 60 * 1000;
+            timeDiff <= 60 * 1000 && timeDiff >= -10 * 60 * 1000;
 
           if (shouldSend) {
             this.logger.log(
-              `Sending missed/pending reminder for booking ${booking.id}, reminder ${i}`
+              `Sending missed/pending reminder for booking ${booking.id}, reminder ${i}, scheduled for ${scheduledFor.toISOString()}, now ${now.toISOString()}, diff ${Math.floor(timeDiff / 1000 / 60)} minutes`
             );
             await this.notificationsService.sendReminder(booking, i);
             sentCount++;
