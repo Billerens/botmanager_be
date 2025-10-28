@@ -1,21 +1,24 @@
 # Используем официальный Node.js образ
 FROM node:18-alpine
 
+# Включение Corepack для Yarn
+RUN corepack enable
+
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем package.json и package-lock.json
-COPY backend/package*.json ./
+# Копируем package.json и yarn.lock
+COPY backend/package.json backend/yarn.lock* ./
 
 
 # Копируем исходный код
 COPY backend/ ./
 
 # Устанавливаем все зависимости (включая dev для сборки)
-RUN npm ci
+RUN yarn install --frozen-lockfile
 
 # Собираем приложение
-RUN npm run build
+RUN yarn build
 
 # Копируем скрипт запуска с миграциями
 COPY backend/scripts/start-with-migrations.sh /app/start.sh

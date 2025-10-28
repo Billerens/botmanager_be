@@ -1,3 +1,15 @@
 node_modules
 .env
 dist
+
+# npm (удален в пользу yarn)
+package-lock.json
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*

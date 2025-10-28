@@ -18,7 +18,7 @@ check_database_connection() {
     last_error=""
     
     while [ $counter -lt $timeout ]; do
-        connection_output=$(npm run typeorm -- query "SELECT 1" --dataSource dist/database/data-source.js 2>&1)
+        connection_output=$(yarn typeorm -- query "SELECT 1" --dataSource dist/database/data-source.js 2>&1)
         connection_exit_code=$?
         
         if [ $connection_exit_code -eq 0 ]; then
@@ -60,13 +60,13 @@ run_migrations() {
     echo "🔄 Проверяем статус миграций..."
     
     # Показываем текущий статус миграций
-    migration_show_output=$(npm run typeorm -- migration:show --dataSource dist/database/data-source.js 2>&1) || true
+    migration_show_output=$(yarn typeorm -- migration:show --dataSource dist/database/data-source.js 2>&1) || true
     echo "$migration_show_output"
     
     echo "🔄 Применяем миграции..."
     
     # Применяем миграции с захватом вывода
-    migration_output=$(npm run typeorm -- migration:run --dataSource dist/database/data-source.js 2>&1)
+    migration_output=$(yarn typeorm -- migration:run --dataSource dist/database/data-source.js 2>&1)
     migration_exit_code=$?
     
     if [ $migration_exit_code -eq 0 ]; then
@@ -75,7 +75,7 @@ run_migrations() {
         
         # Показываем финальный статус
         echo "📊 Финальный статус миграций:"
-        npm run typeorm -- migration:show --dataSource dist/database/data-source.js || true
+        yarn typeorm -- migration:show --dataSource dist/database/data-source.js || true
     else
         echo "❌ Ошибка при применении миграций"
         echo "🔍 Код ошибки: $migration_exit_code"
@@ -105,7 +105,7 @@ run_migrations() {
 # Функция для запуска приложения
 start_application() {
     echo "🚀 Запускаем BotManager API..."
-    exec npm run start:prod
+    exec yarn start:prod
 }
 
 # Основная логика
