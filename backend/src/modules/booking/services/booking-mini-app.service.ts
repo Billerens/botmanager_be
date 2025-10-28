@@ -485,7 +485,11 @@ export class BookingMiniAppService {
           );
         }
 
-        // Создаем физические слоты для каждого виртуального
+        // Сначала проверяем, существуют ли уже все физические слоты с таким временем
+        // (это может быть случай повторного бронирования после отмены)
+        const existingSlotsCheck: TimeSlot[] = [];
+        let allSlotsExist = true;
+
         for (const virtualId of virtualSlotIds) {
           const virtualParts = virtualId.split("_");
           const startTimeMs = parseInt(virtualParts[1]);
@@ -500,8 +504,7 @@ export class BookingMiniAppService {
           const startTime = new Date(startTimeMs);
           const endTime = new Date(endTimeMs);
 
-          // Проверяем, не существует ли уже слот с таким временем
-          let existingSlot = await this.timeSlotRepository.findOne({
+          const existingSlot = await this.timeSlotRepository.findOne({
             where: {
               specialistId: createBookingDto.specialistId,
               startTime,
@@ -509,30 +512,77 @@ export class BookingMiniAppService {
             },
           });
 
-          if (!existingSlot) {
-            // Создаем новый физический слот
-            existingSlot = this.timeSlotRepository.create({
-              specialistId: createBookingDto.specialistId,
-              startTime,
-              endTime,
-              isAvailable: true,
-              isBooked: false,
-            });
-            existingSlot = await this.timeSlotRepository.save(existingSlot);
+          if (existingSlot) {
+            existingSlotsCheck.push(existingSlot);
           } else {
-            // Проверяем доступность существующего слота
-            if (existingSlot.isBooked || !existingSlot.isAvailable) {
+            allSlotsExist = false;
+            break;
+          }
+        }
+
+        // Если все слоты уже существуют как физические, используем логику для физических merged слотов
+        if (allSlotsExist && existingSlotsCheck.length > 0) {
+          // Проверяем доступность всех слотов
+          for (const slot of existingSlotsCheck) {
+            if (slot.isBooked || !slot.isAvailable) {
               throw new BadRequestException(
-                `Слот ${virtualId} уже забронирован или недоступен`
+                "Один или несколько слотов уже забронированы или недоступны"
               );
             }
           }
 
-          slotsToBook.push(existingSlot);
-        }
+          slotsToBook = existingSlotsCheck;
+          firstSlot = slotsToBook[0];
+        } else {
+          // Создаем физические слоты для каждого виртуального
+          for (const virtualId of virtualSlotIds) {
+            const virtualParts = virtualId.split("_");
+            const startTimeMs = parseInt(virtualParts[1]);
+            const endTimeMs = parseInt(virtualParts[2]);
 
-        // Первый слот для основного бронирования
-        firstSlot = slotsToBook[0];
+            if (isNaN(startTimeMs) || isNaN(endTimeMs)) {
+              throw new BadRequestException(
+                "Некорректное время в виртуальном слоте"
+              );
+            }
+
+            const startTime = new Date(startTimeMs);
+            const endTime = new Date(endTimeMs);
+
+            // Проверяем, не существует ли уже слот с таким временем
+            let existingSlot = await this.timeSlotRepository.findOne({
+              where: {
+                specialistId: createBookingDto.specialistId,
+                startTime,
+                endTime,
+              },
+            });
+
+            if (!existingSlot) {
+              // Создаем новый физический слот
+              existingSlot = this.timeSlotRepository.create({
+                specialistId: createBookingDto.specialistId,
+                startTime,
+                endTime,
+                isAvailable: true,
+                isBooked: false,
+              });
+              existingSlot = await this.timeSlotRepository.save(existingSlot);
+            } else {
+              // Проверяем доступность существующего слота
+              if (existingSlot.isBooked || !existingSlot.isAvailable) {
+                throw new BadRequestException(
+                  `Слот ${virtualId} уже забронирован или недоступен`
+                );
+              }
+            }
+
+            slotsToBook.push(existingSlot);
+          }
+
+          // Первый слот для основного бронирования
+          firstSlot = slotsToBook[0];
+        }
       } else {
         // Merged из физических слотов
         const firstSlotId = parts[1];
@@ -822,6 +872,8 @@ export class BookingMiniAppService {
       });
       if (slot) {
         slot.isBooked = false;
+        // Явно восстанавливаем доступность слота
+        slot.isAvailable = true;
         await this.timeSlotRepository.save(slot);
       }
     }
