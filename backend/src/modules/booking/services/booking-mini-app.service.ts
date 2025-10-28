@@ -38,6 +38,7 @@ export class BookingMiniAppService {
         status: BotStatus.ACTIVE,
         isBookingEnabled: true,
       },
+      relations: ["specialists", "specialists.services"],
     });
 
     if (!bot) {
@@ -49,15 +50,17 @@ export class BookingMiniAppService {
     return {
       id: bot.id,
       name: bot.name,
+      username: bot.username,
       description: bot.description,
-      bookingTitle: bot.bookingTitle,
-      bookingDescription: bot.bookingDescription,
+      bookingTitle: bot.bookingTitle || bot.name,
+      bookingDescription: bot.bookingDescription || bot.description,
       bookingLogoUrl: bot.bookingLogoUrl,
       bookingCustomStyles: bot.bookingCustomStyles,
       bookingButtonTypes: bot.bookingButtonTypes,
       bookingButtonSettings: bot.bookingButtonSettings,
       bookingSettings: bot.bookingSettings || bot.defaultBookingSettings,
       bookingUrl: bot.bookingUrl,
+      specialists: bot.specialists?.filter((s) => s.isActive) || [],
     };
   }
 
@@ -240,7 +243,6 @@ export class BookingMiniAppService {
 
     const startTime = this.parseTime(workingHours.startTime, date);
     const endTime = this.parseTime(workingHours.endTime, date);
-    const now = new Date();
 
     let currentTime = new Date(startTime);
 
@@ -253,11 +255,8 @@ export class BookingMiniAppService {
         break;
       }
 
-      // Пропускаем слоты в прошлом
-      if (slotEndTime <= now) {
-        currentTime = new Date(slotEndTime.getTime() + buffer * 60 * 1000);
-        continue;
-      }
+      // НЕ пропускаем слоты в прошлом - фронтенд сам заблокирует их для выбора
+      // Отправляем все слоты на фронтенд для корректного отображения
 
       // Проверяем перерывы
       const breaks = workingHours.breaks || specialist.breakTimes || [];
