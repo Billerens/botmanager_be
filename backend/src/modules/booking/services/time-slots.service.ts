@@ -4,13 +4,17 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Between, LessThan, MoreThan } from "typeorm";
+import { Repository, Between, LessThan, MoreThan, In } from "typeorm";
 import { TimeSlot } from "../../../database/entities/time-slot.entity";
 import {
   Specialist,
   WorkingHours,
 } from "../../../database/entities/specialist.entity";
 import { Service } from "../../../database/entities/service.entity";
+import {
+  Booking,
+  BookingStatus,
+} from "../../../database/entities/booking.entity";
 import {
   CreateTimeSlotDto,
   UpdateTimeSlotDto,
@@ -26,7 +30,9 @@ export class TimeSlotsService {
     @InjectRepository(Specialist)
     private specialistRepository: Repository<Specialist>,
     @InjectRepository(Service)
-    private serviceRepository: Repository<Service>
+    private serviceRepository: Repository<Service>,
+    @InjectRepository(Booking)
+    private bookingRepository: Repository<Booking>
   ) {}
 
   async create(
@@ -401,40 +407,46 @@ export class TimeSlotsService {
         specialistId: specialist.id,
         startTime: Between(startOfDay, endOfDay),
       },
-      relations: ["booking", "booking.service"],
       order: { startTime: "ASC" },
     });
 
-    // Загружаем все бронирования на этот день для поиска составных слотов
-    const bookingsOnDay = existingSlots
-      .filter((slot) => slot.booking)
-      .map((slot) => slot.booking!);
+    // Загружаем все активные бронирования на этот день
+    const bookingsOnDay = await this.bookingRepository.find({
+      where: {
+        specialistId: specialist.id,
+        status: In([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
+        timeSlot: {
+          startTime: Between(startOfDay, endOfDay),
+        },
+      },
+      relations: ["service", "timeSlot"],
+    });
 
-    // Создаем Map для поиска бронирований по составным слотам
-    const mergedSlotBookingsMap = new Map<string, any>();
+    // Создаем Map для поиска бронирований по timeSlotId
+    const bookingsBySlotId = new Map<string, any>();
     bookingsOnDay.forEach((booking) => {
+      bookingsBySlotId.set(booking.timeSlotId, booking);
+
+      // Также добавляем составные слоты если есть
       if (booking.clientData?.mergedSlotIds) {
         booking.clientData.mergedSlotIds.forEach((slotId: string) => {
-          mergedSlotBookingsMap.set(slotId, booking);
+          bookingsBySlotId.set(slotId, booking);
         });
       }
     });
 
     // Создаем Map для быстрого поиска существующих слотов по времени
-    const existingSlotsMap = new Map<string, TimeSlot>();
+    const existingSlotsMap = new Map<string, any>();
     existingSlots.forEach((slot) => {
       const key = `${slot.startTime.toISOString()}_${slot.endTime.toISOString()}`;
 
-      // Если у слота нет прямой связи с бронированием, но он является составным слотом
-      if (
-        !slot.booking &&
-        slot.isBooked &&
-        mergedSlotBookingsMap.has(slot.id)
-      ) {
-        slot.booking = mergedSlotBookingsMap.get(slot.id);
-      }
+      // Добавляем информацию о бронировании к слоту (для совместимости с фронтендом)
+      const slotWithBooking = {
+        ...slot,
+        booking: bookingsBySlotId.get(slot.id),
+      };
 
-      existingSlotsMap.set(key, slot);
+      existingSlotsMap.set(key, slotWithBooking);
     });
 
     // Объединяем виртуальные и реальные слоты
