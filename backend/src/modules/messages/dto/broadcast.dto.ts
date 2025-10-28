@@ -13,8 +13,17 @@ export class BroadcastButtonDto {
   @IsString()
   text: string;
 
+  @IsOptional()
   @IsString()
-  callbackData: string;
+  callbackData?: string;
+
+  @IsOptional()
+  @IsString()
+  url?: string;
+
+  @IsOptional()
+  @IsString()
+  webApp?: string;
 }
 
 export class BroadcastRecipientsDto {

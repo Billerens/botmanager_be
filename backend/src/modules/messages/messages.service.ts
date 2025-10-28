@@ -716,6 +716,28 @@ export class MessagesService {
     };
   }
 
+  private createInlineKeyboard(buttons: any[]): any {
+    if (!buttons || buttons.length === 0) {
+      return undefined;
+    }
+
+    return {
+      inline_keyboard: buttons.map((button) => {
+        const btnData: any = { text: button.text };
+
+        if (button.webApp) {
+          btnData.web_app = { url: button.webApp };
+        } else if (button.url) {
+          btnData.url = button.url;
+        } else if (button.callbackData) {
+          btnData.callback_data = button.callbackData;
+        }
+
+        return [btnData];
+      }),
+    };
+  }
+
   async sendBroadcast(botId: string, userId: string, data: BroadcastDto) {
     // Проверяем, что бот принадлежит пользователю
     const bot = await this.botRepository.findOne({
@@ -875,17 +897,7 @@ export class MessagesService {
             data.text.substring(0, 50) + "..."
           );
 
-          const replyMarkup =
-            data.buttons && data.buttons.length > 0
-              ? {
-                  inline_keyboard: data.buttons.map((button) => [
-                    {
-                      text: button.text,
-                      callback_data: button.callbackData,
-                    },
-                  ]),
-                }
-              : undefined;
+          const replyMarkup = this.createInlineKeyboard(data.buttons);
 
           console.log(`Reply markup:`, replyMarkup);
 
@@ -913,17 +925,7 @@ export class MessagesService {
 
         // Отправляем изображение если есть
         if (data.image && success) {
-          const replyMarkup =
-            data.buttons && data.buttons.length > 0
-              ? {
-                  inline_keyboard: data.buttons.map((button) => [
-                    {
-                      text: button.text,
-                      callback_data: button.callbackData,
-                    },
-                  ]),
-                }
-              : undefined;
+          const replyMarkup = this.createInlineKeyboard(data.buttons);
 
           const result = await this.telegramService.sendPhoto(
             decryptedToken,
