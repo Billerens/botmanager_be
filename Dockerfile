@@ -1,5 +1,5 @@
 # Используем официальный Node.js образ
-FROM node:18-alpine
+FROM node:22-alpine
 
 # Включение Corepack для Yarn
 RUN corepack enable
