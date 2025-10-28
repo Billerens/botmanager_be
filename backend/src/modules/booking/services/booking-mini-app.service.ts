@@ -323,6 +323,25 @@ export class BookingMiniAppService {
   }
 
   /**
+   * Форматирует дату в формат YYYY-MM-DD для буквального сравнения
+   */
+  private formatDate(date: Date): string {
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  /**
+   * Форматирует время в формат HH:mm для буквального сравнения
+   */
+  private formatTime(date: Date): string {
+    const hours = String(date.getUTCHours()).padStart(2, "0");
+    const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  }
+
+  /**
    * Объединяет последовательные слоты в слоты нужной длительности
    */
   private mergeConsecutiveSlots(
@@ -661,9 +680,31 @@ export class BookingMiniAppService {
       slotsToBook = [timeSlot];
     }
 
-    // Проверяем, что время слота не в прошлом
-    if (timeSlot.isInPast()) {
-      throw new BadRequestException("Нельзя забронировать время в прошлом");
+    // Проверяем, что время слота не в прошлом относительно времени пользователя
+    // Используем буквальное сравнение цифр даты и времени (не timezone-based)
+    if (createBookingDto.clientCurrentTime) {
+      const slotDate = this.formatDate(timeSlot.startTime);
+      const slotTime = this.formatTime(timeSlot.startTime);
+      const clientDate = this.formatDate(
+        new Date(createBookingDto.clientCurrentTime)
+      );
+      const clientTime = this.formatTime(
+        new Date(createBookingDto.clientCurrentTime)
+      );
+
+      // Сравниваем буквально: дату, затем время
+      const isSlotPast =
+        slotDate < clientDate ||
+        (slotDate === clientDate && slotTime < clientTime);
+
+      if (isSlotPast) {
+        throw new BadRequestException("Нельзя забронировать время в прошлом");
+      }
+    } else {
+      // Fallback: проверка по времени сервера (если клиент не передал свое время)
+      if (timeSlot.isInPast()) {
+        throw new BadRequestException("Нельзя забронировать время в прошлом");
+      }
     }
 
     // Проверяем, что специалист работает в это время

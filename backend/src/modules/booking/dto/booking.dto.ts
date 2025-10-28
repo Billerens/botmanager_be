@@ -329,6 +329,10 @@ export class CreateBookingDto {
 
   @IsString()
   timeSlotId: string;
+
+  @IsOptional()
+  @IsString()
+  clientCurrentTime?: string; // ISO строка с текущим временем клиента для валидации
 }
 
 export class UpdateBookingDto {
