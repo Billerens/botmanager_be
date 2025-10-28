@@ -11,13 +11,37 @@ import {
   Max,
   IsEmail,
   IsPhoneNumber,
+  ValidateNested,
+  IsIn,
 } from "class-validator";
 import { Type } from "class-transformer";
 import {
   BookingStatus,
   BookingSource,
+  BookingReminder,
 } from "../../../database/entities/booking.entity";
 import { WorkingHours } from "../../../database/entities/specialist.entity";
+
+export class BookingReminderDto {
+  @IsNumber()
+  @Min(1)
+  timeValue: number;
+
+  @IsString()
+  @IsIn(['minutes', 'hours', 'days'])
+  timeUnit: 'minutes' | 'hours' | 'days';
+
+  @IsBoolean()
+  sent: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  sentAt?: string;
+
+  @IsOptional()
+  @IsDateString()
+  scheduledFor?: string;
+}
 
 export class CreateSpecialistDto {
   @IsString()
@@ -277,6 +301,10 @@ export class CreateBookingDto {
 
   @IsOptional()
   @IsString()
+  telegramUsername?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 
   @IsOptional()
@@ -286,6 +314,12 @@ export class CreateBookingDto {
   @IsOptional()
   @IsObject()
   clientData?: Record<string, any>;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BookingReminderDto)
+  reminders?: BookingReminderDto[];
 
   @IsString()
   specialistId: string;
@@ -325,6 +359,12 @@ export class UpdateBookingDto {
   @IsOptional()
   @IsObject()
   clientData?: Record<string, any>;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BookingReminderDto)
+  reminders?: BookingReminderDto[];
 }
 
 export class ConfirmBookingDto {

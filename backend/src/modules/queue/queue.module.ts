@@ -10,8 +10,11 @@ import { QueueService } from "./queue.service";
     BullModule.registerQueue({
       name: "webhook-queue",
     }),
+    BullModule.registerQueue({
+      name: "booking-reminder-queue",
+    }),
   ],
   providers: [QueueService],
-  exports: [QueueService],
+  exports: [QueueService, BullModule],
 })
 export class QueueModule {}

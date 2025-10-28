@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  forwardRef,
+  Inject,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, Between, MoreThan, In } from "typeorm";
@@ -19,6 +21,7 @@ import {
   ConfirmBookingDto,
   CancelBookingDto,
 } from "../dto/booking.dto";
+import { BookingNotificationsService } from "./booking-notifications.service";
 
 @Injectable()
 export class BookingsService {
@@ -32,7 +35,9 @@ export class BookingsService {
     @InjectRepository(Service)
     private serviceRepository: Repository<Service>,
     @InjectRepository(Bot)
-    private botRepository: Repository<Bot>
+    private botRepository: Repository<Bot>,
+    @Inject(forwardRef(() => BookingNotificationsService))
+    private notificationsService: BookingNotificationsService
   ) {}
 
   async create(
@@ -118,6 +123,16 @@ export class BookingsService {
     // Помечаем слот как забронированный
     timeSlot.isBooked = true;
     await this.timeSlotRepository.save(timeSlot);
+
+    // Планируем напоминания если они указаны
+    if (savedBooking.reminders && savedBooking.reminders.length > 0) {
+      try {
+        await this.notificationsService.scheduleReminders(savedBooking);
+      } catch (error) {
+        console.error("Failed to schedule reminders:", error);
+        // Не прерываем создание бронирования из-за ошибки планирования
+      }
+    }
 
     return savedBooking;
   }
@@ -248,7 +263,22 @@ export class BookingsService {
     // Освобождаем все составные слоты
     await this.freeBookingSlots(booking);
 
-    return this.bookingRepository.save(booking);
+    const savedBooking = await this.bookingRepository.save(booking);
+
+    // Отправляем уведомление об отмене, если есть причина
+    if (cancelBookingDto.cancellationReason && booking.telegramUserId) {
+      try {
+        await this.notificationsService.sendCancellationNotification(
+          booking.id,
+          cancelBookingDto.cancellationReason
+        );
+      } catch (error) {
+        console.error("Failed to send cancellation notification:", error);
+        // Не прерываем отмену бронирования из-за ошибки отправки уведомления
+      }
+    }
+
+    return savedBooking;
   }
 
   async markAsCompleted(id: string, botId: string): Promise<Booking> {

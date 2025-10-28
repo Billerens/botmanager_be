@@ -28,6 +28,14 @@ export enum BookingSource {
   OTHER = "other",
 }
 
+export interface BookingReminder {
+  timeValue: number; // Числовое значение (например, 1, 2, 24)
+  timeUnit: 'minutes' | 'hours' | 'days'; // Единица измерения
+  sent: boolean; // Было ли отправлено уведомление
+  sentAt?: Date; // Время отправки уведомления
+  scheduledFor?: Date; // Запланированное время отправки
+}
+
 @Entity("bookings")
 export class Booking {
   @PrimaryGeneratedColumn("uuid")
@@ -45,8 +53,14 @@ export class Booking {
   @Column({ nullable: true })
   telegramUserId: string;
 
+  @Column({ nullable: true })
+  telegramUsername: string;
+
   @Column({ type: "text", nullable: true })
   notes: string;
+
+  @Column({ type: "json", nullable: true })
+  reminders: BookingReminder[];
 
   @Column({
     type: "enum",

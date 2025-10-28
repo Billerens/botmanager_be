@@ -12,6 +12,7 @@ import { ServicesService } from "./services/services.service";
 import { TimeSlotsService } from "./services/time-slots.service";
 import { BookingsService } from "./services/bookings.service";
 import { BookingMiniAppService } from "./services/booking-mini-app.service";
+import { BookingNotificationsService } from "./services/booking-notifications.service";
 
 // Контроллеры
 import { SpecialistsController } from "./controllers/specialists.controller";
@@ -20,9 +21,18 @@ import { TimeSlotsController } from "./controllers/time-slots.controller";
 import { BookingsController } from "./controllers/bookings.controller";
 import { PublicBookingController } from "./controllers/public-booking.controller";
 
+// Процессоры
+import { BookingReminderProcessor } from "./processors/booking-reminder.processor";
+
+// Модули
+import { TelegramModule } from "../telegram/telegram.module";
+import { QueueModule } from "../queue/queue.module";
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Specialist, Service, TimeSlot, Booking, Bot]),
+    TelegramModule,
+    QueueModule,
   ],
   controllers: [
     SpecialistsController,
@@ -37,6 +47,8 @@ import { PublicBookingController } from "./controllers/public-booking.controller
     TimeSlotsService,
     BookingsService,
     BookingMiniAppService,
+    BookingNotificationsService,
+    BookingReminderProcessor,
   ],
   exports: [
     SpecialistsService,
@@ -44,6 +56,7 @@ import { PublicBookingController } from "./controllers/public-booking.controller
     TimeSlotsService,
     BookingsService,
     BookingMiniAppService,
+    BookingNotificationsService,
   ],
 })
 export class BookingModule {}
