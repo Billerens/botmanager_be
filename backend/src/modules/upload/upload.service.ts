@@ -173,4 +173,30 @@ export class UploadService {
       throw error;
     }
   }
+
+  /**
+   * Загружает изображение сообщения/рассылки в S3
+   */
+  async uploadMessageImage(file: {
+    buffer: Buffer;
+    originalname: string;
+    mimetype: string;
+  }): Promise<string> {
+    try {
+      this.logger.log(`Uploading message image: ${file.originalname}`);
+
+      const imageUrl = await this.s3Service.uploadFile(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        "message-images"
+      );
+
+      this.logger.log(`Successfully uploaded message image: ${imageUrl}`);
+      return imageUrl;
+    } catch (error) {
+      this.logger.error(`Error uploading message image: ${error.message}`);
+      throw error;
+    }
+  }
 }

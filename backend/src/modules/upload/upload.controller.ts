@@ -373,4 +373,85 @@ export class UploadController {
       };
     }
   }
+
+  @Post("message-image")
+  @UseInterceptors(FileInterceptor("image"))
+  @ApiOperation({ summary: "Загрузить изображение сообщения/рассылки" })
+  @ApiConsumes("multipart/form-data")
+  @ApiResponse({
+    status: 200,
+    description: "Изображение сообщения загружено",
+    schema: {
+      type: "object",
+      properties: {
+        success: {
+          type: "boolean",
+          example: true,
+        },
+        message: {
+          type: "string",
+          example: "Successfully uploaded message image",
+        },
+        imageUrls: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+          example: ["https://example.com/uploads/message-image.jpg"],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Ошибка загрузки изображения",
+    schema: {
+      type: "object",
+      properties: {
+        success: {
+          type: "boolean",
+          example: false,
+        },
+        message: {
+          type: "string",
+          example: "No file uploaded",
+        },
+        imageUrls: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+          example: [],
+        },
+      },
+    },
+  })
+  async uploadMessageImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: any
+  ) {
+    if (!file) {
+      return {
+        success: false,
+        message: "No file uploaded",
+        imageUrls: [],
+      };
+    }
+
+    try {
+      const imageUrl = await this.uploadService.uploadMessageImage(file);
+
+      return {
+        success: true,
+        message: "Successfully uploaded message image",
+        imageUrls: [imageUrl],
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+        imageUrls: [],
+      };
+    }
+  }
 }
