@@ -210,20 +210,42 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
         try {
           this.logger.log(`Отправка сообщения пользователю ${chatId}`);
           const decryptedToken = this.botsService.decryptToken(bot.token);
+          let result = null;
 
-          const result = await this.telegramService.sendMessage(
-            decryptedToken,
-            chatId,
-            processedText,
-            {
-              parse_mode: "HTML",
-              reply_markup: replyMarkup,
-            }
-          );
+          // Если есть изображение - отправляем фото с caption
+          if (broadcast.image) {
+            this.logger.log(
+              `Отправляем фото пользователю ${chatId} с URL: ${broadcast.image}`
+            );
+            result = await this.telegramService.sendPhoto(
+              decryptedToken,
+              chatId,
+              broadcast.image, // URL изображения
+              {
+                caption: processedText || undefined,
+                parse_mode: processedText ? "HTML" : undefined,
+                reply_markup: replyMarkup,
+              }
+            );
+          }
+          // Если нет изображения, но есть текст - отправляем текстовое сообщение
+          else if (processedText) {
+            result = await this.telegramService.sendMessage(
+              decryptedToken,
+              chatId,
+              processedText,
+              {
+                parse_mode: "HTML",
+                reply_markup: replyMarkup,
+              }
+            );
+          }
 
           if (result) {
             sentCount++;
-            this.logger.log(`✅ Сообщение отправлено пользователю ${chatId}`);
+            this.logger.log(
+              `✅ Сообщение ${broadcast.image ? "с фото " : ""}отправлено пользователю ${chatId}`
+            );
           } else {
             failedCount++;
             this.logger.warn(
