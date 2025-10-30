@@ -50,15 +50,42 @@ export class BookingNotificationsService {
       return;
     }
 
-    // Убеждаемся, что работаем с UTC временем
-    const bookingTime = new Date(fullBooking.timeSlot.startTime);
+    // Получаем timezone пользователя из clientData
+    const clientTimezone = fullBooking.clientData?.clientTimezone as
+      | string
+      | undefined;
+
+    // Интерпретируем время слота как "время на часах" в локальном часовом поясе пользователя
+    // Если timezone есть, конвертируем UTC время в локальное для расчета напоминаний
+    let bookingTimeLocal: Date;
+    if (clientTimezone) {
+      // Время слота в БД хранится как UTC (например, 12:00 UTC)
+      // Но оно должно интерпретироваться как "12:00" по локальному времени пользователя
+      // Конвертируем: если пользователь видел "12:00" и он в UTC+3,
+      // то реальное UTC время = 12:00 - 3 часа = 09:00 UTC
+      bookingTimeLocal = this.convertUTCTimeToLocal(
+        new Date(fullBooking.timeSlot.startTime),
+        clientTimezone
+      );
+      this.logger.log(
+        `Using client timezone ${clientTimezone} for booking ${booking.id}`
+      );
+    } else {
+      // Fallback: если timezone не указан, используем UTC время как есть
+      bookingTimeLocal = new Date(fullBooking.timeSlot.startTime);
+      this.logger.warn(
+        `No timezone found for booking ${booking.id}, using UTC time`
+      );
+    }
+
     const now = new Date();
 
     this.logger.log(
       `Scheduling reminders for booking ${booking.id}:
-       Booking time: ${bookingTime.toISOString()}
+       Booking time (UTC in DB): ${fullBooking.timeSlot.startTime.toISOString()}
+       Booking time (local interpretation): ${bookingTimeLocal.toISOString()}
        Current time: ${now.toISOString()}
-       Time until booking: ${Math.floor((bookingTime.getTime() - now.getTime()) / 1000 / 60)} minutes`
+       Time until booking: ${Math.floor((bookingTimeLocal.getTime() - now.getTime()) / 1000 / 60)} minutes`
     );
 
     // Планируем каждое напоминание
@@ -69,8 +96,9 @@ export class BookingNotificationsService {
         continue; // Уже отправлено
       }
 
+      // Рассчитываем время напоминания относительно локального времени бронирования
       const scheduledTime = this.calculateReminderTime(
-        bookingTime,
+        bookingTimeLocal,
         reminder.timeValue,
         reminder.timeUnit
       );
@@ -109,6 +137,47 @@ export class BookingNotificationsService {
 
     // Сохраняем обновленные reminders с scheduledFor
     await this.bookingRepository.save(fullBooking);
+  }
+
+  /**
+   * Конвертирует UTC время из БД в локальное время пользователя
+   * Интерпретирует UTC время как "время на часах" в указанном часовом поясе
+   *
+   * @param utcTime Время в UTC из БД (например, 12:00 UTC)
+   * @param timezoneOffset Timezone offset в формате "+HH:mm" или "-HH:mm" (например, "+03:00")
+   * @returns Реальное UTC время, соответствующее "времени на часах" в локальном часовом поясе
+   *
+   * Пример:
+   * - В БД: 2025-05-25T12:00:00Z (12:00 UTC)
+   * - Timezone: "+03:00"
+   * - Интерпретация: "12:00" по времени пользователя (UTC+3)
+   * - Результат: 2025-05-25T09:00:00Z (12:00 - 3 часа = 09:00 UTC)
+   */
+  private convertUTCTimeToLocal(utcTime: Date, timezoneOffset: string): Date {
+    // Парсим timezone offset (формат: "+03:00", "-05:00" или "Z")
+    let offsetMs = 0;
+
+    if (timezoneOffset === "Z" || timezoneOffset === "+00:00") {
+      offsetMs = 0;
+    } else {
+      const match = timezoneOffset.match(/^([+-])(\d{2}):(\d{2})$/);
+      if (!match) {
+        this.logger.warn(
+          `Invalid timezone offset format: ${timezoneOffset}, using UTC`
+        );
+        return utcTime;
+      }
+
+      const sign = match[1] === "+" ? 1 : -1;
+      const hours = parseInt(match[2], 10);
+      const minutes = parseInt(match[3], 10);
+
+      offsetMs = sign * (hours * 60 + minutes) * 60 * 1000;
+    }
+
+    // Вычитаем offset из UTC времени, чтобы получить реальное UTC время
+    // Если пользователь видел "12:00" в UTC+3, то реальное UTC время = 12:00 - 3 часа
+    return new Date(utcTime.getTime() - offsetMs);
   }
 
   /**

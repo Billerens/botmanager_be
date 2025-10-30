@@ -28,8 +28,8 @@ export class BookingReminderDto {
   timeValue: number;
 
   @IsString()
-  @IsIn(['minutes', 'hours', 'days'])
-  timeUnit: 'minutes' | 'hours' | 'days';
+  @IsIn(["minutes", "hours", "days"])
+  timeUnit: "minutes" | "hours" | "days";
 
   @IsBoolean()
   sent: boolean;
@@ -332,7 +332,7 @@ export class CreateBookingDto {
 
   @IsOptional()
   @IsString()
-  clientCurrentTime?: string; // ISO строка с текущим временем клиента для валидации
+  clientCurrentTime?: string; // Локальное время клиента с timezone в формате "YYYY-MM-DDTHH:mm:ss+HH:mm" или "YYYY-MM-DDTHH:mm:ss" для валидации
 }
 
 export class UpdateBookingDto {
