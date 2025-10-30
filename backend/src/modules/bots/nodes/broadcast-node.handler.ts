@@ -190,19 +190,28 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
       // Подготавливаем клавиатуру если есть кнопки
       let replyMarkup = undefined;
       if (broadcast.buttons && broadcast.buttons.length > 0) {
-        // Подставляем переменные в текст кнопок
-        const processedButtons = broadcast.buttons.map((button) => ({
-          text: this.substituteVariables(button.text, context),
-          callback_data: button.callbackData,
-        }));
-
         replyMarkup = {
-          inline_keyboard: processedButtons.map((button) => [
-            {
-              text: button.text,
-              callback_data: button.callback_data,
-            },
-          ]),
+          inline_keyboard: broadcast.buttons.map((button) => {
+            // Подставляем переменные в текст кнопок
+            const processedText = this.substituteVariables(button.text, context);
+            const buttonData: any = { text: processedText };
+
+            // Определяем тип кнопки и подставляем переменные
+            if (button.webApp) {
+              buttonData.web_app = {
+                url: this.substituteVariables(button.webApp, context),
+              };
+            } else if (button.url) {
+              buttonData.url = this.substituteVariables(button.url, context);
+            } else if (button.callbackData) {
+              buttonData.callback_data = this.substituteVariables(
+                button.callbackData,
+                context
+              );
+            }
+
+            return [buttonData];
+          }),
         };
       }
 
