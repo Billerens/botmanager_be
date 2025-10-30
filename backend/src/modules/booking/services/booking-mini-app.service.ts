@@ -328,22 +328,46 @@ export class BookingMiniAppService {
   }
 
   /**
-   * Форматирует дату в формат YYYY-MM-DD для буквального сравнения
+   * Форматирует дату в формат YYYY-MM-DD для буквального сравнения "времени на часах"
+   * Использует локальные методы Date для получения числовых значений даты
+   * (интерпретирует UTC время как локальное для буквального сравнения)
    */
   private formatDate(date: Date): string {
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-    const day = String(date.getUTCDate()).padStart(2, "0");
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   }
 
   /**
-   * Форматирует время в формат HH:mm для буквального сравнения
+   * Форматирует время в формат HH:mm для буквального сравнения "времени на часах"
+   * Использует локальные методы Date для получения числовых значений времени
+   * (интерпретирует UTC время как локальное для буквального сравнения)
    */
   private formatTime(date: Date): string {
-    const hours = String(date.getUTCHours()).padStart(2, "0");
-    const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
     return `${hours}:${minutes}`;
+  }
+
+  /**
+   * Парсит строку времени от клиента в локальные компоненты даты и времени
+   * Ожидает формат "YYYY-MM-DDTHH:mm:ss" (без timezone)
+   */
+  private parseClientTime(clientTimeString: string): {
+    date: string;
+    time: string;
+  } {
+    // Парсим строку формата "YYYY-MM-DDTHH:mm:ss"
+    const parts = clientTimeString.split("T");
+    if (parts.length !== 2) {
+      throw new Error(`Invalid client time format: ${clientTimeString}`);
+    }
+
+    const date = parts[0]; // "YYYY-MM-DD"
+    const time = parts[1].substring(0, 5); // "HH:mm" (берем только часы и минуты)
+
+    return { date, time };
   }
 
   /**
@@ -736,18 +760,18 @@ export class BookingMiniAppService {
     }
 
     // Проверяем, что время слота не в прошлом относительно времени пользователя
-    // Используем буквальное сравнение цифр даты и времени (не timezone-based)
+    // Используем буквальное сравнение цифр даты и времени ("времени на часах")
     if (createBookingDto.clientCurrentTime) {
+      // Форматируем время слота для буквального сравнения "времени на часах"
       const slotDate = this.formatDate(timeSlot.startTime);
       const slotTime = this.formatTime(timeSlot.startTime);
-      const clientDate = this.formatDate(
-        new Date(createBookingDto.clientCurrentTime)
-      );
-      const clientTime = this.formatTime(
-        new Date(createBookingDto.clientCurrentTime)
+
+      // Парсим локальное время клиента (формат "YYYY-MM-DDTHH:mm:ss" без timezone)
+      const { date: clientDate, time: clientTime } = this.parseClientTime(
+        createBookingDto.clientCurrentTime
       );
 
-      // Сравниваем буквально: дату, затем время
+      // Сравниваем буквально: дату, затем время ("время на часах")
       const isSlotPast =
         slotDate < clientDate ||
         (slotDate === clientDate && slotTime < clientTime);
