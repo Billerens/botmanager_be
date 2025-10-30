@@ -318,8 +318,44 @@ export class BookingNotificationsService {
    * Отменяет все запланированные напоминания для бронирования
    */
   async cancelReminders(bookingId: string): Promise<void> {
-    // TODO: Реализовать отмену задач в очереди
     this.logger.log(`Cancelling reminders for booking ${bookingId}`);
+
+    try {
+      // Отменяем задачи в очереди BullMQ
+      const cancelledCount =
+        await this.queueService.cancelBookingReminders(bookingId);
+      this.logger.log(
+        `Cancelled ${cancelledCount} reminder jobs from queue for booking ${bookingId}`
+      );
+
+      // Помечаем все неотправленные напоминания как отправленные, чтобы они не отправлялись через backup механизм
+      const booking = await this.bookingRepository.findOne({
+        where: { id: bookingId },
+      });
+
+      if (booking && booking.reminders) {
+        let updated = false;
+        for (let i = 0; i < booking.reminders.length; i++) {
+          if (!booking.reminders[i].sent) {
+            booking.reminders[i].sent = true;
+            updated = true;
+          }
+        }
+
+        if (updated) {
+          await this.bookingRepository.save(booking);
+          this.logger.log(
+            `Marked all reminders as sent for cancelled booking ${bookingId}`
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to cancel reminders for booking ${bookingId}:`,
+        error
+      );
+      // Не пробрасываем ошибку, чтобы не блокировать отмену бронирования
+    }
   }
 
   /**

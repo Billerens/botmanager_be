@@ -936,7 +936,17 @@ export class BookingMiniAppService {
       }
     }
 
-    return this.bookingRepository.save(booking);
+    const savedBooking = await this.bookingRepository.save(booking);
+
+    // Отменяем все запланированные напоминания
+    try {
+      await this.notificationsService.cancelReminders(booking.id);
+    } catch (error) {
+      console.error("Failed to cancel reminders:", error);
+      // Не прерываем отмену бронирования из-за ошибки отмены напоминаний
+    }
+
+    return savedBooking;
   }
 
   async getBookingStatistics(botId: string): Promise<any> {

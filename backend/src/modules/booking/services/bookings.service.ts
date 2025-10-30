@@ -265,6 +265,14 @@ export class BookingsService {
 
     const savedBooking = await this.bookingRepository.save(booking);
 
+    // Отменяем все запланированные напоминания
+    try {
+      await this.notificationsService.cancelReminders(booking.id);
+    } catch (error) {
+      console.error("Failed to cancel reminders:", error);
+      // Не прерываем отмену бронирования из-за ошибки отмены напоминаний
+    }
+
     // Отправляем уведомление об отмене, если есть причина
     if (cancelBookingDto.cancellationReason && booking.telegramUserId) {
       try {
