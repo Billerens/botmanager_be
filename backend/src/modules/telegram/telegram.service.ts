@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import axios from "axios";
 import FormData from "form-data";
+import * as fs from "fs";
 import { Bot } from "../../database/entities/bot.entity";
 
 export interface TelegramBotInfo {
@@ -372,9 +373,22 @@ export class TelegramService {
       formData.append("chat_id", chatId);
 
       if (Buffer.isBuffer(photo)) {
+        // Если это Buffer (файл в памяти) - передаем напрямую
         formData.append("photo", photo, { filename: "photo.jpg" });
+      } else if (typeof photo === "string") {
+        // Если это строка
+        if (photo.startsWith("http://") || photo.startsWith("https://")) {
+          // Если это URL - Telegram может скачать файл сам
+          formData.append("photo", photo);
+        } else if (fs.existsSync(photo)) {
+          // Если это путь к локальному файлу - читаем через stream
+          formData.append("photo", fs.createReadStream(photo));
+        } else {
+          // Если это file_id или другой идентификатор Telegram
+          formData.append("photo", photo);
+        }
       } else {
-        formData.append("photo", photo);
+        throw new Error("Неподдерживаемый тип данных для фото");
       }
 
       if (options.caption) {
@@ -405,7 +419,11 @@ export class TelegramService {
 
       return response.data.ok ? response.data.result : null;
     } catch (error) {
-      console.error("Ошибка отправки фото:", error.message);
+      console.error("Ошибка отправки фото:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
       return null;
     }
   }
