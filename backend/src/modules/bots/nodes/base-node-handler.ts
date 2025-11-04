@@ -199,11 +199,12 @@ export abstract class BaseNodeHandler implements INodeHandler {
     sourceHandle?: string
   ): string[] {
     // Ищем все edges, которые начинаются с текущего узла
-    const edges = context.flow.flowData?.edges?.filter(
-      (edge) =>
-        edge.source === currentNodeId &&
-        (!sourceHandle || edge.sourceHandle === sourceHandle)
-    ) || [];
+    const edges =
+      context.flow.flowData?.edges?.filter(
+        (edge) =>
+          edge.source === currentNodeId &&
+          (!sourceHandle || edge.sourceHandle === sourceHandle)
+      ) || [];
 
     if (edges.length > 0) {
       return edges.map((edge) => edge.target);
@@ -341,18 +342,53 @@ export abstract class BaseNodeHandler implements INodeHandler {
 
   /**
    * Переходит к следующему узлу и выполняет его
+   * Если sourceHandle указан (например, для условных узлов), обрабатывает только эту ветку
+   * Если sourceHandle не указан, обрабатывает все выходные связи (стандартное поведение)
    */
   protected async moveToNextNode(
     context: FlowContext,
     currentNodeId: string,
     sourceHandle?: string
   ): Promise<void> {
-    const nextNodeId = this.findNextNodeId(
+    // Если указан sourceHandle (например, "true"/"false" для condition узлов),
+    // обрабатываем только одну конкретную ветку
+    if (sourceHandle) {
+      const nextNodeId = this.findNextNodeId(
+        context,
+        currentNodeId,
+        sourceHandle
+      );
+      if (nextNodeId) {
+        context.session.currentNodeId = nextNodeId;
+        context.session.lastActivity = new Date();
+
+        const nextNode = context.flow.nodes.find(
+          (node) => node.nodeId === nextNodeId
+        );
+        if (nextNode && this.executeNodeCallback) {
+          context.currentNode = nextNode;
+          await this.executeNodeCallback(context);
+        }
+      }
+      return;
+    }
+
+    // Если sourceHandle не указан, обрабатываем все выходные связи
+    // Это стандартное поведение для большинства узлов
+    const nextNodeIds = this.findAllNextNodeIds(
       context,
       currentNodeId,
       sourceHandle
     );
-    if (nextNodeId) {
+
+    if (nextNodeIds.length === 0) {
+      // Нет следующих узлов - ничего не делаем
+      return;
+    }
+
+    if (nextNodeIds.length === 1) {
+      // Только один следующий узел - обрабатываем его напрямую (оптимизация)
+      const nextNodeId = nextNodeIds[0];
       context.session.currentNodeId = nextNodeId;
       context.session.lastActivity = new Date();
 
@@ -362,6 +398,70 @@ export abstract class BaseNodeHandler implements INodeHandler {
       if (nextNode && this.executeNodeCallback) {
         context.currentNode = nextNode;
         await this.executeNodeCallback(context);
+      }
+      return;
+    }
+
+    // Несколько следующих узлов - обрабатываем все последовательно
+    this.logger.log(
+      `Найдено ${nextNodeIds.length} следующих узлов для узла ${currentNodeId}, обрабатываем все`
+    );
+
+    // Сохраняем исходный currentNodeId для восстановления после обработки всех узлов
+    const originalCurrentNodeId = context.currentNode?.nodeId;
+
+    // Обрабатываем все следующие узлы последовательно
+    for (let i = 0; i < nextNodeIds.length; i++) {
+      const nextNodeId = nextNodeIds[i];
+      this.logger.log(
+        `Обработка следующего узла ${i + 1}/${nextNodeIds.length}: ${nextNodeId}`
+      );
+
+      const nextNode = context.flow.nodes.find(
+        (node) => node.nodeId === nextNodeId
+      );
+
+      if (nextNode && this.executeNodeCallback) {
+        // Устанавливаем текущий узел для выполнения
+        context.currentNode = nextNode;
+        context.session.currentNodeId = nextNodeId;
+        context.session.lastActivity = new Date();
+
+        // Выполняем узел
+        await this.executeNodeCallback(context);
+      } else {
+        this.logger.warn(`Узел ${nextNodeId} не найден в flow`);
+      }
+    }
+
+    // После обработки всех узлов проверяем, есть ли у них дальнейшие связи
+    // Если у последнего узла есть следующие узлы, продолжаем выполнение от него
+    // Если нет, возвращаемся к исходному узлу, чтобы пользователь мог снова отправить сообщение
+    if (nextNodeIds.length > 0) {
+      const lastNodeId = nextNodeIds[nextNodeIds.length - 1];
+      const lastNodeHasNext = this.findNextNodeId(context, lastNodeId) !== null;
+
+      if (lastNodeHasNext) {
+        // У последнего узла есть дальнейшие связи, продолжаем от него
+        this.logger.log(
+          `У последнего узла ${lastNodeId} есть дальнейшие связи, продолжаем выполнение`
+        );
+        context.session.currentNodeId = lastNodeId;
+      } else {
+        // У обработанных узлов нет дальнейших связей, возвращаемся к исходному узлу
+        // Это позволяет пользователю снова отправить сообщение и получить ответ
+        if (originalCurrentNodeId) {
+          this.logger.log(
+            `У обработанных узлов нет дальнейших связей, возвращаемся к исходному узлу ${originalCurrentNodeId}`
+          );
+          const originalNode = context.flow.nodes.find(
+            (node) => node.nodeId === originalCurrentNodeId
+          );
+          if (originalNode) {
+            context.currentNode = originalNode;
+            context.session.currentNodeId = originalCurrentNodeId;
+          }
+        }
       }
     }
   }
@@ -450,7 +550,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
 
     // После обработки всех узлов проверяем, есть ли у них дальнейшие связи
     // Если у последнего узла есть следующие узлы, продолжаем выполнение от него
-    // Если нет, возвращаемся к исходному узлу (например, NewMessageNode), 
+    // Если нет, возвращаемся к исходному узлу (например, NewMessageNode),
     // чтобы пользователь мог снова отправить сообщение
     if (nextNodeIds.length > 0) {
       const lastNodeId = nextNodeIds[nextNodeIds.length - 1];
