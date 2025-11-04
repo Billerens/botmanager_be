@@ -64,7 +64,22 @@ export class BookingReminderSchedulerService {
           continue;
         }
 
-        const bookingTime = new Date(booking.timeSlot.startTime);
+        // Интерпретируем время слота как "время на часах" в локальном часовом поясе пользователя
+        const clientTimezone = booking.clientData?.clientTimezone as
+          | string
+          | undefined;
+        let bookingTime: Date;
+
+        if (clientTimezone) {
+          // Используем ту же логику конвертации, что и при планировании
+          bookingTime = this.convertUTCTimeToLocal(
+            new Date(booking.timeSlot.startTime),
+            clientTimezone
+          );
+        } else {
+          // Fallback: если timezone не указан, используем UTC время как есть
+          bookingTime = new Date(booking.timeSlot.startTime);
+        }
 
         for (let i = 0; i < booking.reminders.length; i++) {
           const reminder = booking.reminders[i];
@@ -84,11 +99,9 @@ export class BookingReminderSchedulerService {
               );
 
           // Проверяем, нужно ли отправлять сейчас
-          // Отправляем, если время наступило (с буфером в обе стороны для надежности)
+          // Отправляем если время наступило или прошло (независимо от просрочки)
           const timeDiff = scheduledFor.getTime() - now.getTime();
-          // Отправляем если уведомление должно было прийти в последние 10 минут И ещё не отправлено
-          const shouldSend =
-            timeDiff <= 60 * 1000 && timeDiff >= -10 * 60 * 1000;
+          const shouldSend = timeDiff <= 0; // Отправляем если время уже наступило или прошло
 
           if (shouldSend) {
             this.logger.log(
@@ -123,6 +136,38 @@ export class BookingReminderSchedulerService {
     } catch (error) {
       this.logger.error("Error during reminder restoration:", error);
     }
+  }
+
+  /**
+   * Конвертирует UTC время из БД в локальное время пользователя
+   * Интерпретирует UTC время как "время на часах" в указанном часовом поясе
+   * (копия логики из booking-notifications.service.ts)
+   */
+  private convertUTCTimeToLocal(utcTime: Date, timezoneOffset: string): Date {
+    // Парсим timezone offset (формат: "+03:00", "-05:00" или "Z")
+    let offsetMs = 0;
+
+    if (timezoneOffset === "Z" || timezoneOffset === "+00:00") {
+      offsetMs = 0;
+    } else {
+      const match = timezoneOffset.match(/^([+-])(\d{2}):(\d{2})$/);
+      if (!match) {
+        this.logger.warn(
+          `Invalid timezone offset format: ${timezoneOffset}, using UTC`
+        );
+        return utcTime;
+      }
+
+      const sign = match[1] === "+" ? 1 : -1;
+      const hours = parseInt(match[2], 10);
+      const minutes = parseInt(match[3], 10);
+
+      offsetMs = sign * (hours * 60 + minutes) * 60 * 1000;
+    }
+
+    // Вычитаем offset из UTC времени, чтобы получить реальное UTC время
+    // Если пользователь видел "12:00" в UTC+3, то реальное UTC время = 12:00 - 3 часа
+    return new Date(utcTime.getTime() - offsetMs);
   }
 
   /**

@@ -889,15 +889,62 @@ export class MessagesService {
     for (const chatId of recipientChatIds) {
       try {
         let success = false;
+        const replyMarkup = this.createInlineKeyboard(data.buttons);
 
-        // Отправляем текст если есть
-        if (data.text) {
+        // Если есть изображение - отправляем фото с caption
+        if (data.image) {
+          console.log(`Отправляем фото пользователю ${chatId}`);
+
+          // Подготавливаем файл для отправки
+          let photoData: string | Buffer;
+          if (Buffer.isBuffer(data.image)) {
+            // Если это уже Buffer
+            photoData = data.image;
+          } else if (data.image.buffer) {
+            // Если это Express.Multer.File - используем buffer
+            photoData = data.image.buffer;
+          } else if (data.image.path) {
+            // Если есть путь к файлу (локальный файл)
+            photoData = data.image.path;
+          } else if (typeof data.image === "string") {
+            // Если это строка (URL или file_id)
+            photoData = data.image;
+          } else {
+            console.error(`Неподдерживаемый тип изображения для ${chatId}`);
+            failedCount++;
+            failedChatIds.push(chatId);
+            continue;
+          }
+
+          const result = await this.telegramService.sendPhoto(
+            decryptedToken,
+            chatId,
+            photoData,
+            {
+              caption: data.text || undefined,
+              parse_mode: data.text ? "HTML" : undefined,
+              reply_markup: replyMarkup,
+            }
+          );
+
+          console.log(
+            `Результат отправки фото:`,
+            result ? "успешно" : "ошибка"
+          );
+
+          if (result) {
+            success = true;
+            console.log(`Фото отправлено пользователю ${chatId}`);
+          } else {
+            console.log(`Не удалось отправить фото пользователю ${chatId}`);
+          }
+        }
+        // Если нет изображения, но есть текст - отправляем текстовое сообщение
+        else if (data.text) {
           console.log(
             `Отправляем текст пользователю ${chatId}:`,
             data.text.substring(0, 50) + "..."
           );
-
-          const replyMarkup = this.createInlineKeyboard(data.buttons);
 
           console.log(`Reply markup:`, replyMarkup);
 
@@ -911,7 +958,10 @@ export class MessagesService {
             }
           );
 
-          console.log(`Результат отправки сообщения:`, result);
+          console.log(
+            `Результат отправки сообщения:`,
+            result ? "успешно" : "ошибка"
+          );
 
           if (result) {
             success = true;
@@ -920,26 +970,6 @@ export class MessagesService {
             console.log(
               `Не удалось отправить сообщение пользователю ${chatId}`
             );
-          }
-        }
-
-        // Отправляем изображение если есть
-        if (data.image && success) {
-          const replyMarkup = this.createInlineKeyboard(data.buttons);
-
-          const result = await this.telegramService.sendPhoto(
-            decryptedToken,
-            chatId,
-            data.image,
-            {
-              caption: data.text,
-              parse_mode: "HTML",
-              reply_markup: replyMarkup,
-            }
-          );
-
-          if (result) {
-            console.log(`Фото отправлено пользователю ${chatId}`);
           }
         }
 

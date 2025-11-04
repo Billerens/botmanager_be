@@ -328,22 +328,65 @@ export class BookingMiniAppService {
   }
 
   /**
-   * Форматирует дату в формат YYYY-MM-DD для буквального сравнения
+   * Форматирует дату в формат YYYY-MM-DD для буквального сравнения "времени на часах"
+   * Использует локальные методы Date для получения числовых значений даты
+   * (интерпретирует UTC время как локальное для буквального сравнения)
    */
   private formatDate(date: Date): string {
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-    const day = String(date.getUTCDate()).padStart(2, "0");
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   }
 
   /**
-   * Форматирует время в формат HH:mm для буквального сравнения
+   * Форматирует время в формат HH:mm для буквального сравнения "времени на часах"
+   * Использует локальные методы Date для получения числовых значений времени
+   * (интерпретирует UTC время как локальное для буквального сравнения)
    */
   private formatTime(date: Date): string {
-    const hours = String(date.getUTCHours()).padStart(2, "0");
-    const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
     return `${hours}:${minutes}`;
+  }
+
+  /**
+   * Парсит строку времени от клиента в локальные компоненты даты и времени
+   * Поддерживает форматы:
+   * - "YYYY-MM-DDTHH:mm:ss+HH:mm" (с timezone offset)
+   * - "YYYY-MM-DDTHH:mm:ssZ" (с timezone offset в ISO формате)
+   * - "YYYY-MM-DDTHH:mm:ss" (без timezone, для обратной совместимости)
+   *
+   * @param clientTimeString Время клиента
+   * @returns Объект с датой, временем и timezone offset (если указан)
+   */
+  private parseClientTime(clientTimeString: string): {
+    date: string;
+    time: string;
+    timezoneOffset?: string; // Сохраняем для будущего использования
+  } {
+    // Убираем timezone offset для парсинга (если есть), сохраняем его отдельно
+    let timezoneOffset: string | undefined;
+    let timeString = clientTimeString;
+
+    // Проверяем формат с timezone offset: "YYYY-MM-DDTHH:mm:ss+HH:mm" или "YYYY-MM-DDTHH:mm:ssZ"
+    const timezoneMatch = clientTimeString.match(/([+-]\d{2}:\d{2}|Z)$/);
+    if (timezoneMatch) {
+      timezoneOffset = timezoneMatch[1];
+      // Убираем timezone из строки для парсинга даты и времени
+      timeString = clientTimeString.replace(/\s*([+-]\d{2}:\d{2}|Z)$/, "");
+    }
+
+    // Парсим строку формата "YYYY-MM-DDTHH:mm:ss"
+    const parts = timeString.split("T");
+    if (parts.length !== 2) {
+      throw new Error(`Invalid client time format: ${clientTimeString}`);
+    }
+
+    const date = parts[0]; // "YYYY-MM-DD"
+    const time = parts[1].substring(0, 5); // "HH:mm" (берем только часы и минуты)
+
+    return { date, time, timezoneOffset };
   }
 
   /**
@@ -736,18 +779,21 @@ export class BookingMiniAppService {
     }
 
     // Проверяем, что время слота не в прошлом относительно времени пользователя
-    // Используем буквальное сравнение цифр даты и времени (не timezone-based)
+    // Используем буквальное сравнение цифр даты и времени ("времени на часах")
     if (createBookingDto.clientCurrentTime) {
+      // Форматируем время слота для буквального сравнения "времени на часах"
       const slotDate = this.formatDate(timeSlot.startTime);
       const slotTime = this.formatTime(timeSlot.startTime);
-      const clientDate = this.formatDate(
-        new Date(createBookingDto.clientCurrentTime)
-      );
-      const clientTime = this.formatTime(
-        new Date(createBookingDto.clientCurrentTime)
-      );
 
-      // Сравниваем буквально: дату, затем время
+      // Парсим локальное время клиента (поддерживает формат с timezone offset)
+      // timezoneOffset сохраняется для использования при планировании напоминаний
+      const {
+        date: clientDate,
+        time: clientTime,
+        timezoneOffset,
+      } = this.parseClientTime(createBookingDto.clientCurrentTime);
+
+      // Сравниваем буквально: дату, затем время ("время на часах")
       const isSlotPast =
         slotDate < clientDate ||
         (slotDate === clientDate && slotTime < clientTime);
@@ -786,12 +832,24 @@ export class BookingMiniAppService {
       booking.generateConfirmationCode();
     }
 
-    // Сохраняем информацию о всех составных слотах в metadata бронирования
+    // Сохраняем timezone пользователя и информацию о составных слотах в clientData
+    booking.clientData = {
+      ...booking.clientData,
+    };
+
+    // Сохраняем timezone пользователя для планирования напоминаний
+    if (createBookingDto.clientCurrentTime) {
+      const { timezoneOffset } = this.parseClientTime(
+        createBookingDto.clientCurrentTime
+      );
+      if (timezoneOffset) {
+        booking.clientData.clientTimezone = timezoneOffset;
+      }
+    }
+
+    // Сохраняем информацию о всех составных слотах
     if (slotsToBook.length > 1) {
-      booking.clientData = {
-        ...booking.clientData,
-        mergedSlotIds: slotsToBook.map((s) => s.id),
-      };
+      booking.clientData.mergedSlotIds = slotsToBook.map((s) => s.id);
     }
 
     const savedBooking = await this.bookingRepository.save(booking);
@@ -878,7 +936,17 @@ export class BookingMiniAppService {
       }
     }
 
-    return this.bookingRepository.save(booking);
+    const savedBooking = await this.bookingRepository.save(booking);
+
+    // Отменяем все запланированные напоминания
+    try {
+      await this.notificationsService.cancelReminders(booking.id);
+    } catch (error) {
+      console.error("Failed to cancel reminders:", error);
+      // Не прерываем отмену бронирования из-за ошибки отмены напоминаний
+    }
+
+    return savedBooking;
   }
 
   async getBookingStatistics(botId: string): Promise<any> {
