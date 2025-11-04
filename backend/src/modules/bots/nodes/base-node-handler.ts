@@ -191,6 +191,37 @@ export abstract class BaseNodeHandler implements INodeHandler {
   }
 
   /**
+   * Находит все следующие узлы по edges (для узлов с множественными выходами)
+   */
+  protected findAllNextNodeIds(
+    context: FlowContext,
+    currentNodeId: string,
+    sourceHandle?: string
+  ): string[] {
+    // Ищем все edges, которые начинаются с текущего узла
+    const edges = context.flow.flowData?.edges?.filter(
+      (edge) =>
+        edge.source === currentNodeId &&
+        (!sourceHandle || edge.sourceHandle === sourceHandle)
+    ) || [];
+
+    if (edges.length > 0) {
+      return edges.map((edge) => edge.target);
+    }
+
+    // Если edges не найдены, ищем в данных узла
+    const currentNode = context.flow.nodes.find(
+      (node) => node.nodeId === currentNodeId
+    );
+
+    if (currentNode?.data?.nextNodeId) {
+      return [currentNode.data.nextNodeId];
+    }
+
+    return [];
+  }
+
+  /**
    * Находит следующий узел по конкретному выходу
    */
   protected findNextNodeIdByOutput(
@@ -363,6 +394,90 @@ export abstract class BaseNodeHandler implements INodeHandler {
       this.logger.warn(
         `Не найден следующий узел для выхода ${outputId} узла ${currentNodeId}`
       );
+    }
+  }
+
+  /**
+   * Переходит ко всем следующим узлам и выполняет их последовательно
+   * Используется для узлов с множественными выходами (например, NewMessageNode)
+   */
+  protected async moveToAllNextNodes(
+    context: FlowContext,
+    currentNodeId: string,
+    sourceHandle?: string
+  ): Promise<void> {
+    const nextNodeIds = this.findAllNextNodeIds(
+      context,
+      currentNodeId,
+      sourceHandle
+    );
+
+    this.logger.log(
+      `Найдено ${nextNodeIds.length} следующих узлов для узла ${currentNodeId}`
+    );
+
+    if (nextNodeIds.length === 0) {
+      this.logger.warn(`Не найдено следующих узлов для узла ${currentNodeId}`);
+      return;
+    }
+
+    // Сохраняем исходный currentNodeId для восстановления после обработки всех узлов
+    const originalCurrentNodeId = context.currentNode?.nodeId;
+
+    // Обрабатываем все следующие узлы последовательно
+    for (let i = 0; i < nextNodeIds.length; i++) {
+      const nextNodeId = nextNodeIds[i];
+      this.logger.log(
+        `Обработка следующего узла ${i + 1}/${nextNodeIds.length}: ${nextNodeId}`
+      );
+
+      const nextNode = context.flow.nodes.find(
+        (node) => node.nodeId === nextNodeId
+      );
+
+      if (nextNode && this.executeNodeCallback) {
+        // Устанавливаем текущий узел для выполнения
+        context.currentNode = nextNode;
+        context.session.currentNodeId = nextNodeId;
+        context.session.lastActivity = new Date();
+
+        // Выполняем узел
+        await this.executeNodeCallback(context);
+      } else {
+        this.logger.warn(`Узел ${nextNodeId} не найден в flow`);
+      }
+    }
+
+    // После обработки всех узлов проверяем, есть ли у них дальнейшие связи
+    // Если у последнего узла есть следующие узлы, продолжаем выполнение от него
+    // Если нет, возвращаемся к исходному узлу (например, NewMessageNode), 
+    // чтобы пользователь мог снова отправить сообщение
+    if (nextNodeIds.length > 0) {
+      const lastNodeId = nextNodeIds[nextNodeIds.length - 1];
+      const lastNodeHasNext = this.findNextNodeId(context, lastNodeId) !== null;
+
+      if (lastNodeHasNext) {
+        // У последнего узла есть дальнейшие связи, продолжаем от него
+        this.logger.log(
+          `У последнего узла ${lastNodeId} есть дальнейшие связи, продолжаем выполнение`
+        );
+        context.session.currentNodeId = lastNodeId;
+      } else {
+        // У обработанных узлов нет дальнейших связей, возвращаемся к исходному узлу
+        // Это позволяет пользователю снова отправить сообщение и получить ответ
+        if (originalCurrentNodeId) {
+          this.logger.log(
+            `У обработанных узлов нет дальнейших связей, возвращаемся к исходному узлу ${originalCurrentNodeId}`
+          );
+          const originalNode = context.flow.nodes.find(
+            (node) => node.nodeId === originalCurrentNodeId
+          );
+          if (originalNode) {
+            context.currentNode = originalNode;
+            context.session.currentNodeId = originalCurrentNodeId;
+          }
+        }
+      }
     }
   }
 

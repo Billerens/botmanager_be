@@ -74,7 +74,8 @@ export class NewMessageNodeHandler extends BaseNodeHandler {
       `Сообщение соответствует условиям узла NEW_MESSAGE: ${message.text}`
     );
 
-    // Переходим к следующему узлу
-    await this.moveToNextNode(context, currentNode.nodeId);
+    // Переходим ко всем следующим узлам (обрабатываем все выходные связи)
+    // Это позволяет выполнить все узлы Message, подключенные к данному NewMessageNode
+    await this.moveToAllNextNodes(context, currentNode.nodeId);
   }
 }
