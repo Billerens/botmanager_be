@@ -7,6 +7,10 @@ import { TelegramService } from "../../telegram/telegram.service";
 import { BotsService } from "../bots.service";
 import { CustomLoggerService } from "../../../common/logger.service";
 import { MessagesService } from "../../messages/messages.service";
+import {
+  MessageType,
+  MessageContentType,
+} from "../../../database/entities/message.entity";
 import { FlowContext } from "./base-node-handler.interface";
 import { BaseNodeHandler } from "./base-node-handler";
 
@@ -21,42 +25,64 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
     this.logger.log("Keyboard node data:", JSON.stringify(currentNode.data));
 
-    // Сохраняем callback данные в переменные сессии, если это callback запрос
+    // Если это callback запрос, сначала проверяем, относится ли он к текущей ноде
+    let isCallbackForCurrentKeyboard = false;
     if (message.is_callback && message.callback_query) {
-      session.variables[`keyboard_${currentNode.nodeId}_last_callback_data`] =
-        message.callback_query.data;
-      session.variables[`keyboard_${currentNode.nodeId}_last_callback_id`] =
-        message.callback_query.id;
-      session.variables[`keyboard_${currentNode.nodeId}_callback_timestamp`] =
-        new Date().toISOString();
-
-      // Дополнительная информация о callback
-      if (message.callback_query.from) {
-        session.variables[`keyboard_${currentNode.nodeId}_callback_user_id`] =
-          message.callback_query.from.id?.toString();
-        session.variables[`keyboard_${currentNode.nodeId}_callback_username`] =
-          message.callback_query.from.username || "";
-        session.variables[
-          `keyboard_${currentNode.nodeId}_callback_first_name`
-        ] = message.callback_query.from.first_name || "";
-      }
-
-      // Информация о сообщении с кнопкой
-      if (message.callback_query.message) {
-        session.variables[
-          `keyboard_${currentNode.nodeId}_callback_message_id`
-        ] = message.callback_query.message.message_id?.toString();
-        session.variables[`keyboard_${currentNode.nodeId}_callback_chat_id`] =
-          message.callback_query.message.chat?.id?.toString();
-      }
+      // Проверяем, есть ли сохраненный message_id для текущей ноды
+      const savedMessageId =
+        session.variables[`keyboard_${currentNode.nodeId}_sent_message_id`];
+      const callbackMessageId =
+        message.callback_query.message?.message_id?.toString();
 
       this.logger.log(
-        `Callback данные сохранены для ноды ${currentNode.nodeId}: ${message.callback_query.data}`
+        `Проверка callback: сохраненный message_id=${savedMessageId}, callback message_id=${callbackMessageId}`
       );
-      this.logger.log(`Callback ID: ${message.callback_query.id}`);
-      this.logger.log(
-        `Callback от пользователя: ${message.callback_query.from?.id}`
-      );
+
+      // Callback относится к текущей ноде только если message_id совпадает
+      isCallbackForCurrentKeyboard = callbackMessageId === savedMessageId;
+
+      if (isCallbackForCurrentKeyboard) {
+        // Сохраняем callback данные только если они относятся к текущей ноде
+        session.variables[`keyboard_${currentNode.nodeId}_last_callback_data`] =
+          message.callback_query.data;
+        session.variables[`keyboard_${currentNode.nodeId}_last_callback_id`] =
+          message.callback_query.id;
+        session.variables[`keyboard_${currentNode.nodeId}_callback_timestamp`] =
+          new Date().toISOString();
+
+        // Дополнительная информация о callback
+        if (message.callback_query.from) {
+          session.variables[`keyboard_${currentNode.nodeId}_callback_user_id`] =
+            message.callback_query.from.id?.toString();
+          session.variables[
+            `keyboard_${currentNode.nodeId}_callback_username`
+          ] = message.callback_query.from.username || "";
+          session.variables[
+            `keyboard_${currentNode.nodeId}_callback_first_name`
+          ] = message.callback_query.from.first_name || "";
+        }
+
+        // Информация о сообщении с кнопкой
+        if (message.callback_query.message) {
+          session.variables[
+            `keyboard_${currentNode.nodeId}_callback_message_id`
+          ] = message.callback_query.message.message_id?.toString();
+          session.variables[`keyboard_${currentNode.nodeId}_callback_chat_id`] =
+            message.callback_query.message.chat?.id?.toString();
+        }
+
+        this.logger.log(
+          `Callback данные сохранены для ноды ${currentNode.nodeId}: ${message.callback_query.data}`
+        );
+        this.logger.log(`Callback ID: ${message.callback_query.id}`);
+        this.logger.log(
+          `Callback от пользователя: ${message.callback_query.from?.id}`
+        );
+      } else {
+        this.logger.log(
+          `Callback не относится к текущей ноде ${currentNode.nodeId}, пропускаем сохранение данных`
+        );
+      }
     }
 
     // Получаем текст сообщения из правильного поля
@@ -172,31 +198,60 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
     // Если это callback запрос (пользователь нажал кнопку)
     if (message.is_callback && message.callback_query) {
-      // Проверяем, что callback_query относится к текущему keyboard узлу
-      // Сравниваем message_id из callback_query с сохраненным в сессии
-      const savedMessageId =
-        session.variables[`keyboard_${currentNode.nodeId}_callback_message_id`];
-      const callbackMessageId =
-        message.callback_query.message?.message_id?.toString();
-
-      this.logger.log(
-        `Проверка callback: сохраненный message_id=${savedMessageId}, callback message_id=${callbackMessageId}`
-      );
-
-      const isCallbackForCurrentKeyboard =
-        callbackMessageId === savedMessageId || !savedMessageId; // Если это первый keyboard узел (нет сохраненного message_id)
-
+      // Используем результат проверки, выполненной в начале функции
       if (!isCallbackForCurrentKeyboard) {
         this.logger.log(
           `Callback_query не относится к текущему keyboard узлу ${currentNode.nodeId}, отправляем клавиатуру`
         );
 
-        await this.sendAndSaveMessage(
-          bot,
+        // Отправляем сообщение и сохраняем message_id
+        const decryptedToken = this.botsService.decryptToken(bot.token);
+        const telegramResponse = await this.telegramService.sendMessage(
+          decryptedToken,
           message.chat.id,
           messageText,
           messageOptions
         );
+
+        if (telegramResponse?.message_id) {
+          // Сохраняем message_id отправленного сообщения для текущей ноды
+          session.variables[`keyboard_${currentNode.nodeId}_sent_message_id`] =
+            telegramResponse.message_id.toString();
+
+          // Сохраняем сообщение в БД
+          await this.messagesService.create({
+            botId: bot.id,
+            telegramMessageId: telegramResponse.message_id,
+            telegramChatId: message.chat.id,
+            telegramUserId: bot.id,
+            type: MessageType.OUTGOING,
+            contentType: MessageContentType.TEXT,
+            text: messageText,
+            keyboard: messageOptions.reply_markup
+              ? {
+                  type: messageOptions.reply_markup.inline_keyboard
+                    ? "inline"
+                    : "reply",
+                  buttons:
+                    messageOptions.reply_markup.inline_keyboard ||
+                    messageOptions.reply_markup.keyboard ||
+                    [],
+                }
+              : null,
+            metadata: {
+              firstName: bot.name || "Bot",
+              lastName: "",
+              username: bot.username,
+              isBot: true,
+            },
+            isProcessed: true,
+            processedAt: new Date(),
+          });
+
+          this.logger.log(
+            `Сообщение отправлено, message_id сохранен: ${telegramResponse.message_id}`
+          );
+        }
 
         this.logger.log(`Keyboard узел завершен, ожидаем выбор пользователя`);
         return;
@@ -238,12 +293,54 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       // Если это обычное сообщение - отправляем клавиатуру и ждем выбора
       this.logger.log(`Отправляем клавиатуру и ждем выбора пользователя`);
 
-      await this.sendAndSaveMessage(
-        bot,
+      // Отправляем сообщение и сохраняем message_id
+      const decryptedToken = this.botsService.decryptToken(bot.token);
+      const telegramResponse = await this.telegramService.sendMessage(
+        decryptedToken,
         message.chat.id,
         messageText,
         messageOptions
       );
+
+      if (telegramResponse?.message_id) {
+        // Сохраняем message_id отправленного сообщения для текущей ноды
+        session.variables[`keyboard_${currentNode.nodeId}_sent_message_id`] =
+          telegramResponse.message_id.toString();
+
+        // Сохраняем сообщение в БД
+        await this.messagesService.create({
+          botId: bot.id,
+          telegramMessageId: telegramResponse.message_id,
+          telegramChatId: message.chat.id,
+          telegramUserId: bot.id,
+          type: MessageType.OUTGOING,
+          contentType: MessageContentType.TEXT,
+          text: messageText,
+          keyboard: messageOptions.reply_markup
+            ? {
+                type: messageOptions.reply_markup.inline_keyboard
+                  ? "inline"
+                  : "reply",
+                buttons:
+                  messageOptions.reply_markup.inline_keyboard ||
+                  messageOptions.reply_markup.keyboard ||
+                  [],
+              }
+            : null,
+          metadata: {
+            firstName: bot.name || "Bot",
+            lastName: "",
+            username: bot.username,
+            isBot: true,
+          },
+          isProcessed: true,
+          processedAt: new Date(),
+        });
+
+        this.logger.log(
+          `Сообщение отправлено, message_id сохранен: ${telegramResponse.message_id}`
+        );
+      }
 
       // НЕ переходим к следующему узлу - ждем callback запрос
       this.logger.log(`Keyboard узел завершен, ожидаем выбор пользователя`);
