@@ -7,6 +7,7 @@ import { NotificationService } from "./services/notification.service";
 import { RedisService } from "./services/redis.service";
 import { NotificationSettingsService } from "./services/notification-settings.service";
 import { WebSocketSettingsController } from "./websocket-settings.controller";
+import { WebSocketNotificationsController } from "./websocket-notifications.controller";
 import { AuthModule } from "../auth/auth.module";
 import { User } from "../../database/entities/user.entity";
 import redisConfig from "./config/redis.config";
@@ -23,7 +24,7 @@ import redisConfig from "./config/redis.config";
     JwtModule,
     AuthModule,
   ],
-  controllers: [WebSocketSettingsController],
+  controllers: [WebSocketSettingsController, WebSocketNotificationsController],
   providers: [
     BotManagerWebSocketGateway,
     NotificationService,

@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from "@nestjs/co
 import { BotManagerWebSocketGateway } from "../websocket.gateway";
 import { RedisService } from "./redis.service";
 import { Notification, NotificationType, SendNotificationDto } from "../interfaces/notification.interface";
+import { NotificationItemDto, NotificationListDto, NotificationSummaryDto } from "../dto/notification.dto";
 import { v4 as uuidv4 } from "uuid";
 
 /**
@@ -15,6 +16,7 @@ export class NotificationService implements OnModuleInit {
   private readonly STREAM_PREFIX = "notifications:user:";
   private readonly MAX_PENDING_NOTIFICATIONS = 1000; // Максимум уведомлений на пользователя
   private readonly NOTIFICATION_TTL_DAYS = 7; // Срок хранения уведомлений в днях
+  private readonly READ_RETENTION_DAYS = 3; // Срок хранения прочитанных уведомлений в днях
   private redisSubscriptionSetup = false;
 
   constructor(
@@ -101,7 +103,8 @@ export class NotificationService implements OnModuleInit {
       broadcast: dto.broadcast,
     };
 
-    // Если уведомление для конкретного пользователя, сохраняем в Stream
+    // Если уведомление для конкретного пользователя, ВСЕГДА сохраняем в Stream
+    // Это нужно для центра уведомлений (как для онлайн, так и для офлайн)
     if (dto.userId && this.redisService.isRedisConnected()) {
       try {
         await this.saveNotificationToStream(dto.userId, notification);
@@ -113,22 +116,28 @@ export class NotificationService implements OnModuleInit {
     // Проверяем, подключен ли пользователь
     const isUserOnline = dto.userId ? this.wsGateway.isUserConnected(dto.userId) : false;
 
-    // Если пользователь онлайн или это широковещательное сообщение
-    if (isUserOnline || !dto.userId || dto.broadcast || dto.room) {
+    // Отправляем уведомление через WebSocket для real-time обработки
+    // (не только офлайн, но и онлайн пользователям для обновления UI)
+    if (!dto.userId || dto.broadcast || dto.room || isUserOnline) {
       // Если Redis доступен, публикуем через него (для масштабируемости)
       if (this.redisService.isRedisConnected()) {
         try {
           await this.redisService.publish(this.REDIS_CHANNEL, notification);
           this.logger.debug(`Уведомление отправлено через Redis: ${notification.type}`);
-          return;
         } catch (error) {
           this.logger.warn(`Ошибка публикации в Redis, отправляем локально: ${error.message}`);
           // Продолжаем выполнение для локальной отправки
+          this.handleNotification(notification);
         }
+      } else {
+        // Локальная отправка
+        this.handleNotification(notification);
       }
 
-      // Локальная отправка
-      this.handleNotification(notification);
+      // Если пользователь онлайн, отправляем обновление счетчика непрочитанных
+      if (isUserOnline && dto.userId) {
+        await this.sendUnreadCountUpdate(dto.userId);
+      }
     } else {
       // Пользователь офлайн, уведомление уже сохранено в Stream
       this.logger.debug(
@@ -150,6 +159,7 @@ export class NotificationService implements OnModuleInit {
         type: notification.type,
         payload: JSON.stringify(notification.payload),
         timestamp: notification.timestamp.toString(),
+        read: "false", // По умолчанию непрочитанное
       };
 
       await this.redisService.addToStream(streamKey, data);
@@ -322,9 +332,50 @@ export class NotificationService implements OnModuleInit {
           `Удалено ${oldMessageIds.length} старых уведомлений для пользователя ${userId}`
         );
       }
+
+      // Также удаляем прочитанные уведомления старше READ_RETENTION_DAYS
+      await this.cleanupReadNotifications(userId);
     } catch (error) {
       this.logger.error(
         `Ошибка очистки старых уведомлений для пользователя ${userId}: ${error.message}`,
+        error.stack
+      );
+    }
+  }
+
+  /**
+   * Удаляет прочитанные уведомления старше READ_RETENTION_DAYS
+   */
+  async cleanupReadNotifications(userId: string): Promise<void> {
+    if (!this.redisService.isRedisConnected()) {
+      return;
+    }
+
+    const streamKey = `${this.STREAM_PREFIX}${userId}`;
+    const readTtlMs = this.READ_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const cutoffTimestamp = Date.now() - readTtlMs;
+
+    try {
+      // Читаем все сообщения
+      const messages = await this.redisService.readFromStream(streamKey, "0");
+      
+      // Находим прочитанные сообщения старше READ_RETENTION_DAYS
+      const readOldMessageIds = messages
+        .filter((msg) => 
+          msg.message.read === "true" && 
+          parseInt(msg.message.timestamp, 10) < cutoffTimestamp
+        )
+        .map((msg) => msg.id);
+
+      if (readOldMessageIds.length > 0) {
+        await this.redisService.deleteFromStream(streamKey, readOldMessageIds);
+        this.logger.log(
+          `Удалено ${readOldMessageIds.length} прочитанных уведомлений (старше ${this.READ_RETENTION_DAYS} дней) для пользователя ${userId}`
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Ошибка очистки прочитанных уведомлений для пользователя ${userId}: ${error.message}`,
         error.stack
       );
     }
@@ -368,6 +419,222 @@ export class NotificationService implements OnModuleInit {
         `Ошибка получения количества уведомлений для пользователя ${userId}: ${error.message}`
       );
       return 0;
+    }
+  }
+
+  /**
+   * Получает список уведомлений для пользователя
+   */
+  async getNotifications(
+    userId: string,
+    limit: number = 50,
+    offset: number = 0,
+    unreadOnly: boolean = false
+  ): Promise<NotificationListDto> {
+    if (!this.redisService.isRedisConnected()) {
+      return {
+        notifications: [],
+        total: 0,
+        unreadCount: 0,
+      };
+    }
+
+    const streamKey = `${this.STREAM_PREFIX}${userId}`;
+
+    try {
+      // Читаем все сообщения из стрима
+      const messages = await this.redisService.readFromStream(streamKey, "0");
+
+      // Преобразуем в NotificationItemDto
+      let notifications: NotificationItemDto[] = messages.map((msg) => ({
+        id: msg.message.id,
+        type: msg.message.type as NotificationType,
+        payload: JSON.parse(msg.message.payload),
+        timestamp: parseInt(msg.message.timestamp, 10),
+        read: msg.message.read === "true",
+        createdAt: new Date(parseInt(msg.message.timestamp, 10)),
+      }));
+
+      // Подсчитываем непрочитанные
+      const unreadCount = notifications.filter((n) => !n.read).length;
+
+      // Фильтруем по непрочитанным, если нужно
+      if (unreadOnly) {
+        notifications = notifications.filter((n) => !n.read);
+      }
+
+      // Сортируем по времени (новые первыми)
+      notifications.sort((a, b) => b.timestamp - a.timestamp);
+
+      // Применяем пагинацию
+      const total = notifications.length;
+      notifications = notifications.slice(offset, offset + limit);
+
+      return {
+        notifications,
+        total,
+        unreadCount,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Ошибка получения списка уведомлений для пользователя ${userId}: ${error.message}`,
+        error.stack
+      );
+      return {
+        notifications: [],
+        total: 0,
+        unreadCount: 0,
+      };
+    }
+  }
+
+  /**
+   * Получает сводку уведомлений (по типам)
+   */
+  async getNotificationsSummary(userId: string): Promise<NotificationSummaryDto[]> {
+    if (!this.redisService.isRedisConnected()) {
+      return [];
+    }
+
+    const streamKey = `${this.STREAM_PREFIX}${userId}`;
+
+    try {
+      const messages = await this.redisService.readFromStream(streamKey, "0");
+
+      // Группируем по типам
+      const summaryMap = new Map<NotificationType, { count: number; latestTimestamp: number }>();
+
+      messages.forEach((msg) => {
+        const type = msg.message.type as NotificationType;
+        const timestamp = parseInt(msg.message.timestamp, 10);
+        const isRead = msg.message.read === "true";
+
+        // Учитываем только непрочитанные
+        if (!isRead) {
+          const current = summaryMap.get(type) || { count: 0, latestTimestamp: 0 };
+          summaryMap.set(type, {
+            count: current.count + 1,
+            latestTimestamp: Math.max(current.latestTimestamp, timestamp),
+          });
+        }
+      });
+
+      // Преобразуем в массив
+      const summary: NotificationSummaryDto[] = Array.from(summaryMap.entries()).map(
+        ([type, data]) => ({
+          type,
+          count: data.count,
+          latestTimestamp: data.latestTimestamp,
+        })
+      );
+
+      // Сортируем по последнему времени
+      summary.sort((a, b) => b.latestTimestamp - a.latestTimestamp);
+
+      return summary;
+    } catch (error) {
+      this.logger.error(
+        `Ошибка получения сводки уведомлений для пользователя ${userId}: ${error.message}`,
+        error.stack
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Помечает уведомления как прочитанные
+   */
+  async markNotificationsAsRead(userId: string, notificationIds?: string[]): Promise<number> {
+    if (!this.redisService.isRedisConnected()) {
+      return 0;
+    }
+
+    const streamKey = `${this.STREAM_PREFIX}${userId}`;
+
+    try {
+      // Читаем все сообщения
+      const messages = await this.redisService.readFromStream(streamKey, "0");
+
+      let updatedCount = 0;
+
+      // Находим сообщения для обновления
+      const messagesToUpdate = notificationIds
+        ? messages.filter((msg) => notificationIds.includes(msg.message.id))
+        : messages;
+
+      // В Redis Streams нельзя обновить существующую запись
+      // Поэтому удаляем старые и добавляем новые с флагом read=true
+      const idsToDelete: string[] = [];
+      const dataToAdd: Array<Record<string, string>> = [];
+
+      for (const msg of messagesToUpdate) {
+        if (msg.message.read !== "true") {
+          idsToDelete.push(msg.id);
+          dataToAdd.push({
+            ...msg.message,
+            read: "true",
+          });
+          updatedCount++;
+        }
+      }
+
+      // Удаляем старые записи
+      if (idsToDelete.length > 0) {
+        await this.redisService.deleteFromStream(streamKey, idsToDelete);
+      }
+
+      // Добавляем обновленные записи
+      for (const data of dataToAdd) {
+        await this.redisService.addToStream(streamKey, data);
+      }
+
+      this.logger.log(`Помечено ${updatedCount} уведомлений как прочитанные для пользователя ${userId}`);
+      return updatedCount;
+    } catch (error) {
+      this.logger.error(
+        `Ошибка пометки уведомлений как прочитанные для пользователя ${userId}: ${error.message}`,
+        error.stack
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Получает количество непрочитанных уведомлений
+   */
+  async getUnreadNotificationsCount(userId: string): Promise<number> {
+    if (!this.redisService.isRedisConnected()) {
+      return 0;
+    }
+
+    const streamKey = `${this.STREAM_PREFIX}${userId}`;
+
+    try {
+      const messages = await this.redisService.readFromStream(streamKey, "0");
+      return messages.filter((msg) => msg.message.read !== "true").length;
+    } catch (error) {
+      this.logger.error(
+        `Ошибка получения количества непрочитанных уведомлений для пользователя ${userId}: ${error.message}`
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Отправляет обновление счетчика непрочитанных уведомлений
+   */
+  async sendUnreadCountUpdate(userId: string): Promise<void> {
+    try {
+      const unreadCount = await this.getUnreadNotificationsCount(userId);
+      this.wsGateway.emitToUser(userId, "notifications.unread_count", {
+        count: unreadCount,
+      });
+      this.logger.debug(`Обновление счетчика отправлено пользователю ${userId}: ${unreadCount}`);
+    } catch (error) {
+      this.logger.error(
+        `Ошибка отправки обновления счетчика для пользователя ${userId}: ${error.message}`,
+        error.stack
+      );
     }
   }
 }

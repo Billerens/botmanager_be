@@ -244,8 +244,8 @@ export class BotManagerWebSocketGateway
 
     this.logger.log(`Клиент ${client.id} (Пользователь: ${client.userId}) готов принимать уведомления`);
     
-    // Отправляем накопленные уведомления
-    await this.sendPendingNotifications(client.userId);
+    // Отправляем сводку по накопленным уведомлениям
+    await this.sendNotificationsSummary(client.userId);
 
     return { success: true };
   }
@@ -291,17 +291,27 @@ export class BotManagerWebSocketGateway
   }
 
   /**
-   * Отправляет накопленные уведомления пользователю
+   * Отправляет сводку по накопленным уведомлениям пользователю
    */
-  private async sendPendingNotifications(userId: string): Promise<void> {
+  private async sendNotificationsSummary(userId: string): Promise<void> {
     try {
-      const count = await this.notificationService.sendPendingNotifications(userId);
-      if (count > 0) {
-        this.logger.log(`Отправлено ${count} накопленных уведомлений пользователю ${userId}`);
+      const unreadCount = await this.notificationService.getUnreadNotificationsCount(userId);
+      if (unreadCount > 0) {
+        const summary = await this.notificationService.getNotificationsSummary(userId);
+        
+        // Отправляем событие с количеством непрочитанных и сводкой
+        this.emitToUser(userId, "notifications.summary", {
+          unreadCount,
+          summary,
+        });
+        
+        this.logger.log(
+          `Отправлена сводка: ${unreadCount} непрочитанных уведомлений пользователю ${userId}`
+        );
       }
     } catch (error) {
       this.logger.error(
-        `Ошибка отправки накопленных уведомлений пользователю ${userId}: ${error.message}`,
+        `Ошибка отправки сводки уведомлений пользователю ${userId}: ${error.message}`,
         error.stack
       );
     }
