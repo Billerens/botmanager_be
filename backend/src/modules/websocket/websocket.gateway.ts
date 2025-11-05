@@ -9,7 +9,7 @@ import {
   OnGatewayInit,
 } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
-import { Logger, Injectable, UnauthorizedException } from "@nestjs/common";
+import { Logger, Injectable, UnauthorizedException, Inject, forwardRef } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { createClient } from "redis";
@@ -17,6 +17,7 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import { AuthService } from "../auth/auth.service";
 import { User } from "../../database/entities/user.entity";
 import { JwtPayload } from "../auth/interfaces/jwt-payload.interface";
+import { NotificationService } from "./services/notification.service";
 
 /**
  * Интерфейс для аутентифицированного сокета
@@ -48,7 +49,9 @@ export class BotManagerWebSocketGateway
   constructor(
     private configService: ConfigService,
     private jwtService: JwtService,
-    private authService: AuthService
+    private authService: AuthService,
+    @Inject(forwardRef(() => NotificationService))
+    private notificationService: NotificationService,
   ) {}
 
   /**
@@ -114,6 +117,9 @@ export class BotManagerWebSocketGateway
       this.logger.log(
         `Клиент ${client.id} подключен (Пользователь: ${user.id}, ${user.telegramUsername || "без username"})`
       );
+
+      // Отправляем накопленные уведомления
+      this.sendPendingNotifications(user.id);
     } catch (error) {
       this.logger.error(
         `Ошибка при подключении клиента ${client.id}: ${error.message}`,
@@ -267,5 +273,22 @@ export class BotManagerWebSocketGateway
    */
   getConnectedUsersCount(): number {
     return this.connectedUsers.size;
+  }
+
+  /**
+   * Отправляет накопленные уведомления пользователю
+   */
+  private async sendPendingNotifications(userId: string): Promise<void> {
+    try {
+      const count = await this.notificationService.sendPendingNotifications(userId);
+      if (count > 0) {
+        this.logger.log(`Отправлено ${count} накопленных уведомлений пользователю ${userId}`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Ошибка отправки накопленных уведомлений пользователю ${userId}: ${error.message}`,
+        error.stack
+      );
+    }
   }
 }

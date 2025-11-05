@@ -17,7 +17,7 @@ export class NotificationSettingsService {
 
   constructor(
     @InjectRepository(User)
-    private userRepository: Repository<User>,
+    private userRepository: Repository<User>
   ) {}
 
   /**
@@ -29,15 +29,15 @@ export class NotificationSettingsService {
       // Боты
       {
         type: NotificationType.BOT_CREATED,
-        defaultEnabled: true,
+        defaultEnabled: false,
       },
       {
         type: NotificationType.BOT_UPDATED,
-        defaultEnabled: true,
+        defaultEnabled: false,
       },
       {
         type: NotificationType.BOT_DELETED,
-        defaultEnabled: true,
+        defaultEnabled: false,
       },
       {
         type: NotificationType.BOT_STATUS_CHANGED,
@@ -46,7 +46,7 @@ export class NotificationSettingsService {
       // Сообщения
       {
         type: NotificationType.MESSAGE_RECEIVED,
-        defaultEnabled: true,
+        defaultEnabled: false,
       },
       {
         type: NotificationType.MESSAGE_SENT,
@@ -92,7 +92,7 @@ export class NotificationSettingsService {
       },
       {
         type: NotificationType.BOOKING_REMINDER,
-        defaultEnabled: true,
+        defaultEnabled: false,
       },
       // Продукты
       {
@@ -101,7 +101,7 @@ export class NotificationSettingsService {
       },
       {
         type: NotificationType.PRODUCT_UPDATED,
-        defaultEnabled: false,
+        defaultEnabled: true,
       },
       {
         type: NotificationType.PRODUCT_DELETED,
@@ -137,7 +137,7 @@ export class NotificationSettingsService {
    * Получает настройки уведомлений пользователя
    */
   async getUserNotificationSettings(
-    userId: string,
+    userId: string
   ): Promise<NotificationSettingsResponseDto> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -160,7 +160,7 @@ export class NotificationSettingsService {
             : typeInfo.defaultEnabled;
         return acc;
       },
-      {} as Record<NotificationType, boolean>,
+      {} as Record<NotificationType, boolean>
     );
 
     return {
@@ -174,7 +174,7 @@ export class NotificationSettingsService {
    */
   async updateUserNotificationSettings(
     userId: string,
-    settings: Partial<Record<NotificationType, boolean>>,
+    settings: Partial<Record<NotificationType, boolean>>
   ): Promise<NotificationSettingsResponseDto> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -195,7 +195,9 @@ export class NotificationSettingsService {
     user.notificationSettings = updatedSettings;
     await this.userRepository.save(user);
 
-    this.logger.log(`Настройки уведомлений обновлены для пользователя ${userId}`);
+    this.logger.log(
+      `Настройки уведомлений обновлены для пользователя ${userId}`
+    );
 
     return this.getUserNotificationSettings(userId);
   }
@@ -205,7 +207,7 @@ export class NotificationSettingsService {
    */
   async isNotificationEnabled(
     userId: string,
-    notificationType: NotificationType,
+    notificationType: NotificationType
   ): Promise<boolean> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -223,26 +225,23 @@ export class NotificationSettingsService {
     }
 
     const userSettings = user.notificationSettings || {};
-    return (
-      userSettings[notificationType] !== undefined
-        ? userSettings[notificationType]
-        : typeInfo.defaultEnabled
-    );
+    return userSettings[notificationType] !== undefined
+      ? userSettings[notificationType]
+      : typeInfo.defaultEnabled;
   }
 
   /**
    * Получает настройки по умолчанию
    */
   private getDefaultSettings(
-    availableTypes: NotificationTypeInfo[],
+    availableTypes: NotificationTypeInfo[]
   ): Record<NotificationType, boolean> {
     return availableTypes.reduce(
       (acc, typeInfo) => {
         acc[typeInfo.type] = typeInfo.defaultEnabled;
         return acc;
       },
-      {} as Record<NotificationType, boolean>,
+      {} as Record<NotificationType, boolean>
     );
   }
 }
-

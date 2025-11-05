@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from "@nestjs/common";
 import { BotManagerWebSocketGateway } from "../websocket.gateway";
 import { RedisService } from "./redis.service";
 import { Notification, NotificationType, SendNotificationDto } from "../interfaces/notification.interface";
@@ -12,9 +12,13 @@ import { v4 as uuidv4 } from "uuid";
 export class NotificationService implements OnModuleInit {
   private readonly logger = new Logger(NotificationService.name);
   private readonly REDIS_CHANNEL = "websocket:notifications";
+  private readonly STREAM_PREFIX = "notifications:user:";
+  private readonly MAX_PENDING_NOTIFICATIONS = 1000; // Максимум уведомлений на пользователя
+  private readonly NOTIFICATION_TTL_DAYS = 7; // Срок хранения уведомлений в днях
   private redisSubscriptionSetup = false;
 
   constructor(
+    @Inject(forwardRef(() => BotManagerWebSocketGateway))
     private readonly wsGateway: BotManagerWebSocketGateway,
     private readonly redisService: RedisService,
   ) {}
@@ -97,20 +101,67 @@ export class NotificationService implements OnModuleInit {
       broadcast: dto.broadcast,
     };
 
-    // Если Redis доступен, публикуем через него (для масштабируемости)
-    if (this.redisService.isRedisConnected()) {
+    // Если уведомление для конкретного пользователя, сохраняем в Stream
+    if (dto.userId && this.redisService.isRedisConnected()) {
       try {
-        await this.redisService.publish(this.REDIS_CHANNEL, notification);
-        this.logger.debug(`Уведомление отправлено через Redis: ${notification.type}`);
-        return;
+        await this.saveNotificationToStream(dto.userId, notification);
       } catch (error) {
-        this.logger.warn(`Ошибка публикации в Redis, отправляем локально: ${error.message}`);
-        // Продолжаем выполнение для локальной отправки
+        this.logger.error(`Ошибка сохранения уведомления в Stream: ${error.message}`);
       }
     }
 
-    // Локальная отправка (если Redis недоступен или для простых случаев)
-    this.handleNotification(notification);
+    // Проверяем, подключен ли пользователь
+    const isUserOnline = dto.userId ? this.wsGateway.isUserConnected(dto.userId) : false;
+
+    // Если пользователь онлайн или это широковещательное сообщение
+    if (isUserOnline || !dto.userId || dto.broadcast || dto.room) {
+      // Если Redis доступен, публикуем через него (для масштабируемости)
+      if (this.redisService.isRedisConnected()) {
+        try {
+          await this.redisService.publish(this.REDIS_CHANNEL, notification);
+          this.logger.debug(`Уведомление отправлено через Redis: ${notification.type}`);
+          return;
+        } catch (error) {
+          this.logger.warn(`Ошибка публикации в Redis, отправляем локально: ${error.message}`);
+          // Продолжаем выполнение для локальной отправки
+        }
+      }
+
+      // Локальная отправка
+      this.handleNotification(notification);
+    } else {
+      // Пользователь офлайн, уведомление уже сохранено в Stream
+      this.logger.debug(
+        `Пользователь ${dto.userId} офлайн. Уведомление ${notification.type} сохранено в Stream`
+      );
+    }
+  }
+
+  /**
+   * Сохраняет уведомление в Redis Stream для пользователя
+   */
+  private async saveNotificationToStream(userId: string, notification: Notification): Promise<void> {
+    const streamKey = `${this.STREAM_PREFIX}${userId}`;
+    
+    try {
+      // Сохраняем уведомление в Stream
+      const data = {
+        id: notification.id,
+        type: notification.type,
+        payload: JSON.stringify(notification.payload),
+        timestamp: notification.timestamp.toString(),
+      };
+
+      await this.redisService.addToStream(streamKey, data);
+
+      // Обрезаем стрим до максимального размера
+      await this.redisService.trimStream(streamKey, this.MAX_PENDING_NOTIFICATIONS);
+
+      this.logger.debug(`Уведомление сохранено в Stream для пользователя ${userId}`);
+    } catch (error) {
+      this.logger.error(`Ошибка сохранения в Stream: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   /**
@@ -179,6 +230,145 @@ export class NotificationService implements OnModuleInit {
       userId,
       broadcast: !userId,
     });
+  }
+
+  /**
+   * Получает накопленные уведомления для пользователя и отправляет их
+   * Вызывается при подключении пользователя к WebSocket
+   */
+  async sendPendingNotifications(userId: string): Promise<number> {
+    if (!this.redisService.isRedisConnected()) {
+      return 0;
+    }
+
+    const streamKey = `${this.STREAM_PREFIX}${userId}`;
+
+    try {
+      // Сначала очищаем старые уведомления
+      await this.cleanupOldNotifications(userId);
+
+      // Читаем все сообщения из стрима
+      const messages = await this.redisService.readFromStream(streamKey, "0");
+
+      if (messages.length === 0) {
+        this.logger.debug(`Нет накопленных уведомлений для пользователя ${userId}`);
+        return 0;
+      }
+
+      this.logger.log(`Отправка ${messages.length} накопленных уведомлений пользователю ${userId}`);
+
+      // Отправляем каждое уведомление
+      const messageIds: string[] = [];
+      for (const msg of messages) {
+        try {
+          const notification: Notification = {
+            id: msg.message.id,
+            type: msg.message.type as NotificationType,
+            payload: JSON.parse(msg.message.payload),
+            timestamp: parseInt(msg.message.timestamp, 10),
+            userId,
+          };
+
+          // Отправляем уведомление пользователю
+          this.wsGateway.emitToUser(userId, notification.type, notification.payload);
+          messageIds.push(msg.id);
+        } catch (error) {
+          this.logger.error(
+            `Ошибка отправки накопленного уведомления ${msg.id}: ${error.message}`
+          );
+        }
+      }
+
+      // Удаляем отправленные сообщения из стрима
+      if (messageIds.length > 0) {
+        await this.redisService.deleteFromStream(streamKey, messageIds);
+        this.logger.debug(`Удалено ${messageIds.length} уведомлений из Stream пользователя ${userId}`);
+      }
+
+      return messageIds.length;
+    } catch (error) {
+      this.logger.error(
+        `Ошибка получения накопленных уведомлений для пользователя ${userId}: ${error.message}`,
+        error.stack
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Удаляет старые уведомления для пользователя
+   */
+  async cleanupOldNotifications(userId: string): Promise<void> {
+    if (!this.redisService.isRedisConnected()) {
+      return;
+    }
+
+    const streamKey = `${this.STREAM_PREFIX}${userId}`;
+    const ttlMs = this.NOTIFICATION_TTL_DAYS * 24 * 60 * 60 * 1000;
+    const cutoffTimestamp = Date.now() - ttlMs;
+
+    try {
+      // Читаем все сообщения
+      const messages = await this.redisService.readFromStream(streamKey, "0");
+      
+      // Находим сообщения старше TTL
+      const oldMessageIds = messages
+        .filter((msg) => parseInt(msg.message.timestamp, 10) < cutoffTimestamp)
+        .map((msg) => msg.id);
+
+      if (oldMessageIds.length > 0) {
+        await this.redisService.deleteFromStream(streamKey, oldMessageIds);
+        this.logger.log(
+          `Удалено ${oldMessageIds.length} старых уведомлений для пользователя ${userId}`
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Ошибка очистки старых уведомлений для пользователя ${userId}: ${error.message}`,
+        error.stack
+      );
+    }
+  }
+
+  /**
+   * Удаляет все уведомления пользователя (например, при удалении аккаунта)
+   */
+  async deleteUserNotifications(userId: string): Promise<void> {
+    if (!this.redisService.isRedisConnected()) {
+      return;
+    }
+
+    const streamKey = `${this.STREAM_PREFIX}${userId}`;
+
+    try {
+      await this.redisService.deleteStream(streamKey);
+      this.logger.log(`Все уведомления удалены для пользователя ${userId}`);
+    } catch (error) {
+      this.logger.error(
+        `Ошибка удаления уведомлений пользователя ${userId}: ${error.message}`,
+        error.stack
+      );
+    }
+  }
+
+  /**
+   * Получает количество накопленных уведомлений для пользователя
+   */
+  async getPendingNotificationsCount(userId: string): Promise<number> {
+    if (!this.redisService.isRedisConnected()) {
+      return 0;
+    }
+
+    const streamKey = `${this.STREAM_PREFIX}${userId}`;
+
+    try {
+      return await this.redisService.getStreamLength(streamKey);
+    } catch (error) {
+      this.logger.error(
+        `Ошибка получения количества уведомлений для пользователя ${userId}: ${error.message}`
+      );
+      return 0;
+    }
   }
 }
 
