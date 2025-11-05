@@ -9,6 +9,7 @@ import { DatabaseModule } from "./database/database.module";
 import databaseConfig from "./config/database.config";
 import jwtConfig from "./config/jwt.config";
 import appConfig from "./config/configuration";
+import redisConfig from "./modules/websocket/config/redis.config";
 import { AuthModule } from "./modules/auth/auth.module";
 import { UsersModule } from "./modules/users/users.module";
 import { BotsModule } from "./modules/bots/bots.module";
@@ -29,7 +30,7 @@ import { BookingModule } from "./modules/booking/booking.module";
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ".env",
-      load: [databaseConfig, jwtConfig, appConfig],
+      load: [databaseConfig, jwtConfig, appConfig, redisConfig],
     }),
 
     // Rate limiting

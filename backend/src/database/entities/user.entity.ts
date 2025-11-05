@@ -104,6 +104,9 @@ export class User {
   @Column({ nullable: true })
   twoFactorVerificationExpires: Date;
 
+  @Column({ type: "jsonb", nullable: true })
+  notificationSettings: Record<string, boolean>;
+
   @CreateDateColumn()
   createdAt: Date;
 
