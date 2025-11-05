@@ -30,23 +30,24 @@ export class LeadsService {
 
       if (bot && bot.ownerId) {
         // Отправляем уведомление о создании лида
-        this.notificationService.sendToUser(
-          bot.ownerId,
-          NotificationType.LEAD_CREATED,
-          {
+        this.notificationService
+          .sendToUser(bot.ownerId, NotificationType.LEAD_CREATED, {
             botId: bot.id,
             botName: bot.name,
             lead: {
               id: savedLead.id,
-              name: savedLead.name,
+              name: savedLead.fullName,
               phone: savedLead.phone,
               email: savedLead.email,
               status: savedLead.status,
             },
-          }
-        ).catch((error) => {
-          console.error("Ошибка отправки уведомления о создании лида:", error);
-        });
+          })
+          .catch((error) => {
+            console.error(
+              "Ошибка отправки уведомления о создании лида:",
+              error
+            );
+          });
       }
     }
 
@@ -87,43 +88,45 @@ export class LeadsService {
 
       if (bot && bot.ownerId) {
         // Отправляем уведомление об обновлении лида
-        this.notificationService.sendToUser(
-          bot.ownerId,
-          NotificationType.LEAD_UPDATED,
-          {
+        this.notificationService
+          .sendToUser(bot.ownerId, NotificationType.LEAD_UPDATED, {
             botId: bot.id,
             botName: bot.name,
             lead: {
               id: updatedLead.id,
-              name: updatedLead.name,
+              name: updatedLead.fullName,
               phone: updatedLead.phone,
               email: updatedLead.email,
               status: updatedLead.status,
             },
             changes: updateLeadDto,
-          }
-        ).catch((error) => {
-          console.error("Ошибка отправки уведомления об обновлении лида:", error);
-        });
+          })
+          .catch((error) => {
+            console.error(
+              "Ошибка отправки уведомления об обновлении лида:",
+              error
+            );
+          });
 
         // Если статус изменился, отправляем отдельное уведомление
         if (statusChanged) {
-          this.notificationService.sendToUser(
-            bot.ownerId,
-            NotificationType.LEAD_STATUS_CHANGED,
-            {
+          this.notificationService
+            .sendToUser(bot.ownerId, NotificationType.LEAD_STATUS_CHANGED, {
               botId: bot.id,
               botName: bot.name,
               lead: {
                 id: updatedLead.id,
-                name: updatedLead.name,
+                name: updatedLead.fullName,
               },
               oldStatus,
               newStatus: updatedLead.status,
-            }
-          ).catch((error) => {
-            console.error("Ошибка отправки уведомления об изменении статуса лида:", error);
-          });
+            })
+            .catch((error) => {
+              console.error(
+                "Ошибка отправки уведомления об изменении статуса лида:",
+                error
+              );
+            });
         }
       }
     }
