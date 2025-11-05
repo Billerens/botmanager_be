@@ -1,5 +1,6 @@
 import { Module, forwardRef } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { TelegramService } from "./telegram.service";
 import { TelegramController } from "./telegram.controller";
@@ -7,6 +8,8 @@ import { BotsModule } from "../bots/bots.module";
 import { MessagesModule } from "../messages/messages.module";
 import { LeadsModule } from "../leads/leads.module";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
+import { Message } from "../../database/entities/message.entity";
+import { Bot } from "../../database/entities/bot.entity";
 
 /**
  * Модуль для управления БОТАМИ ПОЛЬЗОВАТЕЛЕЙ
@@ -16,6 +19,7 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
 @Module({
   imports: [
     ConfigModule,
+    TypeOrmModule.forFeature([Message, Bot]),
     forwardRef(() => BotsModule),
     forwardRef(() => MessagesModule),
     LeadsModule,

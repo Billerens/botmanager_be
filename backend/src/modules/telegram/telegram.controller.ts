@@ -14,6 +14,8 @@ import {
   ApiResponse,
   getSchemaPath,
 } from "@nestjs/swagger";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
 
 import { TelegramService, TelegramUpdate } from "./telegram.service";
 import { BotsService } from "../bots/bots.service";
@@ -28,7 +30,9 @@ import {
 import {
   MessageType,
   MessageContentType,
+  Message,
 } from "../../database/entities/message.entity";
+import { Bot } from "../../database/entities/bot.entity";
 import {
   TelegramWebhookResponseDto,
   TelegramBotInfoResponseDto,
@@ -47,7 +51,11 @@ export class TelegramController {
     private readonly flowExecutionService: FlowExecutionService,
     private readonly messagesService: MessagesService,
     private readonly leadsService: LeadsService,
-    private readonly activityLogService: ActivityLogService
+    private readonly activityLogService: ActivityLogService,
+    @InjectRepository(Message)
+    private readonly messageRepository: Repository<Message>,
+    @InjectRepository(Bot)
+    private readonly botRepository: Repository<Bot>
   ) {}
 
   @Post("webhook/:botId")
@@ -128,11 +136,13 @@ export class TelegramController {
 
   private async processMessage(bot: any, message: any): Promise<void> {
     try {
+      const telegramChatId = message.chat.id.toString();
+
       // Сохраняем входящее сообщение
       const savedMessage = await this.messagesService.create({
         botId: bot.id,
         telegramMessageId: message.message_id,
-        telegramChatId: message.chat.id.toString(),
+        telegramChatId: telegramChatId,
         telegramUserId: message.from.id.toString(),
         type: MessageType.INCOMING,
         contentType: this.getMessageContentType(message),
@@ -152,10 +162,28 @@ export class TelegramController {
         },
       });
 
-      // Обновляем статистику бота
-      await this.botsService.updateStats(bot.id, {
-        totalMessages: bot.totalMessages + 1,
+      // Проверяем, является ли это новым диалогом (новым пользователем)
+      // Используем репозиторий для оптимизации запроса
+      // Проверяем ПОСЛЕ создания сообщения, чтобы уменьшить вероятность race condition
+      const dialogMessageCount = await this.messageRepository.count({
+        where: {
+          botId: bot.id,
+          telegramChatId: telegramChatId,
+        },
       });
+
+      const isNewUser = dialogMessageCount === 1; // Если это первое сообщение для диалога
+
+      // Обновляем статистику бота
+      // Используем репозиторий для атомарного обновления
+      await Promise.all([
+        // Обновляем totalMessages
+        this.botRepository.increment({ id: bot.id }, "totalMessages", 1),
+        // Если это новый пользователь - увеличиваем totalUsers
+        isNewUser
+          ? this.botRepository.increment({ id: bot.id }, "totalUsers", 1)
+          : Promise.resolve(),
+      ]);
 
       // Логируем активность
       await this.activityLogService.create({
@@ -167,6 +195,7 @@ export class TelegramController {
           messageId: savedMessage.id,
           userId: message.from.id,
           chatId: message.chat.id,
+          isNewUser,
         },
       });
 
