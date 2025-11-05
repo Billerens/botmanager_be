@@ -117,9 +117,6 @@ export class BotManagerWebSocketGateway
       this.logger.log(
         `Клиент ${client.id} подключен (Пользователь: ${user.id}, ${user.telegramUsername || "без username"})`
       );
-
-      // Отправляем накопленные уведомления
-      this.sendPendingNotifications(user.id);
     } catch (error) {
       this.logger.error(
         `Ошибка при подключении клиента ${client.id}: ${error.message}`,
@@ -233,6 +230,24 @@ export class BotManagerWebSocketGateway
       socketId: client.id,
       userId: client.userId,
     };
+  }
+
+  /**
+   * Обработка запроса клиента на получение накопленных уведомлений
+   * Клиент отправляет это событие, когда готов принимать уведомления
+   */
+  @SubscribeMessage("client-ready")
+  async handleClientReady(@ConnectedSocket() client: AuthenticatedSocket) {
+    if (!client.userId) {
+      throw new UnauthorizedException("Пользователь не аутентифицирован");
+    }
+
+    this.logger.log(`Клиент ${client.id} (Пользователь: ${client.userId}) готов принимать уведомления`);
+    
+    // Отправляем накопленные уведомления
+    await this.sendPendingNotifications(client.userId);
+
+    return { success: true };
   }
 
   // Методы для отправки уведомлений
