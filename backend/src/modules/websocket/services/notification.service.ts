@@ -1,8 +1,22 @@
-import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Inject,
+  forwardRef,
+} from "@nestjs/common";
 import { BotManagerWebSocketGateway } from "../websocket.gateway";
 import { RedisService } from "./redis.service";
-import { Notification, NotificationType, SendNotificationDto } from "../interfaces/notification.interface";
-import { NotificationItemDto, NotificationListDto, NotificationSummaryDto } from "../dto/notification.dto";
+import {
+  Notification,
+  NotificationType,
+  SendNotificationDto,
+} from "../interfaces/notification.interface";
+import {
+  NotificationItemDto,
+  NotificationListDto,
+  NotificationSummaryDto,
+} from "../dto/notification.dto";
 import { v4 as uuidv4 } from "uuid";
 
 /**
@@ -22,7 +36,7 @@ export class NotificationService implements OnModuleInit {
   constructor(
     @Inject(forwardRef(() => BotManagerWebSocketGateway))
     private readonly wsGateway: BotManagerWebSocketGateway,
-    private readonly redisService: RedisService,
+    private readonly redisService: RedisService
   ) {}
 
   /**
@@ -38,7 +52,7 @@ export class NotificationService implements OnModuleInit {
    * Задержка для ожидания инициализации других сервисов
    */
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
@@ -53,20 +67,30 @@ export class NotificationService implements OnModuleInit {
     for (let attempt = 0; attempt < 5; attempt++) {
       if (this.redisService.isRedisConnected()) {
         try {
-          await this.redisService.subscribe(this.REDIS_CHANNEL, (notification: Notification) => {
-            this.handleNotification(notification);
-          });
+          await this.redisService.subscribe(
+            this.REDIS_CHANNEL,
+            (notification: Notification) => {
+              this.handleNotification(notification);
+            }
+          );
           this.redisSubscriptionSetup = true;
-          this.logger.log(`Подписка на Redis канал ${this.REDIS_CHANNEL} установлена`);
+          this.logger.log(
+            `Подписка на Redis канал ${this.REDIS_CHANNEL} установлена`
+          );
           return;
         } catch (error) {
-          this.logger.error(`Ошибка подписки на Redis канал: ${error.message}`, error.stack);
+          this.logger.error(
+            `Ошибка подписки на Redis канал: ${error.message}`,
+            error.stack
+          );
         }
       }
       await this.delay(1000);
     }
-    
-    this.logger.warn(`Не удалось установить подписку на Redis канал после нескольких попыток. Продолжаем работу без Redis pub/sub.`);
+
+    this.logger.warn(
+      `Не удалось установить подписку на Redis канал после нескольких попыток. Продолжаем работу без Redis pub/sub.`
+    );
   }
 
   /**
@@ -76,16 +100,27 @@ export class NotificationService implements OnModuleInit {
     try {
       if (notification.userId) {
         // Отправка конкретному пользователю
-        this.wsGateway.emitToUser(notification.userId, notification.type, notification.payload);
+        this.wsGateway.emitToUser(
+          notification.userId,
+          notification.type,
+          notification.payload
+        );
       } else if (notification.room) {
         // Отправка в комнату
-        this.wsGateway.emitToRoom(notification.room, notification.type, notification.payload);
+        this.wsGateway.emitToRoom(
+          notification.room,
+          notification.type,
+          notification.payload
+        );
       } else if (notification.broadcast) {
         // Отправка всем подключенным
         this.wsGateway.emitToAll(notification.type, notification.payload);
       }
     } catch (error) {
-      this.logger.error(`Ошибка обработки уведомления: ${error.message}`, error.stack);
+      this.logger.error(
+        `Ошибка обработки уведомления: ${error.message}`,
+        error.stack
+      );
     }
   }
 
@@ -109,12 +144,16 @@ export class NotificationService implements OnModuleInit {
       try {
         await this.saveNotificationToStream(dto.userId, notification);
       } catch (error) {
-        this.logger.error(`Ошибка сохранения уведомления в Stream: ${error.message}`);
+        this.logger.error(
+          `Ошибка сохранения уведомления в Stream: ${error.message}`
+        );
       }
     }
 
     // Проверяем, подключен ли пользователь
-    const isUserOnline = dto.userId ? this.wsGateway.isUserConnected(dto.userId) : false;
+    const isUserOnline = dto.userId
+      ? this.wsGateway.isUserConnected(dto.userId)
+      : false;
 
     // Отправляем уведомление через WebSocket для real-time обработки
     // (не только офлайн, но и онлайн пользователям для обновления UI)
@@ -123,9 +162,13 @@ export class NotificationService implements OnModuleInit {
       if (this.redisService.isRedisConnected()) {
         try {
           await this.redisService.publish(this.REDIS_CHANNEL, notification);
-          this.logger.debug(`Уведомление отправлено через Redis: ${notification.type}`);
+          this.logger.debug(
+            `Уведомление отправлено через Redis: ${notification.type}`
+          );
         } catch (error) {
-          this.logger.warn(`Ошибка публикации в Redis, отправляем локально: ${error.message}`);
+          this.logger.warn(
+            `Ошибка публикации в Redis, отправляем локально: ${error.message}`
+          );
           // Продолжаем выполнение для локальной отправки
           this.handleNotification(notification);
         }
@@ -149,9 +192,12 @@ export class NotificationService implements OnModuleInit {
   /**
    * Сохраняет уведомление в Redis Stream для пользователя
    */
-  private async saveNotificationToStream(userId: string, notification: Notification): Promise<void> {
+  private async saveNotificationToStream(
+    userId: string,
+    notification: Notification
+  ): Promise<void> {
     const streamKey = `${this.STREAM_PREFIX}${userId}`;
-    
+
     try {
       // Сохраняем уведомление в Stream
       const data = {
@@ -165,11 +211,19 @@ export class NotificationService implements OnModuleInit {
       await this.redisService.addToStream(streamKey, data);
 
       // Обрезаем стрим до максимального размера
-      await this.redisService.trimStream(streamKey, this.MAX_PENDING_NOTIFICATIONS);
+      await this.redisService.trimStream(
+        streamKey,
+        this.MAX_PENDING_NOTIFICATIONS
+      );
 
-      this.logger.debug(`Уведомление сохранено в Stream для пользователя ${userId}`);
+      this.logger.debug(
+        `Уведомление сохранено в Stream для пользователя ${userId}`
+      );
     } catch (error) {
-      this.logger.error(`Ошибка сохранения в Stream: ${error.message}`, error.stack);
+      this.logger.error(
+        `Ошибка сохранения в Stream: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -177,7 +231,11 @@ export class NotificationService implements OnModuleInit {
   /**
    * Отправляет уведомление конкретному пользователю
    */
-  async sendToUser(userId: string, type: NotificationType, payload: any): Promise<void> {
+  async sendToUser(
+    userId: string,
+    type: NotificationType,
+    payload: any
+  ): Promise<void> {
     await this.sendNotification({
       type,
       payload,
@@ -188,7 +246,11 @@ export class NotificationService implements OnModuleInit {
   /**
    * Отправляет уведомление в комнату
    */
-  async sendToRoom(room: string, type: NotificationType, payload: any): Promise<void> {
+  async sendToRoom(
+    room: string,
+    type: NotificationType,
+    payload: any
+  ): Promise<void> {
     await this.sendNotification({
       type,
       payload,
@@ -210,7 +272,11 @@ export class NotificationService implements OnModuleInit {
   /**
    * Отправляет системное уведомление
    */
-  async sendSystemNotification(message: string, userId?: string, level: "info" | "warning" | "error" = "info"): Promise<void> {
+  async sendSystemNotification(
+    message: string,
+    userId?: string,
+    level: "info" | "warning" | "error" = "info"
+  ): Promise<void> {
     await this.sendNotification({
       type: NotificationType.SYSTEM_NOTIFICATION,
       payload: {
@@ -261,11 +327,15 @@ export class NotificationService implements OnModuleInit {
       const messages = await this.redisService.readFromStream(streamKey, "0");
 
       if (messages.length === 0) {
-        this.logger.debug(`Нет накопленных уведомлений для пользователя ${userId}`);
+        this.logger.debug(
+          `Нет накопленных уведомлений для пользователя ${userId}`
+        );
         return 0;
       }
 
-      this.logger.log(`Отправка ${messages.length} накопленных уведомлений пользователю ${userId}`);
+      this.logger.log(
+        `Отправка ${messages.length} накопленных уведомлений пользователю ${userId}`
+      );
 
       // Отправляем каждое уведомление
       const messageIds: string[] = [];
@@ -280,7 +350,11 @@ export class NotificationService implements OnModuleInit {
           };
 
           // Отправляем уведомление пользователю
-          this.wsGateway.emitToUser(userId, notification.type, notification.payload);
+          this.wsGateway.emitToUser(
+            userId,
+            notification.type,
+            notification.payload
+          );
           messageIds.push(msg.id);
         } catch (error) {
           this.logger.error(
@@ -292,7 +366,9 @@ export class NotificationService implements OnModuleInit {
       // Удаляем отправленные сообщения из стрима
       if (messageIds.length > 0) {
         await this.redisService.deleteFromStream(streamKey, messageIds);
-        this.logger.debug(`Удалено ${messageIds.length} уведомлений из Stream пользователя ${userId}`);
+        this.logger.debug(
+          `Удалено ${messageIds.length} уведомлений из Stream пользователя ${userId}`
+        );
       }
 
       return messageIds.length;
@@ -320,7 +396,7 @@ export class NotificationService implements OnModuleInit {
     try {
       // Читаем все сообщения
       const messages = await this.redisService.readFromStream(streamKey, "0");
-      
+
       // Находим сообщения старше TTL
       const oldMessageIds = messages
         .filter((msg) => parseInt(msg.message.timestamp, 10) < cutoffTimestamp)
@@ -358,12 +434,13 @@ export class NotificationService implements OnModuleInit {
     try {
       // Читаем все сообщения
       const messages = await this.redisService.readFromStream(streamKey, "0");
-      
+
       // Находим прочитанные сообщения старше READ_RETENTION_DAYS
       const readOldMessageIds = messages
-        .filter((msg) => 
-          msg.message.read === "true" && 
-          parseInt(msg.message.timestamp, 10) < cutoffTimestamp
+        .filter(
+          (msg) =>
+            msg.message.read === "true" &&
+            parseInt(msg.message.timestamp, 10) < cutoffTimestamp
         )
         .map((msg) => msg.id);
 
@@ -491,7 +568,9 @@ export class NotificationService implements OnModuleInit {
   /**
    * Получает сводку уведомлений (по типам)
    */
-  async getNotificationsSummary(userId: string): Promise<NotificationSummaryDto[]> {
+  async getNotificationsSummary(
+    userId: string
+  ): Promise<NotificationSummaryDto[]> {
     if (!this.redisService.isRedisConnected()) {
       return [];
     }
@@ -502,7 +581,10 @@ export class NotificationService implements OnModuleInit {
       const messages = await this.redisService.readFromStream(streamKey, "0");
 
       // Группируем по типам
-      const summaryMap = new Map<NotificationType, { count: number; latestTimestamp: number }>();
+      const summaryMap = new Map<
+        NotificationType,
+        { count: number; latestTimestamp: number }
+      >();
 
       messages.forEach((msg) => {
         const type = msg.message.type as NotificationType;
@@ -511,7 +593,10 @@ export class NotificationService implements OnModuleInit {
 
         // Учитываем только непрочитанные
         if (!isRead) {
-          const current = summaryMap.get(type) || { count: 0, latestTimestamp: 0 };
+          const current = summaryMap.get(type) || {
+            count: 0,
+            latestTimestamp: 0,
+          };
           summaryMap.set(type, {
             count: current.count + 1,
             latestTimestamp: Math.max(current.latestTimestamp, timestamp),
@@ -520,13 +605,13 @@ export class NotificationService implements OnModuleInit {
       });
 
       // Преобразуем в массив
-      const summary: NotificationSummaryDto[] = Array.from(summaryMap.entries()).map(
-        ([type, data]) => ({
-          type,
-          count: data.count,
-          latestTimestamp: data.latestTimestamp,
-        })
-      );
+      const summary: NotificationSummaryDto[] = Array.from(
+        summaryMap.entries()
+      ).map(([type, data]) => ({
+        type,
+        count: data.count,
+        latestTimestamp: data.latestTimestamp,
+      }));
 
       // Сортируем по последнему времени
       summary.sort((a, b) => b.latestTimestamp - a.latestTimestamp);
@@ -544,7 +629,10 @@ export class NotificationService implements OnModuleInit {
   /**
    * Помечает уведомления как прочитанные
    */
-  async markNotificationsAsRead(userId: string, notificationIds?: string[]): Promise<number> {
+  async markNotificationsAsRead(
+    userId: string,
+    notificationIds?: string[]
+  ): Promise<number> {
     if (!this.redisService.isRedisConnected()) {
       return 0;
     }
@@ -588,7 +676,9 @@ export class NotificationService implements OnModuleInit {
         await this.redisService.addToStream(streamKey, data);
       }
 
-      this.logger.log(`Помечено ${updatedCount} уведомлений как прочитанные для пользователя ${userId}`);
+      this.logger.log(
+        `Помечено ${updatedCount} уведомлений как прочитанные для пользователя ${userId}`
+      );
       return updatedCount;
     } catch (error) {
       this.logger.error(
@@ -629,7 +719,9 @@ export class NotificationService implements OnModuleInit {
       this.wsGateway.emitToUser(userId, "notifications.unread_count", {
         count: unreadCount,
       });
-      this.logger.debug(`Обновление счетчика отправлено пользователю ${userId}: ${unreadCount}`);
+      this.logger.debug(
+        `Обновление счетчика отправлено пользователю ${userId}: ${unreadCount}`
+      );
     } catch (error) {
       this.logger.error(
         `Ошибка отправки обновления счетчика для пользователя ${userId}: ${error.message}`,
@@ -637,5 +729,28 @@ export class NotificationService implements OnModuleInit {
       );
     }
   }
-}
 
+  /**
+   * Отправляет сводку уведомлений через WebSocket
+   */
+  async sendNotificationsSummary(userId: string): Promise<void> {
+    try {
+      const unreadCount = await this.getUnreadNotificationsCount(userId);
+      const summary = await this.getNotificationsSummary(userId);
+
+      this.wsGateway.emitToUser(userId, "notifications.summary", {
+        unreadCount,
+        summary,
+      });
+
+      this.logger.debug(
+        `Сводка уведомлений отправлена пользователю ${userId}: ${unreadCount} непрочитанных`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Ошибка отправки сводки уведомлений для пользователя ${userId}: ${error.message}`,
+        error.stack
+      );
+    }
+  }
+}

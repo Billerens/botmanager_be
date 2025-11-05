@@ -79,9 +79,10 @@ export class WebSocketNotificationsController {
       body.all ? undefined : body.notificationIds
     );
 
-    // Отправляем обновление счетчика
+    // Отправляем обновление счетчика и сводки для синхронизации кэша на фронтенде
     if (updatedCount > 0) {
       await this.notificationService.sendUnreadCountUpdate(userId);
+      await this.notificationService.sendNotificationsSummary(userId);
     }
 
     return { updatedCount };
