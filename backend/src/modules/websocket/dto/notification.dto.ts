@@ -1,4 +1,6 @@
 import { NotificationType } from "../interfaces/notification.interface";
+import { IsOptional, IsNumber, IsBoolean, Min, IsArray } from "class-validator";
+import { Type } from "class-transformer";
 
 /**
  * DTO для уведомления в списке
@@ -34,8 +36,21 @@ export class NotificationSummaryDto {
  * DTO для запроса списка уведомлений
  */
 export class GetNotificationsDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
   limit?: number = 50;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
   offset?: number = 0;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
   unreadOnly?: boolean = false;
 }
 
@@ -43,6 +58,12 @@ export class GetNotificationsDto {
  * DTO для пометки уведомлений как прочитанных
  */
 export class MarkNotificationsReadDto {
+  @IsOptional()
+  @IsArray()
   notificationIds?: string[]; // Если не указано, помечаются все
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
   all?: boolean = false;
 }
