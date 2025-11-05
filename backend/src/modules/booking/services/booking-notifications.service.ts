@@ -9,6 +9,8 @@ import {
 import { Bot } from "../../../database/entities/bot.entity";
 import { TelegramService } from "../../telegram/telegram.service";
 import { QueueService } from "../../queue/queue.service";
+import { NotificationService } from "../../websocket/services/notification.service";
+import { NotificationType } from "../../websocket/interfaces/notification.interface";
 
 @Injectable()
 export class BookingNotificationsService {
@@ -20,7 +22,8 @@ export class BookingNotificationsService {
     @InjectRepository(Bot)
     private readonly botRepository: Repository<Bot>,
     private readonly telegramService: TelegramService,
-    private readonly queueService: QueueService
+    private readonly queueService: QueueService,
+    private readonly notificationService: NotificationService
   ) {}
 
   /**
@@ -258,6 +261,35 @@ export class BookingNotificationsService {
       this.logger.log(
         `Reminder sent successfully for booking ${booking.id}, reminder index ${reminderIndex}`
       );
+
+      // Отправляем уведомление владельцу бота о напоминании
+      if (bot && bot.ownerId) {
+        this.notificationService.sendToUser(
+          bot.ownerId,
+          NotificationType.BOOKING_REMINDER,
+          {
+            botId: bot.id,
+            botName: bot.name,
+            booking: {
+              id: fullBooking.id,
+              clientName: fullBooking.clientName,
+              clientPhone: fullBooking.clientPhone,
+            },
+            specialist: fullBooking.specialist
+              ? { name: fullBooking.specialist.name }
+              : undefined,
+            service: fullBooking.service
+              ? { name: fullBooking.service.name }
+              : undefined,
+            timeSlot: fullBooking.timeSlot
+              ? { startTime: fullBooking.timeSlot.startTime }
+              : undefined,
+            reminderIndex,
+          }
+        ).catch((error) => {
+          this.logger.error("Ошибка отправки уведомления о напоминании:", error);
+        });
+      }
     } catch (error) {
       this.logger.error(
         `Failed to send reminder for booking ${booking.id}:`,

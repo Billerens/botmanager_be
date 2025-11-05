@@ -23,6 +23,8 @@ import { FlowExecutionService } from "../bots/flow-execution.service";
 import { MessagesService } from "../messages/messages.service";
 import { LeadsService } from "../leads/leads.service";
 import { ActivityLogService } from "../activity-log/activity-log.service";
+import { NotificationService } from "../websocket/services/notification.service";
+import { NotificationType } from "../websocket/interfaces/notification.interface";
 import {
   ActivityType,
   ActivityLevel,
@@ -52,6 +54,7 @@ export class TelegramController {
     private readonly messagesService: MessagesService,
     private readonly leadsService: LeadsService,
     private readonly activityLogService: ActivityLogService,
+    private readonly notificationService: NotificationService,
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>,
     @InjectRepository(Bot)
@@ -198,6 +201,30 @@ export class TelegramController {
           isNewUser,
         },
       });
+
+      // Отправляем уведомление о получении сообщения владельцу бота
+      this.notificationService
+        .sendToUser(bot.ownerId, NotificationType.MESSAGE_RECEIVED, {
+          botId: bot.id,
+          botName: bot.name,
+          message: {
+            id: savedMessage.id,
+            text: savedMessage.text || savedMessage.contentType,
+            telegramChatId: savedMessage.telegramChatId,
+          },
+          user: {
+            firstName: message.from.first_name,
+            lastName: message.from.last_name,
+            username: message.from.username,
+          },
+          isNewUser,
+        })
+        .catch((error) => {
+          this.logger.error(
+            "Ошибка отправки уведомления о получении сообщения:",
+            error
+          );
+        });
 
       // Обрабатываем сообщение через flow
       await this.flowExecutionService.processMessage(bot, message);

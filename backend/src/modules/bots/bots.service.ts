@@ -15,6 +15,8 @@ import { User } from "../../database/entities/user.entity";
 import { CreateBotDto, UpdateBotDto } from "./dto/bot.dto";
 import { ButtonSettingsDto } from "./dto/command-button-settings.dto";
 import { TelegramService } from "../telegram/telegram.service";
+import { NotificationService } from "../websocket/services/notification.service";
+import { NotificationType } from "../websocket/interfaces/notification.interface";
 
 @Injectable()
 export class BotsService {
@@ -22,7 +24,8 @@ export class BotsService {
     @InjectRepository(Bot)
     private botRepository: Repository<Bot>,
     @Inject(forwardRef(() => TelegramService))
-    private telegramService: TelegramService
+    private telegramService: TelegramService,
+    private notificationService: NotificationService
   ) {}
 
   async create(createBotDto: CreateBotDto, userId: string): Promise<Bot> {
@@ -63,6 +66,20 @@ export class BotsService {
       console.error("Ошибка установки webhook:", error);
     }
 
+    // Отправляем уведомление о создании бота
+    this.notificationService
+      .sendToUser(userId, NotificationType.BOT_CREATED, {
+        bot: {
+          id: savedBot.id,
+          name: savedBot.name,
+          username: savedBot.username,
+          status: savedBot.status,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка отправки уведомления о создании бота:", error);
+      });
+
     return savedBot;
   }
 
@@ -92,11 +109,52 @@ export class BotsService {
     userId: string
   ): Promise<Bot> {
     const bot = await this.findOne(id, userId);
+    const oldStatus = bot.status;
 
     // Обновляем только переданные поля
     Object.assign(bot, updateBotDto);
 
-    return this.botRepository.save(bot);
+    const updatedBot = await this.botRepository.save(bot);
+
+    // Проверяем, изменился ли статус
+    const statusChanged = oldStatus !== updatedBot.status;
+
+    // Отправляем уведомление об обновлении бота
+    this.notificationService
+      .sendToUser(userId, NotificationType.BOT_UPDATED, {
+        bot: {
+          id: updatedBot.id,
+          name: updatedBot.name,
+          username: updatedBot.username,
+          status: updatedBot.status,
+        },
+        changes: updateBotDto,
+      })
+      .catch((error) => {
+        console.error("Ошибка отправки уведомления об обновлении бота:", error);
+      });
+
+    // Если статус изменился, отправляем отдельное уведомление
+    if (statusChanged) {
+      this.notificationService
+        .sendToUser(userId, NotificationType.BOT_STATUS_CHANGED, {
+          bot: {
+            id: updatedBot.id,
+            name: updatedBot.name,
+            username: updatedBot.username,
+          },
+          oldStatus,
+          newStatus: updatedBot.status,
+        })
+        .catch((error) => {
+          console.error(
+            "Ошибка отправки уведомления об изменении статуса бота:",
+            error
+          );
+        });
+    }
+
+    return updatedBot;
   }
 
   async updateShopSettings(
@@ -252,6 +310,11 @@ export class BotsService {
 
   async remove(id: string, userId: string): Promise<void> {
     const bot = await this.findOne(id, userId);
+    const botData = {
+      id: bot.id,
+      name: bot.name,
+      username: bot.username,
+    };
 
     // Удаляем webhook
     try {
@@ -262,6 +325,15 @@ export class BotsService {
     }
 
     await this.botRepository.remove(bot);
+
+    // Отправляем уведомление об удалении бота
+    this.notificationService
+      .sendToUser(userId, NotificationType.BOT_DELETED, {
+        bot: botData,
+      })
+      .catch((error) => {
+        console.error("Ошибка отправки уведомления об удалении бота:", error);
+      });
   }
 
   async activate(id: string, userId: string): Promise<Bot> {
@@ -284,11 +356,32 @@ export class BotsService {
       throw new BadRequestException(`Ошибка активации бота: ${error.message}`);
     }
 
+    const oldStatus = bot.status;
     bot.status = BotStatus.ACTIVE;
     bot.lastError = null;
     bot.lastErrorAt = null;
 
-    return this.botRepository.save(bot);
+    const savedBot = await this.botRepository.save(bot);
+
+    // Отправляем уведомление об изменении статуса
+    this.notificationService
+      .sendToUser(userId, NotificationType.BOT_STATUS_CHANGED, {
+        bot: {
+          id: savedBot.id,
+          name: savedBot.name,
+          username: savedBot.username,
+        },
+        oldStatus,
+        newStatus: savedBot.status,
+      })
+      .catch((error) => {
+        console.error(
+          "Ошибка отправки уведомления об изменении статуса бота:",
+          error
+        );
+      });
+
+    return savedBot;
   }
 
   async deactivate(id: string, userId: string): Promise<Bot> {
@@ -307,9 +400,30 @@ export class BotsService {
       console.error("Ошибка удаления webhook:", error);
     }
 
+    const oldStatus = bot.status;
     bot.status = BotStatus.INACTIVE;
 
-    return this.botRepository.save(bot);
+    const savedBot = await this.botRepository.save(bot);
+
+    // Отправляем уведомление об изменении статуса
+    this.notificationService
+      .sendToUser(userId, NotificationType.BOT_STATUS_CHANGED, {
+        bot: {
+          id: savedBot.id,
+          name: savedBot.name,
+          username: savedBot.username,
+        },
+        oldStatus,
+        newStatus: savedBot.status,
+      })
+      .catch((error) => {
+        console.error(
+          "Ошибка отправки уведомления об изменении статуса бота:",
+          error
+        );
+      });
+
+    return savedBot;
   }
 
   async getStats(

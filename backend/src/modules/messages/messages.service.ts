@@ -11,6 +11,8 @@ import { Message, MessageType } from "../../database/entities/message.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import { BroadcastDto } from "./dto/broadcast.dto";
 import { TelegramService } from "../telegram/telegram.service";
+import { NotificationService } from "../websocket/services/notification.service";
+import { NotificationType } from "../websocket/interfaces/notification.interface";
 
 interface MessageFilters {
   page: number;
@@ -102,7 +104,8 @@ export class MessagesService {
     private messageRepository: Repository<Message>,
     @InjectRepository(Bot)
     private botRepository: Repository<Bot>,
-    private telegramService: TelegramService
+    private telegramService: TelegramService,
+    private notificationService: NotificationService
   ) {}
 
   async getBotMessages(botId: string, userId: string, filters: MessageFilters) {
@@ -881,6 +884,18 @@ export class MessagesService {
       `Токен бота: ${decryptedToken ? decryptedToken.substring(0, 10) + "..." : "НЕ НАЙДЕН"}`
     );
 
+    // Отправляем уведомление о начале рассылки
+    this.notificationService
+      .sendToUser(userId, NotificationType.BROADCAST_STARTED, {
+        botId: bot.id,
+        botName: bot.name,
+        totalRecipients: recipientChatIds.length,
+        message: data.text || "Изображение",
+      })
+      .catch((error) => {
+        console.error("Ошибка отправки уведомления о начале рассылки:", error);
+      });
+
     // Отправляем сообщения через Telegram API
     let sentCount = 0;
     let failedCount = 0;
@@ -995,6 +1010,29 @@ export class MessagesService {
     console.log(
       `Рассылка завершена: отправлено ${sentCount}, не удалось ${failedCount}`
     );
+
+    // Отправляем уведомление о завершении рассылки
+    const hasErrors = failedCount > 0 || sentCount === 0;
+    const notificationType = hasErrors
+      ? NotificationType.BROADCAST_FAILED
+      : NotificationType.BROADCAST_COMPLETED;
+
+    this.notificationService
+      .sendToUser(userId, notificationType, {
+        botId: bot.id,
+        botName: bot.name,
+        sentCount,
+        failedCount,
+        totalRecipients: recipientChatIds.length,
+        failedChatIds:
+          failedChatIds.length > 0 ? failedChatIds.slice(0, 10) : undefined, // Ограничиваем количество для payload
+      })
+      .catch((error) => {
+        console.error(
+          "Ошибка отправки уведомления о завершении рассылки:",
+          error
+        );
+      });
 
     return {
       success: true,

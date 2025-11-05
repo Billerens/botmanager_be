@@ -22,6 +22,8 @@ import {
   CancelBookingDto,
 } from "../dto/booking.dto";
 import { BookingNotificationsService } from "./booking-notifications.service";
+import { NotificationService } from "../../websocket/services/notification.service";
+import { NotificationType } from "../../websocket/interfaces/notification.interface";
 
 @Injectable()
 export class BookingsService {
@@ -37,7 +39,8 @@ export class BookingsService {
     @InjectRepository(Bot)
     private botRepository: Repository<Bot>,
     @Inject(forwardRef(() => BookingNotificationsService))
-    private notificationsService: BookingNotificationsService
+    private notificationsService: BookingNotificationsService,
+    private notificationService: NotificationService
   ) {}
 
   async create(
@@ -134,6 +137,43 @@ export class BookingsService {
       }
     }
 
+    // Отправляем уведомление владельцу бота о создании бронирования
+    if (bot && bot.ownerId) {
+      const fullBooking = await this.bookingRepository.findOne({
+        where: { id: savedBooking.id },
+        relations: ["specialist", "service", "timeSlot"],
+      });
+
+      if (fullBooking) {
+        this.notificationService
+          .sendToUser(bot.ownerId, NotificationType.BOOKING_CREATED, {
+            botId: bot.id,
+            botName: bot.name,
+            booking: {
+              id: fullBooking.id,
+              clientName: fullBooking.clientName,
+              clientPhone: fullBooking.clientPhone,
+              status: fullBooking.status,
+            },
+            specialist: fullBooking.specialist
+              ? { name: fullBooking.specialist.name }
+              : undefined,
+            service: fullBooking.service
+              ? { name: fullBooking.service.name }
+              : undefined,
+            timeSlot: fullBooking.timeSlot
+              ? { startTime: fullBooking.timeSlot.startTime }
+              : undefined,
+          })
+          .catch((error) => {
+            console.error(
+              "Ошибка отправки уведомления о создании бронирования:",
+              error
+            );
+          });
+      }
+    }
+
     return savedBooking;
   }
 
@@ -223,8 +263,36 @@ export class BookingsService {
     }
 
     Object.assign(booking, updateBookingDto);
+    const updatedBooking = await this.bookingRepository.save(booking);
 
-    return this.bookingRepository.save(booking);
+    // Отправляем уведомление владельцу бота об обновлении бронирования
+    if (updatedBooking.specialist?.botId) {
+      const bot = await this.botRepository.findOne({
+        where: { id: updatedBooking.specialist.botId },
+      });
+
+      if (bot && bot.ownerId) {
+        this.notificationService
+          .sendToUser(bot.ownerId, NotificationType.BOOKING_UPDATED, {
+            botId: bot.id,
+            botName: bot.name,
+            booking: {
+              id: updatedBooking.id,
+              clientName: updatedBooking.clientName,
+              status: updatedBooking.status,
+            },
+            changes: updateBookingDto,
+          })
+          .catch((error) => {
+            console.error(
+              "Ошибка отправки уведомления об обновлении бронирования:",
+              error
+            );
+          });
+      }
+    }
+
+    return updatedBooking;
   }
 
   async confirm(
@@ -283,6 +351,33 @@ export class BookingsService {
       } catch (error) {
         console.error("Failed to send cancellation notification:", error);
         // Не прерываем отмену бронирования из-за ошибки отправки уведомления
+      }
+    }
+
+    // Отправляем уведомление владельцу бота об отмене бронирования
+    if (savedBooking.specialist?.botId) {
+      const bot = await this.botRepository.findOne({
+        where: { id: savedBooking.specialist.botId },
+      });
+
+      if (bot && bot.ownerId) {
+        this.notificationService
+          .sendToUser(bot.ownerId, NotificationType.BOOKING_CANCELLED, {
+            botId: bot.id,
+            botName: bot.name,
+            booking: {
+              id: savedBooking.id,
+              clientName: savedBooking.clientName,
+              clientPhone: savedBooking.clientPhone,
+            },
+            cancellationReason: cancelBookingDto.cancellationReason,
+          })
+          .catch((error) => {
+            console.error(
+              "Ошибка отправки уведомления об отмене бронирования:",
+              error
+            );
+          });
       }
     }
 

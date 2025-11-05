@@ -14,6 +14,8 @@ import {
   ProductFiltersDto,
 } from "./dto/product.dto";
 import { UploadService } from "../upload/upload.service";
+import { NotificationService } from "../websocket/services/notification.service";
+import { NotificationType } from "../websocket/interfaces/notification.interface";
 
 export interface ProductStats {
   totalProducts: number;
@@ -32,7 +34,8 @@ export class ProductsService {
     private readonly productRepository: Repository<Product>,
     @InjectRepository(Bot)
     private readonly botRepository: Repository<Bot>,
-    private readonly uploadService: UploadService
+    private readonly uploadService: UploadService,
+    private readonly notificationService: NotificationService
   ) {}
 
   async create(
@@ -52,7 +55,22 @@ export class ProductsService {
       botId,
     });
 
-    return await this.productRepository.save(product);
+    const savedProduct = await this.productRepository.save(product);
+
+    // Отправляем уведомление о создании продукта
+    this.notificationService.sendToUser(userId, NotificationType.PRODUCT_CREATED, {
+      botId,
+      product: {
+        id: savedProduct.id,
+        name: savedProduct.name,
+        price: savedProduct.price,
+        stockQuantity: savedProduct.stockQuantity,
+      },
+    }).catch((error) => {
+      this.logger.error("Ошибка отправки уведомления о создании продукта:", error);
+    });
+
+    return savedProduct;
   }
 
   async findAll(botId: string, userId: string, filters: ProductFiltersDto) {
@@ -143,7 +161,23 @@ export class ProductsService {
     }
 
     Object.assign(product, updateProductDto);
-    return await this.productRepository.save(product);
+    const updatedProduct = await this.productRepository.save(product);
+
+    // Отправляем уведомление об обновлении продукта
+    this.notificationService.sendToUser(userId, NotificationType.PRODUCT_UPDATED, {
+      botId,
+      product: {
+        id: updatedProduct.id,
+        name: updatedProduct.name,
+        price: updatedProduct.price,
+        stockQuantity: updatedProduct.stockQuantity,
+      },
+      changes: updateProductDto,
+    }).catch((error) => {
+      this.logger.error("Ошибка отправки уведомления об обновлении продукта:", error);
+    });
+
+    return updatedProduct;
   }
 
   async remove(id: string, botId: string, userId: string): Promise<void> {
@@ -161,7 +195,20 @@ export class ProductsService {
       }
     }
 
+    const productData = {
+      id: product.id,
+      name: product.name,
+    };
+
     await this.productRepository.remove(product);
+
+    // Отправляем уведомление об удалении продукта
+    this.notificationService.sendToUser(userId, NotificationType.PRODUCT_DELETED, {
+      botId,
+      product: productData,
+    }).catch((error) => {
+      this.logger.error("Ошибка отправки уведомления об удалении продукта:", error);
+    });
   }
 
   async getBotProductStats(
@@ -205,9 +252,32 @@ export class ProductsService {
     quantity: number
   ): Promise<Product> {
     const product = await this.findOne(id, botId, userId);
+    const oldStock = product.stockQuantity;
 
     product.stockQuantity = quantity;
-    return await this.productRepository.save(product);
+    const updatedProduct = await this.productRepository.save(product);
+
+    // Проверяем, стал ли запас низким (меньше 5 единиц)
+    const lowStockThreshold = 5;
+    if (updatedProduct.stockQuantity <= lowStockThreshold && oldStock > lowStockThreshold) {
+      // Отправляем уведомление о низком запасе
+      this.notificationService.sendToUser(
+        userId,
+        NotificationType.PRODUCT_STOCK_LOW,
+        {
+          botId,
+          product: {
+            id: updatedProduct.id,
+            name: updatedProduct.name,
+            stockQuantity: updatedProduct.stockQuantity,
+          },
+        }
+      ).catch((error) => {
+        this.logger.error("Ошибка отправки уведомления о низком запасе:", error);
+      });
+    }
+
+    return updatedProduct;
   }
 
   async toggleActive(
