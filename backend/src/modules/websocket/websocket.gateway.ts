@@ -12,8 +12,8 @@ import { Server, Socket } from "socket.io";
 import { Logger, Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { createAdapter } from "@socket.io/redis-adapter";
 import { createClient } from "redis";
+import { createAdapter } from "@socket.io/redis-adapter";
 import { AuthService } from "../auth/auth.service";
 import { User } from "../../database/entities/user.entity";
 import { JwtPayload } from "../auth/interfaces/jwt-payload.interface";
@@ -48,7 +48,7 @@ export class BotManagerWebSocketGateway
   constructor(
     private configService: ConfigService,
     private jwtService: JwtService,
-    private authService: AuthService,
+    private authService: AuthService
   ) {}
 
   /**
@@ -76,7 +76,7 @@ export class BotManagerWebSocketGateway
       this.logger.log("Redis адаптер для Socket.IO настроен успешно");
     } catch (error) {
       this.logger.warn(
-        `Не удалось настроить Redis адаптер: ${error.message}. Продолжаем работу без масштабируемости.`,
+        `Не удалось настроить Redis адаптер: ${error.message}. Продолжаем работу без масштабируемости.`
       );
     }
   }
@@ -112,12 +112,12 @@ export class BotManagerWebSocketGateway
       this.socketToUser.set(client.id, user.id);
 
       this.logger.log(
-        `Клиент ${client.id} подключен (Пользователь: ${user.id}, ${user.telegramUsername || "без username"})`,
+        `Клиент ${client.id} подключен (Пользователь: ${user.id}, ${user.telegramUsername || "без username"})`
       );
     } catch (error) {
       this.logger.error(
         `Ошибка при подключении клиента ${client.id}: ${error.message}`,
-        error.stack,
+        error.stack
       );
       client.disconnect();
     }
@@ -126,14 +126,12 @@ export class BotManagerWebSocketGateway
   /**
    * Обработка отключения клиента
    */
-  handleDisconnection(client: AuthenticatedSocket) {
+  handleDisconnect(client: AuthenticatedSocket) {
     const userId = this.socketToUser.get(client.id);
     if (userId) {
       this.connectedUsers.delete(userId);
       this.socketToUser.delete(client.id);
-      this.logger.log(
-        `Клиент ${client.id} отключен (Пользователь: ${userId})`,
-      );
+      this.logger.log(`Клиент ${client.id} отключен (Пользователь: ${userId})`);
     } else {
       this.logger.log(`Клиент ${client.id} отключен`);
     }
@@ -185,7 +183,7 @@ export class BotManagerWebSocketGateway
   @SubscribeMessage("join-room")
   handleJoinRoom(
     @MessageBody() data: { room: string },
-    @ConnectedSocket() client: AuthenticatedSocket,
+    @ConnectedSocket() client: AuthenticatedSocket
   ) {
     if (!client.userId) {
       throw new UnauthorizedException("Пользователь не аутентифицирован");
@@ -193,7 +191,7 @@ export class BotManagerWebSocketGateway
 
     client.join(data.room);
     this.logger.log(
-      `Клиент ${client.id} (Пользователь: ${client.userId}) присоединился к комнате ${data.room}`,
+      `Клиент ${client.id} (Пользователь: ${client.userId}) присоединился к комнате ${data.room}`
     );
   }
 
@@ -203,7 +201,7 @@ export class BotManagerWebSocketGateway
   @SubscribeMessage("leave-room")
   handleLeaveRoom(
     @MessageBody() data: { room: string },
-    @ConnectedSocket() client: AuthenticatedSocket,
+    @ConnectedSocket() client: AuthenticatedSocket
   ) {
     if (!client.userId) {
       throw new UnauthorizedException("Пользователь не аутентифицирован");
@@ -211,7 +209,7 @@ export class BotManagerWebSocketGateway
 
     client.leave(data.room);
     this.logger.log(
-      `Клиент ${client.id} (Пользователь: ${client.userId}) покинул комнату ${data.room}`,
+      `Клиент ${client.id} (Пользователь: ${client.userId}) покинул комнату ${data.room}`
     );
   }
 
