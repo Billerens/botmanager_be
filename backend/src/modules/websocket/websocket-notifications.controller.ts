@@ -35,7 +35,13 @@ export class WebSocketNotificationsController {
     const userId = req.user.id;
     const limit = query.limit || 50;
     const offset = query.offset || 0;
-    const unreadOnly = query.unreadOnly || false;
+    // Правильно преобразуем в boolean, учитывая что query параметры могут быть строками
+    // Если параметр не передан или равен false/"false", то unreadOnly = false
+    // Если параметр равен true/"true", то unreadOnly = true
+    const unreadOnly =
+      query.unreadOnly === true ||
+      query.unreadOnly === "true" ||
+      query.unreadOnly === "1";
 
     return this.notificationService.getNotifications(
       userId,
