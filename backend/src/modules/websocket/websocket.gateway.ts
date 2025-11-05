@@ -9,10 +9,10 @@ import {
   OnGatewayInit,
 } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
-import { Logger, Injectable, UnauthorizedException, Inject, forwardRef } from "@nestjs/common";
+import { Logger, Injectable, UnauthorizedException, Inject, forwardRef, OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { createClient } from "redis";
+import { createClient, RedisClientType } from "redis";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { AuthService } from "../auth/auth.service";
 import { User } from "../../database/entities/user.entity";
@@ -37,7 +37,7 @@ interface AuthenticatedSocket extends Socket {
 })
 @Injectable()
 export class BotManagerWebSocketGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
 {
   @WebSocketServer()
   server: Server;
@@ -45,6 +45,8 @@ export class BotManagerWebSocketGateway
   private readonly logger = new Logger(BotManagerWebSocketGateway.name);
   private connectedUsers = new Map<string, string>(); // userId -> socketId
   private socketToUser = new Map<string, string>(); // socketId -> userId
+  private redisPubClient: RedisClientType | null = null;
+  private redisSubClient: RedisClientType | null = null;
 
   constructor(
     private configService: ConfigService,
@@ -63,19 +65,19 @@ export class BotManagerWebSocketGateway
     // Настройка Redis адаптера для масштабируемости
     try {
       const redisConfig = this.configService.get("redis");
-      const pubClient = createClient({
+      this.redisPubClient = createClient({
         socket: {
           host: redisConfig.host,
           port: redisConfig.port,
         },
         password: redisConfig.password,
         database: redisConfig.db,
-      });
-      const subClient = pubClient.duplicate();
+      }) as RedisClientType;
+      this.redisSubClient = this.redisPubClient.duplicate() as RedisClientType;
 
-      await Promise.all([pubClient.connect(), subClient.connect()]);
+      await Promise.all([this.redisPubClient.connect(), this.redisSubClient.connect()]);
 
-      server.adapter(createAdapter(pubClient, subClient));
+      server.adapter(createAdapter(this.redisPubClient, this.redisSubClient));
       this.logger.log("Redis адаптер для Socket.IO настроен успешно");
     } catch (error) {
       this.logger.warn(
@@ -137,6 +139,27 @@ export class BotManagerWebSocketGateway
       this.logger.log(`Клиент ${client.id} отключен (Пользователь: ${userId})`);
     } else {
       this.logger.log(`Клиент ${client.id} отключен`);
+    }
+  }
+
+  /**
+   * Закрытие соединений при завершении работы модуля
+   */
+  async onModuleDestroy() {
+    try {
+      if (this.redisPubClient) {
+        await this.redisPubClient.quit();
+        this.logger.log("Redis pub клиент для Socket.IO адаптера закрыт");
+      }
+      if (this.redisSubClient) {
+        await this.redisSubClient.quit();
+        this.logger.log("Redis sub клиент для Socket.IO адаптера закрыт");
+      }
+    } catch (error) {
+      this.logger.error(
+        `Ошибка закрытия Redis клиентов Socket.IO адаптера: ${error.message}`,
+        error.stack
+      );
     }
   }
 
