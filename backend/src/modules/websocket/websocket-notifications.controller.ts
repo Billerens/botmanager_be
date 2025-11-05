@@ -35,13 +35,7 @@ export class WebSocketNotificationsController {
     const userId = req.user.id;
     const limit = query.limit || 50;
     const offset = query.offset || 0;
-    // Правильно преобразуем в boolean, учитывая что query параметры могут быть строками
-    // Если параметр не передан или равен false/"false", то unreadOnly = false
-    // Если параметр равен true/"true", то unreadOnly = true
-    const unreadOnly =
-      query.unreadOnly === true ||
-      query.unreadOnly === "true" ||
-      query.unreadOnly === "1";
+    const unreadOnly = query.unreadOnly || false;
 
     return this.notificationService.getNotifications(
       userId,
@@ -66,7 +60,8 @@ export class WebSocketNotificationsController {
   @Get("unread-count")
   async getUnreadCount(@Request() req): Promise<{ count: number }> {
     const userId = req.user.id;
-    const count = await this.notificationService.getUnreadNotificationsCount(userId);
+    const count =
+      await this.notificationService.getUnreadNotificationsCount(userId);
     return { count };
   }
 
@@ -92,4 +87,3 @@ export class WebSocketNotificationsController {
     return { updatedCount };
   }
 }
-

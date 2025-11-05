@@ -1,6 +1,6 @@
 import { NotificationType } from "../interfaces/notification.interface";
 import { IsOptional, IsNumber, IsBoolean, Min, IsArray } from "class-validator";
-import { Type } from "class-transformer";
+import { Type, Transform } from "class-transformer";
 
 /**
  * DTO для уведомления в списке
@@ -49,7 +49,11 @@ export class GetNotificationsDto {
   offset?: number = 0;
 
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => {
+    if (value === true || value === "true" || value === "1") return true;
+    if (value === false || value === "false" || value === "0") return false;
+    return undefined; // Если значение не передано, оставляем undefined
+  })
   @IsBoolean()
   unreadOnly?: boolean = false;
 }
