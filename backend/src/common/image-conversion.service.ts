@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import * as sharp from "sharp";
+import sharp from "sharp";
 
 export interface ImageConversionOptions {
   quality?: number; // Качество от 1 до 100 (по умолчанию 80)
@@ -33,7 +33,7 @@ export class ImageConversionService {
 
       // Проверяем, является ли файл изображением
       const metadata = await sharp(buffer).metadata();
-      
+
       if (!metadata.format) {
         throw new Error("Невозможно определить формат изображения");
       }
@@ -55,9 +55,7 @@ export class ImageConversionService {
             fit: "inside",
             withoutEnlargement: true,
           });
-          this.logger.log(
-            `Resizing image to max ${maxWidth}x${maxHeight}`
-          );
+          this.logger.log(`Resizing image to max ${maxWidth}x${maxHeight}`);
         }
       }
 
@@ -145,4 +143,3 @@ export class ImageConversionService {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   }
 }
-
