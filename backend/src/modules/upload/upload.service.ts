@@ -1,14 +1,63 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { S3Service } from "../../common/s3.service";
+import { ImageConversionService } from "../../common/image-conversion.service";
 
 @Injectable()
 export class UploadService {
   private readonly logger = new Logger(UploadService.name);
 
-  constructor(private readonly s3Service: S3Service) {}
+  constructor(
+    private readonly s3Service: S3Service,
+    private readonly imageConversionService: ImageConversionService
+  ) {}
 
   /**
-   * Загружает изображения продукта в S3
+   * Конвертирует файл изображения в WebP формат
+   */
+  private async convertImageToWebP(file: {
+    buffer: Buffer;
+    originalname: string;
+    mimetype: string;
+  }): Promise<{ buffer: Buffer; originalname: string; mimetype: string }> {
+    try {
+      // Проверяем, является ли файл изображением
+      const isImage = await this.imageConversionService.isImage(file.buffer);
+
+      if (!isImage) {
+        // Если не изображение, возвращаем оригинал
+        return file;
+      }
+
+      // Конвертируем в WebP
+      const webpBuffer = await this.imageConversionService.convertToWebP(
+        file.buffer,
+        {
+          quality: 80,
+          maxWidth: 1920,
+          maxHeight: 1920,
+        }
+      );
+
+      // Обновляем имя файла и MIME тип
+      const originalNameWithoutExt = file.originalname.replace(/\.[^/.]+$/, "");
+      const newOriginalName = `${originalNameWithoutExt}.webp`;
+
+      return {
+        buffer: webpBuffer,
+        originalname: newOriginalName,
+        mimetype: "image/webp",
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Failed to convert image to WebP, using original: ${error.message}`
+      );
+      // В случае ошибки конвертации возвращаем оригинальный файл
+      return file;
+    }
+  }
+
+  /**
+   * Загружает изображения продукта в S3 с конвертацией в WebP
    */
   async uploadProductImages(
     files: Array<{ buffer: Buffer; originalname: string; mimetype: string }>
@@ -16,8 +65,13 @@ export class UploadService {
     try {
       this.logger.log(`Uploading ${files.length} product images`);
 
+      // Конвертируем все изображения в WebP
+      const convertedFiles = await Promise.all(
+        files.map((file) => this.convertImageToWebP(file))
+      );
+
       const imageUrls = await this.s3Service.uploadMultipleFiles(
-        files,
+        convertedFiles,
         "products"
       );
 
@@ -71,7 +125,7 @@ export class UploadService {
   }
 
   /**
-   * Загружает логотип магазина в S3
+   * Загружает логотип магазина в S3 с конвертацией в WebP
    */
   async uploadShopLogo(file: {
     buffer: Buffer;
@@ -81,10 +135,13 @@ export class UploadService {
     try {
       this.logger.log(`Uploading shop logo: ${file.originalname}`);
 
+      // Конвертируем в WebP
+      const convertedFile = await this.convertImageToWebP(file);
+
       const imageUrl = await this.s3Service.uploadFile(
-        file.buffer,
-        file.originalname,
-        file.mimetype,
+        convertedFile.buffer,
+        convertedFile.originalname,
+        convertedFile.mimetype,
         "shop-logos"
       );
 
@@ -97,7 +154,7 @@ export class UploadService {
   }
 
   /**
-   * Загружает логотип системы бронирования в S3
+   * Загружает логотип системы бронирования в S3 с конвертацией в WebP
    */
   async uploadBookingLogo(file: {
     buffer: Buffer;
@@ -107,10 +164,13 @@ export class UploadService {
     try {
       this.logger.log(`Uploading booking logo: ${file.originalname}`);
 
+      // Конвертируем в WebP
+      const convertedFile = await this.convertImageToWebP(file);
+
       const imageUrl = await this.s3Service.uploadFile(
-        file.buffer,
-        file.originalname,
-        file.mimetype,
+        convertedFile.buffer,
+        convertedFile.originalname,
+        convertedFile.mimetype,
         "booking-logos"
       );
 
@@ -123,7 +183,7 @@ export class UploadService {
   }
 
   /**
-   * Загружает аватар специалиста в S3
+   * Загружает аватар специалиста в S3 с конвертацией в WebP
    */
   async uploadSpecialistAvatar(file: {
     buffer: Buffer;
@@ -133,10 +193,13 @@ export class UploadService {
     try {
       this.logger.log(`Uploading specialist avatar: ${file.originalname}`);
 
+      // Конвертируем в WebP
+      const convertedFile = await this.convertImageToWebP(file);
+
       const imageUrl = await this.s3Service.uploadFile(
-        file.buffer,
-        file.originalname,
-        file.mimetype,
+        convertedFile.buffer,
+        convertedFile.originalname,
+        convertedFile.mimetype,
         "specialist-avatars"
       );
 
@@ -149,7 +212,7 @@ export class UploadService {
   }
 
   /**
-   * Загружает изображение услуги в S3
+   * Загружает изображение услуги в S3 с конвертацией в WebP
    */
   async uploadServiceImage(file: {
     buffer: Buffer;
@@ -159,10 +222,13 @@ export class UploadService {
     try {
       this.logger.log(`Uploading service image: ${file.originalname}`);
 
+      // Конвертируем в WebP
+      const convertedFile = await this.convertImageToWebP(file);
+
       const imageUrl = await this.s3Service.uploadFile(
-        file.buffer,
-        file.originalname,
-        file.mimetype,
+        convertedFile.buffer,
+        convertedFile.originalname,
+        convertedFile.mimetype,
         "service-images"
       );
 
@@ -175,7 +241,7 @@ export class UploadService {
   }
 
   /**
-   * Загружает изображение сообщения/рассылки в S3
+   * Загружает изображение сообщения/рассылки в S3 с конвертацией в WebP
    */
   async uploadMessageImage(file: {
     buffer: Buffer;
@@ -185,10 +251,13 @@ export class UploadService {
     try {
       this.logger.log(`Uploading message image: ${file.originalname}`);
 
+      // Конвертируем в WebP
+      const convertedFile = await this.convertImageToWebP(file);
+
       const imageUrl = await this.s3Service.uploadFile(
-        file.buffer,
-        file.originalname,
-        file.mimetype,
+        convertedFile.buffer,
+        convertedFile.originalname,
+        convertedFile.mimetype,
         "message-images"
       );
 

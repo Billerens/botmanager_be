@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { MulterModule } from "@nestjs/platform-express";
 import { S3Service } from "../../common/s3.service";
+import { ImageConversionService } from "../../common/image-conversion.service";
 import { UploadController } from "./upload.controller";
 import { UploadService } from "./upload.service";
 import s3Config from "../../config/s3.config";
@@ -22,7 +23,7 @@ import s3Config from "../../config/s3.config";
       },
     }),
   ],
-  providers: [S3Service, UploadService],
+  providers: [S3Service, ImageConversionService, UploadService],
   controllers: [UploadController],
   exports: [S3Service, UploadService],
 })
