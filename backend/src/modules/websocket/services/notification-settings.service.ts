@@ -111,6 +111,27 @@ export class NotificationSettingsService {
         type: NotificationType.PRODUCT_STOCK_LOW,
         defaultEnabled: true,
       },
+      // Корзины
+      {
+        type: NotificationType.CART_CREATED,
+        defaultEnabled: false,
+      },
+      {
+        type: NotificationType.CART_UPDATED,
+        defaultEnabled: false,
+      },
+      {
+        type: NotificationType.CART_ITEM_ADDED,
+        defaultEnabled: true,
+      },
+      {
+        type: NotificationType.CART_ITEM_REMOVED,
+        defaultEnabled: false,
+      },
+      {
+        type: NotificationType.CART_CLEARED,
+        defaultEnabled: false,
+      },
       // Аналитика
       {
         type: NotificationType.STATS_UPDATED,

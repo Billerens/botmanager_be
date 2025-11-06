@@ -32,6 +32,13 @@ export enum NotificationType {
   PRODUCT_DELETED = "product.deleted",
   PRODUCT_STOCK_LOW = "product.stock_low",
 
+  // Корзины
+  CART_CREATED = "cart.created",
+  CART_UPDATED = "cart.updated",
+  CART_ITEM_ADDED = "cart.item_added",
+  CART_ITEM_REMOVED = "cart.item_removed",
+  CART_CLEARED = "cart.cleared",
+
   // Аналитика
   STATS_UPDATED = "stats.updated",
 
@@ -67,4 +74,3 @@ export interface SendNotificationDto {
   room?: string;
   broadcast?: boolean;
 }
-

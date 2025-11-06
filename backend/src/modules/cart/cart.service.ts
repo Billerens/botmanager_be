@@ -2,22 +2,28 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Cart, CartItem } from "../../database/entities/cart.entity";
 import { Product } from "../../database/entities/product.entity";
 import { Bot } from "../../database/entities/bot.entity";
+import { NotificationService } from "../websocket/services/notification.service";
+import { NotificationType } from "../websocket/interfaces/notification.interface";
 
 @Injectable()
 export class CartService {
+  private readonly logger = new Logger(CartService.name);
+
   constructor(
     @InjectRepository(Cart)
     private readonly cartRepository: Repository<Cart>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     @InjectRepository(Bot)
-    private readonly botRepository: Repository<Bot>
+    private readonly botRepository: Repository<Bot>,
+    private readonly notificationService: NotificationService
   ) {}
 
   /**
@@ -45,6 +51,9 @@ export class CartService {
         items: [],
       });
       cart = await this.cartRepository.save(cart);
+
+      // Отправляем уведомление о создании корзины
+      await this.sendCartNotification(bot, NotificationType.CART_CREATED, cart);
     }
 
     return cart;
@@ -109,13 +118,30 @@ export class CartService {
         price: Number(product.price),
         currency: product.currency,
         name: product.name,
-        image: product.images && product.images.length > 0 ? product.images[0] : undefined,
+        image:
+          product.images && product.images.length > 0
+            ? product.images[0]
+            : undefined,
       };
 
       cart.items.push(cartItem);
     }
 
-    return await this.cartRepository.save(cart);
+    const savedCart = await this.cartRepository.save(cart);
+
+    // Отправляем уведомление о добавлении товара в корзину
+    const bot = await this.botRepository.findOne({
+      where: { id: botId },
+    });
+    if (bot) {
+      await this.sendCartNotification(
+        bot,
+        NotificationType.CART_ITEM_ADDED,
+        savedCart
+      );
+    }
+
+    return savedCart;
   }
 
   /**
@@ -161,7 +187,21 @@ export class CartService {
     // Обновляем количество
     cart.items[itemIndex].quantity = quantity;
 
-    return await this.cartRepository.save(cart);
+    const savedCart = await this.cartRepository.save(cart);
+
+    // Отправляем уведомление об обновлении корзины
+    const bot = await this.botRepository.findOne({
+      where: { id: botId },
+    });
+    if (bot) {
+      await this.sendCartNotification(
+        bot,
+        NotificationType.CART_UPDATED,
+        savedCart
+      );
+    }
+
+    return savedCart;
   }
 
   /**
@@ -177,7 +217,21 @@ export class CartService {
     // Удаляем товар из корзины
     cart.items = cart.items.filter((item) => item.productId !== productId);
 
-    return await this.cartRepository.save(cart);
+    const savedCart = await this.cartRepository.save(cart);
+
+    // Отправляем уведомление об удалении товара из корзины
+    const bot = await this.botRepository.findOne({
+      where: { id: botId },
+    });
+    if (bot) {
+      await this.sendCartNotification(
+        bot,
+        NotificationType.CART_ITEM_REMOVED,
+        savedCart
+      );
+    }
+
+    return savedCart;
   }
 
   /**
@@ -186,7 +240,21 @@ export class CartService {
   async clearCart(botId: string, telegramUsername: string): Promise<Cart> {
     const cart = await this.getCart(botId, telegramUsername);
     cart.items = [];
-    return await this.cartRepository.save(cart);
+    const savedCart = await this.cartRepository.save(cart);
+
+    // Отправляем уведомление об очистке корзины
+    const bot = await this.botRepository.findOne({
+      where: { id: botId },
+    });
+    if (bot) {
+      await this.sendCartNotification(
+        bot,
+        NotificationType.CART_CLEARED,
+        savedCart
+      );
+    }
+
+    return savedCart;
   }
 
   /**
@@ -210,5 +278,36 @@ export class CartService {
 
     return carts;
   }
-}
 
+  /**
+   * Отправить уведомление о корзине владельцу бота
+   */
+  private async sendCartNotification(
+    bot: Bot,
+    type: NotificationType,
+    cart: Cart
+  ): Promise<void> {
+    if (!bot.ownerId) {
+      return;
+    }
+
+    try {
+      await this.notificationService.sendToUser(bot.ownerId, type, {
+        botId: bot.id,
+        cart: {
+          id: cart.id,
+          telegramUsername: cart.telegramUsername,
+          items: cart.items,
+          totalItems: cart.totalItems,
+          totalPrice: cart.totalPrice,
+          currency: cart.currency,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Ошибка отправки уведомления о корзине (${type}):`,
+        error
+      );
+    }
+  }
+}
