@@ -5,6 +5,9 @@ export interface ImageConversionOptions {
   quality?: number; // Качество от 1 до 100 (по умолчанию 80)
   maxWidth?: number; // Максимальная ширина (опционально)
   maxHeight?: number; // Максимальная высота (опционально)
+  effort?: number; // Уровень усилия сжатия от 0 до 6 (по умолчанию 5)
+  smartSubsample?: boolean; // Улучшает качество при меньшем размере (по умолчанию true)
+  nearLossless?: boolean; // Режим почти без потерь (по умолчанию false)
 }
 
 @Injectable()
@@ -13,6 +16,8 @@ export class ImageConversionService {
   private readonly defaultQuality = 80;
   private readonly defaultMaxWidth = 1920;
   private readonly defaultMaxHeight = 1920;
+  private readonly defaultEffort = 5; // Оптимальный баланс: лучшее сжатие при приемлемой скорости
+  private readonly defaultSmartSubsample = true; // Улучшает качество при меньшем размере файла
 
   /**
    * Конвертирует изображение в формат WebP
@@ -29,6 +34,9 @@ export class ImageConversionService {
         quality = this.defaultQuality,
         maxWidth = this.defaultMaxWidth,
         maxHeight = this.defaultMaxHeight,
+        effort = this.defaultEffort,
+        smartSubsample = this.defaultSmartSubsample,
+        nearLossless = false,
       } = options;
 
       // Проверяем, является ли файл изображением
@@ -60,12 +68,18 @@ export class ImageConversionService {
       }
 
       // Конвертируем в WebP
-      const webpBuffer = await pipeline
-        .webp({
-          quality,
-          effort: 4, // Баланс между качеством и скоростью (0-6)
-        })
-        .toBuffer();
+      const webpOptions: sharp.WebPOptions = {
+        quality,
+        effort, // 0-6: чем выше, тем лучше сжатие, но медленнее (5 - оптимальный баланс)
+        smartSubsample, // Улучшает качество при меньшем размере файла
+      };
+
+      // Добавляем nearLossless только если явно указано
+      if (nearLossless) {
+        webpOptions.nearLossless = true;
+      }
+
+      const webpBuffer = await pipeline.webp(webpOptions).toBuffer();
 
       const originalSize = buffer.length;
       const convertedSize = webpBuffer.length;

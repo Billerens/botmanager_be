@@ -1,0 +1,192 @@
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { Cart, CartItem } from "../../database/entities/cart.entity";
+import { Product } from "../../database/entities/product.entity";
+import { Bot } from "../../database/entities/bot.entity";
+
+@Injectable()
+export class CartService {
+  constructor(
+    @InjectRepository(Cart)
+    private readonly cartRepository: Repository<Cart>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
+    @InjectRepository(Bot)
+    private readonly botRepository: Repository<Bot>
+  ) {}
+
+  /**
+   * Получить корзину пользователя для бота
+   */
+  async getCart(botId: string, telegramUsername: string): Promise<Cart> {
+    // Проверяем существование бота
+    const bot = await this.botRepository.findOne({
+      where: { id: botId },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
+
+    // Ищем существующую корзину или создаем новую
+    let cart = await this.cartRepository.findOne({
+      where: { botId, telegramUsername },
+    });
+
+    if (!cart) {
+      cart = this.cartRepository.create({
+        botId,
+        telegramUsername,
+        items: [],
+      });
+      cart = await this.cartRepository.save(cart);
+    }
+
+    return cart;
+  }
+
+  /**
+   * Добавить товар в корзину
+   */
+  async addItem(
+    botId: string,
+    telegramUsername: string,
+    productId: string,
+    quantity: number = 1
+  ): Promise<Cart> {
+    if (quantity <= 0) {
+      throw new BadRequestException("Количество должно быть больше 0");
+    }
+
+    // Проверяем существование продукта
+    const product = await this.productRepository.findOne({
+      where: { id: productId, botId },
+    });
+
+    if (!product) {
+      throw new NotFoundException("Товар не найден");
+    }
+
+    if (!product.isActive) {
+      throw new BadRequestException("Товар неактивен");
+    }
+
+    if (product.stockQuantity < quantity) {
+      throw new BadRequestException(
+        `Недостаточно товара в наличии. Доступно: ${product.stockQuantity}`
+      );
+    }
+
+    // Получаем корзину
+    let cart = await this.getCart(botId, telegramUsername);
+
+    // Проверяем, есть ли уже этот товар в корзине
+    const existingItemIndex = cart.items.findIndex(
+      (item) => item.productId === productId
+    );
+
+    if (existingItemIndex >= 0) {
+      // Обновляем количество существующего товара
+      const newQuantity = cart.items[existingItemIndex].quantity + quantity;
+
+      if (product.stockQuantity < newQuantity) {
+        throw new BadRequestException(
+          `Недостаточно товара в наличии. Доступно: ${product.stockQuantity}, в корзине: ${cart.items[existingItemIndex].quantity}`
+        );
+      }
+
+      cart.items[existingItemIndex].quantity = newQuantity;
+    } else {
+      // Добавляем новый товар
+      const cartItem: CartItem = {
+        productId: product.id,
+        quantity,
+        price: Number(product.price),
+        currency: product.currency,
+        name: product.name,
+        image: product.images && product.images.length > 0 ? product.images[0] : undefined,
+      };
+
+      cart.items.push(cartItem);
+    }
+
+    return await this.cartRepository.save(cart);
+  }
+
+  /**
+   * Обновить количество товара в корзине
+   */
+  async updateItem(
+    botId: string,
+    telegramUsername: string,
+    productId: string,
+    quantity: number
+  ): Promise<Cart> {
+    if (quantity <= 0) {
+      throw new BadRequestException("Количество должно быть больше 0");
+    }
+
+    // Проверяем существование продукта
+    const product = await this.productRepository.findOne({
+      where: { id: productId, botId },
+    });
+
+    if (!product) {
+      throw new NotFoundException("Товар не найден");
+    }
+
+    if (product.stockQuantity < quantity) {
+      throw new BadRequestException(
+        `Недостаточно товара в наличии. Доступно: ${product.stockQuantity}`
+      );
+    }
+
+    // Получаем корзину
+    const cart = await this.getCart(botId, telegramUsername);
+
+    // Находим товар в корзине
+    const itemIndex = cart.items.findIndex(
+      (item) => item.productId === productId
+    );
+
+    if (itemIndex < 0) {
+      throw new NotFoundException("Товар не найден в корзине");
+    }
+
+    // Обновляем количество
+    cart.items[itemIndex].quantity = quantity;
+
+    return await this.cartRepository.save(cart);
+  }
+
+  /**
+   * Удалить товар из корзины
+   */
+  async removeItem(
+    botId: string,
+    telegramUsername: string,
+    productId: string
+  ): Promise<Cart> {
+    const cart = await this.getCart(botId, telegramUsername);
+
+    // Удаляем товар из корзины
+    cart.items = cart.items.filter((item) => item.productId !== productId);
+
+    return await this.cartRepository.save(cart);
+  }
+
+  /**
+   * Очистить корзину
+   */
+  async clearCart(botId: string, telegramUsername: string): Promise<Cart> {
+    const cart = await this.getCart(botId, telegramUsername);
+    cart.items = [];
+    return await this.cartRepository.save(cart);
+  }
+}
+

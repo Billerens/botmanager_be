@@ -15,6 +15,7 @@ import { Specialist } from "./entities/specialist.entity";
 import { Service } from "./entities/service.entity";
 import { TimeSlot } from "./entities/time-slot.entity";
 import { Booking } from "./entities/booking.entity";
+import { Cart } from "./entities/cart.entity";
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { Booking } from "./entities/booking.entity";
           Service,
           TimeSlot,
           Booking,
+          Cart,
         ],
         synchronize: configService.get("NODE_ENV") === "development",
         logging: false,
@@ -65,6 +67,7 @@ import { Booking } from "./entities/booking.entity";
       Service,
       TimeSlot,
       Booking,
+      Cart,
     ]),
   ],
   exports: [TypeOrmModule],

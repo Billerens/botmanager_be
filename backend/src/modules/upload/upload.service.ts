@@ -13,12 +13,24 @@ export class UploadService {
 
   /**
    * Конвертирует файл изображения в WebP формат
+   * @param file Файл изображения
+   * @param options Опции конвертации (опционально)
    */
-  private async convertImageToWebP(file: {
-    buffer: Buffer;
-    originalname: string;
-    mimetype: string;
-  }): Promise<{ buffer: Buffer; originalname: string; mimetype: string }> {
+  private async convertImageToWebP(
+    file: {
+      buffer: Buffer;
+      originalname: string;
+      mimetype: string;
+    },
+    options?: {
+      quality?: number;
+      maxWidth?: number;
+      maxHeight?: number;
+      effort?: number;
+      smartSubsample?: boolean;
+      nearLossless?: boolean;
+    }
+  ): Promise<{ buffer: Buffer; originalname: string; mimetype: string }> {
     try {
       // Проверяем, является ли файл изображением
       const isImage = await this.imageConversionService.isImage(file.buffer);
@@ -29,10 +41,12 @@ export class UploadService {
       }
 
       // Конвертируем в WebP
+      // Используем настройки по умолчанию (effort: 5, smartSubsample: true)
+      // которые обеспечивают оптимальный баланс качества и размера файла
       const webpBuffer = await this.imageConversionService.convertToWebP(
         file.buffer,
-        {
-          quality: 80,
+        options || {
+          quality: 70,
           maxWidth: 1920,
           maxHeight: 1920,
         }
@@ -135,8 +149,12 @@ export class UploadService {
     try {
       this.logger.log(`Uploading shop logo: ${file.originalname}`);
 
-      // Конвертируем в WebP
-      const convertedFile = await this.convertImageToWebP(file);
+      // Конвертируем в WebP с более высоким качеством для логотипов
+      const convertedFile = await this.convertImageToWebP(file, {
+        quality: 80, // Более высокое качество для логотипов
+        maxWidth: 1920,
+        maxHeight: 1920,
+      });
 
       const imageUrl = await this.s3Service.uploadFile(
         convertedFile.buffer,
@@ -164,8 +182,12 @@ export class UploadService {
     try {
       this.logger.log(`Uploading booking logo: ${file.originalname}`);
 
-      // Конвертируем в WebP
-      const convertedFile = await this.convertImageToWebP(file);
+      // Конвертируем в WebP с более высоким качеством для логотипов
+      const convertedFile = await this.convertImageToWebP(file, {
+        quality: 80, // Более высокое качество для логотипов
+        maxWidth: 1920,
+        maxHeight: 1920,
+      });
 
       const imageUrl = await this.s3Service.uploadFile(
         convertedFile.buffer,

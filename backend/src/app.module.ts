@@ -23,6 +23,7 @@ import { AssistantBotModule } from "./modules/assistant-bot/assistant-bot.module
 import { SubscriptionModule } from "./modules/subscription/subscription.module";
 import { UploadModule } from "./modules/upload/upload.module";
 import { BookingModule } from "./modules/booking/booking.module";
+import { CartModule } from "./modules/cart/cart.module";
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { BookingModule } from "./modules/booking/booking.module";
     SubscriptionModule,
     UploadModule,
     BookingModule, // Система бронирования
+    CartModule, // Корзина для магазина
   ],
 })
 export class AppModule {}
