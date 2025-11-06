@@ -68,7 +68,7 @@ export class ImageConversionService {
       }
 
       // Конвертируем в WebP
-      const webpOptions: sharp.WebPOptions = {
+      const webpOptions: sharp.WebpOptions = {
         quality,
         effort, // 0-6: чем выше, тем лучше сжатие, но медленнее (5 - оптимальный баланс)
         smartSubsample, // Улучшает качество при меньшем размере файла

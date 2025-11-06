@@ -188,5 +188,27 @@ export class CartService {
     cart.items = [];
     return await this.cartRepository.save(cart);
   }
+
+  /**
+   * Получить все корзины бота (для админа)
+   */
+  async getCartsByBotId(botId: string): Promise<Cart[]> {
+    // Проверяем существование бота
+    const bot = await this.botRepository.findOne({
+      where: { id: botId },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
+
+    // Получаем все корзины бота
+    const carts = await this.cartRepository.find({
+      where: { botId },
+      order: { updatedAt: "DESC" },
+    });
+
+    return carts;
+  }
 }
 

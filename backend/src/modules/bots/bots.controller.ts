@@ -23,13 +23,17 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { CreateBotDto, UpdateBotDto } from "./dto/bot.dto";
 import { BotResponseDto, BotStatsResponseDto } from "./dto/bot-response.dto";
 import { ButtonSettingsDto } from "./dto/command-button-settings.dto";
+import { CartService } from "../cart/cart.service";
 
 @ApiTags("Боты")
 @Controller("bots")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class BotsController {
-  constructor(private readonly botsService: BotsService) {}
+  constructor(
+    private readonly botsService: BotsService,
+    private readonly cartService: CartService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: "Создать нового бота" })
@@ -169,5 +173,18 @@ export class BotsController {
   @ApiResponse({ status: 404, description: "Бот не найден" })
   async remove(@Param("id") id: string, @Request() req) {
     return this.botsService.remove(id, req.user.id);
+  }
+
+  @Get(":id/carts")
+  @ApiOperation({ summary: "Получить все корзины бота" })
+  @ApiResponse({
+    status: 200,
+    description: "Список корзин получен",
+  })
+  @ApiResponse({ status: 404, description: "Бот не найден" })
+  async getCartsByBotId(@Param("id") id: string, @Request() req) {
+    // Проверяем, что бот принадлежит пользователю
+    await this.botsService.findOne(id, req.user.id);
+    return this.cartService.getCartsByBotId(id);
   }
 }

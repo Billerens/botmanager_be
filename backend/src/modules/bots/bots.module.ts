@@ -16,6 +16,7 @@ import { EndpointController } from "./endpoint.controller";
 import { TelegramModule } from "../telegram/telegram.module";
 import { MessagesModule } from "../messages/messages.module";
 import { ProductsModule } from "../products/products.module";
+import { CartModule } from "../cart/cart.module";
 import { CustomLoggerService } from "../../common/logger.service";
 import {
   NodeHandlerService,
@@ -42,6 +43,7 @@ import {
     forwardRef(() => TelegramModule),
     MessagesModule,
     ProductsModule,
+    CartModule,
   ],
   providers: [
     BotsService,
