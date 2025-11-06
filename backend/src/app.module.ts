@@ -24,6 +24,7 @@ import { SubscriptionModule } from "./modules/subscription/subscription.module";
 import { UploadModule } from "./modules/upload/upload.module";
 import { BookingModule } from "./modules/booking/booking.module";
 import { CartModule } from "./modules/cart/cart.module";
+import { HealthModule } from "./health/health.module";
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { CartModule } from "./modules/cart/cart.module";
     UploadModule,
     BookingModule, // Система бронирования
     CartModule, // Корзина для магазина
+    HealthModule, // Health check endpoints
   ],
 })
 export class AppModule {}
