@@ -1127,11 +1127,16 @@ export class MessagesService {
     };
   }
 
-  async getMediaFileUrl(
+  async getMediaFileInfo(
     botId: string,
     userId: string,
     fileId: string
-  ): Promise<{ url: string } | null> {
+  ): Promise<{
+    filePath: string;
+    mimeType?: string;
+    fileName?: string;
+    token: string;
+  } | null> {
     // Проверяем, что бот принадлежит пользователю
     const bot = await this.botRepository.findOne({
       where: { id: botId, ownerId: userId },
@@ -1156,13 +1161,31 @@ export class MessagesService {
         return null;
       }
 
-      // Формируем URL для доступа к файлу через Telegram API
-      // Используем стандартный URL Telegram для файлов
-      const url = `https://api.telegram.org/file/bot${decryptedToken}/${fileInfo.file_path}`;
+      // Определяем MIME тип по расширению файла
+      const fileExtension = fileInfo.file_path.split(".").pop()?.toLowerCase();
+      let mimeType: string | undefined;
+      if (fileExtension) {
+        const mimeTypes: Record<string, string> = {
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+          png: "image/png",
+          gif: "image/gif",
+          webp: "image/webp",
+          mp4: "video/mp4",
+          mp3: "audio/mpeg",
+          pdf: "application/pdf",
+        };
+        mimeType = mimeTypes[fileExtension];
+      }
 
-      return { url };
+      return {
+        filePath: fileInfo.file_path,
+        mimeType: mimeType || "application/octet-stream",
+        fileName: fileInfo.file_path.split("/").pop(),
+        token: decryptedToken,
+      };
     } catch (error) {
-      console.error("Ошибка получения URL файла:", error);
+      console.error("Ошибка получения информации о файле:", error);
       return null;
     }
   }

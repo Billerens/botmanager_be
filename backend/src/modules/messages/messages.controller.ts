@@ -12,7 +12,9 @@ import {
   BadRequestException,
   UseInterceptors,
   UploadedFile,
+  Res,
 } from "@nestjs/common";
+import { Response } from "express";
 import {
   ApiTags,
   ApiOperation,
@@ -24,6 +26,7 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { MessagesService } from "./messages.service";
+import { TelegramService } from "../telegram/telegram.service";
 import { BroadcastDto } from "./dto/broadcast.dto";
 import {
   MessageResponseDto,
@@ -42,7 +45,10 @@ import {
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class MessagesController {
-  constructor(private readonly messagesService: MessagesService) {}
+  constructor(
+    private readonly messagesService: MessagesService,
+    private readonly telegramService: TelegramService
+  ) {}
 
   @Get("bot/:botId")
   @ApiOperation({ summary: "Получить историю сообщений бота" })
@@ -341,16 +347,33 @@ export class MessagesController {
   }
 
   @Get("bot/:botId/media/:fileId")
-  @ApiOperation({ summary: "Получить URL медиафайла по fileId" })
+  @ApiOperation({ summary: "Получить медиафайл по fileId (streaming proxy)" })
   @ApiResponse({
     status: 200,
-    description: "URL медиафайла получен",
-    schema: {
-      type: "object",
-      properties: {
-        url: {
+    description: "Медиафайл получен",
+    content: {
+      "image/*": {
+        schema: {
           type: "string",
-          example: "https://api.telegram.org/file/bot<token>/photos/file_123.jpg",
+          format: "binary",
+        },
+      },
+      "video/*": {
+        schema: {
+          type: "string",
+          format: "binary",
+        },
+      },
+      "audio/*": {
+        schema: {
+          type: "string",
+          format: "binary",
+        },
+      },
+      "application/*": {
+        schema: {
+          type: "string",
+          format: "binary",
         },
       },
     },
@@ -362,23 +385,49 @@ export class MessagesController {
   })
   @ApiResponse({
     status: 404,
-    description: "Бот не найден",
+    description: "Бот или файл не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
-  async getMediaFileUrl(
+  async getMediaFile(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Param("fileId") fileId: string,
-    @Request() req: any
+    @Request() req: any,
+    @Res() res: Response
   ) {
-    const result = await this.messagesService.getMediaFileUrl(
+    const fileInfo = await this.messagesService.getMediaFileInfo(
       botId,
       req.user.id,
       fileId
     );
-    if (!result) {
+    if (!fileInfo) {
       throw new NotFoundException("Файл не найден");
     }
-    return result;
+
+    try {
+      // Получаем stream от Telegram API
+      const telegramResponse = await this.telegramService.getFileStream(
+        fileInfo.token,
+        fileInfo.filePath
+      );
+
+      // Устанавливаем заголовки для правильной отдачи файла
+      res.setHeader("Content-Type", fileInfo.mimeType || "application/octet-stream");
+      if (fileInfo.fileName) {
+        res.setHeader(
+          "Content-Disposition",
+          `inline; filename="${fileInfo.fileName}"`
+        );
+      }
+      res.setHeader("Cache-Control", "public, max-age=31536000"); // Кэшируем на год
+
+      // Проксируем stream напрямую клиенту без загрузки в память
+      telegramResponse.data.pipe(res);
+    } catch (error) {
+      console.error("Ошибка проксирования файла:", error);
+      if (!res.headersSent) {
+        throw new NotFoundException("Ошибка получения файла");
+      }
+    }
   }
 
   @Post("bot/:botId/broadcast")

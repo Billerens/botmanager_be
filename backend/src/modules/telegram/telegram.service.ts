@@ -586,4 +586,11 @@ export class TelegramService {
       return null;
     }
   }
+
+  getFileStream(token: string, filePath: string): Promise<any> {
+    // Возвращаем stream для проксирования файла без загрузки в память
+    return axios.get(`https://api.telegram.org/file/bot${token}/${filePath}`, {
+      responseType: "stream",
+    });
+  }
 }
