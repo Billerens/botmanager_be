@@ -1127,6 +1127,46 @@ export class MessagesService {
     };
   }
 
+  async getMediaFileUrl(
+    botId: string,
+    userId: string,
+    fileId: string
+  ): Promise<{ url: string } | null> {
+    // Проверяем, что бот принадлежит пользователю
+    const bot = await this.botRepository.findOne({
+      where: { id: botId, ownerId: userId },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
+
+    if (!bot.token) {
+      throw new BadRequestException("Токен бота не настроен");
+    }
+
+    try {
+      const decryptedToken = this.decryptToken(bot.token);
+      const fileInfo = await this.telegramService.getFile(
+        decryptedToken,
+        fileId
+      );
+
+      if (!fileInfo || !fileInfo.file_path) {
+        return null;
+      }
+
+      // Формируем URL для доступа к файлу через Telegram API
+      // Используем стандартный URL Telegram для файлов
+      const url = `https://api.telegram.org/file/bot${decryptedToken}/${fileInfo.file_path}`;
+
+      return { url };
+    } catch (error) {
+      console.error("Ошибка получения URL файла:", error);
+      return null;
+    }
+  }
+
   // Расшифровка токена (копия из BotsService)
   private decryptToken(encryptedToken: string): string {
     const algorithm = "aes-256-cbc";

@@ -340,6 +340,47 @@ export class MessagesController {
     });
   }
 
+  @Get("bot/:botId/media/:fileId")
+  @ApiOperation({ summary: "Получить URL медиафайла по fileId" })
+  @ApiResponse({
+    status: 200,
+    description: "URL медиафайла получен",
+    schema: {
+      type: "object",
+      properties: {
+        url: {
+          type: "string",
+          example: "https://api.telegram.org/file/bot<token>/photos/file_123.jpg",
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неавторизован",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Бот не найден",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  async getMediaFileUrl(
+    @Param("botId", ParseUUIDPipe) botId: string,
+    @Param("fileId") fileId: string,
+    @Request() req: any
+  ) {
+    const result = await this.messagesService.getMediaFileUrl(
+      botId,
+      req.user.id,
+      fileId
+    );
+    if (!result) {
+      throw new NotFoundException("Файл не найден");
+    }
+    return result;
+  }
+
   @Post("bot/:botId/broadcast")
   @UseInterceptors(FileInterceptor("image"))
   @ApiOperation({ summary: "Отправить рассылку" })
