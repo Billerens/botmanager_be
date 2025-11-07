@@ -209,6 +209,7 @@ async function bootstrap() {
       "X-Requested-With",
       "Accept",
       "Origin",
+      "x-telegram-init-data",
     ],
     exposedHeaders: ["Authorization"],
     optionsSuccessStatus: 200,
