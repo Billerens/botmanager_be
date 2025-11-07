@@ -7,7 +7,11 @@ import {
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, Between } from "typeorm";
 import * as crypto from "crypto";
-import { Message, MessageType } from "../../database/entities/message.entity";
+import {
+  Message,
+  MessageType,
+  MessageContentType,
+} from "../../database/entities/message.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import { BroadcastDto } from "./dto/broadcast.dto";
 import { TelegramService } from "../telegram/telegram.service";
@@ -950,6 +954,53 @@ export class MessagesService {
           if (result) {
             success = true;
             console.log(`Фото отправлено пользователю ${chatId}`);
+
+            // Сохраняем сообщение в БД
+            try {
+              const photoInfo =
+                result.photo && result.photo.length > 0
+                  ? result.photo[result.photo.length - 1] // Берем фото наибольшего размера
+                  : null;
+
+              await this.createMessage({
+                botId,
+                telegramMessageId: result.message_id,
+                telegramChatId: chatId,
+                telegramUserId: result.from?.id?.toString() || "",
+                type: MessageType.OUTGOING,
+                contentType: MessageContentType.PHOTO,
+                text: data.text || undefined,
+                media: photoInfo
+                  ? {
+                      fileId: photoInfo.file_id || "",
+                      fileUniqueId: photoInfo.file_unique_id || "",
+                      fileSize: photoInfo.file_size,
+                      width: photoInfo.width,
+                      height: photoInfo.height,
+                    }
+                  : undefined,
+                keyboard:
+                  data.buttons && data.buttons.length > 0
+                    ? {
+                        type: "inline",
+                        buttons: data.buttons.map((btn) => ({
+                          text: btn.text,
+                          url: btn.url,
+                          webApp: btn.webApp,
+                          callbackData: btn.callbackData,
+                        })),
+                      }
+                    : undefined,
+                isProcessed: true,
+                processedAt: new Date(),
+              });
+              console.log(`Сообщение сохранено в БД для чата ${chatId}`);
+            } catch (saveError) {
+              console.error(
+                `Ошибка сохранения сообщения в БД для чата ${chatId}:`,
+                saveError
+              );
+            }
           } else {
             console.log(`Не удалось отправить фото пользователю ${chatId}`);
           }
@@ -981,6 +1032,39 @@ export class MessagesService {
           if (result) {
             success = true;
             console.log(`Сообщение отправлено пользователю ${chatId}`);
+
+            // Сохраняем сообщение в БД
+            try {
+              await this.createMessage({
+                botId,
+                telegramMessageId: result.message_id,
+                telegramChatId: chatId,
+                telegramUserId: result.from?.id?.toString() || "",
+                type: MessageType.OUTGOING,
+                contentType: MessageContentType.TEXT,
+                text: data.text,
+                keyboard:
+                  data.buttons && data.buttons.length > 0
+                    ? {
+                        type: "inline",
+                        buttons: data.buttons.map((btn) => ({
+                          text: btn.text,
+                          url: btn.url,
+                          webApp: btn.webApp,
+                          callbackData: btn.callbackData,
+                        })),
+                      }
+                    : undefined,
+                isProcessed: true,
+                processedAt: new Date(),
+              });
+              console.log(`Сообщение сохранено в БД для чата ${chatId}`);
+            } catch (saveError) {
+              console.error(
+                `Ошибка сохранения сообщения в БД для чата ${chatId}:`,
+                saveError
+              );
+            }
           } else {
             console.log(
               `Не удалось отправить сообщение пользователю ${chatId}`
