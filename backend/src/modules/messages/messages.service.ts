@@ -321,7 +321,29 @@ export class MessagesService {
 
   async create(messageData: Partial<Message>): Promise<Message> {
     const message = this.messageRepository.create(messageData);
-    return this.messageRepository.save(message);
+    const savedMessage = await this.messageRepository.save(message);
+
+    // Отправляем WebSocket уведомление для исходящих сообщений
+    if (savedMessage.type === MessageType.OUTGOING) {
+      // Получаем бота для получения ownerId
+      const bot = await this.botRepository.findOne({
+        where: { id: savedMessage.botId },
+      });
+
+      if (bot) {
+        // Отправляем уведомление владельцу бота
+        this.notificationService
+          .sendToUser(bot.ownerId, NotificationType.MESSAGE_SENT, {
+            botId: bot.id,
+            message: savedMessage, // Отправляем полный объект сообщения
+          })
+          .catch((error) => {
+            console.error("Ошибка отправки уведомления message.sent:", error);
+          });
+      }
+    }
+
+    return savedMessage;
   }
 
   async getBotDialogs(botId: string, userId: string, filters: DialogFilters) {
