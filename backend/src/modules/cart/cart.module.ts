@@ -3,6 +3,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { Cart } from "../../database/entities/cart.entity";
 import { Product } from "../../database/entities/product.entity";
 import { Bot } from "../../database/entities/bot.entity";
+import { Message } from "../../database/entities/message.entity";
 import { CartService } from "./cart.service";
 import { CartController } from "./cart.controller";
 import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
@@ -13,7 +14,7 @@ import { WebSocketModule } from "../websocket/websocket.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Cart, Product, Bot]),
+    TypeOrmModule.forFeature([Cart, Product, Bot, Message]),
     forwardRef(() => BotsModule),
     TelegramModule,
     WebSocketModule,

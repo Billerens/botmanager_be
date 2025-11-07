@@ -9,6 +9,7 @@ import { Repository } from "typeorm";
 import { Cart, CartItem } from "../../database/entities/cart.entity";
 import { Product } from "../../database/entities/product.entity";
 import { Bot } from "../../database/entities/bot.entity";
+import { Message } from "../../database/entities/message.entity";
 import { NotificationService } from "../websocket/services/notification.service";
 import { NotificationType } from "../websocket/interfaces/notification.interface";
 
@@ -23,6 +24,8 @@ export class CartService {
     private readonly productRepository: Repository<Product>,
     @InjectRepository(Bot)
     private readonly botRepository: Repository<Bot>,
+    @InjectRepository(Message)
+    private readonly messageRepository: Repository<Message>,
     private readonly notificationService: NotificationService
   ) {}
 
@@ -260,7 +263,19 @@ export class CartService {
   /**
    * Получить все корзины бота (для админа)
    */
-  async getCartsByBotId(botId: string): Promise<Cart[]> {
+  async getCartsByBotId(
+    botId: string,
+    hideEmpty: boolean = false
+  ): Promise<
+    Array<
+      Cart & {
+        chatId?: string;
+        totalItems: number;
+        totalPrice: number;
+        currency: string;
+      }
+    >
+  > {
     // Проверяем существование бота
     const bot = await this.botRepository.findOne({
       where: { id: botId },
@@ -271,12 +286,49 @@ export class CartService {
     }
 
     // Получаем все корзины бота
-    const carts = await this.cartRepository.find({
+    let carts = await this.cartRepository.find({
       where: { botId },
       order: { updatedAt: "DESC" },
     });
 
-    return carts;
+    // Фильтруем пустые корзины, если нужно
+    if (hideEmpty) {
+      carts = carts.filter((cart) => cart.items && cart.items.length > 0);
+    }
+
+    // Получаем chatId для каждой корзины из сообщений пользователя
+    const cartsWithChatId = await Promise.all(
+      carts.map(async (cart) => {
+        // Пытаемся найти chatId по telegramUsername через метаданные сообщений
+        const username = cart.telegramUsername.replace("@", "");
+        const userMessage = await this.messageRepository
+          .createQueryBuilder("message")
+          .where("message.botId = :botId", { botId })
+          .andWhere("message.type = :type", { type: "incoming" })
+          .andWhere(
+            "(message.metadata->>'username' = :username OR message.metadata->>'username' = :usernameWithAt)",
+            {
+              username,
+              usernameWithAt: `@${username}`,
+            }
+          )
+          .orderBy("message.createdAt", "DESC")
+          .limit(1)
+          .getOne();
+
+        const chatId = userMessage?.telegramChatId;
+
+        return {
+          ...cart,
+          chatId,
+          totalItems: cart.totalItems,
+          totalPrice: cart.totalPrice,
+          currency: cart.currency,
+        };
+      })
+    );
+
+    return cartsWithChatId;
   }
 
   /**

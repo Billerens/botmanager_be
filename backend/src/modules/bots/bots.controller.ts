@@ -6,8 +6,10 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   UseGuards,
   Request,
+  NotFoundException,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -15,6 +17,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiExcludeEndpoint,
+  ApiQuery,
   getSchemaPath,
 } from "@nestjs/swagger";
 
@@ -32,7 +35,7 @@ import { CartService } from "../cart/cart.service";
 export class BotsController {
   constructor(
     private readonly botsService: BotsService,
-    private readonly cartService: CartService,
+    private readonly cartService: CartService
   ) {}
 
   @Post()
@@ -182,9 +185,46 @@ export class BotsController {
     description: "Список корзин получен",
   })
   @ApiResponse({ status: 404, description: "Бот не найден" })
-  async getCartsByBotId(@Param("id") id: string, @Request() req) {
+  @ApiQuery({
+    name: "hideEmpty",
+    required: false,
+    type: Boolean,
+    description: "Скрывать пустые корзины",
+  })
+  async getCartsByBotId(
+    @Param("id") id: string,
+    @Query("hideEmpty") hideEmpty?: string,
+    @Request() req?
+  ) {
     // Проверяем, что бот принадлежит пользователю
     await this.botsService.findOne(id, req.user.id);
-    return this.cartService.getCartsByBotId(id);
+    const shouldHideEmpty = hideEmpty === "true" || hideEmpty === "1";
+    return this.cartService.getCartsByBotId(id, shouldHideEmpty);
+  }
+
+  @Delete(":id/carts/:cartId")
+  @ApiOperation({ summary: "Очистить корзину (админ)" })
+  @ApiResponse({
+    status: 200,
+    description: "Корзина очищена",
+  })
+  @ApiResponse({ status: 404, description: "Бот или корзина не найдены" })
+  async clearCartByAdmin(
+    @Param("id") id: string,
+    @Param("cartId") cartId: string,
+    @Request() req
+  ) {
+    // Проверяем, что бот принадлежит пользователю
+    await this.botsService.findOne(id, req.user.id);
+
+    // Получаем корзину
+    const carts = await this.cartService.getCartsByBotId(id, false);
+    const cart = carts.find((c) => c.id === cartId);
+
+    if (!cart) {
+      throw new NotFoundException("Корзина не найдена");
+    }
+
+    return this.cartService.clearCart(id, cart.telegramUsername);
   }
 }
