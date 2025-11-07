@@ -219,6 +219,26 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
             telegramResponse.message_id.toString();
 
           // Сохраняем сообщение в БД
+          // Обрабатываем keyboard: расплющиваем двумерный массив в одномерный
+          let processedKeyboard = null;
+          if (messageOptions.reply_markup) {
+            const buttonsArray =
+              messageOptions.reply_markup.inline_keyboard ||
+              messageOptions.reply_markup.keyboard ||
+              [];
+            // Расплющиваем двумерный массив (массив массивов кнопок) в одномерный
+            const flatButtons = Array.isArray(buttonsArray) && buttonsArray.length > 0 && Array.isArray(buttonsArray[0])
+              ? buttonsArray.flat()
+              : buttonsArray;
+            
+            processedKeyboard = {
+              type: messageOptions.reply_markup.inline_keyboard
+                ? "inline"
+                : "reply",
+              buttons: flatButtons,
+            };
+          }
+
           await this.messagesService.create({
             botId: bot.id,
             telegramMessageId: telegramResponse.message_id,
@@ -227,17 +247,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
             type: MessageType.OUTGOING,
             contentType: MessageContentType.TEXT,
             text: messageText,
-            keyboard: messageOptions.reply_markup
-              ? {
-                  type: messageOptions.reply_markup.inline_keyboard
-                    ? "inline"
-                    : "reply",
-                  buttons:
-                    messageOptions.reply_markup.inline_keyboard ||
-                    messageOptions.reply_markup.keyboard ||
-                    [],
-                }
-              : null,
+            keyboard: processedKeyboard,
             metadata: {
               firstName: bot.name || "Bot",
               lastName: "",
@@ -308,6 +318,26 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
           telegramResponse.message_id.toString();
 
         // Сохраняем сообщение в БД
+        // Обрабатываем keyboard: расплющиваем двумерный массив в одномерный
+        let processedKeyboard = null;
+        if (messageOptions.reply_markup) {
+          const buttonsArray =
+            messageOptions.reply_markup.inline_keyboard ||
+            messageOptions.reply_markup.keyboard ||
+            [];
+          // Расплющиваем двумерный массив (массив массивов кнопок) в одномерный
+          const flatButtons = Array.isArray(buttonsArray) && buttonsArray.length > 0 && Array.isArray(buttonsArray[0])
+            ? buttonsArray.flat()
+            : buttonsArray;
+          
+          processedKeyboard = {
+            type: messageOptions.reply_markup.inline_keyboard
+              ? "inline"
+              : "reply",
+            buttons: flatButtons,
+          };
+        }
+
         await this.messagesService.create({
           botId: bot.id,
           telegramMessageId: telegramResponse.message_id,
@@ -316,17 +346,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
           type: MessageType.OUTGOING,
           contentType: MessageContentType.TEXT,
           text: messageText,
-          keyboard: messageOptions.reply_markup
-            ? {
-                type: messageOptions.reply_markup.inline_keyboard
-                  ? "inline"
-                  : "reply",
-                buttons:
-                  messageOptions.reply_markup.inline_keyboard ||
-                  messageOptions.reply_markup.keyboard ||
-                  [],
-              }
-            : null,
+          keyboard: processedKeyboard,
           metadata: {
             firstName: bot.name || "Bot",
             lastName: "",

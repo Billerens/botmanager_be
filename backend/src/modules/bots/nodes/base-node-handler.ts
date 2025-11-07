@@ -63,6 +63,27 @@ export abstract class BaseNodeHandler implements INodeHandler {
 
     if (telegramResponse) {
       // Сохраняем исходящее сообщение в базу данных
+      // Обрабатываем keyboard: расплющиваем двумерный массив в одномерный
+      let processedKeyboard = null;
+      if (options.reply_markup) {
+        const buttonsArray =
+          options.reply_markup.inline_keyboard ||
+          options.reply_markup.keyboard ||
+          [];
+        // Расплющиваем двумерный массив (массив массивов кнопок) в одномерный
+        const flatButtons =
+          Array.isArray(buttonsArray) &&
+          buttonsArray.length > 0 &&
+          Array.isArray(buttonsArray[0])
+            ? buttonsArray.flat()
+            : buttonsArray;
+
+        processedKeyboard = {
+          type: options.reply_markup.inline_keyboard ? "inline" : "reply",
+          buttons: flatButtons,
+        };
+      }
+
       await this.messagesService.create({
         botId: bot.id,
         telegramMessageId: telegramResponse.message_id,
@@ -71,15 +92,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
         type: MessageType.OUTGOING,
         contentType: MessageContentType.TEXT,
         text: text,
-        keyboard: options.reply_markup
-          ? {
-              type: options.reply_markup.inline_keyboard ? "inline" : "reply",
-              buttons:
-                options.reply_markup.inline_keyboard ||
-                options.reply_markup.keyboard ||
-                [],
-            }
-          : null,
+        keyboard: processedKeyboard,
         metadata: {
           firstName: bot.name || "Bot",
           lastName: "",
@@ -125,6 +138,27 @@ export abstract class BaseNodeHandler implements INodeHandler {
 
     if (telegramResponse) {
       // Сохраняем исходящее сообщение в базу данных
+      // Обрабатываем keyboard: расплющиваем двумерный массив в одномерный
+      let processedKeyboard = null;
+      if (options.reply_markup) {
+        const buttonsArray =
+          options.reply_markup.inline_keyboard ||
+          options.reply_markup.keyboard ||
+          [];
+        // Расплющиваем двумерный массив (массив массивов кнопок) в одномерный
+        const flatButtons =
+          Array.isArray(buttonsArray) &&
+          buttonsArray.length > 0 &&
+          Array.isArray(buttonsArray[0])
+            ? buttonsArray.flat()
+            : buttonsArray;
+
+        processedKeyboard = {
+          type: options.reply_markup.inline_keyboard ? "inline" : "reply",
+          buttons: flatButtons,
+        };
+      }
+
       await this.messagesService.create({
         botId: bot.id,
         telegramMessageId: telegramResponse.message_id,
@@ -141,15 +175,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
           mimeType:
             telegramResponse.document?.mime_type || "application/octet-stream",
         },
-        keyboard: options.reply_markup
-          ? {
-              type: options.reply_markup.inline_keyboard ? "inline" : "reply",
-              buttons:
-                options.reply_markup.inline_keyboard ||
-                options.reply_markup.keyboard ||
-                [],
-            }
-          : null,
+        keyboard: processedKeyboard,
         metadata: {
           firstName: bot.name || "Bot",
           lastName: "",
