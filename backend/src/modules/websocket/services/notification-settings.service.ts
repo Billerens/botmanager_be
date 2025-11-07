@@ -132,6 +132,19 @@ export class NotificationSettingsService {
         type: NotificationType.CART_CLEARED,
         defaultEnabled: false,
       },
+      // Заказы
+      {
+        type: NotificationType.ORDER_CREATED,
+        defaultEnabled: true,
+      },
+      {
+        type: NotificationType.ORDER_STATUS_UPDATED,
+        defaultEnabled: true,
+      },
+      {
+        type: NotificationType.ORDER_CANCELLED,
+        defaultEnabled: true,
+      },
       // Аналитика
       {
         type: NotificationType.STATS_UPDATED,

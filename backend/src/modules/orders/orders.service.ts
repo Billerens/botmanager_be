@@ -13,6 +13,7 @@ import { Product } from "../../database/entities/product.entity";
 import { CreateOrderDto, UpdateOrderStatusDto } from "./dto/order.dto";
 import { NotificationService } from "../websocket/services/notification.service";
 import { NotificationType } from "../websocket/interfaces/notification.interface";
+import { Message } from "../../database/entities/message.entity";
 
 @Injectable()
 export class OrdersService {
@@ -27,6 +28,8 @@ export class OrdersService {
     private readonly botRepository: Repository<Bot>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
+    @InjectRepository(Message)
+    private readonly messageRepository: Repository<Message>,
     private readonly notificationService: NotificationService
   ) {}
 
@@ -153,7 +156,24 @@ export class OrdersService {
   async getOrdersByBotId(
     botId: string,
     status?: OrderStatus
-  ): Promise<Order[]> {
+  ): Promise<
+    Array<
+      Partial<Order> & {
+        id: string;
+        botId: string;
+        telegramUsername: string;
+        items: Order["items"];
+        customerData: Order["customerData"];
+        additionalMessage?: string;
+        status: OrderStatus;
+        totalPrice: number;
+        currency: string;
+        createdAt: Date;
+        updatedAt: Date;
+        chatId?: string;
+      }
+    >
+  > {
     // Проверяем существование бота
     const bot = await this.botRepository.findOne({
       where: { id: botId },
@@ -173,7 +193,36 @@ export class OrdersService {
       order: { createdAt: "DESC" },
     });
 
-    return orders;
+    // Получаем chatId для каждого заказа из сообщений пользователя
+    const ordersWithChatId = await Promise.all(
+      orders.map(async (order) => {
+        // Пытаемся найти chatId по telegramUsername через метаданные сообщений
+        const username = order.telegramUsername.replace("@", "");
+        const userMessage = await this.messageRepository
+          .createQueryBuilder("message")
+          .where("message.botId = :botId", { botId })
+          .andWhere("message.type = :type", { type: "incoming" })
+          .andWhere(
+            "(message.metadata->>'username' = :username OR message.metadata->>'username' = :usernameWithAt)",
+            {
+              username,
+              usernameWithAt: `@${username}`,
+            }
+          )
+          .orderBy("message.createdAt", "DESC")
+          .limit(1)
+          .getOne();
+
+        const chatId = userMessage?.telegramChatId;
+
+        return {
+          ...order,
+          chatId,
+        };
+      })
+    );
+
+    return ordersWithChatId;
   }
 
   /**
@@ -242,6 +291,80 @@ export class OrdersService {
     this.logger.log(
       `Статус заказа ${orderId} изменен с ${oldStatus} на ${updateStatusDto.status}`
     );
+
+    return savedOrder;
+  }
+
+  /**
+   * Удалить заказ (для админа)
+   */
+  async deleteOrder(botId: string, orderId: string): Promise<void> {
+    // Проверяем существование бота
+    const bot = await this.botRepository.findOne({
+      where: { id: botId },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
+
+    // Получаем заказ
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId, botId },
+    });
+
+    if (!order) {
+      throw new NotFoundException("Заказ не найден");
+    }
+
+    // Если заказ был подтвержден, возвращаем товары на склад
+    if (order.status === OrderStatus.CONFIRMED) {
+      await this.returnProductsToStock(botId, order.items);
+    }
+
+    // Удаляем заказ
+    await this.orderRepository.remove(order);
+
+    this.logger.log(`Заказ ${orderId} удален`);
+  }
+
+  /**
+   * Обновить данные покупателя заказа (для админа)
+   */
+  async updateOrderCustomerData(
+    botId: string,
+    orderId: string,
+    customerData: Order["customerData"]
+  ): Promise<Order> {
+    // Проверяем существование бота
+    const bot = await this.botRepository.findOne({
+      where: { id: botId },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
+
+    // Получаем заказ
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId, botId },
+    });
+
+    if (!order) {
+      throw new NotFoundException("Заказ не найден");
+    }
+
+    order.customerData = customerData;
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Отправляем уведомление владельцу бота
+    await this.sendOrderNotification(
+      bot,
+      NotificationType.ORDER_STATUS_UPDATED,
+      savedOrder
+    );
+
+    this.logger.log(`Данные покупателя заказа ${orderId} обновлены`);
 
     return savedOrder;
   }

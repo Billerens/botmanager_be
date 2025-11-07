@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -177,6 +178,52 @@ export class OrdersController {
       botId,
       orderId,
       updateStatusDto
+    );
+  }
+
+  @Delete(":orderId")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Удалить заказ (для админа)" })
+  @ApiParam({ name: "botId", description: "ID бота" })
+  @ApiParam({ name: "orderId", description: "ID заказа" })
+  @ApiResponse({
+    status: 200,
+    description: "Заказ удален",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Заказ не найден",
+  })
+  async deleteOrder(
+    @Param("botId") botId: string,
+    @Param("orderId") orderId: string
+  ) {
+    await this.ordersService.deleteOrder(botId, orderId);
+    return { message: "Заказ успешно удален" };
+  }
+
+  @Patch(":orderId/customer-data")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Обновить данные покупателя заказа (для админа)" })
+  @ApiParam({ name: "botId", description: "ID бота" })
+  @ApiParam({ name: "orderId", description: "ID заказа" })
+  @ApiResponse({
+    status: 200,
+    description: "Данные покупателя обновлены",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Заказ не найден",
+  })
+  async updateOrderCustomerData(
+    @Param("botId") botId: string,
+    @Param("orderId") orderId: string,
+    @Body() body: { customerData: any }
+  ) {
+    return this.ordersService.updateOrderCustomerData(
+      botId,
+      orderId,
+      body.customerData
     );
   }
 }
