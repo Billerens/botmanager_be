@@ -9,17 +9,21 @@ import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
 import { TelegramInitDataValidationService } from "../../common/telegram-initdata-validation.service";
 import { BotsModule } from "../bots/bots.module";
 import { TelegramModule } from "../telegram/telegram.module";
-import { WebsocketModule } from "../websocket/websocket.module";
+import { WebSocketModule } from "../websocket/websocket.module";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Cart, Product, Bot]),
     BotsModule,
     TelegramModule,
-    WebsocketModule,
+    WebSocketModule,
   ],
   controllers: [CartController],
-  providers: [CartService, TelegramInitDataGuard, TelegramInitDataValidationService],
+  providers: [
+    CartService,
+    TelegramInitDataGuard,
+    TelegramInitDataValidationService,
+  ],
   exports: [CartService],
 })
 export class CartModule {}
