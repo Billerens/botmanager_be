@@ -203,20 +203,11 @@ export class TelegramController {
       });
 
       // Отправляем уведомление о получении сообщения владельцу бота
+      // Отправляем полный объект сообщения для корректной обработки на фронтенде
       this.notificationService
         .sendToUser(bot.ownerId, NotificationType.MESSAGE_RECEIVED, {
           botId: bot.id,
-          botName: bot.name,
-          message: {
-            id: savedMessage.id,
-            text: savedMessage.text || savedMessage.contentType,
-            telegramChatId: savedMessage.telegramChatId,
-          },
-          user: {
-            firstName: message.from.first_name,
-            lastName: message.from.last_name,
-            username: message.from.username,
-          },
+          message: savedMessage, // Отправляем полный объект сообщения
           isNewUser,
         })
         .catch((error) => {
