@@ -43,7 +43,7 @@ export class BotManagerWebSocketGateway
   server: Server;
 
   private readonly logger = new Logger(BotManagerWebSocketGateway.name);
-  private connectedUsers = new Map<string, string>(); // userId -> socketId
+  private connectedUsers = new Map<string, Set<string>>(); // userId -> Set<socketId> (поддержка множественных подключений)
   private socketToUser = new Map<string, string>(); // socketId -> userId
   private redisPubClient: RedisClientType | null = null;
   private redisSubClient: RedisClientType | null = null;
@@ -112,12 +112,16 @@ export class BotManagerWebSocketGateway
       client.userId = user.id;
       client.join(`user-${user.id}`); // Автоматически присоединяем к комнате пользователя
 
-      // Отслеживаем подключенных пользователей
-      this.connectedUsers.set(user.id, client.id);
+      // Отслеживаем подключенных пользователей (поддержка множественных подключений)
+      if (!this.connectedUsers.has(user.id)) {
+        this.connectedUsers.set(user.id, new Set());
+      }
+      this.connectedUsers.get(user.id)!.add(client.id);
       this.socketToUser.set(client.id, user.id);
 
+      const connectionCount = this.connectedUsers.get(user.id)!.size;
       this.logger.log(
-        `Клиент ${client.id} подключен (Пользователь: ${user.id}, ${user.telegramUsername || "без username"})`
+        `Клиент ${client.id} подключен (Пользователь: ${user.id}, ${user.telegramUsername || "без username"}, активных подключений: ${connectionCount})`
       );
     } catch (error) {
       this.logger.error(
@@ -134,9 +138,18 @@ export class BotManagerWebSocketGateway
   handleDisconnect(client: AuthenticatedSocket) {
     const userId = this.socketToUser.get(client.id);
     if (userId) {
-      this.connectedUsers.delete(userId);
+      const userSockets = this.connectedUsers.get(userId);
+      if (userSockets) {
+        userSockets.delete(client.id);
+        // Удаляем запись пользователя только если не осталось активных подключений
+        if (userSockets.size === 0) {
+          this.connectedUsers.delete(userId);
+          this.logger.log(`Клиент ${client.id} отключен (Пользователь: ${userId}, больше нет активных подключений)`);
+        } else {
+          this.logger.log(`Клиент ${client.id} отключен (Пользователь: ${userId}, осталось активных подключений: ${userSockets.size})`);
+        }
+      }
       this.socketToUser.delete(client.id);
-      this.logger.log(`Клиент ${client.id} отключен (Пользователь: ${userId})`);
     } else {
       this.logger.log(`Клиент ${client.id} отключен`);
     }
@@ -293,24 +306,37 @@ export class BotManagerWebSocketGateway
 
   /**
    * Отправляет сообщение конкретному пользователю
+   * Отправляется всем активным подключениям пользователя через комнату
    */
   emitToUser(userId: string, event: string, data: any) {
+    const connectionCount = this.getUserConnectionsCount(userId);
     this.server.to(`user-${userId}`).emit(event, data);
-    this.logger.debug(`Сообщение отправлено пользователю ${userId}: ${event}`);
+    this.logger.debug(
+      `Сообщение отправлено пользователю ${userId}: ${event} (активных подключений: ${connectionCount})`
+    );
   }
 
   /**
-   * Проверяет, подключен ли пользователь
+   * Проверяет, подключен ли пользователь (есть ли хотя бы одно активное подключение)
    */
   isUserConnected(userId: string): boolean {
-    return this.connectedUsers.has(userId);
+    const userSockets = this.connectedUsers.get(userId);
+    return userSockets !== undefined && userSockets.size > 0;
   }
 
   /**
-   * Получает количество подключенных пользователей
+   * Получает количество уникальных подключенных пользователей
    */
   getConnectedUsersCount(): number {
     return this.connectedUsers.size;
+  }
+
+  /**
+   * Получает количество активных подключений для конкретного пользователя
+   */
+  getUserConnectionsCount(userId: string): number {
+    const userSockets = this.connectedUsers.get(userId);
+    return userSockets ? userSockets.size : 0;
   }
 
   /**
