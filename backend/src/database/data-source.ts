@@ -14,6 +14,8 @@ import { Specialist } from "./entities/specialist.entity";
 import { Service } from "./entities/service.entity";
 import { TimeSlot } from "./entities/time-slot.entity";
 import { Booking } from "./entities/booking.entity";
+import { Cart } from "./entities/cart.entity";
+import { Order } from "./entities/order.entity";
 
 // Загружаем переменные окружения
 config();
@@ -42,6 +44,8 @@ export const AppDataSource = new DataSource({
     Service,
     TimeSlot,
     Booking,
+    Cart,
+    Order,
   ],
   migrations: ["src/database/migrations/*.ts"],
   subscribers: ["src/database/subscribers/*.ts"],
