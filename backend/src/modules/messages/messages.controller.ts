@@ -10,6 +10,7 @@ import {
   Request,
   ParseUUIDPipe,
   BadRequestException,
+  NotFoundException,
   UseInterceptors,
   UploadedFile,
   Res,
@@ -411,7 +412,10 @@ export class MessagesController {
       );
 
       // Устанавливаем заголовки для правильной отдачи файла
-      res.setHeader("Content-Type", fileInfo.mimeType || "application/octet-stream");
+      res.setHeader(
+        "Content-Type",
+        fileInfo.mimeType || "application/octet-stream"
+      );
       if (fileInfo.fileName) {
         res.setHeader(
           "Content-Disposition",
