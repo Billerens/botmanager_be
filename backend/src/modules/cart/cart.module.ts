@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { Cart } from "../../database/entities/cart.entity";
 import { Product } from "../../database/entities/product.entity";
@@ -14,7 +14,7 @@ import { WebSocketModule } from "../websocket/websocket.module";
 @Module({
   imports: [
     TypeOrmModule.forFeature([Cart, Product, Bot]),
-    BotsModule,
+    forwardRef(() => BotsModule),
     TelegramModule,
     WebSocketModule,
   ],

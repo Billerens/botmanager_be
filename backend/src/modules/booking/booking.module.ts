@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { Specialist } from "../../database/entities/specialist.entity";
 import { Service } from "../../database/entities/service.entity";
@@ -38,7 +38,7 @@ import { WebSocketModule } from "../websocket/websocket.module";
     TypeOrmModule.forFeature([Specialist, Service, TimeSlot, Booking, Bot]),
     TelegramModule,
     QueueModule,
-    BotsModule,
+    forwardRef(() => BotsModule),
     WebSocketModule,
   ],
   controllers: [
