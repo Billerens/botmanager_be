@@ -39,6 +39,11 @@ export enum NotificationType {
   CART_ITEM_REMOVED = "cart.item_removed",
   CART_CLEARED = "cart.cleared",
 
+  // Заказы
+  ORDER_CREATED = "order.created",
+  ORDER_STATUS_UPDATED = "order.status_updated",
+  ORDER_CANCELLED = "order.cancelled",
+
   // Аналитика
   STATS_UPDATED = "stats.updated",
 

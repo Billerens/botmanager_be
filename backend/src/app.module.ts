@@ -24,6 +24,7 @@ import { SubscriptionModule } from "./modules/subscription/subscription.module";
 import { UploadModule } from "./modules/upload/upload.module";
 import { BookingModule } from "./modules/booking/booking.module";
 import { CartModule } from "./modules/cart/cart.module";
+import { OrdersModule } from "./modules/orders/orders.module";
 import { HealthModule } from "./health/health.module";
 
 @Module({
@@ -73,6 +74,7 @@ import { HealthModule } from "./health/health.module";
     UploadModule,
     BookingModule, // Система бронирования
     CartModule, // Корзина для магазина
+    OrdersModule, // Заказы для магазина
     HealthModule, // Health check endpoints
   ],
 })
