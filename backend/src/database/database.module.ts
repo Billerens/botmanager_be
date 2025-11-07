@@ -11,6 +11,7 @@ import { BotFlow } from "./entities/bot-flow.entity";
 import { BotFlowNode } from "./entities/bot-flow-node.entity";
 import { ActivityLog } from "./entities/activity-log.entity";
 import { Product } from "./entities/product.entity";
+import { Category } from "./entities/category.entity";
 import { Specialist } from "./entities/specialist.entity";
 import { Service } from "./entities/service.entity";
 import { TimeSlot } from "./entities/time-slot.entity";
@@ -38,6 +39,7 @@ import { Cart } from "./entities/cart.entity";
           BotFlowNode,
           ActivityLog,
           Product,
+          Category,
           Specialist,
           Service,
           TimeSlot,
@@ -63,6 +65,7 @@ import { Cart } from "./entities/cart.entity";
       BotFlowNode,
       ActivityLog,
       Product,
+      Category,
       Specialist,
       Service,
       TimeSlot,
