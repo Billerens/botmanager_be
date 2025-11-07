@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query } from "@nestjs/common";
+import { Controller, Get, Post, Body, Param, Query, UseGuards, Request } from "@nestjs/common";
 import {
   ApiTags,
   ApiOperation,
@@ -15,6 +15,7 @@ import {
   BookingStatsResponseDto,
   ErrorResponseDto,
 } from "../dto/booking-response.dto";
+import { TelegramInitDataGuard } from "../../auth/guards/telegram-initdata.guard";
 
 @ApiTags("Публичные эндпоинты бронирования")
 @Controller("public")
@@ -140,6 +141,7 @@ export class PublicBookingController {
   }
 
   @Post("bots/:id/bookings")
+  @UseGuards(TelegramInitDataGuard)
   @ApiOperation({ summary: "Создать бронирование" })
   @ApiResponse({
     status: 201,
@@ -153,10 +155,23 @@ export class PublicBookingController {
     description: "Неверные данные",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @ApiResponse({
+    status: 401,
+    description: "Неверный или устаревший initData",
+  })
   async createBooking(
     @Param("id") botId: string,
-    @Body() createBookingDto: CreateBookingDto
+    @Body() createBookingDto: CreateBookingDto,
+    @Request() req
   ) {
+    // Используем telegramUsername из валидированных данных, если он не передан в DTO
+    if (!createBookingDto.telegramUsername && req.telegramUsername) {
+      createBookingDto.telegramUsername = req.telegramUsername;
+    }
+    // Используем telegramUserId из валидированных данных, если он не передан в DTO
+    if (!createBookingDto.telegramUserId && req.telegramInitData?.user?.id) {
+      createBookingDto.telegramUserId = req.telegramInitData.user.id.toString();
+    }
     return this.bookingMiniAppService.createPublicBooking(
       botId,
       createBookingDto

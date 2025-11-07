@@ -28,12 +28,18 @@ import { BookingReminderProcessor } from "./processors/booking-reminder.processo
 // Модули
 import { TelegramModule } from "../telegram/telegram.module";
 import { QueueModule } from "../queue/queue.module";
+import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
+import { TelegramInitDataValidationService } from "../../common/telegram-initdata-validation.service";
+import { BotsModule } from "../bots/bots.module";
+import { WebsocketModule } from "../websocket/websocket.module";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Specialist, Service, TimeSlot, Booking, Bot]),
     TelegramModule,
     QueueModule,
+    BotsModule,
+    WebsocketModule,
   ],
   controllers: [
     SpecialistsController,
@@ -51,6 +57,8 @@ import { QueueModule } from "../queue/queue.module";
     BookingNotificationsService,
     BookingReminderProcessor,
     BookingReminderSchedulerService,
+    TelegramInitDataGuard,
+    TelegramInitDataValidationService,
   ],
   exports: [
     SpecialistsService,

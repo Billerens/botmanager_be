@@ -5,11 +5,21 @@ import { Product } from "../../database/entities/product.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import { CartService } from "./cart.service";
 import { CartController } from "./cart.controller";
+import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
+import { TelegramInitDataValidationService } from "../../common/telegram-initdata-validation.service";
+import { BotsModule } from "../bots/bots.module";
+import { TelegramModule } from "../telegram/telegram.module";
+import { WebsocketModule } from "../websocket/websocket.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Cart, Product, Bot])],
+  imports: [
+    TypeOrmModule.forFeature([Cart, Product, Bot]),
+    BotsModule,
+    TelegramModule,
+    WebsocketModule,
+  ],
   controllers: [CartController],
-  providers: [CartService],
+  providers: [CartService, TelegramInitDataGuard, TelegramInitDataValidationService],
   exports: [CartService],
 })
 export class CartModule {}

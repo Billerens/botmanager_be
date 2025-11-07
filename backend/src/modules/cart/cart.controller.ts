@@ -9,24 +9,34 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UseGuards,
+  Request,
+  UnauthorizedException,
 } from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from "@nestjs/swagger";
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from "@nestjs/swagger";
 import { CartService } from "./cart.service";
 import {
   AddItemToCartDto,
   UpdateCartItemDto,
   RemoveItemFromCartDto,
 } from "./dto/cart.dto";
+import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
 
 @ApiTags("Публичные эндпоинты - Корзина")
 @Controller("public")
+@UseGuards(TelegramInitDataGuard)
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 
   @Get("bots/:botId/cart")
   @ApiOperation({ summary: "Получить корзину пользователя" })
   @ApiParam({ name: "botId", description: "ID бота" })
-  @ApiQuery({ name: "telegramUsername", description: "Telegram username пользователя", required: true })
   @ApiResponse({
     status: 200,
     description: "Корзина получена",
@@ -35,17 +45,23 @@ export class CartController {
     status: 404,
     description: "Бот не найден",
   })
-  async getCart(
-    @Param("botId") botId: string,
-    @Query("telegramUsername") telegramUsername: string
-  ) {
+  @ApiResponse({
+    status: 401,
+    description: "Неверный или устаревший initData",
+  })
+  async getCart(@Param("botId") botId: string, @Request() req) {
+    const telegramUsername = req.telegramUsername;
+    if (!telegramUsername) {
+      throw new UnauthorizedException(
+        "telegramUsername не найден в валидированных данных"
+      );
+    }
     return this.cartService.getCart(botId, telegramUsername);
   }
 
   @Post("bots/:botId/cart/items")
   @ApiOperation({ summary: "Добавить товар в корзину" })
   @ApiParam({ name: "botId", description: "ID бота" })
-  @ApiQuery({ name: "telegramUsername", description: "Telegram username пользователя", required: true })
   @ApiResponse({
     status: 201,
     description: "Товар добавлен в корзину",
@@ -58,11 +74,21 @@ export class CartController {
     status: 404,
     description: "Товар или бот не найден",
   })
+  @ApiResponse({
+    status: 401,
+    description: "Неверный или устаревший initData",
+  })
   async addItem(
     @Param("botId") botId: string,
-    @Query("telegramUsername") telegramUsername: string,
+    @Request() req,
     @Body() addItemDto: AddItemToCartDto
   ) {
+    const telegramUsername = req.telegramUsername;
+    if (!telegramUsername) {
+      throw new UnauthorizedException(
+        "telegramUsername не найден в валидированных данных"
+      );
+    }
     return this.cartService.addItem(
       botId,
       telegramUsername,
@@ -74,7 +100,6 @@ export class CartController {
   @Patch("bots/:botId/cart/items")
   @ApiOperation({ summary: "Обновить количество товара в корзине" })
   @ApiParam({ name: "botId", description: "ID бота" })
-  @ApiQuery({ name: "telegramUsername", description: "Telegram username пользователя", required: true })
   @ApiResponse({
     status: 200,
     description: "Количество товара обновлено",
@@ -87,11 +112,21 @@ export class CartController {
     status: 404,
     description: "Товар не найден в корзине",
   })
+  @ApiResponse({
+    status: 401,
+    description: "Неверный или устаревший initData",
+  })
   async updateItem(
     @Param("botId") botId: string,
-    @Query("telegramUsername") telegramUsername: string,
+    @Request() req,
     @Body() updateItemDto: UpdateCartItemDto
   ) {
+    const telegramUsername = req.telegramUsername;
+    if (!telegramUsername) {
+      throw new UnauthorizedException(
+        "telegramUsername не найден в валидированных данных"
+      );
+    }
     return this.cartService.updateItem(
       botId,
       telegramUsername,
@@ -105,7 +140,6 @@ export class CartController {
   @ApiOperation({ summary: "Удалить товар из корзины" })
   @ApiParam({ name: "botId", description: "ID бота" })
   @ApiParam({ name: "productId", description: "ID товара" })
-  @ApiQuery({ name: "telegramUsername", description: "Telegram username пользователя", required: true })
   @ApiResponse({
     status: 200,
     description: "Товар удален из корзины",
@@ -114,11 +148,21 @@ export class CartController {
     status: 404,
     description: "Товар не найден в корзине",
   })
+  @ApiResponse({
+    status: 401,
+    description: "Неверный или устаревший initData",
+  })
   async removeItem(
     @Param("botId") botId: string,
     @Param("productId") productId: string,
-    @Query("telegramUsername") telegramUsername: string
+    @Request() req
   ) {
+    const telegramUsername = req.telegramUsername;
+    if (!telegramUsername) {
+      throw new UnauthorizedException(
+        "telegramUsername не найден в валидированных данных"
+      );
+    }
     return this.cartService.removeItem(botId, telegramUsername, productId);
   }
 
@@ -126,16 +170,21 @@ export class CartController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Очистить корзину" })
   @ApiParam({ name: "botId", description: "ID бота" })
-  @ApiQuery({ name: "telegramUsername", description: "Telegram username пользователя", required: true })
   @ApiResponse({
     status: 200,
     description: "Корзина очищена",
   })
-  async clearCart(
-    @Param("botId") botId: string,
-    @Query("telegramUsername") telegramUsername: string
-  ) {
+  @ApiResponse({
+    status: 401,
+    description: "Неверный или устаревший initData",
+  })
+  async clearCart(@Param("botId") botId: string, @Request() req) {
+    const telegramUsername = req.telegramUsername;
+    if (!telegramUsername) {
+      throw new UnauthorizedException(
+        "telegramUsername не найден в валидированных данных"
+      );
+    }
     return this.cartService.clearCart(botId, telegramUsername);
   }
 }
-
