@@ -25,6 +25,8 @@ import { UploadModule } from "./modules/upload/upload.module";
 import { BookingModule } from "./modules/booking/booking.module";
 import { CartModule } from "./modules/cart/cart.module";
 import { OrdersModule } from "./modules/orders/orders.module";
+import { ProductsModule } from "./modules/products/products.module";
+import { CategoriesModule } from "./modules/categories/categories.module";
 import { HealthModule } from "./health/health.module";
 
 @Module({
@@ -75,6 +77,8 @@ import { HealthModule } from "./health/health.module";
     BookingModule, // Система бронирования
     CartModule, // Корзина для магазина
     OrdersModule, // Заказы для магазина
+    ProductsModule, // Товары для магазина
+    CategoriesModule, // Категории товаров
     HealthModule, // Health check endpoints
   ],
 })

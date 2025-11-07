@@ -5,9 +5,10 @@ import {
   Logger,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Like, Between } from "typeorm";
+import { Repository, Like, Between, In } from "typeorm";
 import { Product } from "../../database/entities/product.entity";
 import { Bot } from "../../database/entities/bot.entity";
+import { Category } from "../../database/entities/category.entity";
 import {
   CreateProductDto,
   UpdateProductDto,
@@ -34,6 +35,8 @@ export class ProductsService {
     private readonly productRepository: Repository<Product>,
     @InjectRepository(Bot)
     private readonly botRepository: Repository<Bot>,
+    @InjectRepository(Category)
+    private readonly categoryRepository: Repository<Category>,
     private readonly uploadService: UploadService,
     private readonly notificationService: NotificationService
   ) {}
@@ -45,6 +48,17 @@ export class ProductsService {
   ): Promise<Product> {
     // Проверяем, что бот принадлежит пользователю
     await this.validateBotOwnership(botId, userId);
+
+    // Если указана категория, проверяем её
+    if (createProductDto.categoryId) {
+      const category = await this.categoryRepository.findOne({
+        where: { id: createProductDto.categoryId, botId },
+      });
+
+      if (!category) {
+        throw new NotFoundException("Категория не найдена");
+      }
+    }
 
     this.logger.log(
       `Creating product with ${createProductDto.images?.length || 0} images`
@@ -85,6 +99,7 @@ export class ProductsService {
 
     const queryBuilder = this.productRepository
       .createQueryBuilder("product")
+      .leftJoinAndSelect("product.category", "category")
       .where("product.botId = :botId", { botId })
       .skip(skip)
       .take(limit)
@@ -108,6 +123,29 @@ export class ProductsService {
       }
     }
 
+    // Фильтр по категории (включая подкатегории)
+    if (filters.categoryId) {
+      const category = await this.categoryRepository.findOne({
+        where: { id: filters.categoryId, botId },
+      });
+
+      if (category) {
+        // Получаем все подкатегории
+        const subcategoryIds = await this.getAllSubcategoryIds(
+          filters.categoryId,
+          botId
+        );
+        const allCategoryIds = [filters.categoryId, ...subcategoryIds];
+
+        queryBuilder.andWhere("product.categoryId IN (:...categoryIds)", {
+          categoryIds: allCategoryIds,
+        });
+      } else {
+        // Если категория не найдена, возвращаем пустой результат
+        queryBuilder.andWhere("1 = 0");
+      }
+    }
+
     const [products, total] = await queryBuilder.getManyAndCount();
 
     return {
@@ -127,6 +165,7 @@ export class ProductsService {
 
     const product = await this.productRepository.findOne({
       where: { id, botId },
+      relations: ["category"],
     });
 
     if (!product) {
@@ -143,6 +182,24 @@ export class ProductsService {
     updateProductDto: UpdateProductDto
   ): Promise<Product> {
     const product = await this.findOne(id, botId, userId);
+
+    // Если обновляется категория, проверяем её
+    if (updateProductDto.categoryId !== undefined) {
+      if (updateProductDto.categoryId === null) {
+        // Убираем категорию
+        product.categoryId = null;
+      } else {
+        const category = await this.categoryRepository.findOne({
+          where: { id: updateProductDto.categoryId, botId },
+        });
+
+        if (!category) {
+          throw new NotFoundException("Категория не найдена");
+        }
+
+        product.categoryId = updateProductDto.categoryId;
+      }
+    }
 
     this.logger.log(
       `Updating product ${id} with ${updateProductDto.images?.length || 0} images`
@@ -302,5 +359,31 @@ export class ProductsService {
     if (!bot) {
       throw new NotFoundException("Бот не найден");
     }
+  }
+
+  /**
+   * Получить все ID подкатегорий (рекурсивно)
+   */
+  private async getAllSubcategoryIds(
+    categoryId: string,
+    botId: string
+  ): Promise<string[]> {
+    const subcategoryIds: string[] = [];
+    const queue: string[] = [categoryId];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      const children = await this.categoryRepository.find({
+        where: { parentId: currentId, botId },
+        select: ["id"],
+      });
+
+      for (const child of children) {
+        subcategoryIds.push(child.id);
+        queue.push(child.id);
+      }
+    }
+
+    return subcategoryIds;
   }
 }

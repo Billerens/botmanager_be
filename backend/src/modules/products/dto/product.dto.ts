@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsArray,
   IsObject,
+  IsUUID,
   Min,
   Max,
   MaxLength,
@@ -57,6 +58,11 @@ export class CreateProductDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean = true;
+
+  @ApiPropertyOptional({ description: "ID категории товара" })
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
 }
 
 export class UpdateProductDto {
@@ -106,6 +112,11 @@ export class UpdateProductDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ description: "ID категории товара" })
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
 }
 
 export class ProductFiltersDto {
@@ -152,4 +163,11 @@ export class ProductFiltersDto {
   })
   @IsBoolean()
   inStock?: boolean;
+
+  @ApiPropertyOptional({
+    description: "Фильтр по категории (включая подкатегории)",
+  })
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
 }

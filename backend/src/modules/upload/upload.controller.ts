@@ -454,4 +454,85 @@ export class UploadController {
       };
     }
   }
+
+  @Post("category-image")
+  @UseInterceptors(FileInterceptor("image"))
+  @ApiOperation({ summary: "Загрузить изображение категории" })
+  @ApiConsumes("multipart/form-data")
+  @ApiResponse({
+    status: 200,
+    description: "Изображение категории загружено",
+    schema: {
+      type: "object",
+      properties: {
+        success: {
+          type: "boolean",
+          example: true,
+        },
+        message: {
+          type: "string",
+          example: "Successfully uploaded category image",
+        },
+        imageUrls: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+          example: ["https://example.com/uploads/category-image.jpg"],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Ошибка загрузки изображения",
+    schema: {
+      type: "object",
+      properties: {
+        success: {
+          type: "boolean",
+          example: false,
+        },
+        message: {
+          type: "string",
+          example: "No file uploaded",
+        },
+        imageUrls: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+          example: [],
+        },
+      },
+    },
+  })
+  async uploadCategoryImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: any
+  ) {
+    if (!file) {
+      return {
+        success: false,
+        message: "No file uploaded",
+        imageUrls: [],
+      };
+    }
+
+    try {
+      const imageUrl = await this.uploadService.uploadCategoryImage(file);
+
+      return {
+        success: true,
+        message: "Successfully uploaded category image",
+        imageUrls: [imageUrl],
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+        imageUrls: [],
+      };
+    }
+  }
 }

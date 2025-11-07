@@ -290,4 +290,49 @@ export class UploadService {
       throw error;
     }
   }
+
+  /**
+   * Загружает изображение категории в S3 с конвертацией в WebP
+   */
+  async uploadCategoryImage(file: {
+    buffer: Buffer;
+    originalname: string;
+    mimetype: string;
+  }): Promise<string> {
+    try {
+      this.logger.log(`Uploading category image: ${file.originalname}`);
+
+      // Конвертируем в WebP
+      const convertedFile = await this.convertImageToWebP(file);
+
+      const imageUrl = await this.s3Service.uploadFile(
+        convertedFile.buffer,
+        convertedFile.originalname,
+        convertedFile.mimetype,
+        "category-images"
+      );
+
+      this.logger.log(`Successfully uploaded category image: ${imageUrl}`);
+      return imageUrl;
+    } catch (error) {
+      this.logger.error(`Error uploading category image: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Удаляет изображение категории из S3
+   */
+  async deleteCategoryImage(imageUrl: string): Promise<void> {
+    try {
+      this.logger.log(`Deleting category image: ${imageUrl}`);
+
+      await this.s3Service.deleteFile(imageUrl);
+
+      this.logger.log(`Successfully deleted category image`);
+    } catch (error) {
+      this.logger.error(`Error deleting category image: ${error.message}`);
+      throw error;
+    }
+  }
 }

@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from "typeorm";
 import { Bot } from "./bot.entity";
+import { Category } from "./category.entity";
 
 @Entity("products")
 export class Product {
@@ -51,6 +52,17 @@ export class Product {
 
   @Column()
   botId: string;
+
+  // Категория товара (товар может принадлежать только одной категории)
+  @ManyToOne(() => Category, (category) => category.products, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "categoryId" })
+  category: Category;
+
+  @Column({ nullable: true })
+  categoryId: string;
 
   // Методы
   get formattedPrice(): string {
