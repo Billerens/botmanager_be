@@ -261,6 +261,126 @@ export class CartService {
   }
 
   /**
+   * Обновить количество товара в корзине (для админа)
+   */
+  async updateCartItemByAdmin(
+    botId: string,
+    cartId: string,
+    productId: string,
+    quantity: number
+  ): Promise<Cart> {
+    if (quantity <= 0) {
+      throw new BadRequestException("Количество должно быть больше 0");
+    }
+
+    // Проверяем существование бота
+    const bot = await this.botRepository.findOne({
+      where: { id: botId },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
+
+    // Получаем корзину
+    const cart = await this.cartRepository.findOne({
+      where: { id: cartId, botId },
+    });
+
+    if (!cart) {
+      throw new NotFoundException("Корзина не найдена");
+    }
+
+    // Проверяем существование продукта
+    const product = await this.productRepository.findOne({
+      where: { id: productId, botId },
+    });
+
+    if (!product) {
+      throw new NotFoundException("Товар не найден");
+    }
+
+    if (product.stockQuantity < quantity) {
+      throw new BadRequestException(
+        `Недостаточно товара в наличии. Доступно: ${product.stockQuantity}`
+      );
+    }
+
+    // Находим товар в корзине
+    const itemIndex = cart.items.findIndex(
+      (item) => item.productId === productId
+    );
+
+    if (itemIndex < 0) {
+      throw new NotFoundException("Товар не найден в корзине");
+    }
+
+    // Обновляем количество
+    cart.items[itemIndex].quantity = quantity;
+
+    const savedCart = await this.cartRepository.save(cart);
+
+    // Отправляем уведомление об обновлении корзины
+    await this.sendCartNotification(
+      bot,
+      NotificationType.CART_UPDATED,
+      savedCart
+    );
+
+    return savedCart;
+  }
+
+  /**
+   * Удалить товар из корзины (для админа)
+   */
+  async removeCartItemByAdmin(
+    botId: string,
+    cartId: string,
+    productId: string
+  ): Promise<Cart> {
+    // Проверяем существование бота
+    const bot = await this.botRepository.findOne({
+      where: { id: botId },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
+
+    // Получаем корзину
+    const cart = await this.cartRepository.findOne({
+      where: { id: cartId, botId },
+    });
+
+    if (!cart) {
+      throw new NotFoundException("Корзина не найдена");
+    }
+
+    // Проверяем, есть ли товар в корзине
+    const itemIndex = cart.items.findIndex(
+      (item) => item.productId === productId
+    );
+
+    if (itemIndex < 0) {
+      throw new NotFoundException("Товар не найден в корзине");
+    }
+
+    // Удаляем товар из корзины
+    cart.items = cart.items.filter((item) => item.productId !== productId);
+
+    const savedCart = await this.cartRepository.save(cart);
+
+    // Отправляем уведомление об удалении товара из корзины
+    await this.sendCartNotification(
+      bot,
+      NotificationType.CART_ITEM_REMOVED,
+      savedCart
+    );
+
+    return savedCart;
+  }
+
+  /**
    * Получить все корзины бота (для админа)
    */
   async getCartsByBotId(

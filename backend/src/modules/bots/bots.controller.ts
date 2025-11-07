@@ -227,4 +227,58 @@ export class BotsController {
 
     return this.cartService.clearCart(id, cart.telegramUsername);
   }
+
+  @Patch(":id/carts/:cartId/items/:productId")
+  @ApiOperation({ summary: "Обновить количество товара в корзине (админ)" })
+  @ApiResponse({
+    status: 200,
+    description: "Количество товара обновлено",
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Неверные данные или недостаточно товара",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Бот, корзина или товар не найдены",
+  })
+  async updateCartItemByAdmin(
+    @Param("id") id: string,
+    @Param("cartId") cartId: string,
+    @Param("productId") productId: string,
+    @Body() body: { quantity: number },
+    @Request() req
+  ) {
+    // Проверяем, что бот принадлежит пользователю
+    await this.botsService.findOne(id, req.user.id);
+
+    return this.cartService.updateCartItemByAdmin(
+      id,
+      cartId,
+      productId,
+      body.quantity
+    );
+  }
+
+  @Delete(":id/carts/:cartId/items/:productId")
+  @ApiOperation({ summary: "Удалить товар из корзины (админ)" })
+  @ApiResponse({
+    status: 200,
+    description: "Товар удален из корзины",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Бот, корзина или товар не найдены",
+  })
+  async removeCartItemByAdmin(
+    @Param("id") id: string,
+    @Param("cartId") cartId: string,
+    @Param("productId") productId: string,
+    @Request() req
+  ) {
+    // Проверяем, что бот принадлежит пользователю
+    await this.botsService.findOne(id, req.user.id);
+
+    return this.cartService.removeCartItemByAdmin(id, cartId, productId);
+  }
 }
