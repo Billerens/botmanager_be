@@ -17,7 +17,7 @@ export class NewMessageNodeHandler extends BaseNodeHandler {
   }
 
   async execute(context: FlowContext): Promise<void> {
-    const { currentNode, session, message } = context;
+    const { currentNode, session, message, flow } = context;
 
     this.logger.log(`=== ВЫПОЛНЕНИЕ NEW_MESSAGE УЗЛА ===`);
     this.logger.log(`Узел: ${currentNode.nodeId}`);
@@ -27,6 +27,31 @@ export class NewMessageNodeHandler extends BaseNodeHandler {
       this.logger.warn("Данные нового сообщения не найдены");
       return;
     }
+
+    // Проверяем, есть ли входящие edges к этому узлу
+    // Если есть, значит узел был достигнут через переход от другого узла
+    // и должен ждать нового сообщения, а не обрабатывать текущее
+    const hasIncomingEdges = flow.flowData?.edges?.some(
+      (edge) => edge.target === currentNode.nodeId
+    );
+
+    if (hasIncomingEdges) {
+      this.logger.log(
+        `Узел ${currentNode.nodeId} имеет входящие edges - это не первый узел в цепочке`
+      );
+      this.logger.log(
+        `Устанавливаем узел как текущий и ждем нового сообщения от пользователя`
+      );
+      // Устанавливаем узел как текущий в сессии и ждем нового сообщения
+      session.currentNodeId = currentNode.nodeId;
+      session.lastActivity = new Date();
+      // Не обрабатываем текущее сообщение - просто ждем следующего
+      return;
+    }
+
+    this.logger.log(
+      `Узел ${currentNode.nodeId} не имеет входящих edges - это первый узел в цепочке, обрабатываем сообщение`
+    );
 
     const newMessageData = currentNode.data.newMessage;
     const { text, contentType, caseSensitive } = newMessageData;

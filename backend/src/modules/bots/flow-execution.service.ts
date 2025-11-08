@@ -351,11 +351,32 @@ export class FlowExecutionService {
   ): BotFlowNode | null {
     this.logger.log(`Ищем NEW_MESSAGE узлы для сообщения: "${message.text}"`);
 
-    const newMessageNodes = flow.nodes.filter(
-      (node) => node.type === "new_message"
-    );
+    // Фильтруем только узлы NEW_MESSAGE без входящих edges (стартовые узлы диалога)
+    // Это важно, т.к. при отсутствии активной сессии нужно искать только точки входа в диалог
+    const newMessageNodes = flow.nodes.filter((node) => {
+      if (node.type !== "new_message") {
+        return false;
+      }
 
-    this.logger.log(`Найдено ${newMessageNodes.length} NEW_MESSAGE узлов`);
+      // Проверяем, есть ли входящие edges к этому узлу
+      const hasIncomingEdges = flow.flowData?.edges?.some(
+        (edge) => edge.target === node.nodeId
+      );
+
+      // Если есть входящие edges, значит это не стартовый узел - пропускаем
+      if (hasIncomingEdges) {
+        this.logger.log(
+          `Узел ${node.nodeId} имеет входящие edges - пропускаем (не стартовый узел)`
+        );
+        return false;
+      }
+
+      return true;
+    });
+
+    this.logger.log(
+      `Найдено ${newMessageNodes.length} стартовых NEW_MESSAGE узлов (без входящих edges)`
+    );
 
     // Сначала ищем узлы с точным соответствием текста
     const exactMatches: BotFlowNode[] = [];
