@@ -18,6 +18,7 @@ import { TimeSlot } from "./entities/time-slot.entity";
 import { Booking } from "./entities/booking.entity";
 import { Cart } from "./entities/cart.entity";
 import { Order } from "./entities/order.entity";
+import { ShopPromocode } from "./entities/shop-promocode.entity";
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { Order } from "./entities/order.entity";
           Booking,
           Cart,
           Order,
+          ShopPromocode,
         ],
         synchronize: configService.get("NODE_ENV") === "development",
         logging: false,
@@ -74,6 +76,7 @@ import { Order } from "./entities/order.entity";
       Booking,
       Cart,
       Order,
+      ShopPromocode,
     ]),
   ],
   exports: [TypeOrmModule],
