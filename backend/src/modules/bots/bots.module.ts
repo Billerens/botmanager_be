@@ -5,6 +5,7 @@ import { Bot } from "../../database/entities/bot.entity";
 import { BotFlow } from "../../database/entities/bot-flow.entity";
 import { BotFlowNode } from "../../database/entities/bot-flow-node.entity";
 import { Product } from "../../database/entities/product.entity";
+import { Category } from "../../database/entities/category.entity";
 import { Message } from "../../database/entities/message.entity";
 import { BotsService } from "./bots.service";
 import { BotsController } from "./bots.controller";
@@ -39,7 +40,14 @@ import {
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Bot, BotFlow, BotFlowNode, Product, Message]),
+    TypeOrmModule.forFeature([
+      Bot,
+      BotFlow,
+      BotFlowNode,
+      Product,
+      Category,
+      Message,
+    ]),
     forwardRef(() => TelegramModule),
     MessagesModule,
     ProductsModule,

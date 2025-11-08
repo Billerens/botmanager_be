@@ -12,17 +12,24 @@ import * as crypto from "crypto";
 
 import { Bot, BotStatus } from "../../database/entities/bot.entity";
 import { User } from "../../database/entities/user.entity";
+import { Category } from "../../database/entities/category.entity";
+import { Product } from "../../database/entities/product.entity";
 import { CreateBotDto, UpdateBotDto } from "./dto/bot.dto";
 import { ButtonSettingsDto } from "./dto/command-button-settings.dto";
 import { TelegramService } from "../telegram/telegram.service";
 import { NotificationService } from "../websocket/services/notification.service";
 import { NotificationType } from "../websocket/interfaces/notification.interface";
+import { In } from "typeorm";
 
 @Injectable()
 export class BotsService {
   constructor(
     @InjectRepository(Bot)
     private botRepository: Repository<Bot>,
+    @InjectRepository(Category)
+    private categoryRepository: Repository<Category>,
+    @InjectRepository(Product)
+    private productRepository: Repository<Product>,
     @Inject(forwardRef(() => TelegramService))
     private telegramService: TelegramService,
     private notificationService: NotificationService
@@ -285,12 +292,23 @@ export class BotsService {
         status: BotStatus.ACTIVE,
         isShop: true,
       },
-      relations: ["products"],
     });
 
     if (!bot) {
       throw new NotFoundException("Бот не найден или магазин не активен");
     }
+
+    // Загружаем активные категории для магазина
+    const categories = await this.categoryRepository.find({
+      where: {
+        botId,
+        isActive: true,
+      },
+      order: {
+        sortOrder: "ASC",
+        name: "ASC",
+      },
+    });
 
     // Возвращаем только публичные данные, необходимые для магазина
     return {
@@ -304,8 +322,149 @@ export class BotsService {
       shopButtonTypes: bot.shopButtonTypes,
       shopButtonSettings: bot.shopButtonSettings,
       shopUrl: bot.shopUrl,
-      products: bot.products?.filter((product) => product.isActive) || [],
+      categories: categories.map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        description: cat.description,
+        isActive: cat.isActive,
+      })),
     };
+  }
+
+  async getPublicShopProducts(
+    botId: string,
+    page: number = 1,
+    limit: number = 20,
+    categoryId?: string,
+    inStock?: boolean,
+    search?: string,
+    sortBy?: "name-asc" | "name-desc" | "price-asc" | "price-desc"
+  ): Promise<any> {
+    // Проверяем, что бот существует и активен
+    const bot = await this.botRepository.findOne({
+      where: {
+        id: botId,
+        status: BotStatus.ACTIVE,
+        isShop: true,
+      },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден или магазин не активен");
+    }
+
+    const skip = (page - 1) * limit;
+    const queryBuilder = this.productRepository
+      .createQueryBuilder("product")
+      .leftJoinAndSelect("product.category", "category")
+      .where("product.botId = :botId", { botId })
+      .andWhere("product.isActive = :isActive", { isActive: true })
+      .skip(skip)
+      .take(limit);
+
+    // Поиск по названию
+    if (search) {
+      queryBuilder.andWhere("product.name ILIKE :search", {
+        search: `%${search}%`,
+      });
+    }
+
+    // Фильтр по наличию
+    if (inStock !== undefined) {
+      if (inStock) {
+        queryBuilder.andWhere("product.stockQuantity > 0");
+      } else {
+        queryBuilder.andWhere("product.stockQuantity = 0");
+      }
+    }
+
+    // Фильтр по категории (включая подкатегории)
+    if (categoryId) {
+      const category = await this.categoryRepository.findOne({
+        where: { id: categoryId, botId },
+      });
+
+      if (category) {
+        // Получаем все подкатегории
+        const subcategoryIds = await this.getAllSubcategoryIds(
+          categoryId,
+          botId
+        );
+        const allCategoryIds = [categoryId, ...subcategoryIds];
+
+        queryBuilder.andWhere("product.categoryId IN (:...categoryIds)", {
+          categoryIds: allCategoryIds,
+        });
+      } else {
+        // Если категория не найдена, возвращаем пустой результат
+        queryBuilder.andWhere("1 = 0");
+      }
+    }
+
+    // Сортировка
+    if (sortBy) {
+      switch (sortBy) {
+        case "name-asc":
+          queryBuilder.orderBy("product.name", "ASC");
+          break;
+        case "name-desc":
+          queryBuilder.orderBy("product.name", "DESC");
+          break;
+        case "price-asc":
+          queryBuilder.orderBy("product.price", "ASC");
+          break;
+        case "price-desc":
+          queryBuilder.orderBy("product.price", "DESC");
+          break;
+      }
+    } else {
+      queryBuilder.orderBy("product.createdAt", "DESC");
+    }
+
+    const [products, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      products: products.map((product) => ({
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        currency: product.currency,
+        stockQuantity: product.stockQuantity,
+        images: product.images || [],
+        isActive: product.isActive,
+        parameters: product.parameters,
+        categoryId: product.categoryId,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  private async getAllSubcategoryIds(
+    categoryId: string,
+    botId: string
+  ): Promise<string[]> {
+    const subcategoryIds: string[] = [];
+    const queue: string[] = [categoryId];
+
+    while (queue.length > 0) {
+      const currentCategoryId = queue.shift()!;
+      const children = await this.categoryRepository.find({
+        where: { parentId: currentCategoryId, botId },
+      });
+
+      for (const child of children) {
+        subcategoryIds.push(child.id);
+        queue.push(child.id);
+      }
+    }
+
+    return subcategoryIds;
   }
 
   async remove(id: string, userId: string): Promise<void> {
