@@ -275,7 +275,7 @@ export class FlowExecutionService {
         } else {
           this.logger.log(`Сообщение не "/start" - ищем NEW_MESSAGE узел`);
           // Для других сообщений ищем подходящий NEW_MESSAGE узел
-          const newMessageNode = this.findMatchingNewMessageNode(
+          const newMessageNode = await this.findMatchingNewMessageNode(
             activeFlow,
             message
           );
@@ -346,23 +346,41 @@ export class FlowExecutionService {
   }
 
   // Поиск подходящего NEW_MESSAGE узла
-  private findMatchingNewMessageNode(
+  private async findMatchingNewMessageNode(
     flow: BotFlow,
     message: any
-  ): BotFlowNode | null {
+  ): Promise<BotFlowNode | null> {
     this.logger.log(`Ищем NEW_MESSAGE узлы для сообщения: "${message.text}"`);
 
     const newMessageNodes = flow.nodes.filter(
       (node) => node.type === "new_message"
     );
 
+    const executionStatus = await this.getFlowExecutionStatus(
+      flow.botId,
+      message.from.id
+    );
+    if (executionStatus.isExecuting) {
+      return null;
+    }
+
     this.logger.log(`Найдено ${newMessageNodes.length} NEW_MESSAGE узлов`);
+
+    // Фильтруем только те узлы, которые являются начальным условием своей ветки
+    // (не имеют входящих связей от других узлов, кроме START)
+    const startNodes = newMessageNodes.filter((node) =>
+      this.isBranchStartNode(flow, node)
+    );
+
+    this.logger.log(
+      `Найдено ${startNodes.length} NEW_MESSAGE узлов, являющихся начальными условиями веток`
+    );
 
     // Сначала ищем узлы с точным соответствием текста
     const exactMatches: BotFlowNode[] = [];
     const fallbackMatches: BotFlowNode[] = [];
 
-    for (const node of newMessageNodes) {
+    for (const node of startNodes) {
       this.logger.log(
         `Проверяем узел ${node.nodeId}: ${JSON.stringify(node.data?.newMessage)}`
       );
@@ -678,6 +696,47 @@ export class FlowExecutionService {
         error.stack
       );
     }
+  }
+
+  /**
+   * Проверяет, является ли узел начальным условием ветки
+   * (не имеет входящих связей от других узлов, кроме START)
+   */
+  private isBranchStartNode(flow: BotFlow, node: BotFlowNode): boolean {
+    const edges = flow.flowData?.edges || [];
+
+    // Находим все входящие edges для этого узла
+    const incomingEdges = edges.filter((edge) => edge.target === node.nodeId);
+
+    // Если нет входящих связей - узел является начальным условием ветки
+    if (incomingEdges.length === 0) {
+      this.logger.log(
+        `Узел ${node.nodeId} не имеет входящих связей - является начальным условием ветки`
+      );
+      return true;
+    }
+
+    // Проверяем, все ли входящие связи идут только от START узлов
+    const allFromStart = incomingEdges.every((edge) => {
+      const sourceNode = flow.nodes.find((n) => n.nodeId === edge.source);
+      const isFromStart = sourceNode?.type === "start";
+
+      if (!isFromStart) {
+        this.logger.log(
+          `Узел ${node.nodeId} имеет входящую связь от узла ${edge.source} типа "${sourceNode?.type}" - не является начальным условием ветки`
+        );
+      }
+
+      return isFromStart;
+    });
+
+    if (allFromStart) {
+      this.logger.log(
+        `Узел ${node.nodeId} имеет входящие связи только от START узлов - является начальным условием ветки`
+      );
+    }
+
+    return allFromStart;
   }
 
   // Вспомогательный метод для определения типа контента сообщения
