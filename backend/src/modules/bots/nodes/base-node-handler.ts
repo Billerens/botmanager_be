@@ -359,6 +359,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
       this.logger.log(`Переход к узлу: ${nodeId}`);
       if (this.executeNodeCallback) {
         context.currentNode = targetNode;
+        context.reachedThroughTransition = true;
         await this.executeNodeCallback(context);
       }
     } else {
@@ -393,6 +394,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
         );
         if (nextNode && this.executeNodeCallback) {
           context.currentNode = nextNode;
+          context.reachedThroughTransition = true;
           await this.executeNodeCallback(context);
         }
       }
@@ -423,6 +425,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
       );
       if (nextNode && this.executeNodeCallback) {
         context.currentNode = nextNode;
+        context.reachedThroughTransition = true;
         await this.executeNodeCallback(context);
       }
       return;
@@ -452,6 +455,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
         context.currentNode = nextNode;
         context.session.currentNodeId = nextNodeId;
         context.session.lastActivity = new Date();
+        context.reachedThroughTransition = true;
 
         // Выполняем узел
         await this.executeNodeCallback(context);
@@ -514,6 +518,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
       );
       if (nextNode && this.executeNodeCallback) {
         context.currentNode = nextNode;
+        context.reachedThroughTransition = true;
         await this.executeNodeCallback(context);
       }
     } else {
@@ -566,6 +571,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
         context.currentNode = nextNode;
         context.session.currentNodeId = nextNodeId;
         context.session.lastActivity = new Date();
+        context.reachedThroughTransition = true;
 
         // Выполняем узел
         await this.executeNodeCallback(context);

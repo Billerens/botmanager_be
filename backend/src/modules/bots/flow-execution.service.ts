@@ -211,6 +211,7 @@ export class FlowExecutionService {
         message,
         session,
         flow: activeFlow,
+        reachedThroughTransition: false, // По умолчанию узел не достигнут через переход
       };
 
       // Определяем текущий узел
@@ -351,32 +352,11 @@ export class FlowExecutionService {
   ): BotFlowNode | null {
     this.logger.log(`Ищем NEW_MESSAGE узлы для сообщения: "${message.text}"`);
 
-    // Фильтруем только узлы NEW_MESSAGE без входящих edges (стартовые узлы диалога)
-    // Это важно, т.к. при отсутствии активной сессии нужно искать только точки входа в диалог
-    const newMessageNodes = flow.nodes.filter((node) => {
-      if (node.type !== "new_message") {
-        return false;
-      }
-
-      // Проверяем, есть ли входящие edges к этому узлу
-      const hasIncomingEdges = flow.flowData?.edges?.some(
-        (edge) => edge.target === node.nodeId
-      );
-
-      // Если есть входящие edges, значит это не стартовый узел - пропускаем
-      if (hasIncomingEdges) {
-        this.logger.log(
-          `Узел ${node.nodeId} имеет входящие edges - пропускаем (не стартовый узел)`
-        );
-        return false;
-      }
-
-      return true;
-    });
-
-    this.logger.log(
-      `Найдено ${newMessageNodes.length} стартовых NEW_MESSAGE узлов (без входящих edges)`
+    const newMessageNodes = flow.nodes.filter(
+      (node) => node.type === "new_message"
     );
+
+    this.logger.log(`Найдено ${newMessageNodes.length} NEW_MESSAGE узлов`);
 
     // Сначала ищем узлы с точным соответствием текста
     const exactMatches: BotFlowNode[] = [];
@@ -517,6 +497,92 @@ export class FlowExecutionService {
   getEndpointData(botId: string, nodeId: string): EndpointData | undefined {
     const key = `${botId}-${nodeId}`;
     return this.endpointDataStore.get(key);
+  }
+
+  /**
+   * Проверяет, выполняется ли сейчас какая-либо ветка flow для пользователя
+   * @param botId - ID бота
+   * @param userId - ID пользователя
+   * @returns Объект с информацией о состоянии выполнения
+   */
+  async getFlowExecutionStatus(
+    botId: string,
+    userId: string
+  ): Promise<{
+    isExecuting: boolean;
+    currentNodeId?: string;
+    currentNodeType?: string;
+    currentNodeName?: string;
+    isWaitingForEndpoint?: boolean;
+    sessionExists: boolean;
+  }> {
+    const sessionKey = `${botId}-${userId}`;
+    const session = this.userSessions.get(sessionKey);
+
+    // Если сессии нет - точно нет выполнения
+    if (!session) {
+      return {
+        isExecuting: false,
+        sessionExists: false,
+      };
+    }
+
+    // Если currentNodeId не установлен - нет активной ветки (ожидание начала)
+    if (!session.currentNodeId) {
+      return {
+        isExecuting: false,
+        sessionExists: true,
+      };
+    }
+
+    // Есть currentNodeId - значит есть активная ветка
+    // Проверяем, не остановилась ли она на endpoint узле в ожидании данных
+    const activeFlow = await this.botFlowRepository.findOne({
+      where: { botId: botId, status: FlowStatus.ACTIVE },
+      relations: ["nodes"],
+    });
+
+    if (!activeFlow) {
+      return {
+        isExecuting: false,
+        currentNodeId: session.currentNodeId,
+        sessionExists: true,
+      };
+    }
+
+    const currentNode = activeFlow.nodes.find(
+      (node) => node.nodeId === session.currentNodeId
+    );
+
+    if (!currentNode) {
+      return {
+        isExecuting: false,
+        currentNodeId: session.currentNodeId,
+        sessionExists: true,
+      };
+    }
+
+    // Проверяем, остановился ли flow на endpoint узле в ожидании данных
+    const isWaitingForEndpoint =
+      currentNode.type === "endpoint" &&
+      !this.getEndpointData(botId, session.currentNodeId);
+
+    return {
+      isExecuting: true,
+      currentNodeId: session.currentNodeId,
+      currentNodeType: currentNode.type,
+      currentNodeName: currentNode.name,
+      isWaitingForEndpoint,
+      sessionExists: true,
+    };
+  }
+
+  /**
+   * Получает сессию пользователя (для внутреннего использования)
+   */
+  getUserSession(botId: string, userId: string): UserSession | undefined {
+    const sessionKey = `${botId}-${userId}`;
+    return this.userSessions.get(sessionKey);
   }
 
   /**

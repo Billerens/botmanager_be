@@ -9,6 +9,8 @@ export interface FlowContext {
   session: UserSession;
   flow: BotFlow;
   currentNode?: BotFlowNode;
+  // Флаг, указывающий, что узел был достигнут через переход от другого узла
+  reachedThroughTransition?: boolean;
 }
 
 export interface INodeHandler {

@@ -17,41 +17,17 @@ export class NewMessageNodeHandler extends BaseNodeHandler {
   }
 
   async execute(context: FlowContext): Promise<void> {
-    const { currentNode, session, message, flow } = context;
+    const { currentNode, session, message } = context;
 
     this.logger.log(`=== ВЫПОЛНЕНИЕ NEW_MESSAGE УЗЛА ===`);
     this.logger.log(`Узел: ${currentNode.nodeId}`);
     this.logger.log(`Сообщение: "${message.text}"`);
+    this.logger.log(`Текущий узел в сессии: ${session.currentNodeId}`);
 
     if (!currentNode?.data?.newMessage) {
       this.logger.warn("Данные нового сообщения не найдены");
       return;
     }
-
-    // Проверяем, есть ли входящие edges к этому узлу
-    // Если есть, значит узел был достигнут через переход от другого узла
-    // и должен ждать нового сообщения, а не обрабатывать текущее
-    const hasIncomingEdges = flow.flowData?.edges?.some(
-      (edge) => edge.target === currentNode.nodeId
-    );
-
-    if (hasIncomingEdges) {
-      this.logger.log(
-        `Узел ${currentNode.nodeId} имеет входящие edges - это не первый узел в цепочке`
-      );
-      this.logger.log(
-        `Устанавливаем узел как текущий и ждем нового сообщения от пользователя`
-      );
-      // Устанавливаем узел как текущий в сессии и ждем нового сообщения
-      session.currentNodeId = currentNode.nodeId;
-      session.lastActivity = new Date();
-      // Не обрабатываем текущее сообщение - просто ждем следующего
-      return;
-    }
-
-    this.logger.log(
-      `Узел ${currentNode.nodeId} не имеет входящих edges - это первый узел в цепочке, обрабатываем сообщение`
-    );
 
     const newMessageData = currentNode.data.newMessage;
     const { text, contentType, caseSensitive } = newMessageData;
@@ -88,13 +64,30 @@ export class NewMessageNodeHandler extends BaseNodeHandler {
       }
     }
 
-    if (!messageMatches) {
+    // Если узел был достигнут через переход от другого узла,
+    // нужно просто установить его как текущий и ждать следующего сообщения от пользователя
+    if (context.reachedThroughTransition) {
       this.logger.log(
-        `Сообщение не соответствует условиям узла NEW_MESSAGE: ${message.text}`
+        `Узел NEW_MESSAGE достигнут через переход от другого узла. Устанавливаем его как текущий и ждем следующего сообщения.`
       );
+      // Узел уже установлен как текущий в moveToNextNode, просто выходим
+      // При следующем сообщении от пользователя этот узел будет проверен снова
       return;
     }
 
+    // Если сообщение не соответствует условиям узла, значит узел был достигнут через переход
+    // (но флаг не был установлен, что может произойти в некоторых случаях)
+    // В этом случае нужно просто установить узел как текущий и ждать следующего сообщения
+    if (!messageMatches) {
+      this.logger.log(
+        `Сообщение не соответствует условиям узла NEW_MESSAGE: ${message.text}. Устанавливаем узел как текущий и ждем следующего сообщения.`
+      );
+      // Узел уже установлен как текущий в moveToNextNode, просто выходим
+      // При следующем сообщении от пользователя этот узел будет проверен снова
+      return;
+    }
+
+    // Если узел достигнут как начальный (триггер сообщением) И сообщение соответствует условиям
     this.logger.log(
       `Сообщение соответствует условиям узла NEW_MESSAGE: ${message.text}`
     );
