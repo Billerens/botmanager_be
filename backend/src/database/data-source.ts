@@ -16,6 +16,7 @@ import { TimeSlot } from "./entities/time-slot.entity";
 import { Booking } from "./entities/booking.entity";
 import { Cart } from "./entities/cart.entity";
 import { Order } from "./entities/order.entity";
+import { ShopPromocode } from "./entities/shop-promocode.entity";
 
 // Загружаем переменные окружения
 config();
@@ -46,6 +47,7 @@ export const AppDataSource = new DataSource({
     Booking,
     Cart,
     Order,
+    ShopPromocode,
   ],
   migrations: ["src/database/migrations/*.ts"],
   subscribers: ["src/database/subscribers/*.ts"],

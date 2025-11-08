@@ -44,6 +44,13 @@ export enum NotificationType {
   ORDER_STATUS_UPDATED = "order.status_updated",
   ORDER_CANCELLED = "order.cancelled",
 
+  // Промокоды
+  PROMOCODE_CREATED = "promocode.created",
+  PROMOCODE_UPDATED = "promocode.updated",
+  PROMOCODE_DELETED = "promocode.deleted",
+  PROMOCODE_USED = "promocode.used",
+  PROMOCODE_UNLINKED = "promocode.unlinked",
+
   // Аналитика
   STATS_UPDATED = "stats.updated",
 

@@ -27,6 +27,7 @@ import {
   RemoveItemFromCartDto,
 } from "./dto/cart.dto";
 import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
+import { ValidatePromocodeDto, ApplyPromocodeDto } from "../shop-promocodes/dto/shop-promocode.dto";
 
 @ApiTags("Публичные эндпоинты - Корзина")
 @Controller("public")
@@ -186,5 +187,93 @@ export class CartController {
       );
     }
     return this.cartService.clearCart(botId, telegramUsername);
+  }
+
+  @Post("bots/:botId/cart/promocode/validate")
+  @ApiOperation({ summary: "Валидировать промокод для корзины" })
+  @ApiParam({ name: "botId", description: "ID бота" })
+  @ApiResponse({
+    status: 200,
+    description: "Промокод валидирован",
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Промокод недействителен",
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неверный или устаревший initData",
+  })
+  async validatePromocode(
+    @Param("botId") botId: string,
+    @Request() req,
+    @Body() validateDto: ValidatePromocodeDto
+  ) {
+    const telegramUsername = req.telegramUsername;
+    if (!telegramUsername) {
+      throw new UnauthorizedException(
+        "telegramUsername не найден в валидированных данных"
+      );
+    }
+    return this.cartService.validatePromocode(
+      botId,
+      telegramUsername,
+      validateDto.code
+    );
+  }
+
+  @Post("bots/:botId/cart/promocode/apply")
+  @ApiOperation({ summary: "Применить промокод к корзине" })
+  @ApiParam({ name: "botId", description: "ID бота" })
+  @ApiResponse({
+    status: 200,
+    description: "Промокод применен",
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Промокод недействителен",
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неверный или устаревший initData",
+  })
+  async applyPromocode(
+    @Param("botId") botId: string,
+    @Request() req,
+    @Body() applyDto: ApplyPromocodeDto
+  ) {
+    const telegramUsername = req.telegramUsername;
+    if (!telegramUsername) {
+      throw new UnauthorizedException(
+        "telegramUsername не найден в валидированных данных"
+      );
+    }
+    return this.cartService.applyPromocode(
+      botId,
+      telegramUsername,
+      applyDto.code
+    );
+  }
+
+  @Delete("bots/:botId/cart/promocode")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Удалить промокод из корзины" })
+  @ApiParam({ name: "botId", description: "ID бота" })
+  @ApiResponse({
+    status: 200,
+    description: "Промокод удален",
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Неверный или устаревший initData",
+  })
+  async removePromocode(@Param("botId") botId: string, @Request() req) {
+    const telegramUsername = req.telegramUsername;
+    if (!telegramUsername) {
+      throw new UnauthorizedException(
+        "telegramUsername не найден в валидированных данных"
+      );
+    }
+    return this.cartService.removePromocode(botId, telegramUsername);
   }
 }

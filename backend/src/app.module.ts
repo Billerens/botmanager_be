@@ -27,6 +27,7 @@ import { CartModule } from "./modules/cart/cart.module";
 import { OrdersModule } from "./modules/orders/orders.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { CategoriesModule } from "./modules/categories/categories.module";
+import { ShopPromocodesModule } from "./modules/shop-promocodes/shop-promocodes.module";
 import { HealthModule } from "./health/health.module";
 
 @Module({
@@ -79,6 +80,7 @@ import { HealthModule } from "./health/health.module";
     OrdersModule, // Заказы для магазина
     ProductsModule, // Товары для магазина
     CategoriesModule, // Категории товаров
+    ShopPromocodesModule, // Промокоды для магазина
     HealthModule, // Health check endpoints
   ],
 })

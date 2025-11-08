@@ -34,6 +34,9 @@ export class Cart {
   @Column({ type: "json", default: "[]" })
   items: CartItem[];
 
+  @Column({ nullable: true })
+  appliedPromocodeId: string | null; // ID примененного промокода
+
   @CreateDateColumn()
   createdAt: Date;
 
