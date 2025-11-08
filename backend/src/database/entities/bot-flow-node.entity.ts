@@ -26,6 +26,7 @@ export enum NodeType {
   INTEGRATION = "integration",
   ENDPOINT = "endpoint",
   BROADCAST = "broadcast",
+  GROUP = "group",
 }
 
 export enum MessageNodeType {

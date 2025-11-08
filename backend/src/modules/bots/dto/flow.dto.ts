@@ -24,6 +24,7 @@ export enum FlowNodeType {
   INTEGRATION = "integration",
   ENDPOINT = "endpoint",
   BROADCAST = "broadcast",
+  GROUP = "group",
 }
 
 export class KeyboardButtonDto {
@@ -254,6 +255,14 @@ export class FlowNodeDataDto {
     activityDate?: string;
     chatType?: "private" | "group" | "supergroup" | "channel";
   };
+
+  @IsOptional()
+  @IsObject()
+  group?: {
+    title?: string;
+    width?: number;
+    height?: number;
+  };
 }
 
 export class FlowNodeDto {
@@ -269,6 +278,14 @@ export class FlowNodeDto {
   @ValidateNested()
   @Type(() => FlowNodeDataDto)
   data: FlowNodeDataDto;
+
+  @IsOptional()
+  @IsString()
+  parentNode?: string;
+
+  @IsOptional()
+  @IsObject()
+  style?: any;
 }
 
 export class FlowEdgeDto {

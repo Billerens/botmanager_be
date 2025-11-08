@@ -240,6 +240,7 @@ export class BotFlowsService {
       new_message: NodeType.NEW_MESSAGE,
       endpoint: NodeType.ENDPOINT,
       broadcast: NodeType.BROADCAST,
+      group: NodeType.GROUP,
     };
 
     if (!typeMap[type]) {
