@@ -298,17 +298,39 @@ export class BotsService {
       throw new NotFoundException("Бот не найден или магазин не активен");
     }
 
-    // Загружаем активные категории для магазина
+    // Загружаем активные категории для магазина с учетом иерархии
     const categories = await this.categoryRepository.find({
       where: {
         botId,
         isActive: true,
       },
+      relations: ["parent", "children"],
       order: {
         sortOrder: "ASC",
         name: "ASC",
       },
     });
+
+    // Строим дерево категорий
+    const categoryTree = this.buildCategoryTree(categories);
+
+    // Функция для рекурсивного преобразования дерева в нужный формат
+    const mapCategoryTree = (cats: Category[]): any[] => {
+      return cats.map((cat) => {
+        const categoryData: any = {
+          id: cat.id,
+          name: cat.name,
+          description: cat.description,
+          imageUrl: cat.imageUrl,
+          isActive: cat.isActive,
+        };
+        // Добавляем children только если они есть
+        if (cat.children && cat.children.length > 0) {
+          categoryData.children = mapCategoryTree(cat.children);
+        }
+        return categoryData;
+      });
+    };
 
     // Возвращаем только публичные данные, необходимые для магазина
     return {
@@ -322,12 +344,7 @@ export class BotsService {
       shopButtonTypes: bot.shopButtonTypes,
       shopButtonSettings: bot.shopButtonSettings,
       shopUrl: bot.shopUrl,
-      categories: categories.map((cat) => ({
-        id: cat.id,
-        name: cat.name,
-        description: cat.description,
-        isActive: cat.isActive,
-      })),
+      categories: mapCategoryTree(categoryTree),
     };
   }
 
@@ -714,5 +731,38 @@ export class BotsService {
         );
       }
     }
+  }
+
+  /**
+   * Строит дерево категорий из плоского списка
+   */
+  private buildCategoryTree(categories: Category[]): Category[] {
+    const categoryMap = new Map<string, Category & { children: Category[] }>();
+    const rootCategories: Category[] = [];
+
+    // Создаем карту категорий
+    for (const category of categories) {
+      const categoryWithChildren = Object.assign(category, { children: [] });
+      categoryMap.set(category.id, categoryWithChildren);
+    }
+
+    // Строим дерево
+    for (const category of categories) {
+      const categoryNode = categoryMap.get(category.id)!;
+
+      if (category.parentId) {
+        const parent = categoryMap.get(category.parentId);
+        if (parent) {
+          if (!parent.children) {
+            parent.children = [];
+          }
+          parent.children.push(categoryNode);
+        }
+      } else {
+        rootCategories.push(categoryNode);
+      }
+    }
+
+    return rootCategories;
   }
 }

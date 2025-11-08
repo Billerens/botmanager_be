@@ -78,13 +78,23 @@ export class PublicShopBotResponseDto {
   shopUrl?: string;
 
   @ApiProperty({
-    description: "Список категорий магазина",
+    description: "Список категорий магазина (с иерархией)",
     example: [
       {
         id: "category-1",
         name: "Электроника",
         description: "Электронные товары",
+        imageUrl: "https://example.com/electronics.jpg",
         isActive: true,
+        children: [
+          {
+            id: "category-2",
+            name: "Смартфоны",
+            description: "Мобильные телефоны",
+            imageUrl: "https://example.com/smartphones.jpg",
+            isActive: true,
+          },
+        ],
       },
     ],
     required: false,
@@ -93,7 +103,16 @@ export class PublicShopBotResponseDto {
     id: string;
     name: string;
     description?: string;
+    imageUrl?: string;
     isActive: boolean;
+    children?: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      imageUrl?: string;
+      isActive: boolean;
+      children?: any[];
+    }>;
   }>;
 }
 
