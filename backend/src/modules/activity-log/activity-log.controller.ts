@@ -65,4 +65,23 @@ export class ActivityLogController {
     const userId = req.user.id;
     return this.activityLogService.getStats(botId, userId);
   }
+
+  @Get("types")
+  @ApiOperation({
+    summary: "Получить список доступных типов активности",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Список типов активности получен",
+    schema: {
+      type: "array",
+      items: {
+        type: "string",
+        enum: Object.values(ActivityType),
+      },
+    },
+  })
+  async getActivityTypes() {
+    return Object.values(ActivityType);
+  }
 }
