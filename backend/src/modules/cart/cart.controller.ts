@@ -60,7 +60,13 @@ export class CartController {
         "telegramUsername не найден в валидированных данных"
       );
     }
+    
+    console.log(`[CART CONTROLLER] getCart called - botId: ${botId}, telegramUsername: ${telegramUsername}`);
+    console.log(`[CART CONTROLLER] User-Agent: ${req.headers['user-agent'] || 'unknown'}`);
+    
     const cart = await this.cartService.getCart(botId, telegramUsername);
+    
+    console.log(`[CART CONTROLLER] Cart loaded - cartId: ${cart.id}, appliedPromocodeId: ${cart.appliedPromocodeId || 'null'}`);
     
     // Получаем информацию о примененном промокоде
     const promocodeInfo = await this.cartService.getAppliedPromocodeInfo(
@@ -68,8 +74,13 @@ export class CartController {
       cart
     );
 
-    // Возвращаем корзину с информацией о промокоде
-    return {
+    console.log(`[CART CONTROLLER] PromocodeInfo result:`, {
+      hasPromocodeInfo: !!promocodeInfo,
+      promocodeCode: promocodeInfo?.promocode?.code || 'null',
+      discount: promocodeInfo?.discount || 'null',
+    });
+
+    const response = {
       ...cart,
       appliedPromocode: promocodeInfo
         ? {
@@ -78,6 +89,10 @@ export class CartController {
           }
         : null,
     };
+
+    console.log(`[CART CONTROLLER] Response appliedPromocode:`, JSON.stringify(response.appliedPromocode));
+
+    return response;
   }
 
   @Post("bots/:botId/cart/items")

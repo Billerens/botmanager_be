@@ -337,20 +337,26 @@ export class ShopPromocodesService {
     discount?: number;
     message?: string;
   }> {
+    this.logger.log(`[PROMOCODE SERVICE] validatePromocode called - botId: ${botId}, code: ${code}, cartId: ${cart.id}, cart items count: ${cart.items?.length || 0}`);
+    
     const promocode = await this.promocodeRepository.findOne({
       where: { botId, code },
       relations: ["category", "product"],
     });
 
     if (!promocode) {
+      this.logger.warn(`[PROMOCODE SERVICE] Promocode not found - botId: ${botId}, code: ${code}`);
       return {
         isValid: false,
         message: "Промокод не найден",
       };
     }
 
+    this.logger.log(`[PROMOCODE SERVICE] Promocode found - id: ${promocode.id}, type: ${promocode.type}, value: ${promocode.value}, applicableTo: ${promocode.applicableTo}, isActive: ${promocode.isActive}, isAvailable: ${promocode.isAvailable}`);
+
     // Проверяем доступность промокода
     if (!promocode.isAvailable) {
+      this.logger.warn(`[PROMOCODE SERVICE] Promocode is not available - id: ${promocode.id}, code: ${promocode.code}`);
       return {
         isValid: false,
         message: "Промокод неактивен или истек срок действия",
@@ -359,12 +365,14 @@ export class ShopPromocodesService {
 
     // Проверяем применимость к корзине
     if (promocode.applicableTo === ShopPromocodeApplicableTo.CART) {
+      this.logger.log(`[PROMOCODE SERVICE] Promocode applicable to CART - cart totalPrice: ${cart.totalPrice}`);
       // Промокод применим ко всей корзине
       const discount = this.calculateDiscount(
         promocode,
         cart.totalPrice,
         cart.items
       );
+      this.logger.log(`[PROMOCODE SERVICE] Calculated discount for CART: ${discount}`);
       return {
         isValid: true,
         promocode,
@@ -427,12 +435,13 @@ export class ShopPromocodesService {
         (sum, item) => sum + item.price * item.quantity,
         0
       );
+      this.logger.log(`[PROMOCODE SERVICE] Category items found: ${categoryItems.length}, categoryTotal: ${categoryTotal}`);
       const discount = this.calculateDiscount(
         promocode,
         categoryTotal,
         categoryItems
       );
-
+      this.logger.log(`[PROMOCODE SERVICE] Calculated discount for CATEGORY: ${discount}`);
       return {
         isValid: true,
         promocode,
@@ -455,10 +464,11 @@ export class ShopPromocodesService {
       }
 
       const productTotal = productItem.price * productItem.quantity;
+      this.logger.log(`[PROMOCODE SERVICE] Product item found - productTotal: ${productTotal}`);
       const discount = this.calculateDiscount(promocode, productTotal, [
         productItem,
       ]);
-
+      this.logger.log(`[PROMOCODE SERVICE] Calculated discount for PRODUCT: ${discount}`);
       return {
         isValid: true,
         promocode,
@@ -466,6 +476,7 @@ export class ShopPromocodesService {
       };
     }
 
+    this.logger.warn(`[PROMOCODE SERVICE] Promocode not applicable to cart - applicableTo: ${promocode.applicableTo}`);
     return {
       isValid: false,
       message: "Промокод не применим к данной корзине",
@@ -480,13 +491,20 @@ export class ShopPromocodesService {
     totalPrice: number,
     items: any[]
   ): number {
+    this.logger.log(`[PROMOCODE SERVICE] calculateDiscount - type: ${promocode.type}, value: ${promocode.value}, totalPrice: ${totalPrice}, items count: ${items.length}`);
+    
+    let discount: number;
     if (promocode.type === ShopPromocodeType.FIXED) {
       // Фиксированная скидка - не может превышать сумму товаров
-      return Math.min(Number(promocode.value), totalPrice);
+      discount = Math.min(Number(promocode.value), totalPrice);
+      this.logger.log(`[PROMOCODE SERVICE] Fixed discount calculated: ${discount} (min of ${promocode.value} and ${totalPrice})`);
     } else {
       // Процентная скидка
-      return (totalPrice * Number(promocode.value)) / 100;
+      discount = (totalPrice * Number(promocode.value)) / 100;
+      this.logger.log(`[PROMOCODE SERVICE] Percentage discount calculated: ${discount} (${promocode.value}% of ${totalPrice})`);
     }
+    
+    return discount;
   }
 
   /**
