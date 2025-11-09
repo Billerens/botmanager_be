@@ -7,6 +7,11 @@ import { TelegramService } from "../../telegram/telegram.service";
 import { BotsService } from "../bots.service";
 import { CustomLoggerService } from "../../../common/logger.service";
 import { MessagesService } from "../../messages/messages.service";
+import { ActivityLogService } from "../../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../../database/entities/activity-log.entity";
 import {
   MessageType,
   MessageContentType,
@@ -25,7 +30,8 @@ export abstract class BaseNodeHandler implements INodeHandler {
     protected readonly telegramService: TelegramService,
     protected readonly botsService: BotsService,
     protected readonly logger: CustomLoggerService,
-    protected readonly messagesService: MessagesService
+    protected readonly messagesService: MessagesService,
+    protected readonly activityLogService: ActivityLogService
   ) {}
 
   setExecuteNodeCallback(
@@ -84,7 +90,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
         };
       }
 
-      await this.messagesService.create({
+      const savedMessage = await this.messagesService.create({
         botId: bot.id,
         telegramMessageId: telegramResponse.message_id,
         telegramChatId: chatId,
@@ -107,8 +113,48 @@ export abstract class BaseNodeHandler implements INodeHandler {
       this.logger.log(
         `Исходящее сообщение отправлено и сохранено для чата ${chatId}`
       );
+
+      // Логируем отправку сообщения
+      if (bot.ownerId) {
+        this.activityLogService
+          .create({
+            type: ActivityType.MESSAGE_SENT,
+            level: ActivityLevel.SUCCESS,
+            message: `Сообщение отправлено в чат ${chatId}`,
+            userId: bot.ownerId,
+            botId: bot.id,
+            metadata: {
+              chatId,
+              messageId: savedMessage.id,
+              telegramMessageId: telegramResponse.message_id,
+              hasKeyboard: !!processedKeyboard,
+            },
+          })
+          .catch((error) => {
+            this.logger.error("Ошибка логирования отправки сообщения:", error);
+          });
+      }
     } else {
       this.logger.error(`Ошибка отправки сообщения в чат ${chatId}`);
+
+      // Логируем ошибку отправки сообщения
+      if (bot.ownerId) {
+        this.activityLogService
+          .create({
+            type: ActivityType.MESSAGE_FAILED,
+            level: ActivityLevel.ERROR,
+            message: `Ошибка отправки сообщения в чат ${chatId}`,
+            userId: bot.ownerId,
+            botId: bot.id,
+            metadata: {
+              chatId,
+              errorMessage: "Не удалось отправить сообщение через Telegram API",
+            },
+          })
+          .catch((error) => {
+            this.logger.error("Ошибка логирования ошибки отправки:", error);
+          });
+      }
     }
   }
 

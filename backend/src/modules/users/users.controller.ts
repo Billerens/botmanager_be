@@ -117,8 +117,8 @@ export class UsersController {
     description: "Пользователь не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
-  async update(@Param("id") id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
+  async update(@Param("id") id: string, @Body() updateUserDto: UpdateUserDto, @Request() req) {
+    return this.usersService.update(id, updateUserDto, req.user.id);
   }
 
   @Patch(":id/role")
@@ -137,9 +137,10 @@ export class UsersController {
   })
   async updateRole(
     @Param("id") id: string,
-    @Body() updateUserRoleDto: UpdateUserRoleDto
+    @Body() updateUserRoleDto: UpdateUserRoleDto,
+    @Request() req
   ) {
-    return this.usersService.updateRole(id, updateUserRoleDto);
+    return this.usersService.updateRole(id, updateUserRoleDto, req.user.id);
   }
 
   @Patch(":id/toggle-active")
@@ -156,8 +157,8 @@ export class UsersController {
     description: "Пользователь не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
-  async toggleActive(@Param("id") id: string) {
-    return this.usersService.toggleActive(id);
+  async toggleActive(@Param("id") id: string, @Request() req) {
+    return this.usersService.toggleActive(id, req.user.id);
   }
 
   @Delete(":id")
@@ -174,7 +175,7 @@ export class UsersController {
     description: "Пользователь не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
-  async remove(@Param("id") id: string) {
-    return this.usersService.delete(id);
+  async remove(@Param("id") id: string, @Request() req) {
+    return this.usersService.delete(id, req.user.id);
   }
 }

@@ -2,18 +2,27 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 
 import { User, UserRole } from "../../database/entities/user.entity";
 import { UpdateUserDto, UpdateUserRoleDto } from "./dto/user.dto";
+import { ActivityLogService } from "../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../database/entities/activity-log.entity";
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
-    private userRepository: Repository<User>
+    private userRepository: Repository<User>,
+    private activityLogService: ActivityLogService
   ) {}
 
   async findAll(): Promise<User[]> {
@@ -59,20 +68,47 @@ export class UsersService {
     return this.userRepository.findOne({ where: { telegramId } });
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
+  async update(id: string, updateUserDto: UpdateUserDto, updatedByUserId?: string): Promise<User> {
     const user = await this.findOne(id);
+    const oldData = {
+      firstName: user.firstName,
+      lastName: user.lastName,
+      telegramUsername: user.telegramUsername,
+    };
 
     // Обновляем только переданные поля
     Object.assign(user, updateUserDto);
 
-    return this.userRepository.save(user);
+    const updatedUser = await this.userRepository.save(user);
+
+    // Логируем обновление пользователя
+    this.activityLogService
+      .create({
+        type: ActivityType.USER_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Обновлен пользователь ${updatedUser.firstName} ${updatedUser.lastName} (${updatedUser.telegramId})`,
+        userId: updatedByUserId || id,
+        metadata: {
+          targetUserId: id,
+          targetUserTelegramId: updatedUser.telegramId,
+          changes: updateUserDto,
+          oldData,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования обновления пользователя:", error);
+      });
+
+    return updatedUser;
   }
 
   async updateRole(
     id: string,
-    updateUserRoleDto: UpdateUserRoleDto
+    updateUserRoleDto: UpdateUserRoleDto,
+    updatedByUserId?: string
   ): Promise<User> {
     const user = await this.findOne(id);
+    const oldRole = user.role;
 
     // Проверяем, что роль валидна
     if (!Object.values(UserRole).includes(updateUserRoleDto.role)) {
@@ -80,18 +116,84 @@ export class UsersService {
     }
 
     user.role = updateUserRoleDto.role;
-    return this.userRepository.save(user);
+    const updatedUser = await this.userRepository.save(user);
+
+    // Логируем изменение роли
+    this.activityLogService
+      .create({
+        type: ActivityType.USER_ROLE_CHANGED,
+        level: ActivityLevel.WARNING,
+        message: `Изменена роль пользователя ${updatedUser.firstName} ${updatedUser.lastName}: ${oldRole} → ${updateUserRoleDto.role}`,
+        userId: updatedByUserId || id,
+        metadata: {
+          targetUserId: id,
+          targetUserTelegramId: updatedUser.telegramId,
+          oldRole,
+          newRole: updateUserRoleDto.role,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования изменения роли:", error);
+      });
+
+    return updatedUser;
   }
 
-  async toggleActive(id: string): Promise<User> {
+  async toggleActive(id: string, updatedByUserId?: string): Promise<User> {
     const user = await this.findOne(id);
+    const oldStatus = user.isActive;
     user.isActive = !user.isActive;
-    return this.userRepository.save(user);
+    const updatedUser = await this.userRepository.save(user);
+
+    // Логируем переключение активности
+    this.activityLogService
+      .create({
+        type: ActivityType.USER_UPDATED,
+        level: oldStatus ? ActivityLevel.WARNING : ActivityLevel.SUCCESS,
+        message: `Статус активности пользователя ${updatedUser.firstName} ${updatedUser.lastName} изменен: ${oldStatus ? "активен" : "неактивен"} → ${updatedUser.isActive ? "активен" : "неактивен"}`,
+        userId: updatedByUserId || id,
+        metadata: {
+          targetUserId: id,
+          targetUserTelegramId: updatedUser.telegramId,
+          oldStatus,
+          newStatus: updatedUser.isActive,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования переключения активности:", error);
+      });
+
+    return updatedUser;
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, deletedByUserId?: string): Promise<void> {
     const user = await this.findOne(id);
+    const userData = {
+      id: user.id,
+      telegramId: user.telegramId,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+    };
+
     await this.userRepository.remove(user);
+
+    // Логируем удаление пользователя
+    this.activityLogService
+      .create({
+        type: ActivityType.USER_DELETED,
+        level: ActivityLevel.WARNING,
+        message: `Удален пользователь ${userData.firstName} ${userData.lastName} (${userData.telegramId})`,
+        userId: deletedByUserId,
+        metadata: {
+          deletedUserId: userData.id,
+          deletedUserTelegramId: userData.telegramId,
+          deletedUserRole: userData.role,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования удаления пользователя:", error);
+      });
   }
 
   async getStats(): Promise<{

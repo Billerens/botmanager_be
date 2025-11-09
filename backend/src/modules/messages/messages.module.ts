@@ -5,11 +5,13 @@ import { MessagesService } from "./messages.service";
 import { Message } from "../../database/entities/message.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import { TelegramModule } from "../telegram/telegram.module";
+import { ActivityLogModule } from "../activity-log/activity-log.module";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Message, Bot]),
     forwardRef(() => TelegramModule),
+    ActivityLogModule,
   ],
   controllers: [MessagesController],
   providers: [MessagesService],

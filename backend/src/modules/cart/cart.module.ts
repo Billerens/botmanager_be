@@ -13,6 +13,7 @@ import { BotsModule } from "../bots/bots.module";
 import { TelegramModule } from "../telegram/telegram.module";
 import { WebSocketModule } from "../websocket/websocket.module";
 import { ShopPromocodesModule } from "../shop-promocodes/shop-promocodes.module";
+import { ActivityLogModule } from "../activity-log/activity-log.module";
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { ShopPromocodesModule } from "../shop-promocodes/shop-promocodes.module"
     TelegramModule,
     WebSocketModule,
     ShopPromocodesModule,
+    ActivityLogModule,
   ],
   controllers: [CartController],
   providers: [

@@ -13,6 +13,8 @@ import * as crypto from "crypto";
 import { User, UserRole } from "../../database/entities/user.entity";
 import { UsersService } from "../users/users.service";
 import { TwoFactorService } from "./two-factor.service";
+import { ActivityLogService } from "../activity-log/activity-log.service";
+import { ActivityType, ActivityLevel } from "../../database/entities/activity-log.entity";
 import {
   LoginDto,
   RegisterDto,
@@ -37,7 +39,8 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private telegramValidationService: TelegramValidationService,
-    private twoFactorService: TwoFactorService
+    private twoFactorService: TwoFactorService,
+    private activityLogService: ActivityLogService
   ) {}
 
   async register(
@@ -134,6 +137,22 @@ export class AuthService {
     this.logger.log(`=== РЕГИСТРАЦИЯ ЗАВЕРШЕНА ===`);
     this.logger.log(`Общее время выполнения: ${totalDuration}ms`);
     this.logger.log(`Пользователь ID: ${savedUser.id}`);
+
+    // Логируем регистрацию пользователя
+    this.activityLogService.create({
+      type: ActivityType.USER_REGISTERED,
+      level: ActivityLevel.SUCCESS,
+      message: `Пользователь ${firstName} ${lastName} (${telegramId}) зарегистрирован`,
+      userId: savedUser.id,
+      metadata: {
+        telegramId,
+        telegramUsername,
+        firstName,
+        lastName,
+      },
+    }).catch((error) => {
+      this.logger.error("Ошибка логирования регистрации:", error);
+    });
 
     return {
       user: savedUser,
@@ -291,6 +310,20 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload);
 
+    // Логируем вход пользователя
+    this.activityLogService.create({
+      type: ActivityType.USER_LOGIN,
+      level: ActivityLevel.INFO,
+      message: `Пользователь ${user.firstName} ${user.lastName} (${user.telegramId}) вошел в систему`,
+      userId: user.id,
+      metadata: {
+        telegramId: user.telegramId,
+        telegramUsername: user.telegramUsername,
+      },
+    }).catch((error) => {
+      this.logger.error("Ошибка логирования входа:", error);
+    });
+
     return {
       user,
       accessToken,
@@ -338,6 +371,19 @@ export class AuthService {
     // Обновляем пароль
     user.password = newPassword;
     await this.userRepository.save(user);
+
+    // Логируем смену пароля
+    this.activityLogService.create({
+      type: ActivityType.USER_UPDATED,
+      level: ActivityLevel.INFO,
+      message: `Пользователь ${user.firstName} ${user.lastName} изменил пароль`,
+      userId: user.id,
+      metadata: {
+        action: "password_change",
+      },
+    }).catch((error) => {
+      this.logger.error("Ошибка логирования смены пароля:", error);
+    });
   }
 
   async requestPasswordReset(telegramId: string): Promise<void> {
@@ -381,6 +427,19 @@ export class AuthService {
     user.passwordResetToken = null;
     user.passwordResetExpires = null;
     await this.userRepository.save(user);
+
+    // Логируем сброс пароля
+    this.activityLogService.create({
+      type: ActivityType.USER_PASSWORD_RESET,
+      level: ActivityLevel.WARNING,
+      message: `Пароль пользователя ${user.firstName} ${user.lastName} (${user.telegramId}) сброшен`,
+      userId: user.id,
+      metadata: {
+        telegramId: user.telegramId,
+      },
+    }).catch((error) => {
+      this.logger.error("Ошибка логирования сброса пароля:", error);
+    });
   }
 
   async verifyTelegramWithCode(
@@ -417,6 +476,20 @@ export class AuthService {
     user.telegramVerificationCode = null;
     user.telegramVerificationExpires = null;
     await this.userRepository.save(user);
+
+    // Логируем верификацию Telegram
+    this.activityLogService.create({
+      type: ActivityType.USER_TELEGRAM_VERIFIED,
+      level: ActivityLevel.SUCCESS,
+      message: `Telegram пользователя ${user.firstName} ${user.lastName} (${user.telegramId}) верифицирован`,
+      userId: user.id,
+      metadata: {
+        telegramId: user.telegramId,
+        telegramUsername: user.telegramUsername,
+      },
+    }).catch((error) => {
+      this.logger.error("Ошибка логирования верификации Telegram:", error);
+    });
 
     // Отправляем приветственное сообщение
     await this.telegramValidationService.sendWelcomeMessage(
@@ -513,7 +586,23 @@ export class AuthService {
       user.lastName = updateData.lastName;
     }
 
-    return await this.userRepository.save(user);
+    const updatedUser = await this.userRepository.save(user);
+
+    // Логируем обновление профиля
+    this.activityLogService.create({
+      type: ActivityType.USER_UPDATED,
+      level: ActivityLevel.INFO,
+      message: `Пользователь ${updatedUser.firstName} ${updatedUser.lastName} обновил профиль`,
+      userId: updatedUser.id,
+      metadata: {
+        action: "profile_update",
+        changes: updateData,
+      },
+    }).catch((error) => {
+      this.logger.error("Ошибка логирования обновления профиля:", error);
+    });
+
+    return updatedUser;
   }
 
   /**
@@ -561,5 +650,30 @@ export class AuthService {
       user,
       accessToken,
     };
+  }
+
+  async logout(userId: string): Promise<{ message: string }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException("Пользователь не найден");
+    }
+
+    // Логируем выход пользователя
+    this.activityLogService
+      .create({
+        type: ActivityType.USER_LOGOUT,
+        level: ActivityLevel.INFO,
+        message: `Пользователь ${user.firstName} ${user.lastName} (${user.telegramId}) вышел из системы`,
+        userId: user.id,
+        metadata: {
+          telegramId: user.telegramId,
+          telegramUsername: user.telegramUsername,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования выхода:", error);
+      });
+
+    return { message: "Выход выполнен успешно" };
   }
 }

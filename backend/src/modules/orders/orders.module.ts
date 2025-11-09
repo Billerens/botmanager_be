@@ -13,6 +13,7 @@ import { BotsModule } from "../bots/bots.module";
 import { WebSocketModule } from "../websocket/websocket.module";
 import { ShopPromocodesModule } from "../shop-promocodes/shop-promocodes.module";
 import { CartModule } from "../cart/cart.module";
+import { ActivityLogModule } from "../activity-log/activity-log.module";
 import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
 
 @Module({
@@ -22,6 +23,7 @@ import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
     WebSocketModule,
     forwardRef(() => ShopPromocodesModule),
     forwardRef(() => CartModule),
+    ActivityLogModule,
   ],
   controllers: [PublicOrdersController, OrdersController],
   providers: [

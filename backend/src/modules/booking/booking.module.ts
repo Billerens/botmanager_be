@@ -32,6 +32,7 @@ import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
 import { TelegramInitDataValidationService } from "../../common/telegram-initdata-validation.service";
 import { BotsModule } from "../bots/bots.module";
 import { WebSocketModule } from "../websocket/websocket.module";
+import { ActivityLogModule } from "../activity-log/activity-log.module";
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { WebSocketModule } from "../websocket/websocket.module";
     QueueModule,
     forwardRef(() => BotsModule),
     WebSocketModule,
+    ActivityLogModule,
   ],
   controllers: [
     SpecialistsController,

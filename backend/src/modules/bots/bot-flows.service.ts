@@ -13,6 +13,11 @@ import {
 } from "../../database/entities/bot-flow-node.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import { CreateFlowDto, UpdateFlowDto, FlowDataDto } from "./dto/flow.dto";
+import { ActivityLogService } from "../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../database/entities/activity-log.entity";
 
 @Injectable()
 export class BotFlowsService {
@@ -22,7 +27,8 @@ export class BotFlowsService {
     @InjectRepository(BotFlowNode)
     private botFlowNodeRepository: Repository<BotFlowNode>,
     @InjectRepository(Bot)
-    private botRepository: Repository<Bot>
+    private botRepository: Repository<Bot>,
+    private activityLogService: ActivityLogService
   ) {}
 
   async createFlow(
@@ -54,6 +60,24 @@ export class BotFlowsService {
 
     // Создаем узлы flow
     await this.createFlowNodes(savedFlow.id, createFlowDto.flowData.nodes);
+
+    // Логируем создание flow
+    this.activityLogService
+      .create({
+        type: ActivityType.FLOW_CREATED,
+        level: ActivityLevel.SUCCESS,
+        message: `Создан диалог "${savedFlow.name}"`,
+        userId,
+        botId,
+        metadata: {
+          flowId: savedFlow.id,
+          flowName: savedFlow.name,
+          nodesCount: createFlowDto.flowData.nodes?.length || 0,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования создания flow:", error);
+      });
 
     return savedFlow;
   }
@@ -138,10 +162,51 @@ export class BotFlowsService {
       );
       await this.createFlowNodes(savedFlow.id, updateFlowDto.flowData.nodes);
 
+      // Логируем обновление flow
+      this.activityLogService
+        .create({
+          type: ActivityType.FLOW_UPDATED,
+          level: ActivityLevel.INFO,
+          message: `Обновлен диалог "${savedFlow.name}"`,
+          userId,
+          botId,
+          metadata: {
+            flowId: savedFlow.id,
+            flowName: savedFlow.name,
+            nodesCount: updateFlowDto.flowData.nodes?.length || 0,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования обновления flow:", error);
+        });
+
       return savedFlow;
     }
 
-    return this.botFlowRepository.save(flow);
+    const updatedFlow = await this.botFlowRepository.save(flow);
+
+    // Логируем обновление flow (без изменения узлов)
+    this.activityLogService
+      .create({
+        type: ActivityType.FLOW_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Обновлен диалог "${updatedFlow.name}"`,
+        userId,
+        botId,
+        metadata: {
+          flowId: updatedFlow.id,
+          flowName: updatedFlow.name,
+          changes: {
+            name: updateFlowDto.name,
+            description: updateFlowDto.description,
+          },
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования обновления flow:", error);
+      });
+
+    return updatedFlow;
   }
 
   async removeFlow(
@@ -151,11 +216,33 @@ export class BotFlowsService {
   ): Promise<void> {
     const flow = await this.findOneFlow(flowId, botId, userId);
 
+    const flowData = {
+      id: flow.id,
+      name: flow.name,
+    };
+
     // Удаляем узлы flow
     await this.botFlowNodeRepository.delete({ flowId: flow.id });
 
     // Удаляем flow
     await this.botFlowRepository.remove(flow);
+
+    // Логируем удаление flow
+    this.activityLogService
+      .create({
+        type: ActivityType.FLOW_DELETED,
+        level: ActivityLevel.WARNING,
+        message: `Удален диалог "${flowData.name}"`,
+        userId,
+        botId,
+        metadata: {
+          flowId: flowData.id,
+          flowName: flowData.name,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования удаления flow:", error);
+      });
   }
 
   async activateFlow(
@@ -173,7 +260,26 @@ export class BotFlowsService {
 
     // Активируем текущий flow
     flow.status = FlowStatus.ACTIVE;
-    return this.botFlowRepository.save(flow);
+    const savedFlow = await this.botFlowRepository.save(flow);
+
+    // Логируем активацию flow
+    this.activityLogService
+      .create({
+        type: ActivityType.FLOW_ACTIVATED,
+        level: ActivityLevel.SUCCESS,
+        message: `Активирован диалог "${savedFlow.name}"`,
+        userId,
+        botId,
+        metadata: {
+          flowId: savedFlow.id,
+          flowName: savedFlow.name,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования активации flow:", error);
+      });
+
+    return savedFlow;
   }
 
   async deactivateFlow(
@@ -185,7 +291,26 @@ export class BotFlowsService {
 
     // Деактивируем flow
     flow.status = FlowStatus.INACTIVE;
-    return this.botFlowRepository.save(flow);
+    const savedFlow = await this.botFlowRepository.save(flow);
+
+    // Логируем деактивацию flow
+    this.activityLogService
+      .create({
+        type: ActivityType.FLOW_DEACTIVATED,
+        level: ActivityLevel.WARNING,
+        message: `Деактивирован диалог "${savedFlow.name}"`,
+        userId,
+        botId,
+        metadata: {
+          flowId: savedFlow.id,
+          flowName: savedFlow.name,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования деактивации flow:", error);
+      });
+
+    return savedFlow;
   }
 
   private async createFlowNodes(flowId: string, nodes: any[]): Promise<void> {

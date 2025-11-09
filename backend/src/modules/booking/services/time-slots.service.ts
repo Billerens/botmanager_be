@@ -15,12 +15,18 @@ import {
   Booking,
   BookingStatus,
 } from "../../../database/entities/booking.entity";
+import { Bot } from "../../../database/entities/bot.entity";
 import {
   CreateTimeSlotDto,
   UpdateTimeSlotDto,
   GenerateTimeSlotsDto,
   GetAvailableSlotsDto,
 } from "../dto/booking.dto";
+import { ActivityLogService } from "../../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../../database/entities/activity-log.entity";
 
 @Injectable()
 export class TimeSlotsService {
@@ -32,7 +38,10 @@ export class TimeSlotsService {
     @InjectRepository(Service)
     private serviceRepository: Repository<Service>,
     @InjectRepository(Booking)
-    private bookingRepository: Repository<Booking>
+    private bookingRepository: Repository<Booking>,
+    @InjectRepository(Bot)
+    private botRepository: Repository<Bot>,
+    private activityLogService: ActivityLogService
   ) {}
 
   async create(
@@ -97,7 +106,32 @@ export class TimeSlotsService {
       endTime,
     });
 
-    return this.timeSlotRepository.save(timeSlot);
+    const savedTimeSlot = await this.timeSlotRepository.save(timeSlot);
+
+    // Логируем создание таймслота
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
+    if (bot && bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.TIME_SLOT_CREATED,
+          level: ActivityLevel.SUCCESS,
+          message: `Создан таймслот для специалиста`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            timeSlotId: savedTimeSlot.id,
+            specialistId: savedTimeSlot.specialistId,
+            startTime: savedTimeSlot.startTime.toISOString(),
+            endTime: savedTimeSlot.endTime.toISOString(),
+            isAvailable: savedTimeSlot.isAvailable,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования создания таймслота:", error);
+        });
+    }
+
+    return savedTimeSlot;
   }
 
   async findAll(botId: string): Promise<TimeSlot[]> {
@@ -356,7 +390,32 @@ export class TimeSlotsService {
 
     Object.assign(timeSlot, updateTimeSlotDto);
 
-    return this.timeSlotRepository.save(timeSlot);
+    const updatedTimeSlot = await this.timeSlotRepository.save(timeSlot);
+
+    // Логируем обновление таймслота
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
+    if (bot && bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.TIME_SLOT_UPDATED,
+          level: ActivityLevel.SUCCESS,
+          message: `Обновлен таймслот`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            timeSlotId: updatedTimeSlot.id,
+            specialistId: updatedTimeSlot.specialistId,
+            startTime: updatedTimeSlot.startTime.toISOString(),
+            endTime: updatedTimeSlot.endTime.toISOString(),
+            isAvailable: updatedTimeSlot.isAvailable,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования обновления таймслота:", error);
+        });
+    }
+
+    return updatedTimeSlot;
   }
 
   async remove(id: string, botId: string): Promise<void> {
@@ -366,7 +425,33 @@ export class TimeSlotsService {
       throw new BadRequestException("Нельзя удалить забронированный слот");
     }
 
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
+    const timeSlotData = {
+      specialistId: timeSlot.specialistId,
+      startTime: timeSlot.startTime.toISOString(),
+      endTime: timeSlot.endTime.toISOString(),
+    };
+
     await this.timeSlotRepository.remove(timeSlot);
+
+    // Логируем удаление таймслота
+    if (bot && bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.TIME_SLOT_DELETED,
+          level: ActivityLevel.SUCCESS,
+          message: `Удален таймслот`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            timeSlotId: id,
+            ...timeSlotData,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования удаления таймслота:", error);
+        });
+    }
   }
 
   // Метод для предпросмотра слотов (виртуальные + реальные)
@@ -515,7 +600,33 @@ export class TimeSlotsService {
     }
 
     // Сохраняем все слоты
-    return this.timeSlotRepository.save(slots);
+    const savedSlots = await this.timeSlotRepository.save(slots);
+
+    // Логируем генерацию таймслотов
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
+    if (bot && bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.TIME_SLOT_GENERATED,
+          level: ActivityLevel.SUCCESS,
+          message: `Сгенерировано ${savedSlots.length} таймслотов для специалиста`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            specialistId,
+            slotsCount: savedSlots.length,
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+            slotDuration: duration,
+            bufferTime: buffer,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования генерации таймслотов:", error);
+        });
+    }
+
+    return savedSlots;
   }
 
   // Генерирует виртуальные слоты (не сохраняя в БД) для предпросмотра

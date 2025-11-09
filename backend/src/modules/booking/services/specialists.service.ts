@@ -29,6 +29,11 @@ import {
   GenerateTimeSlotsDto,
   GetAvailableSlotsDto,
 } from "../dto/booking.dto";
+import { ActivityLogService } from "../../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../../database/entities/activity-log.entity";
 
 @Injectable()
 export class SpecialistsService {
@@ -36,7 +41,8 @@ export class SpecialistsService {
     @InjectRepository(Specialist)
     private specialistRepository: Repository<Specialist>,
     @InjectRepository(Bot)
-    private botRepository: Repository<Bot>
+    private botRepository: Repository<Bot>,
+    private activityLogService: ActivityLogService
   ) {}
 
   async create(
@@ -54,7 +60,28 @@ export class SpecialistsService {
       botId,
     });
 
-    return this.specialistRepository.save(specialist);
+    const savedSpecialist = await this.specialistRepository.save(specialist);
+
+    // Логируем создание специалиста
+    if (bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.SPECIALIST_CREATED,
+          level: ActivityLevel.SUCCESS,
+          message: `Создан специалист "${savedSpecialist.name}"`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            specialistId: savedSpecialist.id,
+            specialistName: savedSpecialist.name,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования создания специалиста:", error);
+        });
+    }
+
+    return savedSpecialist;
   }
 
   async findAll(botId: string): Promise<Specialist[]> {
@@ -92,15 +119,59 @@ export class SpecialistsService {
     botId: string
   ): Promise<Specialist> {
     const specialist = await this.findOne(id, botId);
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
 
     Object.assign(specialist, updateSpecialistDto);
 
-    return this.specialistRepository.save(specialist);
+    const updatedSpecialist = await this.specialistRepository.save(specialist);
+
+    // Логируем обновление специалиста
+    if (bot && bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.SPECIALIST_UPDATED,
+          level: ActivityLevel.SUCCESS,
+          message: `Обновлен специалист "${updatedSpecialist.name}"`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            specialistId: updatedSpecialist.id,
+            specialistName: updatedSpecialist.name,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования обновления специалиста:", error);
+        });
+    }
+
+    return updatedSpecialist;
   }
 
   async remove(id: string, botId: string): Promise<void> {
     const specialist = await this.findOne(id, botId);
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
+    const specialistName = specialist.name;
+
     await this.specialistRepository.remove(specialist);
+
+    // Логируем удаление специалиста
+    if (bot && bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.SPECIALIST_DELETED,
+          level: ActivityLevel.SUCCESS,
+          message: `Удален специалист "${specialistName}"`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            specialistId: id,
+            specialistName,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования удаления специалиста:", error);
+        });
+    }
   }
 
   async getWorkingHours(id: string, botId: string): Promise<any> {
@@ -114,8 +185,33 @@ export class SpecialistsService {
     botId: string
   ): Promise<Specialist> {
     const specialist = await this.findOne(id, botId);
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
     specialist.workingHours = workingHours;
-    return this.specialistRepository.save(specialist);
+    const updatedSpecialist = await this.specialistRepository.save(specialist);
+
+    // Логируем обновление расписания специалиста
+    if (bot && bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.SPECIALIST_SCHEDULE_UPDATED,
+          level: ActivityLevel.SUCCESS,
+          message: `Обновлено расписание специалиста "${updatedSpecialist.name}"`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            specialistId: updatedSpecialist.id,
+            specialistName: updatedSpecialist.name,
+          },
+        })
+        .catch((error) => {
+          console.error(
+            "Ошибка логирования обновления расписания специалиста:",
+            error
+          );
+        });
+    }
+
+    return updatedSpecialist;
   }
 
   // Проверка доступности специалиста в определенное время

@@ -17,6 +17,11 @@ import { BroadcastDto } from "./dto/broadcast.dto";
 import { TelegramService } from "../telegram/telegram.service";
 import { NotificationService } from "../websocket/services/notification.service";
 import { NotificationType } from "../websocket/interfaces/notification.interface";
+import { ActivityLogService } from "../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../database/entities/activity-log.entity";
 
 interface MessageFilters {
   page: number;
@@ -109,7 +114,8 @@ export class MessagesService {
     @InjectRepository(Bot)
     private botRepository: Repository<Bot>,
     private telegramService: TelegramService,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private activityLogService: ActivityLogService
   ) {}
 
   async getBotMessages(botId: string, userId: string, filters: MessageFilters) {
@@ -635,6 +641,23 @@ export class MessagesService {
       `Удален диалог: botId=${botId}, chatId=${chatId}, сообщений=${messageCount}`
     );
 
+    // Логируем удаление диалога
+    this.activityLogService
+      .create({
+        type: ActivityType.MESSAGE_DELETED,
+        level: ActivityLevel.WARNING,
+        message: `Удален диалог с пользователем ${chatId} (${messageCount} сообщений)`,
+        userId,
+        botId,
+        metadata: {
+          chatId,
+          deletedCount: messageCount,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования удаления диалога:", error);
+      });
+
     return {
       success: true,
       deletedCount: messageCount,
@@ -1138,6 +1161,27 @@ export class MessagesService {
           "Ошибка отправки уведомления о завершении рассылки:",
           error
         );
+      });
+
+    // Логируем рассылку
+    this.activityLogService
+      .create({
+        type: ActivityType.MESSAGE_BROADCAST,
+        level: hasErrors ? ActivityLevel.WARNING : ActivityLevel.SUCCESS,
+        message: `Рассылка завершена: отправлено ${sentCount} из ${recipientChatIds.length}`,
+        userId,
+        botId,
+        metadata: {
+          sentCount,
+          failedCount,
+          totalRecipients: recipientChatIds.length,
+          hasImage: !!data.image,
+          hasButtons: !!(data.buttons && data.buttons.length > 0),
+          recipientsType: data.recipients.type,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования рассылки:", error);
       });
 
     return {

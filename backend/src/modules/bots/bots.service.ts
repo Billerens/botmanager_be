@@ -19,6 +19,11 @@ import { ButtonSettingsDto } from "./dto/command-button-settings.dto";
 import { TelegramService } from "../telegram/telegram.service";
 import { NotificationService } from "../websocket/services/notification.service";
 import { NotificationType } from "../websocket/interfaces/notification.interface";
+import { ActivityLogService } from "../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../database/entities/activity-log.entity";
 import { In } from "typeorm";
 
 @Injectable()
@@ -32,7 +37,8 @@ export class BotsService {
     private productRepository: Repository<Product>,
     @Inject(forwardRef(() => TelegramService))
     private telegramService: TelegramService,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private activityLogService: ActivityLogService
   ) {}
 
   async create(createBotDto: CreateBotDto, userId: string): Promise<Bot> {
@@ -85,6 +91,24 @@ export class BotsService {
       })
       .catch((error) => {
         console.error("Ошибка отправки уведомления о создании бота:", error);
+      });
+
+    // Логируем создание бота
+    this.activityLogService
+      .create({
+        type: ActivityType.BOT_CREATED,
+        level: ActivityLevel.SUCCESS,
+        message: `Бот "${savedBot.name}" (${savedBot.username}) создан`,
+        userId,
+        botId: savedBot.id,
+        metadata: {
+          botName: savedBot.name,
+          botUsername: savedBot.username,
+          botStatus: savedBot.status,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования создания бота:", error);
       });
 
     return savedBot;
@@ -161,6 +185,26 @@ export class BotsService {
         });
     }
 
+    // Логируем обновление бота
+    this.activityLogService
+      .create({
+        type: ActivityType.BOT_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Бот "${updatedBot.name}" обновлен`,
+        userId,
+        botId: updatedBot.id,
+        metadata: {
+          botName: updatedBot.name,
+          changes: updateBotDto,
+          statusChanged,
+          oldStatus: statusChanged ? oldStatus : undefined,
+          newStatus: statusChanged ? updatedBot.status : undefined,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования обновления бота:", error);
+      });
+
     return updatedBot;
   }
 
@@ -204,6 +248,24 @@ export class BotsService {
     } catch (error) {
       console.error("Ошибка обновления команд бота:", error.message);
     }
+
+    // Логируем изменение настроек магазина
+    this.activityLogService
+      .create({
+        type: ActivityType.BOT_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Обновлены настройки магазина для бота "${savedBot.name}"`,
+        userId,
+        botId: savedBot.id,
+        metadata: {
+          botName: savedBot.name,
+          action: "shop_settings_update",
+          changes: shopSettings,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования изменения настроек магазина:", error);
+      });
 
     return savedBot;
   }
@@ -253,6 +315,24 @@ export class BotsService {
     } catch (error) {
       console.error("Ошибка обновления команд бота:", error.message);
     }
+
+    // Логируем изменение настроек бронирования
+    this.activityLogService
+      .create({
+        type: ActivityType.BOT_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Обновлены настройки бронирования для бота "${savedBot.name}"`,
+        userId,
+        botId: savedBot.id,
+        metadata: {
+          botName: savedBot.name,
+          action: "booking_settings_update",
+          changes: bookingSettings,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования изменения настроек бронирования:", error);
+      });
 
     return savedBot;
   }
@@ -510,6 +590,23 @@ export class BotsService {
       .catch((error) => {
         console.error("Ошибка отправки уведомления об удалении бота:", error);
       });
+
+    // Логируем удаление бота
+    this.activityLogService
+      .create({
+        type: ActivityType.BOT_DELETED,
+        level: ActivityLevel.WARNING,
+        message: `Бот "${botData.name}" (${botData.username}) удален`,
+        userId,
+        botId: botData.id,
+        metadata: {
+          botName: botData.name,
+          botUsername: botData.username,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования удаления бота:", error);
+      });
   }
 
   async activate(id: string, userId: string): Promise<Bot> {
@@ -557,6 +654,25 @@ export class BotsService {
         );
       });
 
+    // Логируем активацию бота
+    this.activityLogService
+      .create({
+        type: ActivityType.BOT_ACTIVATED,
+        level: ActivityLevel.SUCCESS,
+        message: `Бот "${savedBot.name}" активирован`,
+        userId,
+        botId: savedBot.id,
+        metadata: {
+          botName: savedBot.name,
+          botUsername: savedBot.username,
+          oldStatus,
+          newStatus: savedBot.status,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования активации бота:", error);
+      });
+
     return savedBot;
   }
 
@@ -597,6 +713,25 @@ export class BotsService {
           "Ошибка отправки уведомления об изменении статуса бота:",
           error
         );
+      });
+
+    // Логируем деактивацию бота
+    this.activityLogService
+      .create({
+        type: ActivityType.BOT_DEACTIVATED,
+        level: ActivityLevel.WARNING,
+        message: `Бот "${savedBot.name}" деактивирован`,
+        userId,
+        botId: savedBot.id,
+        metadata: {
+          botName: savedBot.name,
+          botUsername: savedBot.username,
+          oldStatus,
+          newStatus: savedBot.status,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования деактивации бота:", error);
       });
 
     return savedBot;

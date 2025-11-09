@@ -16,6 +16,11 @@ import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
 import { NotificationService } from "../websocket/services/notification.service";
 import { NotificationType } from "../websocket/interfaces/notification.interface";
 import { ShopPromocodesService } from "../shop-promocodes/shop-promocodes.service";
+import { ActivityLogService } from "../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../database/entities/activity-log.entity";
 
 @Injectable()
 export class CartService {
@@ -34,7 +39,8 @@ export class CartService {
     private readonly promocodeRepository: Repository<ShopPromocode>,
     private readonly notificationService: NotificationService,
     @Inject(forwardRef(() => ShopPromocodesService))
-    private readonly shopPromocodesService: ShopPromocodesService
+    private readonly shopPromocodesService: ShopPromocodesService,
+    private readonly activityLogService: ActivityLogService
   ) {}
 
   /**
@@ -698,6 +704,28 @@ export class CartService {
               "Ошибка отправки уведомления об использовании промокода:",
               error
             );
+          });
+
+        // Логируем применение промокода
+        this.activityLogService
+          .create({
+            type: ActivityType.PROMOCODE_APPLIED,
+            level: ActivityLevel.SUCCESS,
+            message: `Промокод "${validation.promocode.code}" применен к корзине пользователя ${telegramUsername}`,
+            userId: bot.ownerId,
+            botId,
+            metadata: {
+              promocodeId: validation.promocode.id,
+              promocodeCode: validation.promocode.code,
+              promocodeType: validation.promocode.type,
+              promocodeValue: validation.promocode.value,
+              discount: validation.discount,
+              telegramUsername,
+              cartId: savedCart.id,
+            },
+          })
+          .catch((error) => {
+            this.logger.error("Ошибка логирования применения промокода:", error);
           });
       }
     }

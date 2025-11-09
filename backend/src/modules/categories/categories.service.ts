@@ -14,6 +14,11 @@ import {
   UpdateCategoryDto,
   CategoryFiltersDto,
 } from "./dto/category.dto";
+import { ActivityLogService } from "../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../database/entities/activity-log.entity";
 
 @Injectable()
 export class CategoriesService {
@@ -25,7 +30,8 @@ export class CategoriesService {
     @InjectRepository(Bot)
     private readonly botRepository: Repository<Bot>,
     @InjectRepository(Product)
-    private readonly productRepository: Repository<Product>
+    private readonly productRepository: Repository<Product>,
+    private readonly activityLogService: ActivityLogService
   ) {}
 
   async create(
@@ -59,7 +65,27 @@ export class CategoriesService {
       botId,
     });
 
-    return await this.categoryRepository.save(category);
+    const savedCategory = await this.categoryRepository.save(category);
+
+    // Логируем создание категории
+    this.activityLogService
+      .create({
+        type: ActivityType.CATEGORY_CREATED,
+        level: ActivityLevel.SUCCESS,
+        message: `Создана категория "${savedCategory.name}"`,
+        userId,
+        botId,
+        metadata: {
+          categoryId: savedCategory.id,
+          categoryName: savedCategory.name,
+          parentId: savedCategory.parentId,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования создания категории:", error);
+      });
+
+    return savedCategory;
   }
 
   async findAll(
@@ -168,7 +194,27 @@ export class CategoriesService {
     }
 
     Object.assign(category, updateCategoryDto);
-    return await this.categoryRepository.save(category);
+    const updatedCategory = await this.categoryRepository.save(category);
+
+    // Логируем обновление категории
+    this.activityLogService
+      .create({
+        type: ActivityType.CATEGORY_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Обновлена категория "${updatedCategory.name}"`,
+        userId,
+        botId,
+        metadata: {
+          categoryId: updatedCategory.id,
+          categoryName: updatedCategory.name,
+          changes: updateCategoryDto,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования обновления категории:", error);
+      });
+
+    return updatedCategory;
   }
 
   async remove(id: string, botId: string, userId: string): Promise<void> {
@@ -196,7 +242,29 @@ export class CategoriesService {
       );
     }
 
+    const categoryData = {
+      id: category.id,
+      name: category.name,
+    };
+
     await this.categoryRepository.remove(category);
+
+    // Логируем удаление категории
+    this.activityLogService
+      .create({
+        type: ActivityType.CATEGORY_DELETED,
+        level: ActivityLevel.WARNING,
+        message: `Удалена категория "${categoryData.name}"`,
+        userId,
+        botId,
+        metadata: {
+          categoryId: categoryData.id,
+          categoryName: categoryData.name,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования удаления категории:", error);
+      });
   }
 
   /**

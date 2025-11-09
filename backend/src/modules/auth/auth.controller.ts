@@ -437,4 +437,14 @@ export class AuthController {
       body.twoFactorCode
     );
   }
+
+  @Post("logout")
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Выход из системы" })
+  @ApiResponse({ status: 200, description: "Выход выполнен успешно" })
+  async logout(@Request() req) {
+    return this.authService.logout(req.user.id);
+  }
 }

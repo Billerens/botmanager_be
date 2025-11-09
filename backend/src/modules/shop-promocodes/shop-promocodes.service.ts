@@ -22,6 +22,11 @@ import {
 } from "./dto/shop-promocode.dto";
 import { NotificationService } from "../websocket/services/notification.service";
 import { NotificationType } from "../websocket/interfaces/notification.interface";
+import { ActivityLogService } from "../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../database/entities/activity-log.entity";
 
 @Injectable()
 export class ShopPromocodesService {
@@ -36,7 +41,8 @@ export class ShopPromocodesService {
     private readonly categoryRepository: Repository<Category>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
-    private readonly notificationService: NotificationService
+    private readonly notificationService: NotificationService,
+    private readonly activityLogService: ActivityLogService
   ) {}
 
   /**
@@ -137,6 +143,26 @@ export class ShopPromocodesService {
           "Ошибка отправки уведомления о создании промокода:",
           error
         );
+      });
+
+    // Логируем создание промокода
+    this.activityLogService
+      .create({
+        type: ActivityType.PROMOCODE_CREATED,
+        level: ActivityLevel.SUCCESS,
+        message: `Создан промокод "${savedPromocode.code}"`,
+        userId,
+        botId: createDto.botId,
+        metadata: {
+          promocodeId: savedPromocode.id,
+          promocodeCode: savedPromocode.code,
+          promocodeType: savedPromocode.type,
+          promocodeValue: savedPromocode.value,
+          applicableTo: savedPromocode.applicableTo,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования создания промокода:", error);
       });
 
     return savedPromocode;
@@ -326,6 +352,24 @@ export class ShopPromocodesService {
         );
       });
 
+    // Логируем обновление промокода
+    this.activityLogService
+      .create({
+        type: ActivityType.PROMOCODE_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Обновлен промокод "${updatedPromocode.code}"`,
+        userId,
+        botId,
+        metadata: {
+          promocodeId: updatedPromocode.id,
+          promocodeCode: updatedPromocode.code,
+          changes: updateDto,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования обновления промокода:", error);
+      });
+
     return updatedPromocode;
   }
 
@@ -353,6 +397,23 @@ export class ShopPromocodesService {
           "Ошибка отправки уведомления об удалении промокода:",
           error
         );
+      });
+
+    // Логируем удаление промокода
+    this.activityLogService
+      .create({
+        type: ActivityType.PROMOCODE_DELETED,
+        level: ActivityLevel.WARNING,
+        message: `Удален промокод "${promocodeData.code}"`,
+        userId,
+        botId,
+        metadata: {
+          promocodeId: promocodeData.id,
+          promocodeCode: promocodeData.code,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования удаления промокода:", error);
       });
   }
 

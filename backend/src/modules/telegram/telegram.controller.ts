@@ -126,14 +126,19 @@ export class TelegramController {
     } catch (error) {
       this.logger.error("Ошибка обработки обновления:", error);
 
-      // Логируем ошибку
-      await this.activityLogService.create({
-        type: ActivityType.BOT_ERROR,
-        level: ActivityLevel.ERROR,
-        message: `Ошибка обработки обновления: ${error.message}`,
-        botId: bot.id,
-        metadata: { update, error: error.message },
-      });
+      // Логируем ошибку (userId владельца бота) - неблокирующий вызов
+      this.activityLogService
+        .create({
+          type: ActivityType.BOT_ERROR,
+          level: ActivityLevel.ERROR,
+          message: `Ошибка обработки обновления: ${error.message}`,
+          userId: bot.ownerId,
+          botId: bot.id,
+          metadata: { update, error: error.message },
+        })
+        .catch((logError) => {
+          this.logger.error("Ошибка логирования активности:", logError);
+        });
     }
   }
 
@@ -188,19 +193,24 @@ export class TelegramController {
           : Promise.resolve(),
       ]);
 
-      // Логируем активность
-      await this.activityLogService.create({
-        type: ActivityType.MESSAGE_RECEIVED,
-        level: ActivityLevel.INFO,
-        message: `Получено сообщение от пользователя ${message.from.first_name}`,
-        botId: bot.id,
-        metadata: {
-          messageId: savedMessage.id,
-          userId: message.from.id,
-          chatId: message.chat.id,
-          isNewUser,
-        },
-      });
+      // Логируем активность (userId владельца бота) - неблокирующий вызов
+      this.activityLogService
+        .create({
+          type: ActivityType.MESSAGE_RECEIVED,
+          level: ActivityLevel.INFO,
+          message: `Получено сообщение от пользователя ${message.from.first_name}`,
+          userId: bot.ownerId,
+          botId: bot.id,
+          metadata: {
+            messageId: savedMessage.id,
+            telegramUserId: message.from.id,
+            chatId: message.chat.id,
+            isNewUser,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка логирования активности:", error);
+        });
 
       // Отправляем уведомление о получении сообщения владельцу бота
       // Отправляем полный объект сообщения для корректной обработки на фронтенде
@@ -262,18 +272,23 @@ export class TelegramController {
       // Обрабатываем отредактированное сообщение
       this.logger.log("Обработка отредактированного сообщения:", message);
 
-      // Логируем активность
-      await this.activityLogService.create({
-        type: ActivityType.MESSAGE_RECEIVED,
-        level: ActivityLevel.INFO,
-        message: `Получено отредактированное сообщение от пользователя ${message.from.first_name}`,
-        botId: bot.id,
-        metadata: {
-          messageId: message.message_id,
-          userId: message.from.id,
-          chatId: message.chat.id,
-        },
-      });
+      // Логируем активность (userId владельца бота) - неблокирующий вызов
+      this.activityLogService
+        .create({
+          type: ActivityType.MESSAGE_RECEIVED,
+          level: ActivityLevel.INFO,
+          message: `Получено отредактированное сообщение от пользователя ${message.from.first_name}`,
+          userId: bot.ownerId,
+          botId: bot.id,
+          metadata: {
+            messageId: message.message_id,
+            telegramUserId: message.from.id,
+            chatId: message.chat.id,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка логирования активности:", error);
+        });
     } catch (error) {
       this.logger.error(
         "Ошибка обработки отредактированного сообщения:",

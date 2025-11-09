@@ -6,6 +6,11 @@ import * as speakeasy from "speakeasy";
 
 import { User, TwoFactorType } from "../../database/entities/user.entity";
 import { TelegramValidationService } from "../../common/telegram-validation.service";
+import { ActivityLogService } from "../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../database/entities/activity-log.entity";
 
 @Injectable()
 export class TwoFactorService {
@@ -14,7 +19,8 @@ export class TwoFactorService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    private telegramValidationService: TelegramValidationService
+    private telegramValidationService: TelegramValidationService,
+    private activityLogService: ActivityLogService
   ) {}
 
   /**
@@ -105,6 +111,21 @@ export class TwoFactorService {
     this.logger.log(
       `2FA включена для пользователя ${userId}, тип: ${twoFactorType}`
     );
+
+    // Логируем включение 2FA
+    this.activityLogService
+      .create({
+        type: ActivityType.USER_2FA_ENABLED,
+        level: ActivityLevel.SUCCESS,
+        message: `Включена двухфакторная аутентификация (${twoFactorType})`,
+        userId,
+        metadata: {
+          twoFactorType,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования включения 2FA:", error);
+      });
 
     return { backupCodes };
   }
@@ -216,6 +237,21 @@ export class TwoFactorService {
     await this.userRepository.save(user);
 
     this.logger.log(`2FA отключена для пользователя ${userId}`);
+
+    // Логируем отключение 2FA
+    this.activityLogService
+      .create({
+        type: ActivityType.USER_2FA_DISABLED,
+        level: ActivityLevel.WARNING,
+        message: `Отключена двухфакторная аутентификация`,
+        userId,
+        metadata: {
+          previousTwoFactorType: user.twoFactorType,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования отключения 2FA:", error);
+      });
   }
 
   /**

@@ -7,6 +7,11 @@ import { Bot } from "../../database/entities/bot.entity";
 import { CreateLeadDto, UpdateLeadDto } from "./dto/lead.dto";
 import { NotificationService } from "../websocket/services/notification.service";
 import { NotificationType } from "../websocket/interfaces/notification.interface";
+import { ActivityLogService } from "../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../database/entities/activity-log.entity";
 
 @Injectable()
 export class LeadsService {
@@ -15,7 +20,8 @@ export class LeadsService {
     private leadRepository: Repository<Lead>,
     @InjectRepository(Bot)
     private botRepository: Repository<Bot>,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private activityLogService: ActivityLogService
   ) {}
 
   async create(createLeadDto: CreateLeadDto): Promise<Lead> {
@@ -47,6 +53,26 @@ export class LeadsService {
               "Ошибка отправки уведомления о создании лида:",
               error
             );
+          });
+
+        // Логируем создание лида
+        this.activityLogService
+          .create({
+            type: ActivityType.LEAD_CREATED,
+            level: ActivityLevel.SUCCESS,
+            message: `Создана заявка от ${savedLead.fullName || "неизвестно"}`,
+            userId: bot.ownerId,
+            botId: bot.id,
+            metadata: {
+              leadId: savedLead.id,
+              leadName: savedLead.fullName,
+              leadPhone: savedLead.phone,
+              leadEmail: savedLead.email,
+              leadStatus: savedLead.status,
+            },
+          })
+          .catch((error) => {
+            console.error("Ошибка логирования создания лида:", error);
           });
       }
     }
@@ -128,6 +154,30 @@ export class LeadsService {
               );
             });
         }
+
+        // Логируем обновление лида
+        this.activityLogService
+          .create({
+            type: statusChanged
+              ? ActivityType.LEAD_STATUS_CHANGED
+              : ActivityType.LEAD_UPDATED,
+            level: ActivityLevel.INFO,
+            message: statusChanged
+              ? `Статус заявки от ${updatedLead.fullName || "неизвестно"} изменен: ${oldStatus} → ${updatedLead.status}`
+              : `Заявка от ${updatedLead.fullName || "неизвестно"} обновлена`,
+            userId: bot.ownerId,
+            botId: bot.id,
+            metadata: {
+              leadId: updatedLead.id,
+              leadName: updatedLead.fullName,
+              oldStatus: statusChanged ? oldStatus : undefined,
+              newStatus: statusChanged ? updatedLead.status : undefined,
+              changes: updateLeadDto,
+            },
+          })
+          .catch((error) => {
+            console.error("Ошибка логирования обновления лида:", error);
+          });
       }
     }
 
@@ -136,7 +186,39 @@ export class LeadsService {
 
   async delete(id: string): Promise<void> {
     const lead = await this.findOne(id);
+    const leadData = {
+      id: lead.id,
+      fullName: lead.fullName,
+      botId: lead.botId,
+    };
+
     await this.leadRepository.remove(lead);
+
+    // Получаем информацию о боте для логирования
+    if (leadData.botId) {
+      const bot = await this.botRepository.findOne({
+        where: { id: leadData.botId },
+      });
+
+      if (bot && bot.ownerId) {
+        // Логируем удаление лида
+        this.activityLogService
+          .create({
+            type: ActivityType.LEAD_DELETED,
+            level: ActivityLevel.WARNING,
+            message: `Заявка от ${leadData.fullName || "неизвестно"} удалена`,
+            userId: bot.ownerId,
+            botId: bot.id,
+            metadata: {
+              leadId: leadData.id,
+              leadName: leadData.fullName,
+            },
+          })
+          .catch((error) => {
+            console.error("Ошибка логирования удаления лида:", error);
+          });
+      }
+    }
   }
 
   async getStats(botId: string): Promise<{

@@ -24,6 +24,11 @@ import {
 import { BookingNotificationsService } from "./booking-notifications.service";
 import { NotificationService } from "../../websocket/services/notification.service";
 import { NotificationType } from "../../websocket/interfaces/notification.interface";
+import { ActivityLogService } from "../../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../../database/entities/activity-log.entity";
 
 @Injectable()
 export class BookingsService {
@@ -40,7 +45,8 @@ export class BookingsService {
     private botRepository: Repository<Bot>,
     @Inject(forwardRef(() => BookingNotificationsService))
     private notificationsService: BookingNotificationsService,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private activityLogService: ActivityLogService
   ) {}
 
   async create(
@@ -172,6 +178,30 @@ export class BookingsService {
             );
           });
       }
+
+      // Логируем создание бронирования
+      if (bot && bot.ownerId) {
+        this.activityLogService
+          .create({
+            type: ActivityType.BOOKING_CREATED,
+            level: ActivityLevel.SUCCESS,
+            message: `Создано бронирование от ${savedBooking.clientName || "неизвестно"}`,
+            userId: bot.ownerId,
+            botId,
+            metadata: {
+              bookingId: savedBooking.id,
+              clientName: savedBooking.clientName,
+              clientPhone: savedBooking.clientPhone,
+              specialistId: savedBooking.specialistId,
+              serviceId: savedBooking.serviceId,
+              timeSlotId: savedBooking.timeSlotId,
+              status: savedBooking.status,
+            },
+          })
+          .catch((error) => {
+            console.error("Ошибка логирования создания бронирования:", error);
+          });
+      }
     }
 
     return savedBooking;
@@ -290,6 +320,26 @@ export class BookingsService {
             );
           });
       }
+
+      // Логируем обновление бронирования
+      if (bot && bot.ownerId) {
+        this.activityLogService
+          .create({
+            type: ActivityType.BOOKING_UPDATED,
+            level: ActivityLevel.INFO,
+            message: `Обновлено бронирование #${updatedBooking.id} от ${updatedBooking.clientName || "неизвестно"}`,
+            userId: bot.ownerId,
+            botId: bot.id,
+            metadata: {
+              bookingId: updatedBooking.id,
+              clientName: updatedBooking.clientName,
+              changes: updateBookingDto,
+            },
+          })
+          .catch((error) => {
+            console.error("Ошибка логирования обновления бронирования:", error);
+          });
+      }
     }
 
     return updatedBooking;
@@ -312,7 +362,30 @@ export class BookingsService {
 
     booking.confirm();
 
-    return this.bookingRepository.save(booking);
+    const savedBooking = await this.bookingRepository.save(booking);
+
+    // Логируем подтверждение бронирования
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
+    if (bot && bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.BOOKING_CONFIRMED,
+          level: ActivityLevel.SUCCESS,
+          message: `Подтверждено бронирование #${savedBooking.id} от ${savedBooking.clientName || "неизвестно"}`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            bookingId: savedBooking.id,
+            clientName: savedBooking.clientName,
+            clientPhone: savedBooking.clientPhone,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования подтверждения бронирования:", error);
+        });
+    }
+
+    return savedBooking;
   }
 
   async cancel(
@@ -379,6 +452,26 @@ export class BookingsService {
             );
           });
       }
+
+      // Логируем отмену бронирования
+      if (bot && bot.ownerId) {
+        this.activityLogService
+          .create({
+            type: ActivityType.BOOKING_CANCELLED,
+            level: ActivityLevel.WARNING,
+            message: `Отменено бронирование #${savedBooking.id} от ${savedBooking.clientName || "неизвестно"}`,
+            userId: bot.ownerId,
+            botId: bot.id,
+            metadata: {
+              bookingId: savedBooking.id,
+              clientName: savedBooking.clientName,
+              cancellationReason: cancelBookingDto.cancellationReason,
+            },
+          })
+          .catch((error) => {
+            console.error("Ошибка логирования отмены бронирования:", error);
+          });
+      }
     }
 
     return savedBooking;
@@ -389,7 +482,29 @@ export class BookingsService {
 
     booking.markAsCompleted();
 
-    return this.bookingRepository.save(booking);
+    const savedBooking = await this.bookingRepository.save(booking);
+
+    // Логируем завершение бронирования
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
+    if (bot && bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.BOOKING_COMPLETED,
+          level: ActivityLevel.SUCCESS,
+          message: `Завершено бронирование #${savedBooking.id} от ${savedBooking.clientName || "неизвестно"}`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            bookingId: savedBooking.id,
+            clientName: savedBooking.clientName,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования завершения бронирования:", error);
+        });
+    }
+
+    return savedBooking;
   }
 
   async markAsNoShow(id: string, botId: string): Promise<Booking> {
@@ -397,16 +512,62 @@ export class BookingsService {
 
     booking.markAsNoShow();
 
-    return this.bookingRepository.save(booking);
+    const savedBooking = await this.bookingRepository.save(booking);
+
+    // Логируем неявку
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
+    if (bot && bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.BOOKING_NO_SHOW,
+          level: ActivityLevel.WARNING,
+          message: `Отмечена неявка для бронирования #${savedBooking.id} от ${savedBooking.clientName || "неизвестно"}`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            bookingId: savedBooking.id,
+            clientName: savedBooking.clientName,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования неявки:", error);
+        });
+    }
+
+    return savedBooking;
   }
 
   async remove(id: string, botId: string): Promise<void> {
     const booking = await this.findOne(id, botId);
+    const bookingData = {
+      id: booking.id,
+      clientName: booking.clientName,
+    };
 
     // Освобождаем все составные слоты
     await this.freeBookingSlots(booking);
 
     await this.bookingRepository.remove(booking);
+
+    // Логируем удаление бронирования
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
+    if (bot && bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.BOOKING_DELETED,
+          level: ActivityLevel.WARNING,
+          message: `Удалено бронирование #${bookingData.id} от ${bookingData.clientName || "неизвестно"}`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            bookingId: bookingData.id,
+            clientName: bookingData.clientName,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования удаления бронирования:", error);
+        });
+    }
   }
 
   /**

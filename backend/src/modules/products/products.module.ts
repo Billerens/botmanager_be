@@ -6,9 +6,14 @@ import { Product } from "../../database/entities/product.entity";
 import { Category } from "../../database/entities/category.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import { UploadModule } from "../upload/upload.module";
+import { ActivityLogModule } from "../activity-log/activity-log.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Product, Category, Bot]), UploadModule],
+  imports: [
+    TypeOrmModule.forFeature([Product, Category, Bot]),
+    UploadModule,
+    ActivityLogModule,
+  ],
   controllers: [ProductsController],
   providers: [ProductsService],
   exports: [ProductsService],

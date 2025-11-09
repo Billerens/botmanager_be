@@ -19,6 +19,11 @@ import { Message } from "../../database/entities/message.entity";
 import { ShopPromocodesService } from "../shop-promocodes/shop-promocodes.service";
 import { CartService } from "../cart/cart.service";
 import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
+import { ActivityLogService } from "../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../database/entities/activity-log.entity";
 
 @Injectable()
 export class OrdersService {
@@ -41,7 +46,8 @@ export class OrdersService {
     @Inject(forwardRef(() => ShopPromocodesService))
     private readonly shopPromocodesService: ShopPromocodesService,
     @Inject(forwardRef(() => CartService))
-    private readonly cartService: CartService
+    private readonly cartService: CartService,
+    private readonly activityLogService: ActivityLogService
   ) {}
 
   /**
@@ -153,6 +159,29 @@ export class OrdersService {
     this.logger.log(
       `Заказ ${savedOrder.id} создан для пользователя ${telegramUsername} в боте ${botId}`
     );
+
+    // Логируем создание заказа (userId владельца бота)
+    if (bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.ORDER_CREATED,
+          level: ActivityLevel.SUCCESS,
+          message: `Создан заказ #${savedOrder.id} от пользователя ${telegramUsername}`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            orderId: savedOrder.id,
+            telegramUsername,
+            totalPrice: savedOrder.totalPrice,
+            currency: savedOrder.currency,
+            itemsCount: savedOrder.items.length,
+            appliedPromocodeId: savedOrder.appliedPromocodeId,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка логирования создания заказа:", error);
+        });
+    }
 
     return savedOrder;
   }
@@ -346,6 +375,27 @@ export class OrdersService {
       `Статус заказа ${orderId} изменен с ${oldStatus} на ${updateStatusDto.status}`
     );
 
+    // Логируем обновление статуса заказа (userId владельца бота)
+    if (bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.ORDER_STATUS_CHANGED,
+          level: ActivityLevel.INFO,
+          message: `Статус заказа #${orderId} изменен: ${oldStatus} → ${updateStatusDto.status}`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            orderId,
+            telegramUsername: savedOrder.telegramUsername,
+            oldStatus,
+            newStatus: updateStatusDto.status,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка логирования обновления статуса заказа:", error);
+        });
+    }
+
     return savedOrder;
   }
 
@@ -380,6 +430,27 @@ export class OrdersService {
     await this.orderRepository.remove(order);
 
     this.logger.log(`Заказ ${orderId} удален`);
+
+    // Логируем удаление заказа (userId владельца бота)
+    if (bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.ORDER_DELETED,
+          level: ActivityLevel.WARNING,
+          message: `Удален заказ #${orderId} от пользователя ${order.telegramUsername}`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            orderId,
+            telegramUsername: order.telegramUsername,
+            orderStatus: order.status,
+            totalPrice: order.totalPrice,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка логирования удаления заказа:", error);
+        });
+    }
   }
 
   /**
@@ -419,6 +490,26 @@ export class OrdersService {
     );
 
     this.logger.log(`Данные покупателя заказа ${orderId} обновлены`);
+
+    // Логируем обновление данных клиента (userId владельца бота)
+    if (bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.ORDER_UPDATED,
+          level: ActivityLevel.INFO,
+          message: `Обновлены данные покупателя заказа #${orderId}`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            orderId,
+            telegramUsername: savedOrder.telegramUsername,
+            customerData: customerData,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка логирования обновления данных клиента:", error);
+        });
+    }
 
     return savedOrder;
   }

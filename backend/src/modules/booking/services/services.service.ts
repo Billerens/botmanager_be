@@ -7,8 +7,14 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, In } from "typeorm";
 import { Service } from "../../../database/entities/service.entity";
 import { Specialist } from "../../../database/entities/specialist.entity";
+import { Bot } from "../../../database/entities/bot.entity";
 import { CreateServiceDto, UpdateServiceDto } from "../dto/booking.dto";
 import { BookingStatus } from "../../../database/entities/booking.entity";
+import { ActivityLogService } from "../../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../../database/entities/activity-log.entity";
 
 @Injectable()
 export class ServicesService {
@@ -16,7 +22,10 @@ export class ServicesService {
     @InjectRepository(Service)
     private serviceRepository: Repository<Service>,
     @InjectRepository(Specialist)
-    private specialistRepository: Repository<Specialist>
+    private specialistRepository: Repository<Specialist>,
+    @InjectRepository(Bot)
+    private botRepository: Repository<Bot>,
+    private activityLogService: ActivityLogService
   ) {}
 
   async create(
@@ -33,12 +42,40 @@ export class ServicesService {
       throw new NotFoundException("Один или несколько специалистов не найдены");
     }
 
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
+
     const { specialistIds, ...serviceData } = createServiceDto;
     const service = this.serviceRepository.create({
       ...serviceData,
       specialists,
     });
-    return this.serviceRepository.save(service);
+    const savedService = await this.serviceRepository.save(service);
+
+    // Логируем создание услуги
+    if (bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.SERVICE_CREATED,
+          level: ActivityLevel.SUCCESS,
+          message: `Создана услуга "${savedService.name}"`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            serviceId: savedService.id,
+            serviceName: savedService.name,
+            duration: savedService.duration,
+            price: savedService.price,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования создания услуги:", error);
+        });
+    }
+
+    return savedService;
   }
 
   async findAll(botId: string): Promise<Service[]> {
@@ -95,6 +132,7 @@ export class ServicesService {
     botId: string
   ): Promise<Service> {
     const service = await this.findOne(id, botId);
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
 
     // Если обновляются специалисты, проверяем их существование
     if (updateServiceDto.specialistIds) {
@@ -115,11 +153,33 @@ export class ServicesService {
     const { specialistIds, ...serviceData } = updateServiceDto;
     Object.assign(service, serviceData);
 
-    return this.serviceRepository.save(service);
+    const updatedService = await this.serviceRepository.save(service);
+
+    // Логируем обновление услуги
+    if (bot && bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.SERVICE_UPDATED,
+          level: ActivityLevel.SUCCESS,
+          message: `Обновлена услуга "${updatedService.name}"`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            serviceId: updatedService.id,
+            serviceName: updatedService.name,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования обновления услуги:", error);
+        });
+    }
+
+    return updatedService;
   }
 
   async remove(id: string, botId: string): Promise<void> {
     const service = await this.findOne(id, botId);
+    const bot = await this.botRepository.findOne({ where: { id: botId } });
 
     // Проверяем, есть ли активные бронирования
     const activeBookings = await this.serviceRepository
@@ -137,7 +197,27 @@ export class ServicesService {
       );
     }
 
+    const serviceName = service.name;
     await this.serviceRepository.remove(service);
+
+    // Логируем удаление услуги
+    if (bot && bot.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.SERVICE_DELETED,
+          level: ActivityLevel.SUCCESS,
+          message: `Удалена услуга "${serviceName}"`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            serviceId: id,
+            serviceName,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования удаления услуги:", error);
+        });
+    }
   }
 
   async getServicesByCategory(

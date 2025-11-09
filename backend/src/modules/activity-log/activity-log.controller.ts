@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Query, UseGuards, Request } from "@nestjs/common";
 import {
   ApiTags,
   ApiOperation,
@@ -23,7 +23,7 @@ export class ActivityLogController {
   constructor(private readonly activityLogService: ActivityLogService) {}
 
   @Get()
-  @ApiOperation({ summary: "Получить лог активности" })
+  @ApiOperation({ summary: "Получить лог активности текущего пользователя" })
   @ApiResponse({
     status: 200,
     description: "Лог активности получен",
@@ -35,13 +35,16 @@ export class ActivityLogController {
     },
   })
   async findAll(
+    @Request() req,
     @Query("botId") botId?: string,
-    @Query("userId") userId?: string,
     @Query("type") type?: ActivityType,
     @Query("level") level?: ActivityLevel,
     @Query("page") page: number = 1,
     @Query("limit") limit: number = 50
   ) {
+    // Автоматически фильтруем по userId текущего пользователя
+    // Параметр userId из query игнорируется для безопасности
+    const userId = req.user.id;
     return this.activityLogService.findAll(
       botId,
       userId,
@@ -53,12 +56,13 @@ export class ActivityLogController {
   }
 
   @Get("stats")
-  @ApiOperation({ summary: "Получить статистику активности" })
+  @ApiOperation({
+    summary: "Получить статистику активности текущего пользователя",
+  })
   @ApiResponse({ status: 200, description: "Статистика активности получена" })
-  async getStats(
-    @Query("botId") botId?: string,
-    @Query("userId") userId?: string
-  ) {
+  async getStats(@Request() req, @Query("botId") botId?: string) {
+    // Автоматически фильтруем по userId текущего пользователя
+    const userId = req.user.id;
     return this.activityLogService.getStats(botId, userId);
   }
 }

@@ -10,6 +10,7 @@ import { TwoFactorService } from "./two-factor.service";
 import { JwtStrategy } from "./strategies/jwt.strategy";
 import { LocalStrategy } from "./strategies/local.strategy";
 import { UsersModule } from "../users/users.module";
+import { ActivityLogModule } from "../activity-log/activity-log.module";
 import { User } from "../../database/entities/user.entity";
 import { TelegramValidationService } from "../../common/telegram-validation.service";
 import { TelegramUserInfoService } from "../../common/telegram-userinfo.service";
@@ -18,6 +19,7 @@ import { TelegramUserInfoService } from "../../common/telegram-userinfo.service"
   imports: [
     TypeOrmModule.forFeature([User]),
     UsersModule,
+    ActivityLogModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

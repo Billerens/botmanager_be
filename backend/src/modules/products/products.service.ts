@@ -17,6 +17,11 @@ import {
 import { UploadService } from "../upload/upload.service";
 import { NotificationService } from "../websocket/services/notification.service";
 import { NotificationType } from "../websocket/interfaces/notification.interface";
+import { ActivityLogService } from "../activity-log/activity-log.service";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../database/entities/activity-log.entity";
 
 export interface ProductStats {
   totalProducts: number;
@@ -38,7 +43,8 @@ export class ProductsService {
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
     private readonly uploadService: UploadService,
-    private readonly notificationService: NotificationService
+    private readonly notificationService: NotificationService,
+    private readonly activityLogService: ActivityLogService
   ) {}
 
   async create(
@@ -83,6 +89,25 @@ export class ProductsService {
     }).catch((error) => {
       this.logger.error("Ошибка отправки уведомления о создании продукта:", error);
     });
+
+    // Логируем создание продукта
+    this.activityLogService
+      .create({
+        type: ActivityType.PRODUCT_CREATED,
+        level: ActivityLevel.SUCCESS,
+        message: `Создан товар "${savedProduct.name}"`,
+        userId,
+        botId,
+        metadata: {
+          productId: savedProduct.id,
+          productName: savedProduct.name,
+          productPrice: savedProduct.price,
+          stockQuantity: savedProduct.stockQuantity,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования создания продукта:", error);
+      });
 
     return savedProduct;
   }
@@ -234,6 +259,24 @@ export class ProductsService {
       this.logger.error("Ошибка отправки уведомления об обновлении продукта:", error);
     });
 
+    // Логируем обновление продукта
+    this.activityLogService
+      .create({
+        type: ActivityType.PRODUCT_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Обновлен товар "${updatedProduct.name}"`,
+        userId,
+        botId,
+        metadata: {
+          productId: updatedProduct.id,
+          productName: updatedProduct.name,
+          changes: updateProductDto,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования обновления продукта:", error);
+      });
+
     return updatedProduct;
   }
 
@@ -266,6 +309,23 @@ export class ProductsService {
     }).catch((error) => {
       this.logger.error("Ошибка отправки уведомления об удалении продукта:", error);
     });
+
+    // Логируем удаление продукта
+    this.activityLogService
+      .create({
+        type: ActivityType.PRODUCT_DELETED,
+        level: ActivityLevel.WARNING,
+        message: `Удален товар "${productData.name}"`,
+        userId,
+        botId,
+        metadata: {
+          productId: productData.id,
+          productName: productData.name,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования удаления продукта:", error);
+      });
   }
 
   async getBotProductStats(
@@ -333,6 +393,25 @@ export class ProductsService {
         this.logger.error("Ошибка отправки уведомления о низком запасе:", error);
       });
     }
+
+    // Логируем изменение стока
+    this.activityLogService
+      .create({
+        type: ActivityType.PRODUCT_STOCK_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Изменен сток товара "${updatedProduct.name}": ${oldStock} → ${quantity}`,
+        userId,
+        botId,
+        metadata: {
+          productId: updatedProduct.id,
+          productName: updatedProduct.name,
+          oldStock,
+          newStock: quantity,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования изменения стока:", error);
+      });
 
     return updatedProduct;
   }
