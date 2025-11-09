@@ -18,6 +18,7 @@ import { NotificationType } from "../websocket/interfaces/notification.interface
 import { Message } from "../../database/entities/message.entity";
 import { ShopPromocodesService } from "../shop-promocodes/shop-promocodes.service";
 import { CartService } from "../cart/cart.service";
+import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
 
 @Injectable()
 export class OrdersService {
@@ -34,6 +35,8 @@ export class OrdersService {
     private readonly productRepository: Repository<Product>,
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>,
+    @InjectRepository(ShopPromocode)
+    private readonly promocodeRepository: Repository<ShopPromocode>,
     private readonly notificationService: NotificationService,
     @Inject(forwardRef(() => ShopPromocodesService))
     private readonly shopPromocodesService: ShopPromocodesService,
@@ -231,7 +234,7 @@ export class OrdersService {
       order: { createdAt: "DESC" },
     });
 
-    // Получаем chatId для каждого заказа из сообщений пользователя
+    // Получаем chatId и информацию о промокодах для каждого заказа
     const ordersWithChatId = await Promise.all(
       orders.map(async (order) => {
         // Пытаемся найти chatId по telegramUsername через метаданные сообщений
@@ -253,9 +256,22 @@ export class OrdersService {
 
         const chatId = userMessage?.telegramChatId;
 
+        // Получаем информацию о примененном промокоде, если есть
+        let appliedPromocodeCode: string | null = null;
+        if (order.appliedPromocodeId) {
+          const promocode = await this.promocodeRepository.findOne({
+            where: { id: order.appliedPromocodeId, botId },
+            select: ["code"],
+          });
+          if (promocode) {
+            appliedPromocodeCode = promocode.code;
+          }
+        }
+
         return {
           ...order,
           chatId,
+          appliedPromocodeCode,
         };
       })
     );

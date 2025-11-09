@@ -13,10 +13,11 @@ import { BotsModule } from "../bots/bots.module";
 import { WebSocketModule } from "../websocket/websocket.module";
 import { ShopPromocodesModule } from "../shop-promocodes/shop-promocodes.module";
 import { CartModule } from "../cart/cart.module";
+import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, Cart, Product, Bot, Message]),
+    TypeOrmModule.forFeature([Order, Cart, Product, Bot, Message, ShopPromocode]),
     forwardRef(() => BotsModule),
     WebSocketModule,
     forwardRef(() => ShopPromocodesModule),
