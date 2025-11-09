@@ -145,6 +145,27 @@ export class NotificationSettingsService {
         type: NotificationType.ORDER_CANCELLED,
         defaultEnabled: true,
       },
+      // Промокоды
+      {
+        type: NotificationType.PROMOCODE_CREATED,
+        defaultEnabled: true,
+      },
+      {
+        type: NotificationType.PROMOCODE_UPDATED,
+        defaultEnabled: true,
+      },
+      {
+        type: NotificationType.PROMOCODE_DELETED,
+        defaultEnabled: true,
+      },
+      {
+        type: NotificationType.PROMOCODE_USED,
+        defaultEnabled: true,
+      },
+      {
+        type: NotificationType.PROMOCODE_UNLINKED,
+        defaultEnabled: true,
+      },
       // Аналитика
       {
         type: NotificationType.STATS_UPDATED,

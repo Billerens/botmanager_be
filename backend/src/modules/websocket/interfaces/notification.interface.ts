@@ -45,11 +45,11 @@ export enum NotificationType {
   ORDER_CANCELLED = "order.cancelled",
 
   // Промокоды
-  PROMOCODE_CREATED = "promocode.created",
-  PROMOCODE_UPDATED = "promocode.updated",
-  PROMOCODE_DELETED = "promocode.deleted",
-  PROMOCODE_USED = "promocode.used",
-  PROMOCODE_UNLINKED = "promocode.unlinked",
+  SHOP_PROMOCODE_CREATED = "shop_promocode.created",
+  SHOP_PROMOCODE_UPDATED = "shop_promocode.updated",
+  SHOP_PROMOCODE_DELETED = "shop_promocode.deleted",
+  SHOP_PROMOCODE_USED = "shop_promocode.used",
+  SHOP_PROMOCODE_UNLINKED = "shop_promocode.unlinked",
 
   // Аналитика
   STATS_UPDATED = "stats.updated",
