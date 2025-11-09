@@ -10,6 +10,7 @@ import { TelegramService } from "../../telegram/telegram.service";
 import { BotsService } from "../bots.service";
 import { CustomLoggerService } from "../../../common/logger.service";
 import { MessagesService } from "../../messages/messages.service";
+import { ActivityLogService } from "../../activity-log/activity-log.service";
 
 @Injectable()
 export class BroadcastNodeHandler extends BaseNodeHandler {
@@ -22,6 +23,7 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
     protected readonly botsService: BotsService,
     protected readonly logger: CustomLoggerService,
     protected readonly messagesService: MessagesService,
+    protected readonly activityLogService: ActivityLogService,
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>
   ) {
@@ -31,7 +33,8 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
       telegramService,
       botsService,
       logger,
-      messagesService
+      messagesService,
+      activityLogService
     );
   }
 
@@ -193,7 +196,10 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
         replyMarkup = {
           inline_keyboard: broadcast.buttons.map((button) => {
             // Подставляем переменные в текст кнопок
-            const processedText = this.substituteVariables(button.text, context);
+            const processedText = this.substituteVariables(
+              button.text,
+              context
+            );
             const buttonData: any = { text: processedText };
 
             // Определяем тип кнопки и подставляем переменные

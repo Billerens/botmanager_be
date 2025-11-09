@@ -10,6 +10,7 @@ import { MessagesService } from "../../messages/messages.service";
 import { FlowContext } from "./base-node-handler.interface";
 import { BaseNodeHandler } from "./base-node-handler";
 import { FlowExecutionService } from "../flow-execution.service";
+import { ActivityLogService } from "../../activity-log/activity-log.service";
 
 @Injectable()
 export class EndpointNodeHandler extends BaseNodeHandler {
@@ -22,6 +23,7 @@ export class EndpointNodeHandler extends BaseNodeHandler {
     protected readonly botsService: BotsService,
     protected readonly logger: CustomLoggerService,
     protected readonly messagesService: MessagesService,
+    protected readonly activityLogService: ActivityLogService,
     @Inject(forwardRef(() => FlowExecutionService))
     private readonly flowExecutionService: FlowExecutionService
   ) {
@@ -31,7 +33,8 @@ export class EndpointNodeHandler extends BaseNodeHandler {
       telegramService,
       botsService,
       logger,
-      messagesService
+      messagesService,
+      activityLogService
     );
   }
 

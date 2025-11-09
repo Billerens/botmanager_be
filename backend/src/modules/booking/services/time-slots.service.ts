@@ -615,8 +615,8 @@ export class TimeSlotsService {
           metadata: {
             specialistId,
             slotsCount: savedSlots.length,
-            startDate: startDate.toISOString(),
-            endDate: endDate.toISOString(),
+            startDate: start.toISOString(),
+            endDate: end.toISOString(),
             slotDuration: duration,
             bufferTime: buffer,
           },
