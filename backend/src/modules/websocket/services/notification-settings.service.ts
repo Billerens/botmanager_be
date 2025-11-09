@@ -147,23 +147,23 @@ export class NotificationSettingsService {
       },
       // Промокоды
       {
-        type: NotificationType.PROMOCODE_CREATED,
+        type: NotificationType.SHOP_PROMOCODE_CREATED,
         defaultEnabled: true,
       },
       {
-        type: NotificationType.PROMOCODE_UPDATED,
+        type: NotificationType.SHOP_PROMOCODE_UPDATED,
         defaultEnabled: true,
       },
       {
-        type: NotificationType.PROMOCODE_DELETED,
+        type: NotificationType.SHOP_PROMOCODE_DELETED,
         defaultEnabled: true,
       },
       {
-        type: NotificationType.PROMOCODE_USED,
+        type: NotificationType.SHOP_PROMOCODE_USED,
         defaultEnabled: true,
       },
       {
-        type: NotificationType.PROMOCODE_UNLINKED,
+        type: NotificationType.SHOP_PROMOCODE_UNLINKED,
         defaultEnabled: true,
       },
       // Аналитика

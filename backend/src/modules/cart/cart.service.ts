@@ -601,7 +601,7 @@ export class CartService {
       // Отправляем уведомление об использовании промокода
       if (bot.ownerId) {
         this.notificationService
-          .sendToUser(bot.ownerId, NotificationType.PROMOCODE_USED, {
+          .sendToUser(bot.ownerId, NotificationType.SHOP_PROMOCODE_USED, {
             botId,
             promocode: {
               id: validation.promocode.id,
@@ -669,7 +669,7 @@ export class CartService {
       // Отправляем уведомление об отвязке промокода
       if (bot.ownerId && promocodeData) {
         this.notificationService
-          .sendToUser(bot.ownerId, NotificationType.PROMOCODE_UNLINKED, {
+          .sendToUser(bot.ownerId, NotificationType.SHOP_PROMOCODE_UNLINKED, {
             botId,
             promocode: promocodeData,
             cart: {

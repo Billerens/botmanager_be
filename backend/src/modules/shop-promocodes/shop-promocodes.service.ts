@@ -120,7 +120,7 @@ export class ShopPromocodesService {
 
     // Отправляем уведомление о создании промокода
     this.notificationService
-      .sendToUser(userId, NotificationType.PROMOCODE_CREATED, {
+      .sendToUser(userId, NotificationType.SHOP_PROMOCODE_CREATED, {
         botId: createDto.botId,
         promocode: {
           id: savedPromocode.id,
@@ -245,8 +245,7 @@ export class ShopPromocodesService {
     // Валидация значения скидки
     const value =
       updateDto.value !== undefined ? updateDto.value : promocode.value;
-    const type =
-      updateDto.type !== undefined ? updateDto.type : promocode.type;
+    const type = updateDto.type !== undefined ? updateDto.type : promocode.type;
 
     if (type === ShopPromocodeType.PERCENTAGE) {
       if (value < 0 || value > 100) {
@@ -276,7 +275,7 @@ export class ShopPromocodesService {
 
     // Отправляем уведомление об обновлении промокода
     this.notificationService
-      .sendToUser(userId, NotificationType.PROMOCODE_UPDATED, {
+      .sendToUser(userId, NotificationType.SHOP_PROMOCODE_UPDATED, {
         botId,
         promocode: {
           id: updatedPromocode.id,
@@ -313,7 +312,7 @@ export class ShopPromocodesService {
 
     // Отправляем уведомление об удалении промокода
     this.notificationService
-      .sendToUser(userId, NotificationType.PROMOCODE_DELETED, {
+      .sendToUser(userId, NotificationType.SHOP_PROMOCODE_DELETED, {
         botId,
         promocode: promocodeData,
       })
@@ -419,7 +418,8 @@ export class ShopPromocodesService {
       if (categoryItems.length === 0) {
         return {
           isValid: false,
-          message: "В корзине нет товаров из категории, к которой применим промокод",
+          message:
+            "В корзине нет товаров из категории, к которой применим промокод",
         };
       }
 
@@ -455,11 +455,9 @@ export class ShopPromocodesService {
       }
 
       const productTotal = productItem.price * productItem.quantity;
-      const discount = this.calculateDiscount(
-        promocode,
-        productTotal,
-        [productItem]
-      );
+      const discount = this.calculateDiscount(promocode, productTotal, [
+        productItem,
+      ]);
 
       return {
         isValid: true,
@@ -521,4 +519,3 @@ export class ShopPromocodesService {
     }
   }
 }
-
