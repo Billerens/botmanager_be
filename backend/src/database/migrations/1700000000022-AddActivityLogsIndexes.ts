@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class AddActivityLogsIndexes1700000000023 implements MigrationInterface {
-  name = "AddActivityLogsIndexes1700000000023";
+export class AddActivityLogsIndexes1700000000022 implements MigrationInterface {
+  name = "AddActivityLogsIndexes1700000000022";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Создаем составные индексы для оптимизации запросов
@@ -50,4 +50,3 @@ export class AddActivityLogsIndexes1700000000023 implements MigrationInterface {
     );
   }
 }
-
