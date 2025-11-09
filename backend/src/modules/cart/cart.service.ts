@@ -67,6 +67,42 @@ export class CartService {
       await this.sendCartNotification(bot, NotificationType.CART_CREATED, cart);
     }
 
+    // Если есть примененный промокод, валидируем его и пересчитываем скидку
+    if (cart.appliedPromocodeId) {
+      try {
+        const promocode = await this.promocodeRepository.findOne({
+          where: { id: cart.appliedPromocodeId, botId },
+        });
+
+        if (promocode) {
+          // Валидируем промокод для текущей корзины
+          const validation = await this.shopPromocodesService.validatePromocode(
+            botId,
+            promocode.code,
+            cart
+          );
+
+          // Если промокод стал недействителен, удаляем его
+          if (!validation.isValid) {
+            cart.appliedPromocodeId = null;
+            cart = await this.cartRepository.save(cart);
+          }
+        } else {
+          // Промокод не найден, удаляем его из корзины
+          cart.appliedPromocodeId = null;
+          cart = await this.cartRepository.save(cart);
+        }
+      } catch (error) {
+        this.logger.error(
+          "Ошибка при валидации примененного промокода:",
+          error
+        );
+        // В случае ошибки удаляем промокод
+        cart.appliedPromocodeId = null;
+        cart = await this.cartRepository.save(cart);
+      }
+    }
+
     return cart;
   }
 
@@ -475,6 +511,53 @@ export class CartService {
   }> {
     const cart = await this.getCart(botId, telegramUsername);
     return this.shopPromocodesService.validatePromocode(botId, code, cart);
+  }
+
+  /**
+   * Получить информацию о примененном промокоде и скидке
+   */
+  async getAppliedPromocodeInfo(
+    botId: string,
+    cart: Cart
+  ): Promise<{
+    promocode?: ShopPromocode;
+    discount?: number;
+  } | null> {
+    if (!cart.appliedPromocodeId) {
+      return null;
+    }
+
+    try {
+      const promocode = await this.promocodeRepository.findOne({
+        where: { id: cart.appliedPromocodeId, botId },
+      });
+
+      if (!promocode) {
+        return null;
+      }
+
+      // Валидируем промокод для текущей корзины
+      const validation = await this.shopPromocodesService.validatePromocode(
+        botId,
+        promocode.code,
+        cart
+      );
+
+      if (!validation.isValid || !validation.discount) {
+        return null;
+      }
+
+      return {
+        promocode,
+        discount: validation.discount,
+      };
+    } catch (error) {
+      this.logger.error(
+        "Ошибка при получении информации о примененном промокоде:",
+        error
+      );
+      return null;
+    }
   }
 
   /**

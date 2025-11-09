@@ -60,7 +60,24 @@ export class CartController {
         "telegramUsername не найден в валидированных данных"
       );
     }
-    return this.cartService.getCart(botId, telegramUsername);
+    const cart = await this.cartService.getCart(botId, telegramUsername);
+    
+    // Получаем информацию о примененном промокоде
+    const promocodeInfo = await this.cartService.getAppliedPromocodeInfo(
+      botId,
+      cart
+    );
+
+    // Возвращаем корзину с информацией о промокоде
+    return {
+      ...cart,
+      appliedPromocode: promocodeInfo
+        ? {
+            code: promocodeInfo.promocode?.code,
+            discount: promocodeInfo.discount,
+          }
+        : null,
+    };
   }
 
   @Post("bots/:botId/cart/items")
@@ -93,12 +110,29 @@ export class CartController {
         "telegramUsername не найден в валидированных данных"
       );
     }
-    return this.cartService.addItem(
+    const cart = await this.cartService.addItem(
       botId,
       telegramUsername,
       addItemDto.productId,
       addItemDto.quantity
     );
+
+    // Получаем информацию о примененном промокоде
+    const promocodeInfo = await this.cartService.getAppliedPromocodeInfo(
+      botId,
+      cart
+    );
+
+    // Возвращаем корзину с информацией о промокоде
+    return {
+      ...cart,
+      appliedPromocode: promocodeInfo
+        ? {
+            code: promocodeInfo.promocode?.code,
+            discount: promocodeInfo.discount,
+          }
+        : null,
+    };
   }
 
   @Patch("bots/:botId/cart/items")
@@ -131,12 +165,29 @@ export class CartController {
         "telegramUsername не найден в валидированных данных"
       );
     }
-    return this.cartService.updateItem(
+    const cart = await this.cartService.updateItem(
       botId,
       telegramUsername,
       updateItemDto.productId,
       updateItemDto.quantity
     );
+
+    // Получаем информацию о примененном промокоде
+    const promocodeInfo = await this.cartService.getAppliedPromocodeInfo(
+      botId,
+      cart
+    );
+
+    // Возвращаем корзину с информацией о промокоде
+    return {
+      ...cart,
+      appliedPromocode: promocodeInfo
+        ? {
+            code: promocodeInfo.promocode?.code,
+            discount: promocodeInfo.discount,
+          }
+        : null,
+    };
   }
 
   @Delete("bots/:botId/cart/items/:productId")
@@ -167,7 +218,24 @@ export class CartController {
         "telegramUsername не найден в валидированных данных"
       );
     }
-    return this.cartService.removeItem(botId, telegramUsername, productId);
+    const cart = await this.cartService.removeItem(botId, telegramUsername, productId);
+
+    // Получаем информацию о примененном промокоде
+    const promocodeInfo = await this.cartService.getAppliedPromocodeInfo(
+      botId,
+      cart
+    );
+
+    // Возвращаем корзину с информацией о промокоде
+    return {
+      ...cart,
+      appliedPromocode: promocodeInfo
+        ? {
+            code: promocodeInfo.promocode?.code,
+            discount: promocodeInfo.discount,
+          }
+        : null,
+    };
   }
 
   @Delete("bots/:botId/cart")
@@ -251,11 +319,28 @@ export class CartController {
         "telegramUsername не найден в валидированных данных"
       );
     }
-    return this.cartService.applyPromocode(
+    const cart = await this.cartService.applyPromocode(
       botId,
       telegramUsername,
       applyDto.code
     );
+
+    // Получаем информацию о примененном промокоде
+    const promocodeInfo = await this.cartService.getAppliedPromocodeInfo(
+      botId,
+      cart
+    );
+
+    // Возвращаем корзину с информацией о промокоде
+    return {
+      ...cart,
+      appliedPromocode: promocodeInfo
+        ? {
+            code: promocodeInfo.promocode?.code,
+            discount: promocodeInfo.discount,
+          }
+        : null,
+    };
   }
 
   @Delete("bots/:botId/cart/promocode")
@@ -277,6 +362,12 @@ export class CartController {
         "telegramUsername не найден в валидированных данных"
       );
     }
-    return this.cartService.removePromocode(botId, telegramUsername);
+    const cart = await this.cartService.removePromocode(botId, telegramUsername);
+    
+    // Возвращаем корзину без промокода
+    return {
+      ...cart,
+      appliedPromocode: null,
+    };
   }
 }

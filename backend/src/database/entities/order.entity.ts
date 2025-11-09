@@ -67,6 +67,12 @@ export class Order {
   @Column({ length: 3, default: "RUB" })
   currency: string;
 
+  @Column({ nullable: true })
+  appliedPromocodeId: string | null; // ID примененного промокода
+
+  @Column({ type: "decimal", precision: 10, scale: 2, nullable: true })
+  promocodeDiscount: number | null; // Размер скидки от промокода
+
   @CreateDateColumn()
   createdAt: Date;
 

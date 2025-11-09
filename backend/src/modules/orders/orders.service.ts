@@ -3,6 +3,8 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  Inject,
+  forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
@@ -14,6 +16,8 @@ import { CreateOrderDto, UpdateOrderStatusDto } from "./dto/order.dto";
 import { NotificationService } from "../websocket/services/notification.service";
 import { NotificationType } from "../websocket/interfaces/notification.interface";
 import { Message } from "../../database/entities/message.entity";
+import { ShopPromocodesService } from "../shop-promocodes/shop-promocodes.service";
+import { CartService } from "../cart/cart.service";
 
 @Injectable()
 export class OrdersService {
@@ -30,7 +34,11 @@ export class OrdersService {
     private readonly productRepository: Repository<Product>,
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>,
-    private readonly notificationService: NotificationService
+    private readonly notificationService: NotificationService,
+    @Inject(forwardRef(() => ShopPromocodesService))
+    private readonly shopPromocodesService: ShopPromocodesService,
+    @Inject(forwardRef(() => CartService))
+    private readonly cartService: CartService
   ) {}
 
   /**
@@ -84,6 +92,33 @@ export class OrdersService {
       }
     }
 
+    // Получаем информацию о примененном промокоде и рассчитываем итоговую цену
+    let finalPrice = cart.totalPrice;
+    let promocodeDiscount = 0;
+    let appliedPromocodeId: string | null = null;
+
+    if (cart.appliedPromocodeId) {
+      const promocodeInfo = await this.cartService.getAppliedPromocodeInfo(
+        botId,
+        cart
+      );
+
+      if (promocodeInfo && promocodeInfo.discount) {
+        promocodeDiscount = promocodeInfo.discount;
+        finalPrice = cart.totalPrice - promocodeDiscount;
+        appliedPromocodeId = cart.appliedPromocodeId;
+
+        // Обновляем счетчик использований промокода
+        await this.shopPromocodesService.incrementUsageCount(
+          cart.appliedPromocodeId
+        );
+      } else {
+        // Промокод стал недействителен, удаляем его из корзины
+        cart.appliedPromocodeId = null;
+        await this.cartRepository.save(cart);
+      }
+    }
+
     // Создаем заказ на основе корзины
     const order = this.orderRepository.create({
       botId,
@@ -92,8 +127,10 @@ export class OrdersService {
       customerData: createOrderDto.customerData,
       additionalMessage: createOrderDto.additionalMessage,
       status: OrderStatus.PENDING,
-      totalPrice: cart.totalPrice,
+      totalPrice: finalPrice, // Итоговая цена с учетом скидки
       currency: cart.currency,
+      appliedPromocodeId: appliedPromocodeId,
+      promocodeDiscount: promocodeDiscount > 0 ? promocodeDiscount : null,
     });
 
     const savedOrder = await this.orderRepository.save(order);
@@ -107,6 +144,7 @@ export class OrdersService {
 
     // Очищаем корзину после создания заказа
     cart.items = [];
+    cart.appliedPromocodeId = null; // Удаляем примененный промокод
     await this.cartRepository.save(cart);
 
     this.logger.log(
@@ -436,6 +474,8 @@ export class OrdersService {
           currency: order.currency,
           totalItems: order.totalItems,
           createdAt: order.createdAt,
+          appliedPromocodeId: order.appliedPromocodeId,
+          promocodeDiscount: order.promocodeDiscount,
         },
       });
     } catch (error) {

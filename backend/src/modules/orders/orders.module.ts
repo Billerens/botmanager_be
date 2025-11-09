@@ -11,12 +11,16 @@ import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
 import { TelegramInitDataValidationService } from "../../common/telegram-initdata-validation.service";
 import { BotsModule } from "../bots/bots.module";
 import { WebSocketModule } from "../websocket/websocket.module";
+import { ShopPromocodesModule } from "../shop-promocodes/shop-promocodes.module";
+import { CartModule } from "../cart/cart.module";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Order, Cart, Product, Bot, Message]),
     forwardRef(() => BotsModule),
     WebSocketModule,
+    forwardRef(() => ShopPromocodesModule),
+    forwardRef(() => CartModule),
   ],
   controllers: [PublicOrdersController, OrdersController],
   providers: [
