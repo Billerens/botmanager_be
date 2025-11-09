@@ -12,6 +12,8 @@ import {
   UseGuards,
   Request,
   UnauthorizedException,
+  UseInterceptors,
+  ClassSerializerInterceptor,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -32,6 +34,7 @@ import { ValidatePromocodeDto, ApplyPromocodeDto } from "../shop-promocodes/dto/
 @ApiTags("Публичные эндпоинты - Корзина")
 @Controller("public")
 @UseGuards(TelegramInitDataGuard)
+@UseInterceptors(ClassSerializerInterceptor)
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 

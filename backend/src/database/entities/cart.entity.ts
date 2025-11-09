@@ -8,6 +8,7 @@ import {
   JoinColumn,
   Index,
 } from "typeorm";
+import { Expose } from "class-transformer";
 import { Bot } from "./bot.entity";
 
 export interface CartItem {
@@ -49,19 +50,22 @@ export class Cart {
   bot: Bot;
 
   // Методы
+  @Expose()
   get totalItems(): number {
     if (!this.items || this.items.length === 0) return 0;
     return this.items.reduce((sum, item) => sum + item.quantity, 0);
   }
 
+  @Expose()
   get totalPrice(): number {
     if (!this.items || this.items.length === 0) return 0;
     return this.items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
+      (sum, item) => sum + Number(item.price) * Number(item.quantity),
       0
     );
   }
 
+  @Expose()
   get currency(): string {
     if (!this.items || this.items.length === 0) return "RUB";
     return this.items[0].currency;
