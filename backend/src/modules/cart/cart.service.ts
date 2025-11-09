@@ -41,8 +41,10 @@ export class CartService {
    * Получить корзину пользователя для бота
    */
   async getCart(botId: string, telegramUsername: string): Promise<Cart> {
-    this.logger.log(`[CART SERVICE] getCart called - botId: ${botId}, telegramUsername: ${telegramUsername}`);
-    
+    this.logger.log(
+      `[CART SERVICE] getCart called - botId: ${botId}, telegramUsername: ${telegramUsername}`
+    );
+
     // Проверяем существование бота
     const bot = await this.botRepository.findOne({
       where: { id: botId },
@@ -59,7 +61,9 @@ export class CartService {
     });
 
     if (!cart) {
-      this.logger.log(`[CART SERVICE] Creating new cart for botId: ${botId}, telegramUsername: ${telegramUsername}`);
+      this.logger.log(
+        `[CART SERVICE] Creating new cart for botId: ${botId}, telegramUsername: ${telegramUsername}`
+      );
       cart = this.cartRepository.create({
         botId,
         telegramUsername,
@@ -70,20 +74,26 @@ export class CartService {
       // Отправляем уведомление о создании корзины
       await this.sendCartNotification(bot, NotificationType.CART_CREATED, cart);
     } else {
-      this.logger.log(`[CART SERVICE] Cart found - cartId: ${cart.id}, items count: ${cart.items?.length || 0}, appliedPromocodeId: ${cart.appliedPromocodeId || 'null'}`);
+      this.logger.log(
+        `[CART SERVICE] Cart found - cartId: ${cart.id}, items count: ${cart.items?.length || 0}, appliedPromocodeId: ${cart.appliedPromocodeId || "null"}`
+      );
     }
 
     // Если есть примененный промокод, валидируем его и пересчитываем скидку
     if (cart.appliedPromocodeId) {
-      this.logger.log(`[CART SERVICE] Cart has appliedPromocodeId: ${cart.appliedPromocodeId}, validating...`);
+      this.logger.log(
+        `[CART SERVICE] Cart has appliedPromocodeId: ${cart.appliedPromocodeId}, validating...`
+      );
       try {
         const promocode = await this.promocodeRepository.findOne({
           where: { id: cart.appliedPromocodeId, botId },
         });
 
         if (promocode) {
-          this.logger.log(`[CART SERVICE] Promocode found in validation - code: ${promocode.code}, isActive: ${promocode.isActive}`);
-          
+          this.logger.log(
+            `[CART SERVICE] Promocode found in validation - code: ${promocode.code}, isActive: ${promocode.isActive}`
+          );
+
           // Валидируем промокод для текущей корзины
           const validation = await this.shopPromocodesService.validatePromocode(
             botId,
@@ -91,16 +101,22 @@ export class CartService {
             cart
           );
 
-          this.logger.log(`[CART SERVICE] Promocode validation in getCart - isValid: ${validation.isValid}, discount: ${validation.discount || 'null'}`);
+          this.logger.log(
+            `[CART SERVICE] Promocode validation in getCart - isValid: ${validation.isValid}, discount: ${validation.discount || "null"}`
+          );
 
           // Если промокод стал недействителен, удаляем его
           if (!validation.isValid) {
-            this.logger.warn(`[CART SERVICE] Promocode is invalid, removing from cart - code: ${promocode.code}`);
+            this.logger.warn(
+              `[CART SERVICE] Promocode is invalid, removing from cart - code: ${promocode.code}`
+            );
             cart.appliedPromocodeId = null;
             cart = await this.cartRepository.save(cart);
           }
         } else {
-          this.logger.warn(`[CART SERVICE] Promocode not found with id: ${cart.appliedPromocodeId}, removing from cart`);
+          this.logger.warn(
+            `[CART SERVICE] Promocode not found with id: ${cart.appliedPromocodeId}, removing from cart`
+          );
           // Промокод не найден, удаляем его из корзины
           cart.appliedPromocodeId = null;
           cart = await this.cartRepository.save(cart);
@@ -118,7 +134,9 @@ export class CartService {
       this.logger.log(`[CART SERVICE] Cart has no appliedPromocodeId`);
     }
 
-    this.logger.log(`[CART SERVICE] Returning cart - cartId: ${cart.id}, appliedPromocodeId: ${cart.appliedPromocodeId || 'null'}`);
+    this.logger.log(
+      `[CART SERVICE] Returning cart - cartId: ${cart.id}, appliedPromocodeId: ${cart.appliedPromocodeId || "null"}`
+    );
     return cart;
   }
 
@@ -477,7 +495,7 @@ export class CartService {
       carts = carts.filter((cart) => cart.items && cart.items.length > 0);
     }
 
-    // Получаем chatId для каждой корзины из сообщений пользователя
+    // Получаем chatId и информацию о промокодах для каждой корзины
     const cartsWithChatId = await Promise.all(
       carts.map(async (cart) => {
         // Пытаемся найти chatId по telegramUsername через метаданные сообщений
@@ -499,12 +517,21 @@ export class CartService {
 
         const chatId = userMessage?.telegramChatId;
 
+        // Получаем информацию о примененном промокоде
+        const promocodeInfo = await this.getAppliedPromocodeInfo(botId, cart);
+
         return {
           ...cart,
           chatId,
           totalItems: cart.totalItems,
           totalPrice: cart.totalPrice,
           currency: cart.currency,
+          appliedPromocode: promocodeInfo
+            ? {
+                code: promocodeInfo.promocode?.code,
+                discount: promocodeInfo.discount,
+              }
+            : null,
         };
       })
     );
@@ -539,40 +566,56 @@ export class CartService {
     promocode?: ShopPromocode;
     discount?: number;
   } | null> {
-    this.logger.log(`[CART SERVICE] getAppliedPromocodeInfo called - botId: ${botId}, cartId: ${cart.id}, appliedPromocodeId: ${cart.appliedPromocodeId || 'null'}`);
-    
+    this.logger.log(
+      `[CART SERVICE] getAppliedPromocodeInfo called - botId: ${botId}, cartId: ${cart.id}, appliedPromocodeId: ${cart.appliedPromocodeId || "null"}`
+    );
+
     if (!cart.appliedPromocodeId) {
-      this.logger.log(`[CART SERVICE] No appliedPromocodeId in cart, returning null`);
+      this.logger.log(
+        `[CART SERVICE] No appliedPromocodeId in cart, returning null`
+      );
       return null;
     }
 
     try {
-      this.logger.log(`[CART SERVICE] Looking for promocode with id: ${cart.appliedPromocodeId}, botId: ${botId}`);
-      
+      this.logger.log(
+        `[CART SERVICE] Looking for promocode with id: ${cart.appliedPromocodeId}, botId: ${botId}`
+      );
+
       const promocode = await this.promocodeRepository.findOne({
         where: { id: cart.appliedPromocodeId, botId },
       });
 
       if (!promocode) {
-        this.logger.warn(`[CART SERVICE] Promocode not found with id: ${cart.appliedPromocodeId}, botId: ${botId}`);
+        this.logger.warn(
+          `[CART SERVICE] Promocode not found with id: ${cart.appliedPromocodeId}, botId: ${botId}`
+        );
         return null;
       }
 
-      this.logger.log(`[CART SERVICE] Promocode found - code: ${promocode.code}, type: ${promocode.type}, value: ${promocode.value}, isActive: ${promocode.isActive}`);
+      this.logger.log(
+        `[CART SERVICE] Promocode found - code: ${promocode.code}, type: ${promocode.type}, value: ${promocode.value}, isActive: ${promocode.isActive}`
+      );
 
       // Валидируем промокод для текущей корзины
-      this.logger.log(`[CART SERVICE] Validating promocode for cart - cart items count: ${cart.items?.length || 0}`);
-      
+      this.logger.log(
+        `[CART SERVICE] Validating promocode for cart - cart items count: ${cart.items?.length || 0}`
+      );
+
       const validation = await this.shopPromocodesService.validatePromocode(
         botId,
         promocode.code,
         cart
       );
 
-      this.logger.log(`[CART SERVICE] Validation result - isValid: ${validation.isValid}, discount: ${validation.discount || 'null'}, message: ${validation.message || 'null'}`);
+      this.logger.log(
+        `[CART SERVICE] Validation result - isValid: ${validation.isValid}, discount: ${validation.discount || "null"}, message: ${validation.message || "null"}`
+      );
 
       if (!validation.isValid || !validation.discount) {
-        this.logger.warn(`[CART SERVICE] Promocode validation failed - isValid: ${validation.isValid}, discount: ${validation.discount || 'null'}`);
+        this.logger.warn(
+          `[CART SERVICE] Promocode validation failed - isValid: ${validation.isValid}, discount: ${validation.discount || "null"}`
+        );
         return null;
       }
 
@@ -581,7 +624,9 @@ export class CartService {
         discount: validation.discount,
       };
 
-      this.logger.log(`[CART SERVICE] Returning promocode info - code: ${result.promocode.code}, discount: ${result.discount}`);
+      this.logger.log(
+        `[CART SERVICE] Returning promocode info - code: ${result.promocode.code}, discount: ${result.discount}`
+      );
 
       return result;
     } catch (error) {
