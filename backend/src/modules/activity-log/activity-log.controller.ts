@@ -39,6 +39,8 @@ export class ActivityLogController {
     @Query("botId") botId?: string,
     @Query("type") type?: ActivityType,
     @Query("level") level?: ActivityLevel,
+    @Query("dateFrom") dateFrom?: string,
+    @Query("dateTo") dateTo?: string,
     @Query("page") page: number = 1,
     @Query("limit") limit: number = 50
   ) {
@@ -50,6 +52,8 @@ export class ActivityLogController {
       userId,
       type,
       level,
+      dateFrom,
+      dateTo,
       page,
       limit
     );

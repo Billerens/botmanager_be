@@ -28,6 +28,8 @@ export class ActivityLogService {
     userId?: string,
     type?: ActivityType,
     level?: ActivityLevel,
+    dateFrom?: string,
+    dateTo?: string,
     page: number = 1,
     limit: number = 50
   ): Promise<ActivityLog[]> {
@@ -38,7 +40,10 @@ export class ActivityLogService {
     }
 
     if (userId) {
-      query.andWhere("log.userId = :userId", { userId });
+      // Показываем логи текущего пользователя ИЛИ логи с userId = null (системные логи)
+      query.andWhere("(log.userId = :userId OR log.userId IS NULL)", {
+        userId,
+      });
     }
 
     if (type) {
@@ -47,6 +52,16 @@ export class ActivityLogService {
 
     if (level) {
       query.andWhere("log.level = :level", { level });
+    }
+
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      query.andWhere("log.createdAt >= :dateFrom", { dateFrom: fromDate });
+    }
+
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      query.andWhere("log.createdAt <= :dateTo", { dateTo: toDate });
     }
 
     return query
