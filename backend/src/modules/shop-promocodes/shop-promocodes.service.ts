@@ -18,6 +18,7 @@ import { Category } from "../../database/entities/category.entity";
 import {
   CreateShopPromocodeDto,
   UpdateShopPromocodeDto,
+  ShopPromocodeFiltersDto,
 } from "./dto/shop-promocode.dto";
 import { NotificationService } from "../websocket/services/notification.service";
 import { NotificationType } from "../websocket/interfaces/notification.interface";
@@ -144,14 +145,45 @@ export class ShopPromocodesService {
   /**
    * Получить все промокоды бота
    */
-  async findAll(botId: string, userId: string): Promise<ShopPromocode[]> {
+  async findAll(
+    botId: string,
+    userId: string,
+    filters?: ShopPromocodeFiltersDto
+  ): Promise<ShopPromocode[]> {
     await this.validateBotOwnership(botId, userId);
 
-    return await this.promocodeRepository.find({
-      where: { botId },
+    const where: any = { botId };
+
+    if (filters?.type) {
+      where.type = filters.type;
+    }
+
+    if (filters?.applicableTo) {
+      where.applicableTo = filters.applicableTo;
+    }
+
+    if (filters?.usageLimit) {
+      where.usageLimit = filters.usageLimit;
+    }
+
+    if (filters?.isActive !== undefined) {
+      where.isActive = filters.isActive;
+    }
+
+    const promocodes = await this.promocodeRepository.find({
+      where,
       relations: ["category", "product"],
       order: { createdAt: "DESC" },
     });
+
+    // Фильтрация по isAvailable (вычисляемое поле) на уровне приложения
+    if (filters?.isAvailable !== undefined) {
+      return promocodes.filter(
+        (promocode) => promocode.isAvailable === filters.isAvailable
+      );
+    }
+
+    return promocodes;
   }
 
   /**

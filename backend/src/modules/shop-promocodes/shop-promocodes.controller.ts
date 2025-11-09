@@ -8,6 +8,7 @@ import {
   Param,
   UseGuards,
   Request,
+  Query,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -16,10 +17,12 @@ import {
   ApiParam,
   ApiBearerAuth,
 } from "@nestjs/swagger";
+import { ValidationPipe } from "@nestjs/common";
 import { ShopPromocodesService } from "./shop-promocodes.service";
 import {
   CreateShopPromocodeDto,
   UpdateShopPromocodeDto,
+  ShopPromocodeFiltersDto,
 } from "./dto/shop-promocode.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 
@@ -65,8 +68,13 @@ export class ShopPromocodesController {
     status: 200,
     description: "Список промокодов",
   })
-  async findAll(@Param("botId") botId: string, @Request() req) {
-    return this.shopPromocodesService.findAll(botId, req.user.id);
+  async findAll(
+    @Param("botId") botId: string,
+    @Request() req,
+    @Query(new ValidationPipe({ transform: true }))
+    filters: ShopPromocodeFiltersDto
+  ) {
+    return this.shopPromocodesService.findAll(botId, req.user.id, filters);
   }
 
   @Get(":id")

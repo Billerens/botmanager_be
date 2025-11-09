@@ -10,6 +10,8 @@ import {
   Max,
   ValidateIf,
 } from "class-validator";
+import { ApiPropertyOptional } from "@nestjs/swagger";
+import { Type, Transform } from "class-transformer";
 import {
   ShopPromocodeType,
   ShopPromocodeApplicableTo,
@@ -137,3 +139,50 @@ export class ApplyPromocodeDto {
   code: string;
 }
 
+export class ShopPromocodeFiltersDto {
+  @ApiPropertyOptional({
+    description: "Фильтр по типу промокода",
+    enum: ShopPromocodeType,
+  })
+  @IsOptional()
+  @IsEnum(ShopPromocodeType)
+  type?: ShopPromocodeType;
+
+  @ApiPropertyOptional({
+    description: "Фильтр по применимости промокода",
+    enum: ShopPromocodeApplicableTo,
+  })
+  @IsOptional()
+  @IsEnum(ShopPromocodeApplicableTo)
+  applicableTo?: ShopPromocodeApplicableTo;
+
+  @ApiPropertyOptional({
+    description: "Фильтр по ограничению использования",
+    enum: ShopPromocodeUsageLimit,
+  })
+  @IsOptional()
+  @IsEnum(ShopPromocodeUsageLimit)
+  usageLimit?: ShopPromocodeUsageLimit;
+
+  @ApiPropertyOptional({ description: "Фильтр по активности" })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === "true") return true;
+    if (value === "false") return false;
+    if (value === true || value === false) return value;
+    return undefined;
+  })
+  @IsBoolean()
+  isActive?: boolean;
+
+  @ApiPropertyOptional({ description: "Фильтр по статусу доступности" })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === "true") return true;
+    if (value === "false") return false;
+    if (value === true || value === false) return value;
+    return undefined;
+  })
+  @IsBoolean()
+  isAvailable?: boolean;
+}
