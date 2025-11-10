@@ -247,12 +247,12 @@ export class CloudAiController {
   })
   async chatCompletionsSimple(
     @Body() data: ChatCompletionCreateParamsDto,
+    @Res() res: Response,
     @Headers("authorization") authToken?: string,
-    @Res({ passthrough: true }) res?: Response,
     @Req() req?: Request
-  ): Promise<OpenAiChatCompletionResponseDto> {
+  ): Promise<void | OpenAiChatCompletionResponseDto> {
     this.logger.debug("Chat completions request received (simple endpoint)");
-    
+
     // Логирование входящих данных для диагностики
     this.logger.debug(`Request body type: ${typeof req?.body}`);
     this.logger.debug(`Request body: ${JSON.stringify(req?.body)}`);
@@ -263,7 +263,7 @@ export class CloudAiController {
     const token = authToken?.replace("Bearer ", "") || undefined;
 
     // Если запрос стриминговый, проксируем стрим
-    if (data.stream && res) {
+    if (data.stream) {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
@@ -281,7 +281,7 @@ export class CloudAiController {
         }
         res.write("data: [DONE]\n\n");
         res.end();
-        return {} as OpenAiChatCompletionResponseDto; // Не используется при стриминге
+        return; // Не возвращаем значение для стриминговых запросов
       } catch (error: any) {
         this.logger.error(
           `Error in streaming chat completions: ${error.message}`,
@@ -299,7 +299,7 @@ export class CloudAiController {
           );
           res.end();
         }
-        throw error;
+        return; // Не пробрасываем ошибку дальше, так как ответ уже отправлен
       }
     }
 
@@ -309,6 +309,6 @@ export class CloudAiController {
       undefined,
       token
     );
-    return result;
+    res.json(result);
   }
 }
