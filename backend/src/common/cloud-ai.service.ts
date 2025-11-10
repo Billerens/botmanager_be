@@ -81,7 +81,17 @@ export class CloudAiService {
    * Получает authToken из параметра или конфигурации
    */
   private getAuthToken(authToken?: string): string | undefined {
-    return authToken || this.defaultAuthToken;
+    const token = authToken || this.defaultAuthToken;
+    if (token) {
+      this.logger.debug(
+        `Using ${authToken ? "provided" : "default"} auth token (length: ${token.length})`
+      );
+    } else {
+      this.logger.warn(
+        "No auth token available - neither provided nor configured"
+      );
+    }
+    return token;
   }
 
   /**
@@ -319,8 +329,11 @@ export class CloudAiService {
 
       this.logger.debug(`Starting stream request to ${url}`);
 
+      const headers = this.getHeaders(authToken);
+      this.logger.debug(`Request headers: ${JSON.stringify(headers)}`);
+
       const response = await this.axiosInstance.post(url, streamData, {
-        headers: this.getHeaders(authToken),
+        headers: headers,
         responseType: "stream",
       });
 

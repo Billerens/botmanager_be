@@ -72,9 +72,10 @@ export class CloudAiController {
     this.logger.debug("Call agent request received");
 
     // Игнорируем agentAccessId из пути, используем дефолтный
-    const token = authToken?.replace("Bearer ", "") || undefined;
-
-    return await this.cloudAiService.callAgent(data, undefined, token);
+    // Токен из заголовка используется только для проверки авторизации на нашем бэкенде
+    // Для запросов к внешнему AI-агенту всегда используется CLOUD_AI_DEFAULT_AUTH_TOKEN
+    // Не передаем userToken - сервис будет использовать дефолтный токен из конфигурации
+    return await this.cloudAiService.callAgent(data, undefined, undefined);
   }
 
   /**
@@ -106,9 +107,14 @@ export class CloudAiController {
     this.logger.debug("Chat completions request received");
 
     // Игнорируем agentAccessId из пути, используем дефолтный
-    const token = authToken?.replace("Bearer ", "") || undefined;
-
-    return await this.cloudAiService.chatCompletions(data, undefined, token);
+    // Токен из заголовка используется только для проверки авторизации на нашем бэкенде
+    // Для запросов к внешнему AI-агенту всегда используется CLOUD_AI_DEFAULT_AUTH_TOKEN
+    // Не передаем userToken - сервис будет использовать дефолтный токен из конфигурации
+    return await this.cloudAiService.chatCompletions(
+      data,
+      undefined,
+      undefined
+    );
   }
 
   /**
@@ -142,9 +148,14 @@ export class CloudAiController {
     this.logger.debug("Text completions request received (deprecated)");
 
     // Игнорируем agentAccessId из пути, используем дефолтный
-    const token = authToken?.replace("Bearer ", "") || undefined;
-
-    return await this.cloudAiService.textCompletions(data, undefined, token);
+    // Токен из заголовка используется только для проверки авторизации на нашем бэкенде
+    // Для запросов к внешнему AI-агенту всегда используется CLOUD_AI_DEFAULT_AUTH_TOKEN
+    // Не передаем userToken - сервис будет использовать дефолтный токен из конфигурации
+    return await this.cloudAiService.textCompletions(
+      data,
+      undefined,
+      undefined
+    );
   }
 
   /**
@@ -175,9 +186,10 @@ export class CloudAiController {
     this.logger.debug("Get models request received");
 
     // Игнорируем agentAccessId из пути, используем дефолтный
-    const token = authToken?.replace("Bearer ", "") || undefined;
-
-    return await this.cloudAiService.getModels(undefined, token);
+    // Токен из заголовка используется только для проверки авторизации на нашем бэкенде
+    // Для запросов к внешнему AI-агенту всегда используется CLOUD_AI_DEFAULT_AUTH_TOKEN
+    // Не передаем userToken - сервис будет использовать дефолтный токен из конфигурации
+    return await this.cloudAiService.getModels(undefined, undefined);
   }
 
   /**
@@ -217,8 +229,9 @@ export class CloudAiController {
     this.logger.debug("Get agent embed code request received");
 
     // Игнорируем agentAccessId из пути, используем дефолтный
-    const token = authToken?.replace("Bearer ", "") || undefined;
-
+    // Токен из заголовка используется только для проверки авторизации на нашем бэкенде
+    // Для запросов к внешнему AI-агенту всегда используется CLOUD_AI_DEFAULT_AUTH_TOKEN
+    // Не передаем userToken - сервис будет использовать дефолтный токен из конфигурации
     return await this.cloudAiService.getAgentEmbedCode(
       {
         collapsed,
@@ -226,7 +239,7 @@ export class CloudAiController {
         origin,
       },
       undefined,
-      token
+      undefined // Всегда используем дефолтный токен из конфигурации
     );
   }
 
@@ -260,7 +273,17 @@ export class CloudAiController {
     this.logger.debug(`Messages is array: ${Array.isArray(data?.messages)}`);
     this.logger.debug(`Messages value: ${JSON.stringify(data?.messages)}`);
 
-    const token = authToken?.replace("Bearer ", "") || undefined;
+    // Токен из заголовка используется только для проверки авторизации на нашем бэкенде
+    // Для запросов к внешнему AI-агенту всегда используется CLOUD_AI_DEFAULT_AUTH_TOKEN из конфигурации
+    const userToken = authToken?.replace("Bearer ", "") || undefined;
+    this.logger.debug(
+      `User auth token from header: ${userToken ? "present" : "missing"}`
+    );
+
+    // TODO: Здесь можно добавить проверку авторизации пользователя, если нужно
+    // if (!userToken) {
+    //   throw new UnauthorizedException("User must be authenticated");
+    // }
 
     // Если запрос стриминговый, проксируем стрим
     if (data.stream) {
@@ -273,10 +296,11 @@ export class CloudAiController {
 
       try {
         let chunkCount = 0;
+        // Не передаем userToken - сервис будет использовать CLOUD_AI_DEFAULT_AUTH_TOKEN
         for await (const chunk of this.cloudAiService.chatCompletionsStream(
           data,
           undefined,
-          token
+          undefined // Всегда используем дефолтный токен из конфигурации
         )) {
           chunkCount++;
           this.logger.debug(
@@ -312,10 +336,11 @@ export class CloudAiController {
     }
 
     // Обычный (не стриминговый) запрос
+    // Не передаем userToken - сервис будет использовать CLOUD_AI_DEFAULT_AUTH_TOKEN
     const result = await this.cloudAiService.chatCompletions(
       data,
       undefined,
-      token
+      undefined // Всегда используем дефолтный токен из конфигурации
     );
     res.json(result);
   }
