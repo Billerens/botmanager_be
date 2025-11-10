@@ -22,13 +22,17 @@ export class ValidationExceptionFilter implements ExceptionFilter {
     // Логирование для диагностики
     this.logger.error(
       `Validation error on ${request.method} ${request.url}`,
-      {
-        body: request.body,
-        query: request.query,
-        params: request.params,
-        exceptionResponse,
-      }
     );
+    this.logger.error(`Content-Type: ${request.headers["content-type"]}`);
+    this.logger.error(`Body: ${JSON.stringify(request.body)}`);
+    this.logger.error(`Body keys: ${Object.keys(request.body || {}).join(", ")}`);
+    this.logger.error(`Messages in body: ${request.body?.messages !== undefined ? "yes" : "no"}`);
+    if (request.body?.messages !== undefined) {
+      this.logger.error(`Messages type: ${typeof request.body.messages}`);
+      this.logger.error(`Messages is array: ${Array.isArray(request.body.messages)}`);
+      this.logger.error(`Messages value: ${JSON.stringify(request.body.messages)}`);
+    }
+    this.logger.error(`Exception response: ${JSON.stringify(exceptionResponse)}`);
 
     // Форматируем ответ в формате, который ожидает клиент
     const message = Array.isArray(exceptionResponse.message)

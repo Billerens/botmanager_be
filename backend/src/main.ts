@@ -7,6 +7,7 @@ import helmet from "helmet";
 import compression from "compression";
 import { AppModule } from "./app.module";
 import { ValidationExceptionFilter } from "./common/filters/validation-exception.filter";
+import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
 
 // Импорты всех DTO для Swagger
 import {
@@ -245,6 +246,7 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule, {
     logger: ["error", "warn", "log", "debug", "verbose"],
+    bodyParser: true, // Включаем body parser по умолчанию
   });
   const configService = app.get(ConfigService);
 
@@ -252,18 +254,29 @@ async function bootstrap() {
   app.use(helmet());
   app.use(compression());
 
-  // Middleware для логирования запросов к cloud-ai эндпоинтам
+  // Middleware для парсинга JSON, даже если Content-Type не установлен
+  // Это помогает, когда клиент забывает установить Content-Type: application/json
   app.use((req, res, next) => {
-    if (req.url.includes("/api/v1/cloud-ai/v1/chat/completions")) {
-      const logger = new Logger("RequestLogger");
-      logger.debug(`[${req.method}] ${req.url}`);
-      logger.debug(`Content-Type: ${req.headers["content-type"]}`);
-      logger.debug(`Body (raw): ${JSON.stringify(req.body)}`);
-      logger.debug(`Body type: ${typeof req.body}`);
-      if (req.body && req.body.messages) {
-        logger.debug(`Messages type: ${typeof req.body.messages}`);
-        logger.debug(`Messages is array: ${Array.isArray(req.body.messages)}`);
-        logger.debug(`Messages: ${JSON.stringify(req.body.messages)}`);
+    if (
+      req.method === "POST" ||
+      req.method === "PUT" ||
+      req.method === "PATCH"
+    ) {
+      const contentType = req.headers["content-type"] || "";
+      // Если Content-Type не установлен или не содержит json, но тело есть
+      if (
+        (!contentType || !contentType.includes("application/json")) &&
+        req.body &&
+        typeof req.body === "object" &&
+        Object.keys(req.body).length === 0
+      ) {
+        // Пытаемся прочитать сырые данные из потока (если они еще не прочитаны)
+        // Но это сложно сделать без изменения потока
+        // Вместо этого просто логируем предупреждение
+        const logger = new Logger("BodyParserWarning");
+        logger.warn(
+          `Request to ${req.url} has no Content-Type header. Body may not be parsed correctly.`
+        );
       }
     }
     next();
@@ -291,6 +304,9 @@ async function bootstrap() {
 
   // Exception filter для обработки ошибок валидации
   app.useGlobalFilters(new ValidationExceptionFilter());
+
+  // Interceptor для логирования запросов (выполняется после парсинга body)
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
   // Валидация
   app.useGlobalPipes(
