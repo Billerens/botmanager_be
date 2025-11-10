@@ -10,6 +10,7 @@ import databaseConfig from "./config/database.config";
 import jwtConfig from "./config/jwt.config";
 import appConfig from "./config/configuration";
 import cloudAiConfig from "./config/cloud-ai.config";
+import bytezConfig from "./config/bytez.config";
 import redisConfig from "./modules/websocket/config/redis.config";
 import { AuthModule } from "./modules/auth/auth.module";
 import { UsersModule } from "./modules/users/users.module";
@@ -31,6 +32,7 @@ import { CategoriesModule } from "./modules/categories/categories.module";
 import { ShopPromocodesModule } from "./modules/shop-promocodes/shop-promocodes.module";
 import { HealthModule } from "./health/health.module";
 import { CloudAiModule } from "./modules/cloud-ai/cloud-ai.module";
+import { BytezModule } from "./modules/bytez/bytez.module";
 
 @Module({
   imports: [
@@ -38,7 +40,7 @@ import { CloudAiModule } from "./modules/cloud-ai/cloud-ai.module";
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ".env",
-      load: [databaseConfig, jwtConfig, appConfig, cloudAiConfig, redisConfig],
+      load: [databaseConfig, jwtConfig, appConfig, cloudAiConfig, bytezConfig, redisConfig],
     }),
 
     // Rate limiting
@@ -85,6 +87,7 @@ import { CloudAiModule } from "./modules/cloud-ai/cloud-ai.module";
     ShopPromocodesModule, // Промокоды для магазина
     HealthModule, // Health check endpoints
     CloudAiModule, // Cloud AI прокси-контроллер
+    BytezModule, // Bytez AI models integration
   ],
 })
 export class AppModule {}
