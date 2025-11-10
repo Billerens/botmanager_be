@@ -98,3 +98,94 @@ export class BytezListModelsDto {
   @IsOptional()
   limit?: number;
 }
+
+/**
+ * DTO для сообщения в чате
+ */
+export class BytezChatMessageDto {
+  @ApiProperty({
+    description: "Роль отправителя сообщения",
+    example: "user",
+    enum: ["system", "user", "assistant"],
+  })
+  @IsString()
+  @IsNotEmpty()
+  role: "system" | "user" | "assistant";
+
+  @ApiProperty({
+    description: "Содержимое сообщения",
+    example: "Привет! Как дела?",
+  })
+  @IsString()
+  @IsNotEmpty()
+  content: string;
+}
+
+/**
+ * DTO для создания chat completion через bytez
+ */
+export class BytezChatCompletionCreateParamsDto {
+  @ApiProperty({
+    description: "ID модели для чата",
+    example: "meta-llama/Llama-3.1-8B-Instruct",
+  })
+  @IsString()
+  @IsNotEmpty()
+  modelId: string;
+
+  @ApiProperty({
+    description: "Массив сообщений для чата",
+    type: [BytezChatMessageDto],
+  })
+  @IsNotEmpty()
+  messages: BytezChatMessageDto[];
+
+  @ApiProperty({
+    description: "Температура для генерации (0-2)",
+    required: false,
+    example: 0.7,
+  })
+  @IsOptional()
+  temperature?: number;
+
+  @ApiProperty({
+    description: "Максимальное количество токенов в ответе",
+    required: false,
+    example: 1000,
+  })
+  @IsOptional()
+  maxTokens?: number;
+
+  @ApiProperty({
+    description: "Включить стриминг",
+    required: false,
+    example: false,
+  })
+  @IsOptional()
+  stream?: boolean;
+}
+
+/**
+ * DTO для ответа chat completion через bytez
+ */
+export class BytezChatCompletionResponseDto {
+  @ApiProperty({
+    description: "Ответ модели",
+  })
+  output: string;
+
+  @ApiProperty({
+    description: "Ошибка, если произошла (опционально)",
+    required: false,
+  })
+  @IsOptional()
+  error?: string;
+
+  @ApiProperty({
+    description: "Метаданные выполнения (опционально)",
+    required: false,
+  })
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, any>;
+}
