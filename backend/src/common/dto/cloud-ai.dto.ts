@@ -195,7 +195,7 @@ export class ChatCompletionCreateParamsDto {
     description: "Список сообщений, составляющих разговор",
     type: [ChatMessageDto],
   })
-  @IsArray()
+  @IsArray({ message: "messages must be an array" })
   @ValidateNested({ each: true })
   @Type(() => ChatMessageDto)
   messages: ChatMessageDto[];
