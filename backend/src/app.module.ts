@@ -30,6 +30,7 @@ import { ProductsModule } from "./modules/products/products.module";
 import { CategoriesModule } from "./modules/categories/categories.module";
 import { ShopPromocodesModule } from "./modules/shop-promocodes/shop-promocodes.module";
 import { HealthModule } from "./health/health.module";
+import { CloudAiModule } from "./modules/cloud-ai/cloud-ai.module";
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { HealthModule } from "./health/health.module";
     CategoriesModule, // Категории товаров
     ShopPromocodesModule, // Промокоды для магазина
     HealthModule, // Health check endpoints
+    CloudAiModule, // Cloud AI прокси-контроллер
   ],
 })
 export class AppModule {}
