@@ -317,29 +317,84 @@ export class CloudAiService {
       // Убеждаемся, что stream включен
       const streamData = { ...data, stream: true };
 
+      this.logger.debug(`Starting stream request to ${url}`);
+
       const response = await this.axiosInstance.post(url, streamData, {
         headers: this.getHeaders(authToken),
         responseType: "stream",
       });
 
-      // Обрабатываем стрим
-      for await (const chunk of response.data) {
-        const lines = chunk.toString().split("\n");
+      this.logger.debug(`Stream response received, status: ${response.status}`);
+
+      let buffer = "";
+
+      // Обрабатываем стрим через события (axios stream - это Node.js stream)
+      const stream = response.data;
+
+      // Используем async iteration для Node.js stream
+      for await (const chunk of stream) {
+        const chunkStr = chunk.toString();
+        this.logger.debug(
+          `Received chunk (${chunkStr.length} bytes): ${chunkStr.substring(0, 200)}...`
+        );
+
+        buffer += chunkStr;
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || ""; // Сохраняем неполную строку
+
         for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6);
+          const trimmedLine = line.trim();
+          if (trimmedLine === "") continue; // Пропускаем пустые строки
+
+          if (trimmedLine.startsWith("data: ")) {
+            const data = trimmedLine.slice(6).trim();
             if (data === "[DONE]") {
+              this.logger.debug("Stream completed with [DONE]");
               return;
             }
+            if (data === "") continue; // Пропускаем пустые data строки
+
+            try {
+              const parsed = JSON.parse(data);
+              this.logger.debug(
+                `Yielding parsed chunk: ${JSON.stringify(parsed).substring(0, 200)}...`
+              );
+              yield JSON.stringify(parsed);
+            } catch (e) {
+              this.logger.warn(
+                `Failed to parse chunk: ${data.substring(0, 200)}, error: ${e.message}`
+              );
+              // Игнорируем ошибки парсинга отдельных чанков
+            }
+          } else {
+            // Если строка не начинается с "data: ", логируем для отладки
+            this.logger.debug(
+              `Unexpected line format: ${trimmedLine.substring(0, 200)}`
+            );
+          }
+        }
+      }
+
+      // Обрабатываем оставшийся буфер
+      if (buffer.trim()) {
+        this.logger.debug(
+          `Processing remaining buffer: ${buffer.substring(0, 200)}`
+        );
+        const trimmedBuffer = buffer.trim();
+        if (trimmedBuffer.startsWith("data: ")) {
+          const data = trimmedBuffer.slice(6).trim();
+          if (data && data !== "[DONE]") {
             try {
               const parsed = JSON.parse(data);
               yield JSON.stringify(parsed);
             } catch (e) {
-              // Игнорируем ошибки парсинга отдельных чанков
+              this.logger.warn(`Failed to parse remaining buffer: ${data}`);
             }
           }
         }
       }
+
+      this.logger.debug("Stream processing completed");
     } catch (error) {
       const id = agentAccessId || this.defaultAgentAccessId || "unknown";
       this.logger.error(

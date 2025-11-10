@@ -264,6 +264,7 @@ export class CloudAiController {
 
     // Если запрос стриминговый, проксируем стрим
     if (data.stream) {
+      this.logger.debug("Starting streaming response");
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
@@ -271,16 +272,23 @@ export class CloudAiController {
       res.status(HttpStatus.OK);
 
       try {
+        let chunkCount = 0;
         for await (const chunk of this.cloudAiService.chatCompletionsStream(
           data,
           undefined,
           token
         )) {
+          chunkCount++;
+          this.logger.debug(
+            `Writing chunk ${chunkCount} to response: ${chunk.substring(0, 100)}...`
+          );
           // CloudAiService уже возвращает JSON-строку, просто добавляем префикс SSE
           res.write(`data: ${chunk}\n\n`);
         }
+        this.logger.debug(`Stream completed, total chunks: ${chunkCount}`);
         res.write("data: [DONE]\n\n");
         res.end();
+        this.logger.debug("Stream response ended");
         return; // Не возвращаем значение для стриминговых запросов
       } catch (error: any) {
         this.logger.error(
