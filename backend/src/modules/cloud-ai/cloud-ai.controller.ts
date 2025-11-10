@@ -295,23 +295,46 @@ export class CloudAiController {
       res.status(HttpStatus.OK);
 
       try {
-        let chunkCount = 0;
-        // Не передаем userToken - сервис будет использовать CLOUD_AI_DEFAULT_AUTH_TOKEN
-        for await (const chunk of this.cloudAiService.chatCompletionsStream(
-          data,
-          undefined,
-          undefined // Всегда используем дефолтный токен из конфигурации
-        )) {
-          chunkCount++;
-          this.logger.debug(
-            `Writing chunk ${chunkCount} to response: ${chunk.substring(0, 100)}...`
+        // Проксируем стрим напрямую для сохранения оригинальной скорости отправки данных
+        const upstreamStream =
+          await this.cloudAiService.getChatCompletionsStream(
+            data,
+            undefined,
+            undefined // Всегда используем дефолтный токен из конфигурации
           );
-          // CloudAiService уже возвращает JSON-строку, просто добавляем префикс SSE
-          res.write(`data: ${chunk}\n\n`);
-        }
-        this.logger.debug(`Stream completed, total chunks: ${chunkCount}`);
-        res.write("data: [DONE]\n\n");
-        res.end();
+
+        // Проксируем стрим напрямую, без парсинга и пересборки
+        // Это сохраняет оригинальную скорость отправки данных от внешнего API
+        upstreamStream.on("data", (chunk: Buffer) => {
+          this.logger.debug(
+            `Proxying chunk (${chunk.length} bytes) directly to client`
+          );
+          res.write(chunk);
+        });
+
+        // Ждем завершения стрима
+        await new Promise<void>((resolve, reject) => {
+          upstreamStream.on("end", () => {
+            this.logger.debug("Upstream stream ended, closing response");
+            res.end();
+            resolve();
+          });
+
+          upstreamStream.on("error", (error: Error) => {
+            this.logger.error(`Stream error: ${error.message}`, error);
+            if (!res.headersSent) {
+              res.status(500).json({
+                error: {
+                  message: error.message || "Failed to stream chat completion",
+                },
+              });
+            } else {
+              res.end();
+            }
+            reject(error);
+          });
+        });
+
         this.logger.debug("Stream response ended");
         return; // Не возвращаем значение для стриминговых запросов
       } catch (error: any) {

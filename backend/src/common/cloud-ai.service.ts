@@ -308,6 +308,31 @@ export class CloudAiService {
   }
 
   /**
+   * Получает стрим напрямую для проксирования (без парсинга)
+   * @param data Параметры для chat completion
+   * @param agentAccessId ID доступа к агенту (опционально)
+   * @param authToken Опциональный токен авторизации
+   * @returns Node.js stream для прямого проксирования
+   */
+  getChatCompletionsStream(
+    data: ChatCompletionCreateParamsDto,
+    agentAccessId?: string,
+    authToken?: string
+  ): Promise<NodeJS.ReadableStream> {
+    const id = this.getAgentAccessId(agentAccessId);
+    const url = `/api/v1/cloud-ai/agents/${id}/v1/chat/completions`;
+    const streamData = { ...data, stream: true };
+    const headers = this.getHeaders(authToken);
+
+    return this.axiosInstance
+      .post(url, streamData, {
+        headers: headers,
+        responseType: "stream",
+      })
+      .then((response) => response.data);
+  }
+
+  /**
    * Стриминговая версия chat completions
    * Возвращает async generator для обработки стриминговых ответов
    * @param data Параметры для chat completion
@@ -369,6 +394,22 @@ export class CloudAiService {
 
             try {
               const parsed = JSON.parse(data);
+
+              // Логируем структуру чанка для диагностики
+              const hasDelta = parsed.choices?.[0]?.delta;
+              const hasMessage = parsed.choices?.[0]?.message;
+              const deltaContent = parsed.choices?.[0]?.delta?.content;
+
+              this.logger.debug(
+                `Chunk structure - hasDelta: ${!!hasDelta}, hasMessage: ${!!hasMessage}, deltaContent length: ${deltaContent?.length || 0}`
+              );
+
+              if (deltaContent) {
+                this.logger.debug(
+                  `Delta content: "${deltaContent.substring(0, 50)}${deltaContent.length > 50 ? "..." : ""}"`
+                );
+              }
+
               this.logger.debug(
                 `Yielding parsed chunk: ${JSON.stringify(parsed).substring(0, 200)}...`
               );
