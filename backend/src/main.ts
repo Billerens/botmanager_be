@@ -1,11 +1,12 @@
 import { NestFactory } from "@nestjs/core";
-import { ValidationPipe } from "@nestjs/common";
+import { ValidationPipe, Logger } from "@nestjs/common";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import { getSchemaPath } from "@nestjs/swagger";
 import { ConfigService } from "@nestjs/config";
 import helmet from "helmet";
 import compression from "compression";
 import { AppModule } from "./app.module";
+import { ValidationExceptionFilter } from "./common/filters/validation-exception.filter";
 
 // Импорты всех DTO для Swagger
 import {
@@ -251,6 +252,23 @@ async function bootstrap() {
   app.use(helmet());
   app.use(compression());
 
+  // Middleware для логирования запросов к cloud-ai эндпоинтам
+  app.use((req, res, next) => {
+    if (req.url.includes("/api/v1/cloud-ai/v1/chat/completions")) {
+      const logger = new Logger("RequestLogger");
+      logger.debug(`[${req.method}] ${req.url}`);
+      logger.debug(`Content-Type: ${req.headers["content-type"]}`);
+      logger.debug(`Body (raw): ${JSON.stringify(req.body)}`);
+      logger.debug(`Body type: ${typeof req.body}`);
+      if (req.body && req.body.messages) {
+        logger.debug(`Messages type: ${typeof req.body.messages}`);
+        logger.debug(`Messages is array: ${Array.isArray(req.body.messages)}`);
+        logger.debug(`Messages: ${JSON.stringify(req.body.messages)}`);
+      }
+    }
+    next();
+  });
+
   // CORS
   const corsOrigin =
     configService.get("app.corsOrigin") ||
@@ -271,12 +289,18 @@ async function bootstrap() {
     optionsSuccessStatus: 200,
   });
 
+  // Exception filter для обработки ошибок валидации
+  app.useGlobalFilters(new ValidationExceptionFilter());
+
   // Валидация
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
     })
   );
 

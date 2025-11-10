@@ -10,8 +10,9 @@ import {
   Headers,
   Param,
   Res,
+  Req,
 } from "@nestjs/common";
-import { Response } from "express";
+import { Request, Response } from "express";
 import {
   ApiTags,
   ApiOperation,
@@ -247,9 +248,17 @@ export class CloudAiController {
   async chatCompletionsSimple(
     @Body() data: ChatCompletionCreateParamsDto,
     @Headers("authorization") authToken?: string,
-    @Res({ passthrough: true }) res?: Response
+    @Res({ passthrough: true }) res?: Response,
+    @Req() req?: Request
   ): Promise<OpenAiChatCompletionResponseDto> {
     this.logger.debug("Chat completions request received (simple endpoint)");
+    
+    // Логирование входящих данных для диагностики
+    this.logger.debug(`Request body type: ${typeof req?.body}`);
+    this.logger.debug(`Request body: ${JSON.stringify(req?.body)}`);
+    this.logger.debug(`Messages type: ${typeof data?.messages}`);
+    this.logger.debug(`Messages is array: ${Array.isArray(data?.messages)}`);
+    this.logger.debug(`Messages value: ${JSON.stringify(data?.messages)}`);
 
     const token = authToken?.replace("Bearer ", "") || undefined;
 
