@@ -9,6 +9,8 @@ import {
   ValidateNested,
   Min,
   Max,
+  ValidateIf,
+  IsNotEmpty,
 } from "class-validator";
 import { Type } from "class-transformer";
 import { ApiProperty } from "@nestjs/swagger";
@@ -145,6 +147,15 @@ export class ChatMessageDto {
       },
     ],
   })
+  // Валидация: content должен быть либо строкой, либо массивом
+  // Используем ValidateIf для условной валидации
+  // Важно: ValidateIf должен быть перед каждым декоратором валидации
+  // IsNotEmpty гарантирует, что поле не будет удалено whitelist
+  @IsNotEmpty()
+  @ValidateIf((o) => typeof o.content === "string")
+  @IsString()
+  @ValidateIf((o) => Array.isArray(o.content))
+  @IsArray()
   content: ChatMessageContent;
 
   @ApiProperty({ required: false })
