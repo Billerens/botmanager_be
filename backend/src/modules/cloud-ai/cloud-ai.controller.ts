@@ -293,6 +293,8 @@ export class CloudAiController {
       res.setHeader("Connection", "keep-alive");
       res.setHeader("X-Accel-Buffering", "no"); // Отключаем буферизацию в nginx
       res.status(HttpStatus.OK);
+      // Принудительно отправляем заголовки немедленно
+      res.flushHeaders();
 
       try {
         // Проксируем стрим напрямую для сохранения оригинальной скорости отправки данных
@@ -310,6 +312,11 @@ export class CloudAiController {
             `Proxying chunk (${chunk.length} bytes) directly to client`
           );
           res.write(chunk);
+          // Принудительно отправляем данные немедленно, без буферизации
+          // flush() доступен в Node.js ServerResponse, но TypeScript может не знать об этом
+          if ("flush" in res && typeof (res as any).flush === "function") {
+            (res as any).flush();
+          }
         });
 
         // Ждем завершения стрима
@@ -352,6 +359,10 @@ export class CloudAiController {
           res.write(
             `data: ${JSON.stringify({ error: { message: error.message } })}\n\n`
           );
+          // Принудительно отправляем данные немедленно
+          if ("flush" in res && typeof (res as any).flush === "function") {
+            (res as any).flush();
+          }
           res.end();
         }
         return; // Не пробрасываем ошибку дальше, так как ответ уже отправлен
