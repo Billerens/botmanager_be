@@ -139,6 +139,27 @@ const CRITICAL_ENV_VARS = [
   },
 ];
 
+// Опциональные переменные окружения (для Cloud AI API)
+const OPTIONAL_ENV_VARS = [
+  {
+    name: "CLOUD_AI_BASE_URL",
+    description: "Базовый URL для Cloud AI API",
+    example: "https://agent.timeweb.cloud",
+    default: "https://agent.timeweb.cloud",
+  },
+  {
+    name: "CLOUD_AI_AGENT_ACCESS_ID",
+    description: "ID доступа к AI агенту (можно передавать в методах сервиса)",
+    example: "your-agent-access-id",
+  },
+  {
+    name: "CLOUD_AI_DEFAULT_AUTH_TOKEN",
+    description:
+      "Токен авторизации для Cloud AI API (можно передавать в методах сервиса)",
+    example: "your-auth-token",
+  },
+];
+
 // Функция проверки критически важных переменных окружения
 function checkCriticalEnvVars() {
   const missingVars: typeof CRITICAL_ENV_VARS = [];
@@ -175,16 +196,51 @@ function checkCriticalEnvVars() {
     process.exit(1);
   } else {
     console.log("✅ Все критически важные переменные окружения настроены");
+  }
+}
+
+// Функция проверки опциональных переменных окружения
+function checkOptionalEnvVars() {
+  const missingVars: Array<(typeof OPTIONAL_ENV_VARS)[number]> = [];
+
+  OPTIONAL_ENV_VARS.forEach((envVar) => {
+    if (!process.env[envVar.name]) {
+      missingVars.push(envVar);
+    }
+  });
+
+  if (missingVars.length > 0) {
     console.log(
-      "✅ Переменные окружения: ",
-      JSON.stringify(process.env, null, 2)
+      "\n⚠️  ПРЕДУПРЕЖДЕНИЕ: Отсутствуют некоторые опциональные переменные окружения\n"
     );
+    console.log("📋 Рекомендуется настроить следующие переменные:\n");
+
+    missingVars.forEach((envVar, index) => {
+      console.log(`${index + 1}. ${envVar.name}`);
+      console.log(`   📝 Назначение: ${envVar.description}`);
+      console.log(`   💡 Пример: ${envVar.example}`);
+      if (envVar.default) {
+        console.log(`   🔧 Значение по умолчанию: ${envVar.default}`);
+      }
+      console.log("");
+    });
+
+    console.log("ℹ️  Примечание: Эти переменные опциональны.");
+    console.log(
+      "   Приложение будет работать, но функционал Cloud AI может быть недоступен."
+    );
+    console.log(
+      "   Вы можете передавать эти параметры напрямую в методы сервиса.\n"
+    );
+  } else {
+    console.log("✅ Все опциональные переменные окружения настроены");
   }
 }
 
 async function bootstrap() {
   // Проверяем переменные окружения перед запуском
   checkCriticalEnvVars();
+  checkOptionalEnvVars();
 
   const app = await NestFactory.create(AppModule, {
     logger: ["error", "warn", "log", "debug", "verbose"],

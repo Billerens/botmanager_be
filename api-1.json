@@ -1,0 +1,1201 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/cloud-ai/agents/{agent_access_id}/call": {
+      "post": {
+        "operationId": "CloudAiAgentsClientController_callAgent",
+        "parameters": [
+          {
+            "name": "agent_access_id",
+            "required": true,
+            "in": "path",
+            "description": "Agent access ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "required": false,
+            "in": "header",
+            "description": "Bearer token (optional)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentCallDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Call AI agent",
+        "tags": [
+          "ai-agents-client"
+        ]
+      }
+    },
+    "/api/v1/cloud-ai/agents/{agent_access_id}/v1/chat/completions": {
+      "post": {
+        "description": "\nThis endpoint supports both simple text messages and multimodal content:\n\n**Simple text message:**\n```json\n{\n  \"model\": \"gpt-4\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Hello, how are you?\"\n    }\n  ]\n}\n```\n\n**Multimodal message with text and image:**\n```json\n{\n  \"model\": \"gpt-4\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        { \"type\": \"text\", \"text\": \"What is in this image?\" },\n        { \"type\": \"image_url\", \"image_url\": { \"url\": \"https://example.com/image.jpg\" } }\n      ]\n    }\n  ]\n}\n```\n\n**Message with audio input:**\n```json\n{\n  \"model\": \"gpt-4\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        { \"type\": \"text\", \"text\": \"Please transcribe this audio:\" },\n        { \"type\": \"input_audio\", \"input_audio\": { \"data\": \"base64_encoded_audio_data\", \"format\": \"wav\" } }\n      ]\n    }\n  ]\n}\n```\n    ",
+        "operationId": "CloudAiAgentsClientController_chatCompletions",
+        "parameters": [
+          {
+            "name": "agent_access_id",
+            "required": true,
+            "in": "path",
+            "description": "Agent access ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "required": false,
+            "in": "header",
+            "description": "Bearer token (optional)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCompletionCreateParamsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "OpenAI-compatible chat completions endpoint for AI agent",
+        "tags": [
+          "ai-agents-client"
+        ]
+      }
+    },
+    "/api/v1/cloud-ai/agents/{agent_access_id}/v1/completions": {
+      "post": {
+        "deprecated": true,
+        "operationId": "CloudAiAgentsClientController_textCompletions",
+        "parameters": [
+          {
+            "name": "agent_access_id",
+            "required": true,
+            "in": "path",
+            "description": "Agent access ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "required": false,
+            "in": "header",
+            "description": "Bearer token (optional)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenAiTextCompletionRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "OpenAI-compatible text completions endpoint for AI agent (legacy)",
+        "tags": [
+          "ai-agents-client"
+        ]
+      }
+    },
+    "/api/v1/cloud-ai/agents/{agent_access_id}/v1/models": {
+      "get": {
+        "operationId": "CloudAiAgentsClientController_getModels",
+        "parameters": [
+          {
+            "name": "agent_access_id",
+            "required": true,
+            "in": "path",
+            "description": "Agent access ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Authorization",
+            "required": false,
+            "in": "header",
+            "description": "Bearer token (optional)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "OpenAI-compatible models endpoint for AI agent",
+        "tags": [
+          "ai-agents-client"
+        ]
+      }
+    },
+    "/api/v1/cloud-ai/agents/{agent_access_id}/embed.js": {
+      "get": {
+        "operationId": "CloudAiAgentsClientController_getAgentEmbedCode",
+        "parameters": [
+          {
+            "name": "agent_access_id",
+            "required": true,
+            "in": "path",
+            "description": "Agent Access ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "collapsed",
+            "required": false,
+            "in": "query",
+            "description": "Start widget in collapsed mode (default: true)",
+            "schema": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "referer",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "origin",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ai-agents-client"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Cloud AI API",
+    "description": "API docs for Timeweb Cloud AI",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [
+    {
+      "name": "ai-agents-client",
+      "description": "API for working with AI agents"
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://agent.timeweb.cloud",
+      "description": "Timeweb Cloud AI API"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "AgentCallResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "The response message from the agent"
+          },
+          "id": {
+            "type": "string",
+            "description": "Unique ID of the message"
+          },
+          "finish_reason": {
+            "type": "object",
+            "description": "The reason why the response was finished"
+          }
+        },
+        "required": [
+          "message",
+          "id",
+          "finish_reason"
+        ]
+      },
+      "AgentCallDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "The message to send to the agent"
+          },
+          "parent_message_id": {
+            "type": "string",
+            "description": "Optional parent message ID for conversation context"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "OpenAiChatCompletionMessageDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "description": "The role of the author of this message"
+          },
+          "content": {
+            "type": "string",
+            "description": "The contents of the message"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ]
+      },
+      "OpenAiChatCompletionChoiceDto": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "number",
+            "description": "The index of the choice in the list of choices"
+          },
+          "message": {
+            "description": "A chat completion message generated by the model",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OpenAiChatCompletionMessageDto"
+              }
+            ]
+          },
+          "finish_reason": {
+            "type": "string",
+            "description": "The reason the model stopped generating tokens",
+            "enum": [
+              "stop",
+              "length",
+              "content_filter",
+              "tool_calls"
+            ]
+          }
+        },
+        "required": [
+          "index",
+          "message",
+          "finish_reason"
+        ]
+      },
+      "OpenAiUsageDto": {
+        "type": "object",
+        "properties": {
+          "prompt_tokens": {
+            "type": "number",
+            "description": "Number of tokens in the prompt"
+          },
+          "completion_tokens": {
+            "type": "number",
+            "description": "Number of tokens in the generated completion"
+          },
+          "total_tokens": {
+            "type": "number",
+            "description": "Total number of tokens used in the request (prompt + completion)"
+          }
+        },
+        "required": [
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens"
+        ]
+      },
+      "OpenAiChatCompletionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "A unique identifier for the chat completion"
+          },
+          "object": {
+            "type": "string",
+            "description": "The object type, which is always \"chat.completion\"",
+            "example": "chat.completion"
+          },
+          "created": {
+            "type": "number",
+            "description": "The Unix timestamp (in seconds) of when the chat completion was created"
+          },
+          "model": {
+            "type": "string",
+            "description": "The model used for the chat completion"
+          },
+          "choices": {
+            "description": "A list of chat completion choices",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenAiChatCompletionChoiceDto"
+            }
+          },
+          "usage": {
+            "description": "Usage statistics for the completion request",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OpenAiUsageDto"
+              }
+            ]
+          },
+          "system_fingerprint": {
+            "type": "string",
+            "description": "System fingerprint"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "created",
+          "model",
+          "choices",
+          "usage"
+        ]
+      },
+      "OpenAiStreamDeltaDto": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The content delta for the message"
+          },
+          "role": {
+            "type": "string",
+            "description": "The role of the message author (only in first chunk)"
+          }
+        }
+      },
+      "OpenAiStreamChoiceDto": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "number",
+            "description": "The index of the choice in the list of choices"
+          },
+          "delta": {
+            "description": "A chat completion delta generated by the model",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OpenAiStreamDeltaDto"
+              }
+            ]
+          },
+          "finish_reason": {
+            "type": "string",
+            "description": "The reason the model stopped generating tokens",
+            "enum": [
+              "stop",
+              "length",
+              "content_filter",
+              "tool_calls",
+              null
+            ]
+          }
+        },
+        "required": [
+          "index",
+          "delta"
+        ]
+      },
+      "OpenAiChatCompletionStreamResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "A unique identifier for the chat completion"
+          },
+          "object": {
+            "type": "string",
+            "description": "The object type, which is always \"chat.completion.chunk\"",
+            "example": "chat.completion.chunk"
+          },
+          "created": {
+            "type": "number",
+            "description": "The Unix timestamp (in seconds) of when the chat completion was created"
+          },
+          "model": {
+            "type": "string",
+            "description": "The model used for the chat completion"
+          },
+          "choices": {
+            "description": "A list of chat completion choices",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenAiStreamChoiceDto"
+            }
+          },
+          "system_fingerprint": {
+            "type": "string",
+            "description": "System fingerprint"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "created",
+          "model",
+          "choices"
+        ]
+      },
+      "OpenAiModelDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Model identifier",
+            "example": "gpt-4o-2024-08-06"
+          },
+          "object": {
+            "type": "string",
+            "description": "Object type, always \"model\"",
+            "example": "model"
+          },
+          "created": {
+            "type": "number",
+            "description": "Unix timestamp when the model was created",
+            "example": 1692901427
+          },
+          "owned_by": {
+            "type": "string",
+            "description": "Organization that owns the model",
+            "example": "openai"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "created",
+          "owned_by"
+        ]
+      },
+      "OpenAiModelsResponseDto": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object type, always \"list\"",
+            "example": "list"
+          },
+          "data": {
+            "description": "Array of available models",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenAiModelDto"
+            }
+          }
+        },
+        "required": [
+          "object",
+          "data"
+        ]
+      },
+      "OpenAiTextCompletionRequestDto": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "The prompt to generate completions for",
+            "example": "Write a short story about a robot"
+          },
+          "model": {
+            "type": "string",
+            "description": "The model to use for completion",
+            "example": "gpt-3.5-turbo-instruct",
+            "default": "gpt-3.5-turbo-instruct"
+          },
+          "max_tokens": {
+            "type": "number",
+            "description": "The maximum number of tokens to generate",
+            "example": 100,
+            "minimum": 1,
+            "maximum": 4096,
+            "default": 16
+          },
+          "temperature": {
+            "type": "number",
+            "description": "Controls randomness in the output",
+            "example": 0.7,
+            "minimum": 0,
+            "maximum": 2,
+            "default": 1
+          },
+          "top_p": {
+            "type": "number",
+            "description": "Controls diversity via nucleus sampling",
+            "example": 0.9,
+            "minimum": 0,
+            "maximum": 1,
+            "default": 1
+          },
+          "n": {
+            "type": "number",
+            "description": "How many completions to generate",
+            "example": 1,
+            "minimum": 1,
+            "maximum": 128,
+            "default": 1
+          },
+          "stream": {
+            "type": "boolean",
+            "description": "Whether to stream back partial progress",
+            "example": false,
+            "default": false
+          },
+          "logprobs": {
+            "type": "number",
+            "description": "Include the log probabilities on the logprobs most likely tokens",
+            "example": null,
+            "minimum": 0,
+            "maximum": 5
+          },
+          "echo": {
+            "type": "boolean",
+            "description": "Echo back the prompt in addition to the completion",
+            "example": false,
+            "default": false
+          },
+          "stop": {
+            "description": "Up to 4 sequences where the API will stop generating further tokens",
+            "example": [
+              "\n"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "presence_penalty": {
+            "type": "number",
+            "description": "Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far",
+            "example": 0,
+            "minimum": -2,
+            "maximum": 2,
+            "default": 0
+          },
+          "frequency_penalty": {
+            "type": "number",
+            "description": "Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far",
+            "example": 0,
+            "minimum": -2,
+            "maximum": 2,
+            "default": 0
+          },
+          "best_of": {
+            "type": "number",
+            "description": "Generates best_of completions server-side and returns the \"best\"",
+            "example": 1,
+            "minimum": 1,
+            "maximum": 20,
+            "default": 1
+          },
+          "user": {
+            "type": "string",
+            "description": "A unique identifier representing your end-user",
+            "example": "user-123"
+          }
+        },
+        "required": [
+          "prompt"
+        ]
+      },
+      "TextCompletionLogprobs": {
+        "type": "object",
+        "properties": {
+          "tokens": {
+            "description": "The tokens chosen by the model",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "token_logprobs": {
+            "description": "The log probability of each token",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "top_logprobs": {
+            "type": "object",
+            "description": "The top logprobs for each token",
+            "additionalProperties": true
+          },
+          "text_offset": {
+            "description": "The character offsets for each token",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      "TextCompletionChoice": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The generated text",
+            "example": "Once upon a time, there was a robot named R2D2..."
+          },
+          "index": {
+            "type": "number",
+            "description": "The index of this choice",
+            "example": 0
+          },
+          "logprobs": {
+            "description": "Log probability information for the choice",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TextCompletionLogprobs"
+              }
+            ]
+          },
+          "finish_reason": {
+            "type": "string",
+            "description": "The reason the model stopped generating tokens",
+            "example": "stop",
+            "enum": [
+              "stop",
+              "length",
+              "content_filter"
+            ]
+          }
+        },
+        "required": [
+          "text",
+          "index",
+          "finish_reason"
+        ]
+      },
+      "TextCompletionUsage": {
+        "type": "object",
+        "properties": {
+          "prompt_tokens": {
+            "type": "number",
+            "description": "Number of tokens in the prompt",
+            "example": 10
+          },
+          "completion_tokens": {
+            "type": "number",
+            "description": "Number of tokens in the generated completion",
+            "example": 50
+          },
+          "total_tokens": {
+            "type": "number",
+            "description": "Total number of tokens used",
+            "example": 60
+          }
+        },
+        "required": [
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens"
+        ]
+      },
+      "OpenAiTextCompletionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the completion",
+            "example": "cmpl-7QyqpwdfhqwajicIEznoc6Q47XAyW"
+          },
+          "object": {
+            "type": "string",
+            "description": "The object type, always \"text_completion\"",
+            "example": "text_completion"
+          },
+          "created": {
+            "type": "number",
+            "description": "Unix timestamp when the completion was created",
+            "example": 1692901427
+          },
+          "model": {
+            "type": "string",
+            "description": "The model used for completion",
+            "example": "gpt-3.5-turbo-instruct"
+          },
+          "choices": {
+            "description": "Array of completion choices",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TextCompletionChoice"
+            }
+          },
+          "usage": {
+            "description": "Usage statistics for the completion",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TextCompletionUsage"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "created",
+          "model",
+          "choices",
+          "usage"
+        ]
+      },
+      "TextContentDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "text"
+            ],
+            "description": "Content type - always \"text\"",
+            "example": "text"
+          },
+          "text": {
+            "type": "string",
+            "description": "The text content",
+            "example": "What is in this image?"
+          }
+        },
+        "required": [
+          "type",
+          "text"
+        ]
+      },
+      "ImageUrlDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The URL of the image",
+            "example": "https://example.com/image.jpg"
+          },
+          "detail": {
+            "type": "string",
+            "description": "The detail level of the image",
+            "enum": [
+              "low",
+              "high",
+              "auto"
+            ],
+            "example": "auto"
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "ImageUrlContentDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "image_url"
+            ],
+            "description": "Content type - always \"image_url\"",
+            "example": "image_url"
+          },
+          "image_url": {
+            "description": "Image URL object",
+            "example": {
+              "url": "https://example.com/image.jpg",
+              "detail": "auto"
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ImageUrlDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "image_url"
+        ]
+      },
+      "InputAudioDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Base64 encoded audio data",
+            "example": "UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7bllHgU7jdXzzn0uBSF+zO/eizEIHWq+8+OWT"
+          },
+          "format": {
+            "type": "string",
+            "description": "Audio format",
+            "enum": [
+              "wav",
+              "mp3",
+              "m4a",
+              "ogg",
+              "flac",
+              "webm"
+            ],
+            "example": "wav"
+          }
+        },
+        "required": [
+          "data",
+          "format"
+        ]
+      },
+      "InputAudioContentDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "input_audio"
+            ],
+            "description": "Content type - always \"input_audio\"",
+            "example": "input_audio"
+          },
+          "input_audio": {
+            "description": "Input audio object",
+            "example": {
+              "data": "UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7bllHgU7jdXzzn0uBSF+zO/eizEIHWq+8+OWT",
+              "format": "wav"
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InputAudioDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "input_audio"
+        ]
+      },
+      "FunctionCallDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the function to call",
+            "example": "get_weather"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ChatMessageDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "system",
+              "user",
+              "assistant",
+              "tool",
+              "function",
+              "developer"
+            ],
+            "description": "The role of the message author"
+          },
+          "content": {
+            "description": "The contents of the message - can be a string or array of content items",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TextContentDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ImageUrlContentDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InputAudioContentDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/FileContentDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RefusalContentDto"
+                    }
+                  ]
+                }
+              }
+            ],
+            "examples": [
+              "Simple text message",
+              [
+                {
+                  "type": "text",
+                  "text": "What is in this image?"
+                },
+                {
+                  "type": "image_url",
+                  "image_url": {
+                    "url": "https://example.com/image.jpg"
+                  }
+                }
+              ]
+            ]
+          },
+          "name": {
+            "type": "object",
+            "description": "The name of the author of this message (required for function role)",
+            "example": "user123"
+          },
+          "function_call": {
+            "description": "The name and arguments of a function that should be called",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FunctionCallDto"
+              }
+            ]
+          },
+          "tool_calls": {
+            "type": "object",
+            "description": "Tool call information"
+          },
+          "tool_call_id": {
+            "type": "object",
+            "description": "Tool call ID (required for tool role messages)",
+            "example": "call_abc123"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ]
+      },
+      "StreamOptionsDto": {
+        "type": "object",
+        "properties": {
+          "include_usage": {
+            "type": "boolean",
+            "description": "Whether to include usage information in streaming responses",
+            "example": true
+          }
+        }
+      },
+      "ChatCompletionCreateParamsDto": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "object",
+            "description": "ID of the model to use. This field is ignored as the agent has its own model configuration.",
+            "example": "gpt-4"
+          },
+          "messages": {
+            "description": "A list of messages comprising the conversation so far",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatMessageDto"
+            }
+          },
+          "temperature": {
+            "type": "object",
+            "description": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.",
+            "example": 0.7,
+            "minimum": 0,
+            "maximum": 2
+          },
+          "top_p": {
+            "type": "object",
+            "description": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass.",
+            "example": 1,
+            "minimum": 0,
+            "maximum": 1
+          },
+          "n": {
+            "type": "object",
+            "description": "How many chat completion choices to generate for each input message",
+            "example": 1,
+            "minimum": 1,
+            "maximum": 128
+          },
+          "stream": {
+            "type": "object",
+            "description": "Whether to stream back partial responses",
+            "example": false,
+            "default": false
+          },
+          "stop": {
+            "description": "Up to 4 sequences where the API will stop generating further tokens",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ],
+            "example": [
+              "\n",
+              "Human:"
+            ]
+          },
+          "max_tokens": {
+            "type": "object",
+            "deprecated": true,
+            "description": "The maximum number of tokens to generate in the chat completion",
+            "example": 100,
+            "minimum": 1
+          },
+          "max_completion_tokens": {
+            "type": "object",
+            "description": "The maximum number of tokens to generate in the chat completion (alternative to max_tokens)",
+            "example": 100,
+            "minimum": 1
+          },
+          "presence_penalty": {
+            "type": "object",
+            "description": "Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.",
+            "example": 0,
+            "minimum": -2,
+            "maximum": 2
+          },
+          "frequency_penalty": {
+            "type": "object",
+            "description": "Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.",
+            "example": 0,
+            "minimum": -2,
+            "maximum": 2
+          },
+          "logit_bias": {
+            "type": "object",
+            "description": "Modify the likelihood of specified tokens appearing in the completion",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "example": {
+              "50256": -100
+            }
+          },
+          "user": {
+            "type": "string",
+            "description": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
+            "example": "user-1234"
+          },
+          "response_format": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ResponseFormatTextDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResponseFormatJsonObjectDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResponseFormatJsonSchemaDto"
+              }
+            ],
+            "description": "An object specifying the format that the model must output"
+          },
+          "tools": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FunctionToolDto"
+              },
+              {
+                "$ref": "#/components/schemas/CustomToolDto"
+              }
+            ],
+            "description": "A list of tools the model may call"
+          },
+          "tool_choice": {
+            "description": "Controls which (if any) tool is called by the model",
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "auto",
+                  "required"
+                ]
+              },
+              {
+                "type": "object"
+              }
+            ],
+            "example": "auto"
+          },
+          "stream_options": {
+            "description": "Options for streaming response",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StreamOptionsDto"
+              }
+            ]
+          },
+          "logprobs": {
+            "type": "object",
+            "description": "Whether to return log probabilities of the output tokens",
+            "example": false
+          },
+          "top_logprobs": {
+            "type": "object",
+            "description": "An integer between 0 and 5 specifying the number of most likely tokens to return at each token position",
+            "example": 0,
+            "minimum": 0,
+            "maximum": 5
+          }
+        },
+        "required": [
+          "messages"
+        ]
+      }
+    }
+  }
+}

@@ -9,6 +9,7 @@ import { DatabaseModule } from "./database/database.module";
 import databaseConfig from "./config/database.config";
 import jwtConfig from "./config/jwt.config";
 import appConfig from "./config/configuration";
+import cloudAiConfig from "./config/cloud-ai.config";
 import redisConfig from "./modules/websocket/config/redis.config";
 import { AuthModule } from "./modules/auth/auth.module";
 import { UsersModule } from "./modules/users/users.module";
@@ -36,7 +37,7 @@ import { HealthModule } from "./health/health.module";
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ".env",
-      load: [databaseConfig, jwtConfig, appConfig, redisConfig],
+      load: [databaseConfig, jwtConfig, appConfig, cloudAiConfig, redisConfig],
     }),
 
     // Rate limiting
