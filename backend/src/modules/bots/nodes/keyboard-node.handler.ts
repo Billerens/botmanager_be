@@ -283,38 +283,24 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
       this.logger.log(`Найден индекс кнопки: ${buttonIndex}`);
 
-      // Очищаем callback_query из сообщения перед переходом к следующему узлу
-      // чтобы следующий узел не пытался обработать этот callback
-      const originalCallbackQuery = message.callback_query;
-      const originalIsCallback = message.is_callback;
-      message.callback_query = undefined;
-      message.is_callback = false;
-
-      try {
-        if (buttonIndex !== -1) {
-          // Переходим к узлу, подключенному к соответствующему выходу
-          this.logger.log(`Переходим к выходу button-${buttonIndex}`);
-          await this.moveToNextNodeByOutput(
-            context,
-            currentNode.nodeId,
-            `button-${buttonIndex}`
-          );
-        } else {
-          // Если кнопка не найдена, переходим к первому выходу
-          this.logger.warn(
-            `Кнопка с данными ${pressedButtonData} не найдена, переходим к button-0`
-          );
-          await this.moveToNextNodeByOutput(
-            context,
-            currentNode.nodeId,
-            "button-0"
-          );
-        }
-      } finally {
-        // Восстанавливаем callback_query на случай, если он нужен для других целей
-        // (хотя обычно после обработки он больше не нужен)
-        message.callback_query = originalCallbackQuery;
-        message.is_callback = originalIsCallback;
+      if (buttonIndex !== -1) {
+        // Переходим к узлу, подключенному к соответствующему выходу
+        this.logger.log(`Переходим к выходу button-${buttonIndex}`);
+        await this.moveToNextNodeByOutput(
+          context,
+          currentNode.nodeId,
+          `button-${buttonIndex}`
+        );
+      } else {
+        // Если кнопка не найдена, переходим к первому выходу
+        this.logger.warn(
+          `Кнопка с данными ${pressedButtonData} не найдена, переходим к button-0`
+        );
+        await this.moveToNextNodeByOutput(
+          context,
+          currentNode.nodeId,
+          "button-0"
+        );
       }
     } else {
       // Если это обычное сообщение - отправляем клавиатуру и ждем выбора
