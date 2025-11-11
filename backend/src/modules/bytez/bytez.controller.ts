@@ -65,8 +65,40 @@ export class BytezController {
   }
 
   /**
+   * Получает список доступных моделей для чата
+   * GET /api/v1/bytez/models/chat
+   * ВАЖНО: Этот роут должен быть определен ПЕРЕД models/:modelId, иначе "chat" будет интерпретирован как modelId
+   */
+  @Get("models/chat")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "List available chat models",
+    description: "Получает список доступных моделей для чата",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "List of available chat models",
+  })
+  async listChatModels(): Promise<{
+    models: Array<{ id: string; name: string; description?: string }>;
+    total: number;
+  }> {
+    this.logger.debug("List chat models request received");
+    try {
+      const result = await this.bytezService.listChatModels();
+      this.logger.debug(`Returning ${result.models.length} models`);
+      this.logger.debug(`Models: ${JSON.stringify(result.models.map(m => m.id))}`);
+      return result;
+    } catch (error: any) {
+      this.logger.error(`Error in listChatModels: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
    * Получает информацию о модели
    * GET /api/v1/bytez/models/:modelId
+   * ВАЖНО: Этот роут должен быть определен ПОСЛЕ models/chat, иначе "chat" будет интерпретирован как modelId
    */
   @Get("models/:modelId")
   @HttpCode(HttpStatus.OK)
@@ -156,28 +188,6 @@ export class BytezController {
         ? "Bytez API key is configured"
         : "Bytez API key is not configured. Set BYTEZ_API_KEY environment variable.",
     };
-  }
-
-  /**
-   * Получает список доступных моделей для чата
-   * GET /api/v1/bytez/models/chat
-   */
-  @Get("models/chat")
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: "List available chat models",
-    description: "Получает список доступных моделей для чата",
-  })
-  @ApiResponse({
-    status: 200,
-    description: "List of available chat models",
-  })
-  async listChatModels(): Promise<{
-    models: Array<{ id: string; name: string; description?: string }>;
-    total: number;
-  }> {
-    this.logger.debug("List chat models request received");
-    return await this.bytezService.listChatModels();
   }
 
   /**

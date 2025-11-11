@@ -165,6 +165,7 @@ export class BytezService {
     models: Array<{ id: string; name: string; description?: string }>;
     total: number;
   }> {
+    this.logger.debug("listChatModels called");
     // Список популярных open source моделей чата через bytez
     // Для закрытых моделей (openai, anthropic, mistral, google, cohere) нужен provider-key
     const chatModels = [
@@ -228,10 +229,13 @@ export class BytezService {
       },
     ];
 
-    return {
+    this.logger.debug(`Returning ${chatModels.length} chat models`);
+    const result = {
       models: chatModels,
       total: chatModels.length,
     };
+    this.logger.debug(`Result: ${JSON.stringify(result, null, 2)}`);
+    return result;
   }
 
   /**
