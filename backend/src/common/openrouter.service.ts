@@ -190,9 +190,38 @@ export class OpenRouterService {
             `OpenRouter API error: ${response.errorCode} - ${response.errorMessage}`,
             response.metadata
           );
-          throw new BadRequestException(
-            `OpenRouter API error: ${response.errorMessage}`
-          );
+          
+          // Пытаемся извлечь более детальное сообщение из metadata
+          let detailedMessage = response.errorMessage;
+          
+          if (response.metadata) {
+            const metadata = response.metadata as any;
+            
+            // Если есть raw данные, пытаемся извлечь сообщение из HTML
+            if (metadata.raw) {
+              try {
+                const rawStr = String(metadata.raw);
+                // Ищем сообщение в HTML (например, "This service is not available in your region")
+                const match = rawStr.match(/<p[^>]*>([^<]+)<\/p>/i);
+                if (match && match[1]) {
+                  detailedMessage = match[1].trim();
+                } else if (rawStr.includes("not available in your region")) {
+                  detailedMessage = "This service is not available in your region";
+                } else if (rawStr.includes("region")) {
+                  detailedMessage = "Service is not available in your region";
+                }
+              } catch (e) {
+                // Игнорируем ошибки парсинга
+              }
+            }
+            
+            // Добавляем информацию о провайдере, если есть
+            if (metadata.provider_name) {
+              detailedMessage += ` (Provider: ${metadata.provider_name})`;
+            }
+          }
+          
+          throw new BadRequestException(detailedMessage);
         }
 
         // Fallback на случай неизвестной структуры ошибки
@@ -209,8 +238,23 @@ export class OpenRouterService {
       if (error instanceof BadRequestException) {
         throw error;
       }
+      
+      // Пытаемся извлечь более понятное сообщение об ошибке
+      let errorMessage = error.message;
+      
+      // Если ошибка содержит информацию о регионе или провайдере
+      if (errorMessage.includes("region") || errorMessage.includes("not available")) {
+        errorMessage = errorMessage;
+      } else if (errorMessage.includes("Provider returned error")) {
+        // Пытаемся найти более детальную информацию
+        const errorStr = String(error);
+        if (errorStr.includes("not available in your region")) {
+          errorMessage = "This service is not available in your region";
+        }
+      }
+      
       throw new BadRequestException(
-        `Failed to send chat request: ${error.message}`
+        errorMessage || `Failed to send chat request: ${error.message}`
       );
     }
   }
@@ -454,20 +498,28 @@ export class OpenRouterService {
             const errorData = JSON.parse(jsonMatch[0]);
             if (errorData.error?.message) {
               errorMessage = errorData.error.message;
-              // Добавляем информацию о провайдере, если есть
-              if (errorData.error.metadata?.provider_name) {
-                errorMessage += ` (Provider: ${errorData.error.metadata.provider_name})`;
-              }
-              // Добавляем информацию о модели, если есть
+              
+              // Пытаемся извлечь сообщение из metadata.raw (HTML)
               if (errorData.error.metadata?.raw) {
                 try {
-                  const rawData = JSON.parse(errorData.error.metadata.raw);
-                  if (rawData.detail) {
-                    errorMessage += ` - ${rawData.detail}`;
+                  const rawStr = String(errorData.error.metadata.raw);
+                  // Ищем сообщение в HTML (например, "This service is not available in your region")
+                  const match = rawStr.match(/<p[^>]*>([^<]+)<\/p>/i);
+                  if (match && match[1]) {
+                    errorMessage = match[1].trim();
+                  } else if (rawStr.includes("not available in your region")) {
+                    errorMessage = "This service is not available in your region";
+                  } else if (rawStr.includes("region")) {
+                    errorMessage = "Service is not available in your region";
                   }
                 } catch (e) {
                   // Игнорируем ошибки парсинга raw данных
                 }
+              }
+              
+              // Добавляем информацию о провайдере, если есть
+              if (errorData.error.metadata?.provider_name) {
+                errorMessage += ` (Provider: ${errorData.error.metadata.provider_name})`;
               }
             }
           }
@@ -497,18 +549,27 @@ export class OpenRouterService {
             const errorData = JSON.parse(jsonMatch[0]);
             if (errorData.error?.message) {
               errorMessage = errorData.error.message;
-              if (errorData.error.metadata?.provider_name) {
-                errorMessage += ` (Provider: ${errorData.error.metadata.provider_name})`;
-              }
+              
+              // Пытаемся извлечь сообщение из metadata.raw (HTML)
               if (errorData.error.metadata?.raw) {
                 try {
-                  const rawData = JSON.parse(errorData.error.metadata.raw);
-                  if (rawData.detail) {
-                    errorMessage += ` - ${rawData.detail}`;
+                  const rawStr = String(errorData.error.metadata.raw);
+                  // Ищем сообщение в HTML (например, "This service is not available in your region")
+                  const match = rawStr.match(/<p[^>]*>([^<]+)<\/p>/i);
+                  if (match && match[1]) {
+                    errorMessage = match[1].trim();
+                  } else if (rawStr.includes("not available in your region")) {
+                    errorMessage = "This service is not available in your region";
+                  } else if (rawStr.includes("region")) {
+                    errorMessage = "Service is not available in your region";
                   }
                 } catch (e) {
-                  // Игнорируем ошибки парсинга
+                  // Игнорируем ошибки парсинга raw данных
                 }
+              }
+              
+              if (errorData.error.metadata?.provider_name) {
+                errorMessage += ` (Provider: ${errorData.error.metadata.provider_name})`;
               }
             }
           }
