@@ -35,14 +35,68 @@ export class BytezService {
     this.bytezClient = new Bytez(this.bytezApiKey);
 
     // Инициализируем axios для OpenAI-совместимого API
+    // Согласно документации: https://docs.bytez.com/http-reference/examples/openai-compliant/chatCompletionsExample
+    // Authorization header должен содержать только BYTEZ_KEY без "Bearer"
     this.axiosInstance = axios.create({
       baseURL: this.bytezApiBaseUrl,
       timeout: 120000, // 120 секунд таймаут для больших ответов
       headers: {
         "Content-Type": "application/json",
-        Authorization: this.bytezApiKey,
+        Authorization: this.bytezApiKey, // Bytez использует просто ключ, без "Bearer"
       },
     });
+
+    // Добавляем interceptor для логирования запросов
+    this.axiosInstance.interceptors.request.use(
+      (config) => {
+        const fullUrl = `${config.baseURL}${config.url}`;
+        this.logger.debug(
+          `[Bytez API] Request: ${config.method?.toUpperCase()} ${fullUrl}`
+        );
+        const authHeader = config.headers?.Authorization;
+        const authValue =
+          typeof authHeader === "string"
+            ? authHeader.length > 0
+              ? `present (length: ${authHeader.length})`
+              : "empty"
+            : authHeader
+              ? "present (not string)"
+              : "missing";
+        this.logger.debug(`[Bytez API] Authorization header: ${authValue}`);
+        this.logger.debug(
+          `[Bytez API] All headers: ${JSON.stringify(config.headers)}`
+        );
+        this.logger.debug(
+          `[Bytez API] Body: ${JSON.stringify(config.data)?.substring(0, 500)}`
+        );
+        return config;
+      },
+      (error) => {
+        this.logger.error(`[Bytez API] Request error: ${error.message}`);
+        return Promise.reject(error);
+      }
+    );
+
+    // Добавляем interceptor для логирования ответов
+    this.axiosInstance.interceptors.response.use(
+      (response) => {
+        this.logger.debug(
+          `[Bytez API] Response: ${response.status} ${response.config.url}`
+        );
+        return response;
+      },
+      (error) => {
+        this.logger.error(
+          `[Bytez API] Response error: ${error.response?.status} ${error.config?.url} - ${error.message}`
+        );
+        if (error.response) {
+          this.logger.error(
+            `[Bytez API] Error response data: ${JSON.stringify(error.response.data)}`
+          );
+        }
+        return Promise.reject(error);
+      }
+    );
   }
 
   /**
@@ -248,22 +302,41 @@ export class BytezService {
     data: BytezChatCompletionCreateParamsDto
   ): Promise<BytezChatCompletionResponseDto> {
     try {
+      // Проверяем наличие API ключа
+      if (!this.bytezApiKey) {
+        throw new BadRequestException(
+          "BYTEZ_API_KEY не установлен. Установите переменную окружения BYTEZ_API_KEY."
+        );
+      }
+
       this.logger.debug(
         `Chat completion request for model ${data.modelId} with ${data.messages.length} messages`
       );
 
       // Используем OpenAI-совместимый API bytez
       // Формат запроса полностью совместим с OpenAI
-      const requestBody = {
+      // Согласно документации: https://docs.bytez.com/http-reference/examples/openai-compliant/chatCompletionsExample
+      const requestBody: any = {
         model: data.modelId,
         messages: data.messages.map((msg) => ({
           role: msg.role,
           content: msg.content,
         })),
         temperature: data.temperature || 0.7,
-        max_tokens: data.maxTokens || 1000,
         stream: false, // Для обычного запроса без стриминга
       };
+
+      // Добавляем max_tokens только если он указан
+      if (data.maxTokens) {
+        requestBody.max_tokens = data.maxTokens;
+      }
+
+      this.logger.debug(
+        `[Bytez API] Request URL: ${this.bytezApiBaseUrl}/chat/completions`
+      );
+      this.logger.debug(
+        `[Bytez API] Request body: ${JSON.stringify(requestBody)}`
+      );
 
       const response = await this.axiosInstance.post(
         "/chat/completions",
@@ -309,24 +382,78 @@ export class BytezService {
    * @param data Параметры для chat completion
    * @returns Node.js stream для прямого проксирования
    */
-  getChatCompletionsStream(
+  async getChatCompletionsStream(
     data: BytezChatCompletionCreateParamsDto
   ): Promise<NodeJS.ReadableStream> {
-    const requestBody = {
-      model: data.modelId,
-      messages: data.messages.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      })),
-      temperature: data.temperature || 0.7,
-      max_tokens: data.maxTokens || 1000,
-      stream: true,
-    };
+    try {
+      // Проверяем наличие API ключа
+      if (!this.bytezApiKey) {
+        throw new BadRequestException(
+          "BYTEZ_API_KEY не установлен. Установите переменную окружения BYTEZ_API_KEY."
+        );
+      }
 
-    return this.axiosInstance
-      .post("/chat/completions", requestBody, {
-        responseType: "stream",
-      })
-      .then((response) => response.data);
+      this.logger.debug(
+        `[Bytez Stream] Preparing stream request for model ${data.modelId}`
+      );
+
+      // Используем OpenAI-совместимый API bytez
+      // Согласно документации: https://docs.bytez.com/http-reference/examples/openai-compliant/chatCompletionsExample
+      const requestBody: any = {
+        model: data.modelId,
+        messages: data.messages.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        })),
+        temperature: data.temperature || 0.7,
+        stream: true,
+      };
+
+      // Добавляем max_tokens только если он указан
+      if (data.maxTokens) {
+        requestBody.max_tokens = data.maxTokens;
+      }
+
+      this.logger.debug(
+        `[Bytez Stream] Request URL: ${this.bytezApiBaseUrl}/chat/completions`
+      );
+      this.logger.debug(
+        `[Bytez Stream] Request body: ${JSON.stringify(requestBody)}`
+      );
+      this.logger.debug(
+        `[Bytez Stream] Authorization header: ${this.bytezApiKey ? "present" : "missing"}`
+      );
+
+      const response = await this.axiosInstance.post(
+        "/chat/completions",
+        requestBody,
+        {
+          responseType: "stream",
+        }
+      );
+
+      this.logger.debug(
+        `[Bytez Stream] Response received, status: ${response.status}`
+      );
+
+      return response.data;
+    } catch (error: any) {
+      this.logger.error(
+        `[Bytez Stream] Error creating stream: ${error.message}`,
+        error.stack
+      );
+      if (error.response) {
+        this.logger.error(
+          `[Bytez Stream] Error response status: ${error.response.status}`
+        );
+        this.logger.error(
+          `[Bytez Stream] Error response data: ${JSON.stringify(error.response.data)}`
+        );
+        this.logger.error(
+          `[Bytez Stream] Error response headers: ${JSON.stringify(error.response.headers)}`
+        );
+      }
+      throw error;
+    }
   }
 }
