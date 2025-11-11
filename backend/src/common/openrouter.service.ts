@@ -24,6 +24,7 @@ export class OpenRouterService {
   private readonly defaultModel: string;
   private readonly httpReferer?: string;
   private readonly xTitle?: string;
+  private readonly allowedModels: string[];
   private client: OpenRouter;
 
   constructor(private configService: ConfigService) {
@@ -41,6 +42,7 @@ export class OpenRouterService {
       config?.defaultModel || "meta-llama/llama-3.3-70b-instruct";
     this.httpReferer = config?.httpReferer;
     this.xTitle = config?.xTitle;
+    this.allowedModels = config?.allowedModels || [];
 
     // Инициализируем клиент с глобальной конфигурацией
     this.client = new OpenRouter(this.apiKey, {
@@ -306,6 +308,64 @@ export class OpenRouterService {
       );
       throw new BadRequestException(
         `Failed to fetch free models: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Получает список платных моделей OpenRouter
+   * Фильтрует модели по списку из OPENROUTER_ALLOWED_MODELS
+   * @returns Список платных моделей из разрешенного списка
+   */
+  async getPaidModels(): Promise<ModelsListResponseDto> {
+    try {
+      this.logger.debug("Fetching paid models from OpenRouter");
+
+      if (!this.allowedModels || this.allowedModels.length === 0) {
+        this.logger.warn(
+          "OPENROUTER_ALLOWED_MODELS is not configured. Returning empty list."
+        );
+        return {
+          data: [],
+        };
+      }
+
+      const allModels = await this.getModels();
+
+      // Фильтруем модели по списку разрешенных
+      const paidModels = allModels.data.filter((model) => {
+        // Проверяем, есть ли модель в списке разрешенных
+        // Модель может быть указана как полный ID или как префикс
+        return this.allowedModels.some((allowedModel) => {
+          // Точное совпадение
+          if (model.id === allowedModel) {
+            return true;
+          }
+          // Совпадение по префиксу (например, "meta-llama/" совпадет с "meta-llama/llama-3.3-70b-instruct")
+          if (model.id.startsWith(allowedModel)) {
+            return true;
+          }
+          return false;
+        });
+      });
+
+      this.logger.debug(
+        `Found ${paidModels.length} paid models from ${this.allowedModels.length} allowed models`
+      );
+
+      // Сортируем по имени для удобства
+      paidModels.sort((a, b) => a.name.localeCompare(b.name));
+
+      return {
+        data: paidModels,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error fetching paid models: ${error.message}`,
+        error.stack
+      );
+      throw new BadRequestException(
+        `Failed to fetch paid models: ${error.message}`
       );
     }
   }
