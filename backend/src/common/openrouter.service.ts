@@ -383,8 +383,42 @@ export class OpenRouterService {
     });
 
     streamClient.on("error", (error) => {
-      this.logger.error(`Stream error: ${error.message}`, error);
-      streamError = error as Error;
+      let errorMessage = error.message;
+
+      // Пытаемся извлечь более детальную информацию из ошибки
+      try {
+        // Если ошибка содержит JSON, парсим его
+        if (errorMessage.includes("{")) {
+          const jsonMatch = errorMessage.match(/\{.*\}/);
+          if (jsonMatch) {
+            const errorData = JSON.parse(jsonMatch[0]);
+            if (errorData.error?.message) {
+              errorMessage = errorData.error.message;
+              // Добавляем информацию о провайдере, если есть
+              if (errorData.error.metadata?.provider_name) {
+                errorMessage += ` (Provider: ${errorData.error.metadata.provider_name})`;
+              }
+              // Добавляем информацию о модели, если есть
+              if (errorData.error.metadata?.raw) {
+                try {
+                  const rawData = JSON.parse(errorData.error.metadata.raw);
+                  if (rawData.detail) {
+                    errorMessage += ` - ${rawData.detail}`;
+                  }
+                } catch (e) {
+                  // Игнорируем ошибки парсинга raw данных
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // Если не удалось распарсить, используем оригинальное сообщение
+        this.logger.warn("Failed to parse error message", e);
+      }
+
+      this.logger.error(`Stream error: ${errorMessage}`, error);
+      streamError = new Error(errorMessage);
       isComplete = true;
       if (resolver) {
         resolver(null);
@@ -393,8 +427,38 @@ export class OpenRouterService {
 
     // Запускаем стрим
     start().catch((error) => {
-      this.logger.error(`Failed to start stream: ${error.message}`, error);
-      streamError = error;
+      let errorMessage = error.message;
+
+      // Пытаемся извлечь более детальную информацию из ошибки
+      try {
+        if (errorMessage.includes("{")) {
+          const jsonMatch = errorMessage.match(/\{.*\}/);
+          if (jsonMatch) {
+            const errorData = JSON.parse(jsonMatch[0]);
+            if (errorData.error?.message) {
+              errorMessage = errorData.error.message;
+              if (errorData.error.metadata?.provider_name) {
+                errorMessage += ` (Provider: ${errorData.error.metadata.provider_name})`;
+              }
+              if (errorData.error.metadata?.raw) {
+                try {
+                  const rawData = JSON.parse(errorData.error.metadata.raw);
+                  if (rawData.detail) {
+                    errorMessage += ` - ${rawData.detail}`;
+                  }
+                } catch (e) {
+                  // Игнорируем ошибки парсинга
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        this.logger.warn("Failed to parse error message in start()", e);
+      }
+
+      this.logger.error(`Failed to start stream: ${errorMessage}`, error);
+      streamError = new Error(errorMessage);
       isComplete = true;
       if (resolver) {
         resolver(null);
@@ -404,7 +468,18 @@ export class OpenRouterService {
     // Отдаем чанки по мере поступления
     while (!isComplete || queue.length > 0) {
       if (streamError) {
-        throw new BadRequestException(`Stream error: ${streamError.message}`);
+        // Формируем более информативное сообщение об ошибке
+        let errorMessage = streamError.message;
+
+        // Если ошибка связана с моделью, добавляем подсказку
+        if (
+          errorMessage.includes("model not found") ||
+          errorMessage.includes("404")
+        ) {
+          errorMessage = `Модель недоступна или не найдена. ${errorMessage}. Попробуйте выбрать другую модель.`;
+        }
+
+        throw new BadRequestException(errorMessage);
       }
 
       if (queue.length > 0) {
@@ -421,7 +496,18 @@ export class OpenRouterService {
     }
 
     if (streamError) {
-      throw new BadRequestException(`Stream error: ${streamError.message}`);
+      // Формируем более информативное сообщение об ошибке
+      let errorMessage = streamError.message;
+
+      // Если ошибка связана с моделью, добавляем подсказку
+      if (
+        errorMessage.includes("model not found") ||
+        errorMessage.includes("404")
+      ) {
+        errorMessage = `Модель недоступна или не найдена. ${errorMessage}. Попробуйте выбрать другую модель.`;
+      }
+
+      throw new BadRequestException(errorMessage);
     }
   }
 
@@ -480,11 +566,44 @@ export class OpenRouterService {
     streamClient
       .chatStreamWhole(preparedMessages, preparedConfig)
       .catch((error) => {
+        let errorMessage = error.message;
+
+        // Пытаемся извлечь более детальную информацию из ошибки
+        try {
+          if (errorMessage.includes("{")) {
+            const jsonMatch = errorMessage.match(/\{.*\}/);
+            if (jsonMatch) {
+              const errorData = JSON.parse(jsonMatch[0]);
+              if (errorData.error?.message) {
+                errorMessage = errorData.error.message;
+                if (errorData.error.metadata?.provider_name) {
+                  errorMessage += ` (Provider: ${errorData.error.metadata.provider_name})`;
+                }
+                if (errorData.error.metadata?.raw) {
+                  try {
+                    const rawData = JSON.parse(errorData.error.metadata.raw);
+                    if (rawData.detail) {
+                      errorMessage += ` - ${rawData.detail}`;
+                    }
+                  } catch (e) {
+                    // Игнорируем ошибки парсинга
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          this.logger.warn(
+            "Failed to parse error message in chatStreamWhole",
+            e
+          );
+        }
+
         this.logger.error(
-          `Failed to start whole stream: ${error.message}`,
+          `Failed to start whole stream: ${errorMessage}`,
           error
         );
-        streamError = error;
+        streamError = new Error(errorMessage);
         isComplete = true;
         if (resolver) {
           resolver(null);
@@ -494,7 +613,18 @@ export class OpenRouterService {
     // Отдаем данные по мере поступления
     while (!isComplete || queue.length > 0) {
       if (streamError) {
-        throw new BadRequestException(`Stream error: ${streamError.message}`);
+        // Формируем более информативное сообщение об ошибке
+        let errorMessage = streamError.message;
+
+        // Если ошибка связана с моделью, добавляем подсказку
+        if (
+          errorMessage.includes("model not found") ||
+          errorMessage.includes("404")
+        ) {
+          errorMessage = `Модель недоступна или не найдена. ${errorMessage}. Попробуйте выбрать другую модель.`;
+        }
+
+        throw new BadRequestException(errorMessage);
       }
 
       if (queue.length > 0) {
@@ -510,7 +640,18 @@ export class OpenRouterService {
     }
 
     if (streamError) {
-      throw new BadRequestException(`Stream error: ${streamError.message}`);
+      // Формируем более информативное сообщение об ошибке
+      let errorMessage = streamError.message;
+
+      // Если ошибка связана с моделью, добавляем подсказку
+      if (
+        errorMessage.includes("model not found") ||
+        errorMessage.includes("404")
+      ) {
+        errorMessage = `Модель недоступна или не найдена. ${errorMessage}. Попробуйте выбрать другую модель.`;
+      }
+
+      throw new BadRequestException(errorMessage);
     }
   }
 }

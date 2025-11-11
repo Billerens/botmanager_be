@@ -114,20 +114,24 @@ export class OpenRouterController {
     if (request.stream) {
       this.logger.debug("Starting streaming response");
 
-      // Устанавливаем заголовки для SSE (Server-Sent Events)
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-      res.setHeader("X-Accel-Buffering", "no"); // Отключаем буферизацию в nginx
-      res.status(HttpStatus.OK);
-      res.flushHeaders();
+      let dataSent = false; // Флаг для отслеживания отправки данных
 
       try {
+        // Устанавливаем заголовки для SSE (Server-Sent Events)
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        res.setHeader("X-Accel-Buffering", "no"); // Отключаем буферизацию в nginx
+        res.status(HttpStatus.OK);
+        res.flushHeaders();
+
         // Используем chunk mode для стриминга
         for await (const chunk of this.openRouterService.chatStreamChunk(
           request.messages,
           request
         )) {
+          dataSent = true; // Отметим, что данные начали отправляться
+          
           // Отправляем чанк в формате SSE
           res.write(`data: ${JSON.stringify(chunk)}\n\n`);
 
@@ -143,6 +147,102 @@ export class OpenRouterController {
 
         this.logger.debug("Streaming response completed");
       } catch (error: any) {
+        this.logger.warn(
+          `Streaming failed, attempting fallback to non-streaming mode: ${error.message}`
+        );
+
+        // Проверяем, является ли ошибка связанной с недоступностью стриминга
+        const isStreamingError =
+          error.message?.includes("model not found") ||
+          error.message?.includes("404") ||
+          error.message?.includes("Provider returned error") ||
+          error.statusCode === 404;
+
+        // Если это ошибка модели/провайдера и данные еще не отправлялись,
+        // пробуем fallback к обычному запросу
+        if (isStreamingError && !dataSent) {
+          try {
+            this.logger.debug(
+              "Attempting fallback to non-streaming chat completion"
+            );
+
+            // Пробуем обычный запрос без стриминга
+            const nonStreamingRequest = { ...request, stream: false };
+            const result = await this.openRouterService.chat(
+              request.messages,
+              nonStreamingRequest
+            );
+
+            // Если заголовки еще не отправлены, устанавливаем их
+            if (!res.headersSent) {
+              res.setHeader("Content-Type", "text/event-stream");
+              res.setHeader("Cache-Control", "no-cache");
+              res.setHeader("Connection", "keep-alive");
+              res.setHeader("X-Accel-Buffering", "no");
+              res.status(HttpStatus.OK);
+              res.flushHeaders();
+            }
+
+            // Отправляем результат как финальный чанк
+            const finalChunk = {
+              id: result.id,
+              object: "chat.completion.chunk",
+              created: result.created,
+              model: result.model,
+              choices: result.choices.map((choice) => ({
+                index: 0,
+                delta: {
+                  role: choice.message.role,
+                  content: choice.message.content || "",
+                },
+                finish_reason: choice.finish_reason,
+              })),
+              usage: result.usage,
+            };
+
+            res.write(`data: ${JSON.stringify(finalChunk)}\n\n`);
+            res.write("data: [DONE]\n\n");
+            res.end();
+
+            this.logger.debug(
+              "Fallback to non-streaming mode completed successfully"
+            );
+            return;
+          } catch (fallbackError: any) {
+            this.logger.error(
+              `Fallback to non-streaming mode also failed: ${fallbackError.message}`,
+              fallbackError.stack
+            );
+            // Если fallback тоже не сработал, возвращаем исходную ошибку
+            if (!res.headersSent) {
+              res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+                error: {
+                  status: 500,
+                  message:
+                    fallbackError.message ||
+                    error.message ||
+                    "Failed to process chat completion",
+                },
+              });
+            } else {
+              res.write(
+                `data: ${JSON.stringify({
+                  error: {
+                    message:
+                      fallbackError.message ||
+                      error.message ||
+                      "Failed to process chat completion",
+                  },
+                })}\n\n`
+              );
+              res.end();
+            }
+            return;
+          }
+        }
+
+        // Если это не ошибка модели или заголовки уже отправлены,
+        // возвращаем исходную ошибку
         this.logger.error(
           `Error in streaming chat completions: ${error.message}`,
           error.stack
