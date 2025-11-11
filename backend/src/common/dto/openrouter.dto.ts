@@ -10,6 +10,8 @@ import {
   IsEnum,
   Min,
   Max,
+  IsNotEmpty,
+  ValidateIf,
 } from "class-validator";
 import { Type } from "class-transformer";
 
@@ -91,6 +93,11 @@ export class OpenRouterMessageDto {
     example: "Hello, world!",
     description: "Содержимое сообщения (строка или массив объектов контента)",
   })
+  @IsNotEmpty()
+  @ValidateIf((o) => typeof o.content === "string")
+  @IsString()
+  @ValidateIf((o) => Array.isArray(o.content))
+  @IsArray()
   content:
     | string
     | (
