@@ -3,6 +3,8 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
@@ -18,6 +20,7 @@ import {
   ActivityType,
   ActivityLevel,
 } from "../../database/entities/activity-log.entity";
+import { FlowExecutionService } from "./flow-execution.service";
 
 @Injectable()
 export class BotFlowsService {
@@ -28,7 +31,9 @@ export class BotFlowsService {
     private botFlowNodeRepository: Repository<BotFlowNode>,
     @InjectRepository(Bot)
     private botRepository: Repository<Bot>,
-    private activityLogService: ActivityLogService
+    private activityLogService: ActivityLogService,
+    @Inject(forwardRef(() => FlowExecutionService))
+    private flowExecutionService: FlowExecutionService
   ) {}
 
   async createFlow(
@@ -162,6 +167,11 @@ export class BotFlowsService {
       );
       await this.createFlowNodes(savedFlow.id, updateFlowDto.flowData.nodes);
 
+      // Если Flow активен, сбрасываем все сессии бота
+      if (savedFlow.status === FlowStatus.ACTIVE) {
+        this.flowExecutionService.resetBotSessions(botId);
+      }
+
       // Логируем обновление flow
       this.activityLogService
         .create({
@@ -184,6 +194,11 @@ export class BotFlowsService {
     }
 
     const updatedFlow = await this.botFlowRepository.save(flow);
+
+    // Если Flow активен, сбрасываем все сессии бота
+    if (updatedFlow.status === FlowStatus.ACTIVE) {
+      this.flowExecutionService.resetBotSessions(botId);
+    }
 
     // Логируем обновление flow (без изменения узлов)
     this.activityLogService
@@ -261,6 +276,9 @@ export class BotFlowsService {
     // Активируем текущий flow
     flow.status = FlowStatus.ACTIVE;
     const savedFlow = await this.botFlowRepository.save(flow);
+
+    // Сбрасываем все сессии бота при активации Flow
+    this.flowExecutionService.resetBotSessions(botId);
 
     // Логируем активацию flow
     this.activityLogService

@@ -488,6 +488,30 @@ export class FlowExecutionService {
   }
 
   /**
+   * Сбрасывает все сессии для указанного бота
+   * @param botId - ID бота
+   */
+  resetBotSessions(botId: string): void {
+    const sessionsToDelete: string[] = [];
+
+    // Находим все сессии для данного бота
+    for (const [key, session] of this.userSessions.entries()) {
+      if (session.botId === botId) {
+        sessionsToDelete.push(key);
+      }
+    }
+
+    // Удаляем найденные сессии
+    for (const key of sessionsToDelete) {
+      this.userSessions.delete(key);
+    }
+
+    this.logger.log(
+      `Сброшено ${sessionsToDelete.length} сессий для бота ${botId}`
+    );
+  }
+
+  /**
    * Сохраняет данные эндпоинта в глобальное хранилище
    */
   saveEndpointData(
