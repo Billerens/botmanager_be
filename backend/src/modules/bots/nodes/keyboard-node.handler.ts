@@ -227,10 +227,13 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
               messageOptions.reply_markup.keyboard ||
               [];
             // Расплющиваем двумерный массив (массив массивов кнопок) в одномерный
-            const flatButtons = Array.isArray(buttonsArray) && buttonsArray.length > 0 && Array.isArray(buttonsArray[0])
-              ? buttonsArray.flat()
-              : buttonsArray;
-            
+            const flatButtons =
+              Array.isArray(buttonsArray) &&
+              buttonsArray.length > 0 &&
+              Array.isArray(buttonsArray[0])
+                ? buttonsArray.flat()
+                : buttonsArray;
+
             processedKeyboard = {
               type: messageOptions.reply_markup.inline_keyboard
                 ? "inline"
@@ -280,24 +283,38 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
       this.logger.log(`Найден индекс кнопки: ${buttonIndex}`);
 
-      if (buttonIndex !== -1) {
-        // Переходим к узлу, подключенному к соответствующему выходу
-        this.logger.log(`Переходим к выходу button-${buttonIndex}`);
-        await this.moveToNextNodeByOutput(
-          context,
-          currentNode.nodeId,
-          `button-${buttonIndex}`
-        );
-      } else {
-        // Если кнопка не найдена, переходим к первому выходу
-        this.logger.warn(
-          `Кнопка с данными ${pressedButtonData} не найдена, переходим к button-0`
-        );
-        await this.moveToNextNodeByOutput(
-          context,
-          currentNode.nodeId,
-          "button-0"
-        );
+      // Очищаем callback_query из сообщения перед переходом к следующему узлу
+      // чтобы следующий узел не пытался обработать этот callback
+      const originalCallbackQuery = message.callback_query;
+      const originalIsCallback = message.is_callback;
+      message.callback_query = undefined;
+      message.is_callback = false;
+
+      try {
+        if (buttonIndex !== -1) {
+          // Переходим к узлу, подключенному к соответствующему выходу
+          this.logger.log(`Переходим к выходу button-${buttonIndex}`);
+          await this.moveToNextNodeByOutput(
+            context,
+            currentNode.nodeId,
+            `button-${buttonIndex}`
+          );
+        } else {
+          // Если кнопка не найдена, переходим к первому выходу
+          this.logger.warn(
+            `Кнопка с данными ${pressedButtonData} не найдена, переходим к button-0`
+          );
+          await this.moveToNextNodeByOutput(
+            context,
+            currentNode.nodeId,
+            "button-0"
+          );
+        }
+      } finally {
+        // Восстанавливаем callback_query на случай, если он нужен для других целей
+        // (хотя обычно после обработки он больше не нужен)
+        message.callback_query = originalCallbackQuery;
+        message.is_callback = originalIsCallback;
       }
     } else {
       // Если это обычное сообщение - отправляем клавиатуру и ждем выбора
@@ -326,10 +343,13 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
             messageOptions.reply_markup.keyboard ||
             [];
           // Расплющиваем двумерный массив (массив массивов кнопок) в одномерный
-          const flatButtons = Array.isArray(buttonsArray) && buttonsArray.length > 0 && Array.isArray(buttonsArray[0])
-            ? buttonsArray.flat()
-            : buttonsArray;
-          
+          const flatButtons =
+            Array.isArray(buttonsArray) &&
+            buttonsArray.length > 0 &&
+            Array.isArray(buttonsArray[0])
+              ? buttonsArray.flat()
+              : buttonsArray;
+
           processedKeyboard = {
             type: messageOptions.reply_markup.inline_keyboard
               ? "inline"
