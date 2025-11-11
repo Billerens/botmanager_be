@@ -4,8 +4,10 @@ import {
   BadRequestException,
   ConflictException,
   Logger,
+  ForbiddenException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import * as crypto from "crypto";
@@ -14,7 +16,10 @@ import { User, UserRole } from "../../database/entities/user.entity";
 import { UsersService } from "../users/users.service";
 import { TwoFactorService } from "./two-factor.service";
 import { ActivityLogService } from "../activity-log/activity-log.service";
-import { ActivityType, ActivityLevel } from "../../database/entities/activity-log.entity";
+import {
+  ActivityType,
+  ActivityLevel,
+} from "../../database/entities/activity-log.entity";
 import {
   LoginDto,
   RegisterDto,
@@ -40,8 +45,44 @@ export class AuthService {
     private jwtService: JwtService,
     private telegramValidationService: TelegramValidationService,
     private twoFactorService: TwoFactorService,
-    private activityLogService: ActivityLogService
+    private activityLogService: ActivityLogService,
+    private configService: ConfigService
   ) {}
+
+  /**
+   * Проверяет, разрешен ли пользователь для регистрации/входа
+   * Если ALLOWED_USERS не задан, проверка не выполняется (разрешены все)
+   */
+  private checkAllowedUser(telegramId: string): void {
+    // Используем process.env напрямую, так как переменная может быть не определена в конфигурационных файлах
+    const allowedUsers =
+      process.env.ALLOWED_USERS ||
+      this.configService.get<string>("ALLOWED_USERS");
+
+    if (!allowedUsers) {
+      // Если переменная не задана, разрешаем всем
+      return;
+    }
+
+    const allowedIds = allowedUsers
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+
+    if (allowedIds.length === 0) {
+      // Если список пустой, разрешаем всем
+      return;
+    }
+
+    if (!allowedIds.includes(telegramId)) {
+      this.logger.warn(
+        `Попытка доступа пользователя ${telegramId}, который не в списке разрешенных`
+      );
+      throw new ForbiddenException(
+        "Доступ ограничен. Ваш Telegram ID не в списке разрешенных пользователей."
+      );
+    }
+  }
 
   async register(
     registerDto: RegisterDto
@@ -52,6 +93,9 @@ export class AuthService {
 
     this.logger.log(`=== НАЧАЛО РЕГИСТРАЦИИ ===`);
     this.logger.log(`Telegram ID: ${telegramId}`);
+
+    // Проверяем, разрешен ли пользователь для регистрации
+    this.checkAllowedUser(telegramId);
     this.logger.log(`Telegram Username: ${telegramUsername || "не указан"}`);
     this.logger.log(`Имя: ${firstName} ${lastName}`);
 
@@ -139,20 +183,22 @@ export class AuthService {
     this.logger.log(`Пользователь ID: ${savedUser.id}`);
 
     // Логируем регистрацию пользователя
-    this.activityLogService.create({
-      type: ActivityType.USER_REGISTERED,
-      level: ActivityLevel.SUCCESS,
-      message: `Пользователь ${firstName} ${lastName} (${telegramId}) зарегистрирован`,
-      userId: savedUser.id,
-      metadata: {
-        telegramId,
-        telegramUsername,
-        firstName,
-        lastName,
-      },
-    }).catch((error) => {
-      this.logger.error("Ошибка логирования регистрации:", error);
-    });
+    this.activityLogService
+      .create({
+        type: ActivityType.USER_REGISTERED,
+        level: ActivityLevel.SUCCESS,
+        message: `Пользователь ${firstName} ${lastName} (${telegramId}) зарегистрирован`,
+        userId: savedUser.id,
+        metadata: {
+          telegramId,
+          telegramUsername,
+          firstName,
+          lastName,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования регистрации:", error);
+      });
 
     return {
       user: savedUser,
@@ -169,6 +215,9 @@ export class AuthService {
     | TwoFactorRequiredResponseDto
   > {
     const { telegramId, password } = loginDto;
+
+    // Проверяем, разрешен ли пользователь для входа
+    this.checkAllowedUser(telegramId);
 
     // Находим пользователя
     const user = await this.userRepository.findOne({ where: { telegramId } });
@@ -311,18 +360,20 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload);
 
     // Логируем вход пользователя
-    this.activityLogService.create({
-      type: ActivityType.USER_LOGIN,
-      level: ActivityLevel.INFO,
-      message: `Пользователь ${user.firstName} ${user.lastName} (${user.telegramId}) вошел в систему`,
-      userId: user.id,
-      metadata: {
-        telegramId: user.telegramId,
-        telegramUsername: user.telegramUsername,
-      },
-    }).catch((error) => {
-      this.logger.error("Ошибка логирования входа:", error);
-    });
+    this.activityLogService
+      .create({
+        type: ActivityType.USER_LOGIN,
+        level: ActivityLevel.INFO,
+        message: `Пользователь ${user.firstName} ${user.lastName} (${user.telegramId}) вошел в систему`,
+        userId: user.id,
+        metadata: {
+          telegramId: user.telegramId,
+          telegramUsername: user.telegramUsername,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования входа:", error);
+      });
 
     return {
       user,
@@ -373,17 +424,19 @@ export class AuthService {
     await this.userRepository.save(user);
 
     // Логируем смену пароля
-    this.activityLogService.create({
-      type: ActivityType.USER_UPDATED,
-      level: ActivityLevel.INFO,
-      message: `Пользователь ${user.firstName} ${user.lastName} изменил пароль`,
-      userId: user.id,
-      metadata: {
-        action: "password_change",
-      },
-    }).catch((error) => {
-      this.logger.error("Ошибка логирования смены пароля:", error);
-    });
+    this.activityLogService
+      .create({
+        type: ActivityType.USER_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Пользователь ${user.firstName} ${user.lastName} изменил пароль`,
+        userId: user.id,
+        metadata: {
+          action: "password_change",
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования смены пароля:", error);
+      });
   }
 
   async requestPasswordReset(telegramId: string): Promise<void> {
@@ -429,17 +482,19 @@ export class AuthService {
     await this.userRepository.save(user);
 
     // Логируем сброс пароля
-    this.activityLogService.create({
-      type: ActivityType.USER_PASSWORD_RESET,
-      level: ActivityLevel.WARNING,
-      message: `Пароль пользователя ${user.firstName} ${user.lastName} (${user.telegramId}) сброшен`,
-      userId: user.id,
-      metadata: {
-        telegramId: user.telegramId,
-      },
-    }).catch((error) => {
-      this.logger.error("Ошибка логирования сброса пароля:", error);
-    });
+    this.activityLogService
+      .create({
+        type: ActivityType.USER_PASSWORD_RESET,
+        level: ActivityLevel.WARNING,
+        message: `Пароль пользователя ${user.firstName} ${user.lastName} (${user.telegramId}) сброшен`,
+        userId: user.id,
+        metadata: {
+          telegramId: user.telegramId,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования сброса пароля:", error);
+      });
   }
 
   async verifyTelegramWithCode(
@@ -478,18 +533,20 @@ export class AuthService {
     await this.userRepository.save(user);
 
     // Логируем верификацию Telegram
-    this.activityLogService.create({
-      type: ActivityType.USER_TELEGRAM_VERIFIED,
-      level: ActivityLevel.SUCCESS,
-      message: `Telegram пользователя ${user.firstName} ${user.lastName} (${user.telegramId}) верифицирован`,
-      userId: user.id,
-      metadata: {
-        telegramId: user.telegramId,
-        telegramUsername: user.telegramUsername,
-      },
-    }).catch((error) => {
-      this.logger.error("Ошибка логирования верификации Telegram:", error);
-    });
+    this.activityLogService
+      .create({
+        type: ActivityType.USER_TELEGRAM_VERIFIED,
+        level: ActivityLevel.SUCCESS,
+        message: `Telegram пользователя ${user.firstName} ${user.lastName} (${user.telegramId}) верифицирован`,
+        userId: user.id,
+        metadata: {
+          telegramId: user.telegramId,
+          telegramUsername: user.telegramUsername,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования верификации Telegram:", error);
+      });
 
     // Отправляем приветственное сообщение
     await this.telegramValidationService.sendWelcomeMessage(
@@ -589,18 +646,20 @@ export class AuthService {
     const updatedUser = await this.userRepository.save(user);
 
     // Логируем обновление профиля
-    this.activityLogService.create({
-      type: ActivityType.USER_UPDATED,
-      level: ActivityLevel.INFO,
-      message: `Пользователь ${updatedUser.firstName} ${updatedUser.lastName} обновил профиль`,
-      userId: updatedUser.id,
-      metadata: {
-        action: "profile_update",
-        changes: updateData,
-      },
-    }).catch((error) => {
-      this.logger.error("Ошибка логирования обновления профиля:", error);
-    });
+    this.activityLogService
+      .create({
+        type: ActivityType.USER_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Пользователь ${updatedUser.firstName} ${updatedUser.lastName} обновил профиль`,
+        userId: updatedUser.id,
+        metadata: {
+          action: "profile_update",
+          changes: updateData,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования обновления профиля:", error);
+      });
 
     return updatedUser;
   }
