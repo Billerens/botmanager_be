@@ -283,12 +283,14 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
       this.logger.log(`Найден индекс кнопки: ${buttonIndex}`);
 
-      // Очищаем callback_query из сообщения перед переходом к следующему узлу
-      // чтобы следующий узел не пытался обработать этот callback
+      // Очищаем callback_query и text из сообщения перед переходом к следующему узлу
+      // чтобы следующий узел не пытался обработать этот callback и не получил текст кнопки как ввод пользователя
       const originalCallbackQuery = message.callback_query;
       const originalIsCallback = message.is_callback;
+      const originalText = message.text;
       message.callback_query = undefined;
       message.is_callback = false;
+      message.text = undefined;
 
       try {
         if (buttonIndex !== -1) {
@@ -315,6 +317,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
         // (хотя обычно после обработки он больше не нужен)
         message.callback_query = originalCallbackQuery;
         message.is_callback = originalIsCallback;
+        message.text = originalText;
       }
     } else {
       // Если это обычное сообщение - отправляем клавиатуру и ждем выбора
