@@ -74,8 +74,8 @@ export class FlowNodeDataDto {
   messageText?: string;
 
   @IsOptional()
-  @IsEnum(["HTML", "Markdown", "Plain"])
-  parseMode?: "HTML" | "Markdown" | "Plain";
+  @IsEnum(["HTML", "Markdown", "MarkdownV2"])
+  parseMode?: "HTML" | "Markdown" | "MarkdownV2";
 
   @IsOptional()
   @IsArray()
