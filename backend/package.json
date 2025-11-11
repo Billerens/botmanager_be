@@ -60,6 +60,7 @@
     "helmet": "^7.0.0",
     "multer": "^2.0.2",
     "node-telegram-bot-api": "^0.64.0",
+    "openrouter-client": "^1.6.2",
     "passport": "^0.6.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
