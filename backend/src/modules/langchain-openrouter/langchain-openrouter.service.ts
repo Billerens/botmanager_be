@@ -32,27 +32,24 @@ export class LangChainOpenRouterService {
     this.apiKey = this.configService.get<string>("openrouter.apiKey");
     this.baseUrl = this.configService.get<string>("openrouter.baseUrl");
     this.defaultModel = this.configService.get<string>(
-      "openrouter.defaultModel",
+      "openrouter.defaultModel"
     );
 
     if (!this.apiKey) {
       this.logger.warn(
-        "OpenRouter API key не настроен. Проверьте переменную OPENROUTER_API_KEY",
+        "OpenRouter API key не настроен. Проверьте переменную OPENROUTER_API_KEY"
       );
     }
 
     this.logger.log(
-      `LangChain OpenRouter сервис инициализирован с моделью: ${this.defaultModel}`,
+      `LangChain OpenRouter сервис инициализирован с моделью: ${this.defaultModel}`
     );
   }
 
   /**
    * Создает экземпляр ChatOpenAI для работы с OpenRouter
    */
-  private createChatModel(
-    modelName?: string,
-    parameters?: any,
-  ): ChatOpenAI {
+  private createChatModel(modelName?: string, parameters?: any): ChatOpenAI {
     const model = modelName || this.defaultModel;
 
     this.logger.debug(`Создание ChatOpenAI модели: ${model}`);
@@ -89,7 +86,7 @@ export class LangChainOpenRouterService {
         return new AIMessage(message.content);
       default:
         this.logger.warn(
-          `Неизвестная роль сообщения: ${message.role}, используется как HumanMessage`,
+          `Неизвестная роль сообщения: ${message.role}, используется как HumanMessage`
         );
         return new HumanMessage(message.content);
     }
@@ -99,31 +96,28 @@ export class LangChainOpenRouterService {
    * Основной метод для работы с чатом через LangChain
    */
   async chat(
-    request: LangChainChatRequestDto,
+    request: LangChainChatRequestDto
   ): Promise<LangChainChatResponseDto> {
     const startTime = Date.now();
 
     try {
       this.logger.debug(
-        `Обработка запроса чата с ${request.messages.length} сообщениями`,
+        `Обработка запроса чата с ${request.messages.length} сообщениями`
       );
 
       // Валидация
       if (!request.messages || request.messages.length === 0) {
         throw new BadRequestException(
-          "Необходимо предоставить хотя бы одно сообщение",
+          "Необходимо предоставить хотя бы одно сообщение"
         );
       }
 
       // Создаем модель
-      const chatModel = this.createChatModel(
-        request.model,
-        request.parameters,
-      );
+      const chatModel = this.createChatModel(request.model, request.parameters);
 
       // Конвертируем сообщения
       const langchainMessages = request.messages.map((msg) =>
-        this.convertToLangChainMessage(msg),
+        this.convertToLangChainMessage(msg)
       );
 
       // Выполняем запрос
@@ -135,21 +129,24 @@ export class LangChainOpenRouterService {
       // Формируем метаданные ответа
       const metadata: ResponseMetadataDto = {
         model: request.model || this.defaultModel,
-        finishReason: (response.response_metadata as any)?.finish_reason || "stop",
+        finishReason:
+          (response.response_metadata as any)?.finish_reason || "stop",
         generationTime,
         usage: (response.response_metadata as any)?.tokenUsage
           ? {
-              promptTokens: (response.response_metadata as any).tokenUsage.promptTokens,
-              completionTokens:
-                (response.response_metadata as any).tokenUsage.completionTokens,
-              totalTokens: (response.response_metadata as any).tokenUsage.totalTokens,
+              promptTokens: (response.response_metadata as any).tokenUsage
+                .promptTokens,
+              completionTokens: (response.response_metadata as any).tokenUsage
+                .completionTokens,
+              totalTokens: (response.response_metadata as any).tokenUsage
+                .totalTokens,
             }
           : undefined,
         additionalMetadata: response.response_metadata,
       };
 
       this.logger.log(
-        `Чат завершен успешно за ${generationTime.toFixed(2)}s. Токены: ${metadata.usage?.totalTokens || "N/A"}`,
+        `Чат завершен успешно за ${generationTime.toFixed(2)}s. Токены: ${metadata.usage?.totalTokens || "N/A"}`
       );
 
       return {
@@ -161,7 +158,7 @@ export class LangChainOpenRouterService {
     } catch (error) {
       this.logger.error(
         `Ошибка при обработке запроса чата: ${error.message}`,
-        error.stack,
+        error.stack
       );
       throw error;
     }
@@ -171,7 +168,7 @@ export class LangChainOpenRouterService {
    * Упрощенный метод для быстрых текстовых запросов
    */
   async simplePrompt(
-    request: SimpleTextRequestDto,
+    request: SimpleTextRequestDto
   ): Promise<LangChainChatResponseDto> {
     this.logger.debug(`Обработка простого текстового запроса`);
 
@@ -203,20 +200,17 @@ export class LangChainOpenRouterService {
    * Потоковая генерация ответа
    */
   async *chatStream(
-    request: LangChainChatRequestDto,
+    request: LangChainChatRequestDto
   ): AsyncGenerator<string, void, unknown> {
     try {
       this.logger.debug(`Начало потоковой генерации`);
 
       // Создаем модель
-      const chatModel = this.createChatModel(
-        request.model,
-        request.parameters,
-      );
+      const chatModel = this.createChatModel(request.model, request.parameters);
 
       // Конвертируем сообщения
       const langchainMessages = request.messages.map((msg) =>
-        this.convertToLangChainMessage(msg),
+        this.convertToLangChainMessage(msg)
       );
 
       // Создаем поток
@@ -233,7 +227,7 @@ export class LangChainOpenRouterService {
     } catch (error) {
       this.logger.error(
         `Ошибка при потоковой генерации: ${error.message}`,
-        error.stack,
+        error.stack
       );
       throw error;
     }
@@ -244,7 +238,7 @@ export class LangChainOpenRouterService {
    * Позволяет создавать более сложные сценарии обработки
    */
   async executeChain(
-    request: LangChainChatRequestDto,
+    request: LangChainChatRequestDto
   ): Promise<LangChainChatResponseDto> {
     const startTime = Date.now();
 
@@ -252,14 +246,11 @@ export class LangChainOpenRouterService {
       this.logger.debug(`Выполнение цепочки LangChain`);
 
       // Создаем модель
-      const chatModel = this.createChatModel(
-        request.model,
-        request.parameters,
-      );
+      const chatModel = this.createChatModel(request.model, request.parameters);
 
       // Конвертируем сообщения
       const langchainMessages = request.messages.map((msg) =>
-        this.convertToLangChainMessage(msg),
+        this.convertToLangChainMessage(msg)
       );
 
       // Выполняем через модель напрямую
@@ -269,7 +260,7 @@ export class LangChainOpenRouterService {
       const generationTime = (endTime - startTime) / 1000;
 
       this.logger.log(
-        `Цепочка выполнена успешно за ${generationTime.toFixed(2)}s`,
+        `Цепочка выполнена успешно за ${generationTime.toFixed(2)}s`
       );
 
       return {
@@ -279,10 +270,12 @@ export class LangChainOpenRouterService {
           generationTime,
           usage: (response.response_metadata as any)?.tokenUsage
             ? {
-                promptTokens: (response.response_metadata as any).tokenUsage.promptTokens,
-                completionTokens:
-                  (response.response_metadata as any).tokenUsage.completionTokens,
-                totalTokens: (response.response_metadata as any).tokenUsage.totalTokens,
+                promptTokens: (response.response_metadata as any).tokenUsage
+                  .promptTokens,
+                completionTokens: (response.response_metadata as any).tokenUsage
+                  .completionTokens,
+                totalTokens: (response.response_metadata as any).tokenUsage
+                  .totalTokens,
               }
             : undefined,
         },
@@ -292,7 +285,7 @@ export class LangChainOpenRouterService {
     } catch (error) {
       this.logger.error(
         `Ошибка при выполнении цепочки: ${error.message}`,
-        error.stack,
+        error.stack
       );
       throw error;
     }
@@ -302,7 +295,7 @@ export class LangChainOpenRouterService {
    * Батч-обработка нескольких запросов
    */
   async batchProcess(
-    requests: LangChainChatRequestDto[],
+    requests: LangChainChatRequestDto[]
   ): Promise<LangChainChatResponseDto[]> {
     this.logger.log(`Начало батч-обработки ${requests.length} запросов`);
 
@@ -319,7 +312,7 @@ export class LangChainOpenRouterService {
     } catch (error) {
       this.logger.error(
         `Ошибка при батч-обработке: ${error.message}`,
-        error.stack,
+        error.stack
       );
       throw error;
     }
@@ -344,4 +337,3 @@ export class LangChainOpenRouterService {
     };
   }
 }
-
