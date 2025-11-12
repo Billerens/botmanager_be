@@ -15,6 +15,8 @@ import {
   ChatMessageDto,
   ResponseMetadataDto,
 } from "./dto/langchain-chat.dto";
+import { HttpsProxyAgent } from "https-proxy-agent";
+import axios from "axios";
 
 /**
  * Сервис для работы с OpenRouter через LangChain
@@ -30,6 +32,12 @@ export class LangChainOpenRouterService {
   private readonly httpReferer?: string;
   private readonly xTitle?: string;
 
+  // Настройки прокси
+  private readonly proxyUrl?: string;
+  private readonly proxyCheckTimeout: number;
+  private proxyAvailable: boolean = false;
+  private proxyAgent?: HttpsProxyAgent<string>;
+
   constructor(private readonly configService: ConfigService) {
     // Получаем конфигурацию OpenRouter
     this.apiKey = this.configService.get<string>("openrouter.apiKey");
@@ -40,15 +48,94 @@ export class LangChainOpenRouterService {
     this.httpReferer = this.configService.get<string>("openrouter.httpReferer");
     this.xTitle = this.configService.get<string>("openrouter.xTitle");
 
+    // Получаем настройки прокси
+    this.proxyUrl = this.configService.get<string>("openrouter.proxyUrl");
+    this.proxyCheckTimeout =
+      this.configService.get<number>("openrouter.proxyCheckTimeout") || 5000;
+
     if (!this.apiKey) {
       this.logger.warn(
         "OpenRouter API key не настроен. Проверьте переменную OPENROUTER_API_KEY"
       );
     }
 
+    // Инициализируем прокси, если настроен
+    if (this.proxyUrl) {
+      this.initializeProxy();
+    }
+
     this.logger.log(
       `LangChain OpenRouter сервис инициализирован с моделью: ${this.defaultModel}`
     );
+  }
+
+  /**
+   * Инициализация и проверка прокси
+   */
+  private async initializeProxy(): Promise<void> {
+    if (!this.proxyUrl) {
+      return;
+    }
+
+    try {
+      this.logger.log(`Проверка доступности прокси: ${this.proxyUrl}`);
+
+      const isAvailable = await this.checkProxyAvailability();
+
+      if (isAvailable) {
+        this.proxyAgent = new HttpsProxyAgent(this.proxyUrl);
+        this.proxyAvailable = true;
+        this.logger.log(`✓ Прокси ${this.proxyUrl} доступен и настроен`);
+      } else {
+        this.proxyAvailable = false;
+        this.logger.warn(
+          `✗ Прокси ${this.proxyUrl} недоступен, будет использоваться прямое подключение`
+        );
+      }
+    } catch (error) {
+      this.proxyAvailable = false;
+      this.logger.warn(
+        `Ошибка при инициализации прокси: ${error.message}. Используется прямое подключение`
+      );
+    }
+  }
+
+  /**
+   * Проверяет доступность прокси
+   */
+  private async checkProxyAvailability(): Promise<boolean> {
+    if (!this.proxyUrl) {
+      return false;
+    }
+
+    try {
+      const proxyAgent = new HttpsProxyAgent(this.proxyUrl);
+
+      // Пытаемся сделать простой запрос через прокси
+      const response = await axios.get("https://www.google.com", {
+        httpAgent: proxyAgent,
+        httpsAgent: proxyAgent,
+        timeout: this.proxyCheckTimeout,
+        validateStatus: () => true, // Принимаем любой статус
+      });
+
+      return response.status >= 200 && response.status < 500;
+    } catch (error) {
+      this.logger.debug(`Прокси недоступен: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Переподключение к прокси (для повторной проверки доступности)
+   */
+  async reconnectProxy(): Promise<boolean> {
+    if (!this.proxyUrl) {
+      return false;
+    }
+
+    await this.initializeProxy();
+    return this.proxyAvailable;
   }
 
   /**
@@ -58,6 +145,11 @@ export class LangChainOpenRouterService {
     const model = modelName || this.defaultModel;
 
     this.logger.debug(`Создание ChatOpenAI модели: ${model}`);
+
+    // Логируем использование прокси
+    if (this.proxyAvailable && this.proxyAgent) {
+      this.logger.debug(`Используется прокси: ${this.proxyUrl}`);
+    }
 
     // Формируем заголовки для OpenRouter
     const defaultHeaders: Record<string, string> = {};
@@ -84,6 +176,18 @@ export class LangChainOpenRouterService {
       data_collection: "deny", // Запрещаем сбор данных для обучения
     };
 
+    // Формируем конфигурацию
+    const configuration: any = {
+      baseURL: this.baseUrl,
+      defaultHeaders,
+    };
+
+    // Добавляем прокси-агент, если доступен
+    if (this.proxyAvailable && this.proxyAgent) {
+      configuration.httpAgent = this.proxyAgent;
+      configuration.httpsAgent = this.proxyAgent;
+    }
+
     return new ChatOpenAI({
       modelName: model,
       openAIApiKey: this.apiKey,
@@ -93,10 +197,7 @@ export class LangChainOpenRouterService {
       frequencyPenalty: parameters?.frequencyPenalty,
       presencePenalty: parameters?.presencePenalty,
       stop: parameters?.stopSequences,
-      configuration: {
-        baseURL: this.baseUrl,
-        defaultHeaders,
-      },
+      configuration,
       // Дополнительные параметры для OpenRouter
       modelKwargs,
     });
@@ -357,6 +458,16 @@ export class LangChainOpenRouterService {
       defaultModel: this.defaultModel,
       baseUrl: this.baseUrl,
       status: this.apiKey ? "configured" : "not_configured",
+      proxy: {
+        configured: !!this.proxyUrl,
+        url: this.proxyUrl || null,
+        available: this.proxyAvailable,
+        status: this.proxyUrl
+          ? this.proxyAvailable
+            ? "active"
+            : "unavailable"
+          : "not_configured",
+      },
       features: {
         chat: true,
         streaming: true,

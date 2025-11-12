@@ -18,5 +18,11 @@ export default registerAs("openrouter", () => {
       process.env.OPENROUTER_DEFAULT_MODEL ||
       "meta-llama/llama-3.3-70b-instruct",
     allowedModels,
+    // Настройки VPN прокси
+    proxyUrl: process.env.OPENROUTER_PROXY_URL,
+    proxyCheckTimeout: parseInt(
+      process.env.OPENROUTER_PROXY_CHECK_TIMEOUT || "5000",
+      10
+    ),
   };
 });

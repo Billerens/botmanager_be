@@ -36,9 +36,7 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 export class LangChainOpenRouterController {
   private readonly logger = new Logger(LangChainOpenRouterController.name);
 
-  constructor(
-    private readonly langchainService: LangChainOpenRouterService,
-  ) {}
+  constructor(private readonly langchainService: LangChainOpenRouterService) {}
 
   /**
    * Основной endpoint для чата с использованием LangChain
@@ -68,10 +66,10 @@ export class LangChainOpenRouterController {
   })
   @ApiBody({ type: LangChainChatRequestDto })
   async chat(
-    @Body() request: LangChainChatRequestDto,
+    @Body() request: LangChainChatRequestDto
   ): Promise<LangChainChatResponseDto> {
     this.logger.log(
-      `Получен запрос на чат с ${request.messages.length} сообщениями`,
+      `Получен запрос на чат с ${request.messages.length} сообщениями`
     );
 
     try {
@@ -106,7 +104,7 @@ export class LangChainOpenRouterController {
   })
   @ApiBody({ type: SimpleTextRequestDto })
   async simplePrompt(
-    @Body() request: SimpleTextRequestDto,
+    @Body() request: SimpleTextRequestDto
   ): Promise<LangChainChatResponseDto> {
     this.logger.log(`Получен простой текстовый запрос`);
 
@@ -141,7 +139,7 @@ export class LangChainOpenRouterController {
   @ApiBody({ type: LangChainChatRequestDto })
   async chatStream(
     @Body() request: LangChainChatRequestDto,
-    @Res() response: Response,
+    @Res() response: Response
   ): Promise<void> {
     this.logger.log(`Начало потоковой генерации`);
 
@@ -170,9 +168,7 @@ export class LangChainOpenRouterController {
 
       this.logger.log(`Потоковая генерация завершена`);
     } catch (error) {
-      this.logger.error(
-        `Ошибка при потоковой генерации: ${error.message}`,
-      );
+      this.logger.error(`Ошибка при потоковой генерации: ${error.message}`);
 
       // Отправляем ошибку в потоке
       const errorData = JSON.stringify({
@@ -203,7 +199,7 @@ export class LangChainOpenRouterController {
   })
   @ApiBody({ type: LangChainChatRequestDto })
   async executeChain(
-    @Body() request: LangChainChatRequestDto,
+    @Body() request: LangChainChatRequestDto
   ): Promise<LangChainChatResponseDto> {
     this.logger.log(`Получен запрос на выполнение цепочки`);
 
@@ -234,14 +230,14 @@ export class LangChainOpenRouterController {
   })
   @ApiBody({ type: [LangChainChatRequestDto] })
   async batchProcess(
-    @Body() requests: LangChainChatRequestDto[],
+    @Body() requests: LangChainChatRequestDto[]
   ): Promise<LangChainChatResponseDto[]> {
-    this.logger.log(`Получен запрос на батч-обработку ${requests.length} запросов`);
+    this.logger.log(
+      `Получен запрос на батч-обработку ${requests.length} запросов`
+    );
 
     if (!Array.isArray(requests) || requests.length === 0) {
-      throw new BadRequestException(
-        "Необходимо предоставить массив запросов",
-      );
+      throw new BadRequestException("Необходимо предоставить массив запросов");
     }
 
     try {
@@ -258,8 +254,7 @@ export class LangChainOpenRouterController {
   @Get("info")
   @ApiOperation({
     summary: "Информация о сервисе",
-    description:
-      "Возвращает информацию о конфигурации и возможностях сервиса.",
+    description: "Возвращает информацию о конфигурации и возможностях сервиса.",
   })
   @ApiResponse({
     status: 200,
@@ -288,5 +283,43 @@ export class LangChainOpenRouterController {
       timestamp: new Date().toISOString(),
     };
   }
-}
 
+  /**
+   * Переподключение к прокси
+   */
+  @Post("proxy/reconnect")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Переподключение к VPN прокси",
+    description:
+      "Повторно проверяет доступность прокси и переподключается, если прокси снова доступен.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Результат переподключения к прокси",
+  })
+  async reconnectProxy() {
+    this.logger.log("Получен запрос на переподключение к прокси");
+
+    try {
+      const connected = await this.langchainService.reconnectProxy();
+      const serviceInfo = this.langchainService.getServiceInfo();
+
+      return {
+        success: connected,
+        message: connected
+          ? "Прокси успешно подключен"
+          : "Прокси недоступен, используется прямое подключение",
+        proxy: serviceInfo.proxy,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.logger.error(
+        `Ошибка при переподключении к прокси: ${error.message}`
+      );
+      throw error;
+    }
+  }
+}
