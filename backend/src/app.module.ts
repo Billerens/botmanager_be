@@ -33,6 +33,7 @@ import { ShopPromocodesModule } from "./modules/shop-promocodes/shop-promocodes.
 import { HealthModule } from "./health/health.module";
 import { CloudAiModule } from "./modules/cloud-ai/cloud-ai.module";
 import { OpenRouterModule } from "./modules/openrouter/openrouter.module";
+import { LangChainOpenRouterModule } from "./modules/langchain-openrouter/langchain-openrouter.module";
 
 @Module({
   imports: [
@@ -88,6 +89,7 @@ import { OpenRouterModule } from "./modules/openrouter/openrouter.module";
     HealthModule, // Health check endpoints
     CloudAiModule, // Cloud AI прокси-контроллер
     OpenRouterModule, // OpenRouter AI провайдер
+    LangChainOpenRouterModule, // LangChain + OpenRouter интеграция
   ],
 })
 export class AppModule {}
