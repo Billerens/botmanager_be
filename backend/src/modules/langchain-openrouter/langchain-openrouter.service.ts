@@ -88,7 +88,7 @@ export class LangChainOpenRouterService {
       modelName: model,
       openAIApiKey: this.apiKey,
       temperature: parameters?.temperature ?? 0.7,
-      maxTokens: parameters?.maxTokens ?? 2000,
+      maxTokens: parameters?.maxTokens ?? 4000,
       topP: parameters?.topP,
       frequencyPenalty: parameters?.frequencyPenalty,
       presencePenalty: parameters?.presencePenalty,
