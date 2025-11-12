@@ -10,12 +10,7 @@ import {
   Res,
 } from "@nestjs/common";
 import { Response } from "express";
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiParam,
-} from "@nestjs/swagger";
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger";
 import { OpenRouterService } from "../../common/openrouter.service";
 import {
   OpenRouterChatRequestDto,
@@ -28,9 +23,10 @@ import {
 /**
  * Контроллер для работы с платными моделями OpenRouter API
  * Предоставляет эндпоинты для chat completions с использованием моделей из OPENROUTER_ALLOWED_MODELS
- * 
+ * Если OPENROUTER_ALLOWED_MODELS не задан или пуст, доступны все модели OpenRouter
+ *
  * Примеры использования API:
- * 
+ *
  * 1. Простой chat completion запрос:
  * POST /api/v1/openrouter-paid/chat/completions
  * Body: {
@@ -40,7 +36,7 @@ import {
  *   "model": "anthropic/claude-3.5-sonnet",
  *   "temperature": 0.7
  * }
- * 
+ *
  * 2. Стриминговый запрос:
  * POST /api/v1/openrouter-paid/chat/completions
  * Body: {
@@ -49,7 +45,7 @@ import {
  *   ],
  *   "stream": true
  * }
- * 
+ *
  * 3. Получение списка платных моделей:
  * GET /api/v1/openrouter-paid/models
  */
@@ -70,7 +66,7 @@ export class OpenRouterPaidController {
   @ApiOperation({
     summary: "OpenRouter paid models chat completions",
     description:
-      "Отправляет chat completion запрос к OpenRouter с использованием платных моделей из OPENROUTER_ALLOWED_MODELS. Поддерживает стриминг (если stream: true в запросе).",
+      "Отправляет chat completion запрос к OpenRouter. Если OPENROUTER_ALLOWED_MODELS задан, используются только модели из этого списка. Если не задан, доступны все модели OpenRouter. Поддерживает стриминг (если stream: true в запросе).",
   })
   @ApiResponse({
     status: 200,
@@ -91,6 +87,7 @@ export class OpenRouterPaidController {
     );
 
     // Валидация модели (если указана)
+    // Если OPENROUTER_ALLOWED_MODELS не задан, валидация пропускает все модели
     if (request.model) {
       const paidModels = await this.openRouterService.getPaidModels();
       const isModelAllowed = paidModels.data.some(
@@ -132,7 +129,7 @@ export class OpenRouterPaidController {
           request
         )) {
           dataSent = true; // Отметим, что данные начали отправляться
-          
+
           // Отправляем чанк в формате SSE
           res.write(`data: ${JSON.stringify(chunk)}\n\n`);
 
@@ -315,7 +312,9 @@ export class OpenRouterPaidController {
   async getGenerationStats(
     @Param("id") id: string
   ): Promise<GenerationStatsDto> {
-    this.logger.debug(`Get generation stats request for ID: ${id} (paid models)`);
+    this.logger.debug(
+      `Get generation stats request for ID: ${id} (paid models)`
+    );
 
     try {
       return await this.openRouterService.getGenerationStats(id);
@@ -329,14 +328,16 @@ export class OpenRouterPaidController {
   }
 
   /**
-   * Получить список платных моделей из OPENROUTER_ALLOWED_MODELS
+   * Получить список платных моделей
+   * Если OPENROUTER_ALLOWED_MODELS не задан или пуст, возвращает все модели OpenRouter
+   * Иначе возвращает только модели из списка разрешенных
    */
   @Get("models")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: "Get paid models",
     description:
-      "Получает список платных моделей OpenRouter из списка разрешенных моделей (OPENROUTER_ALLOWED_MODELS)",
+      "Получает список платных моделей OpenRouter. Если OPENROUTER_ALLOWED_MODELS не задан или пуст, возвращает все доступные модели. Иначе возвращает только модели из списка разрешенных.",
   })
   @ApiResponse({
     status: 200,
@@ -389,4 +390,3 @@ export class OpenRouterPaidController {
     };
   }
 }
-

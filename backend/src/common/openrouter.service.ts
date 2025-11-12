@@ -190,13 +190,13 @@ export class OpenRouterService {
             `OpenRouter API error: ${response.errorCode} - ${response.errorMessage}`,
             response.metadata
           );
-          
+
           // Пытаемся извлечь более детальное сообщение из metadata
           let detailedMessage = response.errorMessage;
-          
+
           if (response.metadata) {
             const metadata = response.metadata as any;
-            
+
             // Если есть raw данные, пытаемся извлечь сообщение из HTML
             if (metadata.raw) {
               try {
@@ -206,7 +206,8 @@ export class OpenRouterService {
                 if (match && match[1]) {
                   detailedMessage = match[1].trim();
                 } else if (rawStr.includes("not available in your region")) {
-                  detailedMessage = "This service is not available in your region";
+                  detailedMessage =
+                    "This service is not available in your region";
                 } else if (rawStr.includes("region")) {
                   detailedMessage = "Service is not available in your region";
                 }
@@ -214,13 +215,13 @@ export class OpenRouterService {
                 // Игнорируем ошибки парсинга
               }
             }
-            
+
             // Добавляем информацию о провайдере, если есть
             if (metadata.provider_name) {
               detailedMessage += ` (Provider: ${metadata.provider_name})`;
             }
           }
-          
+
           throw new BadRequestException(detailedMessage);
         }
 
@@ -238,12 +239,15 @@ export class OpenRouterService {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      
+
       // Пытаемся извлечь более понятное сообщение об ошибке
       let errorMessage = error.message;
-      
+
       // Если ошибка содержит информацию о регионе или провайдере
-      if (errorMessage.includes("region") || errorMessage.includes("not available")) {
+      if (
+        errorMessage.includes("region") ||
+        errorMessage.includes("not available")
+      ) {
         errorMessage = errorMessage;
       } else if (errorMessage.includes("Provider returned error")) {
         // Пытаемся найти более детальную информацию
@@ -252,7 +256,7 @@ export class OpenRouterService {
           errorMessage = "This service is not available in your region";
         }
       }
-      
+
       throw new BadRequestException(
         errorMessage || `Failed to send chat request: ${error.message}`
       );
@@ -358,23 +362,31 @@ export class OpenRouterService {
 
   /**
    * Получает список платных моделей OpenRouter
-   * Фильтрует модели по списку из OPENROUTER_ALLOWED_MODELS
-   * @returns Список платных моделей из разрешенного списка
+   * Если OPENROUTER_ALLOWED_MODELS не задан или пуст, возвращает все модели
+   * Иначе фильтрует модели по списку из OPENROUTER_ALLOWED_MODELS
+   * @returns Список платных моделей (все или из разрешенного списка)
    */
   async getPaidModels(): Promise<ModelsListResponseDto> {
     try {
       this.logger.debug("Fetching paid models from OpenRouter");
 
+      const allModels = await this.getModels();
+
+      // Если список разрешенных моделей не задан или пуст, возвращаем все модели
       if (!this.allowedModels || this.allowedModels.length === 0) {
-        this.logger.warn(
-          "OPENROUTER_ALLOWED_MODELS is not configured. Returning empty list."
+        this.logger.debug(
+          "OPENROUTER_ALLOWED_MODELS is not configured. Returning all models."
         );
+
+        // Сортируем по имени для удобства
+        const sortedModels = [...allModels.data].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+
         return {
-          data: [],
+          data: sortedModels,
         };
       }
-
-      const allModels = await this.getModels();
 
       // Фильтруем модели по списку разрешенных
       const paidModels = allModels.data.filter((model) => {
@@ -498,7 +510,7 @@ export class OpenRouterService {
             const errorData = JSON.parse(jsonMatch[0]);
             if (errorData.error?.message) {
               errorMessage = errorData.error.message;
-              
+
               // Пытаемся извлечь сообщение из metadata.raw (HTML)
               if (errorData.error.metadata?.raw) {
                 try {
@@ -508,7 +520,8 @@ export class OpenRouterService {
                   if (match && match[1]) {
                     errorMessage = match[1].trim();
                   } else if (rawStr.includes("not available in your region")) {
-                    errorMessage = "This service is not available in your region";
+                    errorMessage =
+                      "This service is not available in your region";
                   } else if (rawStr.includes("region")) {
                     errorMessage = "Service is not available in your region";
                   }
@@ -516,7 +529,7 @@ export class OpenRouterService {
                   // Игнорируем ошибки парсинга raw данных
                 }
               }
-              
+
               // Добавляем информацию о провайдере, если есть
               if (errorData.error.metadata?.provider_name) {
                 errorMessage += ` (Provider: ${errorData.error.metadata.provider_name})`;
@@ -549,7 +562,7 @@ export class OpenRouterService {
             const errorData = JSON.parse(jsonMatch[0]);
             if (errorData.error?.message) {
               errorMessage = errorData.error.message;
-              
+
               // Пытаемся извлечь сообщение из metadata.raw (HTML)
               if (errorData.error.metadata?.raw) {
                 try {
@@ -559,7 +572,8 @@ export class OpenRouterService {
                   if (match && match[1]) {
                     errorMessage = match[1].trim();
                   } else if (rawStr.includes("not available in your region")) {
-                    errorMessage = "This service is not available in your region";
+                    errorMessage =
+                      "This service is not available in your region";
                   } else if (rawStr.includes("region")) {
                     errorMessage = "Service is not available in your region";
                   }
@@ -567,7 +581,7 @@ export class OpenRouterService {
                   // Игнорируем ошибки парсинга raw данных
                 }
               }
-              
+
               if (errorData.error.metadata?.provider_name) {
                 errorMessage += ` (Provider: ${errorData.error.metadata.provider_name})`;
               }
