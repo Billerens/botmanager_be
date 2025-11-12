@@ -6,7 +6,7 @@ import {
   HumanMessage,
   AIMessage,
   BaseMessage,
-} from "@langchain/core/dist/messages/index.js";
+} from "@langchain/core/messages";
 import {
   LangChainChatRequestDto,
   SimpleTextRequestDto,

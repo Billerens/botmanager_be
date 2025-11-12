@@ -4,7 +4,7 @@ import {
   HumanMessage,
   AIMessage,
   BaseMessage,
-} from "@langchain/core/dist/messages/index.js";
+} from "@langchain/core/messages";
 import { ChatMessageDto, MessageRole } from "../dto/langchain-chat.dto";
 
 /**
