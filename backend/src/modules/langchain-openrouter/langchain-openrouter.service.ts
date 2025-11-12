@@ -27,6 +27,9 @@ export class LangChainOpenRouterService {
   private readonly apiKey: string;
   private readonly baseUrl: string;
 
+  private readonly httpReferer?: string;
+  private readonly xTitle?: string;
+
   constructor(private readonly configService: ConfigService) {
     // Получаем конфигурацию OpenRouter
     this.apiKey = this.configService.get<string>("openrouter.apiKey");
@@ -34,6 +37,8 @@ export class LangChainOpenRouterService {
     this.defaultModel = this.configService.get<string>(
       "openrouter.defaultModel"
     );
+    this.httpReferer = this.configService.get<string>("openrouter.httpReferer");
+    this.xTitle = this.configService.get<string>("openrouter.xTitle");
 
     if (!this.apiKey) {
       this.logger.warn(
@@ -54,6 +59,31 @@ export class LangChainOpenRouterService {
 
     this.logger.debug(`Создание ChatOpenAI модели: ${model}`);
 
+    // Формируем заголовки для OpenRouter
+    const defaultHeaders: Record<string, string> = {};
+
+    if (this.httpReferer) {
+      defaultHeaders["HTTP-Referer"] = this.httpReferer;
+    }
+
+    if (this.xTitle) {
+      defaultHeaders["X-Title"] = this.xTitle;
+    }
+
+    // Формируем параметры для modelKwargs
+    const modelKwargs: any = {};
+
+    // Добавляем top_k если указан
+    if (parameters?.topK) {
+      modelKwargs.top_k = parameters.topK;
+    }
+
+    // ВАЖНО: Добавляем настройки приватности для OpenRouter
+    // Это предотвращает использование данных для обучения моделей
+    modelKwargs.provider = {
+      data_collection: "deny", // Запрещаем сбор данных для обучения
+    };
+
     return new ChatOpenAI({
       modelName: model,
       openAIApiKey: this.apiKey,
@@ -65,11 +95,10 @@ export class LangChainOpenRouterService {
       stop: parameters?.stopSequences,
       configuration: {
         baseURL: this.baseUrl,
+        defaultHeaders,
       },
       // Дополнительные параметры для OpenRouter
-      modelKwargs: {
-        top_k: parameters?.topK,
-      },
+      modelKwargs,
     });
   }
 
