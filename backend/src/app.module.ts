@@ -34,6 +34,7 @@ import { HealthModule } from "./health/health.module";
 import { CloudAiModule } from "./modules/cloud-ai/cloud-ai.module";
 import { OpenRouterModule } from "./modules/openrouter/openrouter.module";
 import { LangChainOpenRouterModule } from "./modules/langchain-openrouter/langchain-openrouter.module";
+import { AgentToolsModule } from "./modules/agent-tools/agent-tools.module";
 
 @Module({
   imports: [
@@ -90,6 +91,7 @@ import { LangChainOpenRouterModule } from "./modules/langchain-openrouter/langch
     CloudAiModule, // Cloud AI прокси-контроллер
     OpenRouterModule, // OpenRouter AI провайдер
     LangChainOpenRouterModule, // LangChain + OpenRouter интеграция
+    AgentToolsModule, // Инструменты агента для прямого воздействия на контент
   ],
 })
 export class AppModule {}

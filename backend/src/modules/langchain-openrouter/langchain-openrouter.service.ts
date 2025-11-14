@@ -343,13 +343,36 @@ export class LangChainOpenRouterService {
         this.convertToLangChainMessage(msg)
       );
 
+      // Если есть инструменты, привязываем их к модели
+      let modelWithTools = chatModel;
+      if (request.tools && request.tools.length > 0) {
+        modelWithTools = chatModel.bindTools(request.tools);
+      }
+
       // Создаем поток
-      const stream = await chatModel.stream(langchainMessages);
+      const stream = await modelWithTools.stream(langchainMessages);
 
       // Стримим чанки
       for await (const chunk of stream) {
+        // Обрабатываем контент
         if (chunk.content) {
           yield chunk.content as string;
+        }
+
+        // Обрабатываем tool calls
+        if (chunk.tool_calls) {
+          // Передаем tool calls как JSON
+          yield JSON.stringify({
+            tool_calls: chunk.tool_calls,
+            finish_reason: chunk.finish_reason
+          });
+        }
+
+        // Проверяем finish_reason для завершения
+        if (chunk.finish_reason) {
+          yield JSON.stringify({
+            finish_reason: chunk.finish_reason
+          });
         }
       }
 
