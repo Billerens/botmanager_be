@@ -179,10 +179,6 @@ export class LangChainChatRequestDto {
     example: false,
     description: "Включить потоковую передачу ответа (streaming)",
   })
-  @ApiPropertyOptional({
-    example: false,
-    description: "Включить потоковую передачу ответа (streaming)",
-  })
   @IsOptional()
   @IsBoolean()
   stream?: boolean;
@@ -194,32 +190,6 @@ export class LangChainChatRequestDto {
   @IsOptional()
   @IsString()
   sessionId?: string;
-
-  @ApiPropertyOptional({
-    type: [Object],
-    description: "Инструменты (tools) для function calling",
-    example: [
-      {
-        type: "function",
-        function: {
-          name: "style_apply",
-          description: "Применить CSS стили к странице",
-          parameters: {
-            type: "object",
-            properties: {
-              context: { type: "string", enum: ["booking", "shop"] },
-              cssRules: { type: "string" },
-              botId: { type: "string" }
-            },
-            required: ["context", "cssRules"]
-          }
-        }
-      }
-    ],
-  })
-  @IsOptional()
-  @IsArray()
-  tools?: any[];
 
   @ApiPropertyOptional({
     type: Object,
