@@ -28,6 +28,8 @@ export enum NodeType {
   ENDPOINT = "endpoint",
   BROADCAST = "broadcast",
   GROUP = "group",
+  LOCATION = "location",
+  CALCULATOR = "calculator",
 }
 
 export enum MessageNodeType {
@@ -245,6 +247,23 @@ export class BotFlowNode {
       chatType?: "private" | "group" | "supergroup" | "channel";
     };
 
+    // Для LOCATION нод
+    location?: {
+      requestText: string; // Текст запроса геолокации
+      timeout?: number; // Таймаут ожидания в секундах (по умолчанию 300)
+      variableName?: string; // Имя переменной для сохранения координат
+      successMessage?: string; // Сообщение при успешном получении
+      errorMessage?: string; // Сообщение при ошибке или таймауте
+    };
+
+    // Для CALCULATOR нод
+    calculator?: {
+      expression: string; // Математическое выражение
+      variableName: string; // Имя переменной для сохранения результата
+      precision?: number; // Количество знаков после запятой (по умолчанию 2)
+      format?: "number" | "currency" | "percentage"; // Формат вывода
+    };
+
     // Общие настройки
     nextNodeId?: string; // ID следующей ноды
     errorNodeId?: string; // ID ноды при ошибке
@@ -318,5 +337,13 @@ export class BotFlowNode {
   get errorRate(): number {
     if (this.executionCount === 0) return 0;
     return (this.errorCount / this.executionCount) * 100;
+  }
+
+  get isLocation(): boolean {
+    return this.type === NodeType.LOCATION;
+  }
+
+  get isCalculator(): boolean {
+    return this.type === NodeType.CALCULATOR;
   }
 }

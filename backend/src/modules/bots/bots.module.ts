@@ -41,6 +41,8 @@ import {
   EndpointNodeHandler,
   BroadcastNodeHandler,
   DatabaseNodeHandler,
+  LocationNodeHandler,
+  CalculatorNodeHandler,
 } from "./nodes";
 import { DatabaseService } from "./database.service";
 
@@ -86,6 +88,8 @@ import { DatabaseService } from "./database.service";
     EndpointNodeHandler,
     BroadcastNodeHandler,
     DatabaseNodeHandler,
+    LocationNodeHandler,
+    CalculatorNodeHandler,
   ],
   controllers: [
     BotsController,

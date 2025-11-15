@@ -19,3 +19,5 @@ export * from "./new-message-node.handler";
 export * from "./endpoint-node.handler";
 export * from "./broadcast-node.handler";
 export * from "./database-node.handler";
+export * from "./location-node.handler";
+export * from "./calculator-node.handler";

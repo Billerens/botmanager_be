@@ -50,6 +50,7 @@ export enum ActivityType {
   FLOW_EXECUTED = "flow_executed",
   FLOW_ACTIVATED = "flow_activated",
   FLOW_DEACTIVATED = "flow_deactivated",
+  NODE_EXECUTED = "node_executed",
 
   PRODUCT_CREATED = "product_created",
   PRODUCT_UPDATED = "product_updated",

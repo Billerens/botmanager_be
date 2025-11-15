@@ -34,6 +34,8 @@ import {
   EndpointNodeHandler,
   BroadcastNodeHandler,
   DatabaseNodeHandler,
+  LocationNodeHandler,
+  CalculatorNodeHandler,
 } from "./nodes";
 
 export interface UserSession {
@@ -43,6 +45,11 @@ export interface UserSession {
   currentNodeId?: string;
   variables: Record<string, any>;
   lastActivity: Date;
+  locationRequest?: {
+    nodeId: string;
+    timestamp: Date;
+    timeout: number;
+  };
 }
 
 export interface EndpointData {
@@ -83,7 +90,9 @@ export class FlowExecutionService {
     private readonly newMessageNodeHandler: NewMessageNodeHandler,
     private readonly endpointNodeHandler: EndpointNodeHandler,
     private readonly broadcastNodeHandler: BroadcastNodeHandler,
-    private readonly databaseNodeHandler: DatabaseNodeHandler
+    private readonly databaseNodeHandler: DatabaseNodeHandler,
+    private readonly locationNodeHandler: LocationNodeHandler,
+    private readonly calculatorNodeHandler: CalculatorNodeHandler
   ) {
     // Регистрируем все обработчики
     this.registerNodeHandlers();
@@ -130,6 +139,14 @@ export class FlowExecutionService {
       "database",
       this.databaseNodeHandler
     );
+    this.nodeHandlerService.registerHandler(
+      "location",
+      this.locationNodeHandler
+    );
+    this.nodeHandlerService.registerHandler(
+      "calculator",
+      this.calculatorNodeHandler
+    );
 
     // Устанавливаем callback для всех обработчиков
     const handlers = [
@@ -149,6 +166,8 @@ export class FlowExecutionService {
       this.endpointNodeHandler,
       this.broadcastNodeHandler,
       this.databaseNodeHandler,
+      this.locationNodeHandler,
+      this.calculatorNodeHandler,
     ];
 
     handlers.forEach((handler) => {
