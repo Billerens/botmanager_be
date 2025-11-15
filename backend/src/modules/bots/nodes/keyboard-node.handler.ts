@@ -320,7 +320,43 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
         message.text = originalText;
       }
     } else {
-      // Если это обычное сообщение - отправляем клавиатуру и ждем выбора
+      // Если это обычное сообщение
+      this.logger.log(`Получено обычное сообщение: "${message.text}"`);
+
+      // Для обычных клавиатур (inline = false) проверяем, соответствует ли текст сообщения кнопке
+      if (!isInline && message.text && message.text.trim()) {
+        const pressedButtonText = message.text.trim();
+        this.logger.log(
+          `Проверяем, соответствует ли текст "${pressedButtonText}" кнопке`
+        );
+
+        // Находим индекс кнопки по тексту
+        const buttonIndex = processedButtons.findIndex(
+          (button) => button.text.trim() === pressedButtonText
+        );
+
+        this.logger.log(`Найден индекс кнопки: ${buttonIndex}`);
+
+        if (buttonIndex !== -1) {
+          // Нашли кнопку - переходим к соответствующему выходу
+          this.logger.log(
+            `Найдена кнопка "${pressedButtonText}", переходим к выходу button-${buttonIndex}`
+          );
+          await this.moveToNextNodeByOutput(
+            context,
+            currentNode.nodeId,
+            `button-${buttonIndex}`
+          );
+          return;
+        } else {
+          // Кнопка не найдена - отправляем клавиатуру и ждем выбора
+          this.logger.log(
+            `Кнопка с текстом "${pressedButtonText}" не найдена, отправляем клавиатуру`
+          );
+        }
+      }
+
+      // Отправляем клавиатуру и ждем выбора пользователя
       this.logger.log(`Отправляем клавиатуру и ждем выбора пользователя`);
 
       // Отправляем сообщение и сохраняем message_id
