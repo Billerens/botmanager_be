@@ -338,15 +338,25 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
         this.logger.log(`Найден индекс кнопки: ${buttonIndex}`);
 
         if (buttonIndex !== -1) {
-          // Нашли кнопку - переходим к соответствующему выходу
-          this.logger.log(
-            `Найдена кнопка "${pressedButtonText}", переходим к выходу button-${buttonIndex}`
-          );
-          await this.moveToNextNodeByOutput(
-            context,
-            currentNode.nodeId,
-            `button-${buttonIndex}`
-          );
+          // Нашли кнопку - очищаем текст сообщения перед переходом к следующему узлу
+          // чтобы следующий узел не получил текст кнопки как ввод пользователя
+          const originalText = message.text;
+          message.text = undefined;
+
+          try {
+            // Переходим к узлу, подключенному к соответствующему выходу
+            this.logger.log(
+              `Найдена кнопка "${pressedButtonText}", переходим к выходу button-${buttonIndex}`
+            );
+            await this.moveToNextNodeByOutput(
+              context,
+              currentNode.nodeId,
+              `button-${buttonIndex}`
+            );
+          } finally {
+            // Восстанавливаем текст сообщения на случай, если он нужен для других целей
+            message.text = originalText;
+          }
           return;
         } else {
           // Кнопка не найдена - отправляем клавиатуру и ждем выбора
