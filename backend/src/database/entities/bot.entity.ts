@@ -13,6 +13,7 @@ import { Message } from "./message.entity";
 import { Lead } from "./lead.entity";
 import { BotFlow } from "./bot-flow.entity";
 import { ActivityLog } from "./activity-log.entity";
+import { BotCustomData } from "./bot-custom-data.entity";
 import { Product } from "./product.entity";
 import { Specialist } from "./specialist.entity";
 
@@ -132,6 +133,9 @@ export class Bot {
 
   @OneToMany(() => Specialist, (specialist) => specialist.bot)
   specialists: Specialist[];
+
+  @OneToMany(() => BotCustomData, (customData) => customData.bot)
+  customData: BotCustomData[];
 
   // Поля для магазина
   @Column({ default: false })

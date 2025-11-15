@@ -20,6 +20,7 @@ export enum NodeType {
   FORM = "form",
   DELAY = "delay",
   VARIABLE = "variable",
+  DATABASE = "database",
   FILE = "file",
   WEBHOOK = "webhook",
   RANDOM = "random",
@@ -175,6 +176,20 @@ export class BotFlowNode {
     };
     // Для множественных переменных (новая упрощенная версия)
     variables?: Record<string, string>;
+
+    // Для DATABASE нод
+    database?: {
+      dataSource: "bot_data" | "custom_storage";
+      table?: string; // для bot_data
+      collection?: string; // для custom_storage
+      operation: "select" | "insert" | "update" | "delete" | "count";
+      where?: string;
+      data?: Record<string, any>;
+      limit?: number;
+      offset?: number;
+      orderBy?: string;
+      key?: string; // для custom_storage
+    };
 
     // Для FILE нод
     file?: {

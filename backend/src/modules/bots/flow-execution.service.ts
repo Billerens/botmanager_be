@@ -33,6 +33,7 @@ import {
   NewMessageNodeHandler,
   EndpointNodeHandler,
   BroadcastNodeHandler,
+  DatabaseNodeHandler,
 } from "./nodes";
 
 export interface UserSession {
@@ -81,7 +82,8 @@ export class FlowExecutionService {
     private readonly integrationNodeHandler: IntegrationNodeHandler,
     private readonly newMessageNodeHandler: NewMessageNodeHandler,
     private readonly endpointNodeHandler: EndpointNodeHandler,
-    private readonly broadcastNodeHandler: BroadcastNodeHandler
+    private readonly broadcastNodeHandler: BroadcastNodeHandler,
+    private readonly databaseNodeHandler: DatabaseNodeHandler
   ) {
     // Регистрируем все обработчики
     this.registerNodeHandlers();
@@ -124,6 +126,10 @@ export class FlowExecutionService {
       "broadcast",
       this.broadcastNodeHandler
     );
+    this.nodeHandlerService.registerHandler(
+      "database",
+      this.databaseNodeHandler
+    );
 
     // Устанавливаем callback для всех обработчиков
     const handlers = [
@@ -142,6 +148,7 @@ export class FlowExecutionService {
       this.newMessageNodeHandler,
       this.endpointNodeHandler,
       this.broadcastNodeHandler,
+      this.databaseNodeHandler,
     ];
 
     handlers.forEach((handler) => {
