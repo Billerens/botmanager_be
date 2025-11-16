@@ -404,4 +404,94 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return 0;
     }
   }
+
+  /**
+   * Добавить элемент в Redis Set
+   */
+  async sadd(key: string, member: string): Promise<number> {
+    try {
+      return await this.publisher.sAdd(key, member);
+    } catch (error) {
+      this.logger.error(
+        `Ошибка добавления в set ${key}: ${error.message}`,
+        error.stack
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Удалить элемент из Redis Set
+   */
+  async srem(key: string, member: string): Promise<number> {
+    try {
+      return await this.publisher.sRem(key, member);
+    } catch (error) {
+      this.logger.error(
+        `Ошибка удаления из set ${key}: ${error.message}`,
+        error.stack
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Получить все элементы Redis Set
+   */
+  async smembers(key: string): Promise<string[]> {
+    try {
+      return await this.publisher.sMembers(key);
+    } catch (error) {
+      this.logger.error(
+        `Ошибка получения членов set ${key}: ${error.message}`,
+        error.stack
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Установить поле в Redis Hash
+   */
+  async hset(key: string, field: string, value: string): Promise<number> {
+    try {
+      return await this.publisher.hSet(key, field, value);
+    } catch (error) {
+      this.logger.error(
+        `Ошибка установки поля hash ${key}:${field}: ${error.message}`,
+        error.stack
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Получить все поля и значения из Redis Hash
+   */
+  async hgetall(key: string): Promise<Record<string, string>> {
+    try {
+      return await this.publisher.hGetAll(key);
+    } catch (error) {
+      this.logger.error(
+        `Ошибка получения hash ${key}: ${error.message}`,
+        error.stack
+      );
+      return {};
+    }
+  }
+
+  /**
+   * Установить TTL для ключа
+   */
+  async expire(key: string, seconds: number): Promise<boolean> {
+    try {
+      return await this.publisher.expire(key, seconds);
+    } catch (error) {
+      this.logger.error(
+        `Ошибка установки TTL для ключа ${key}: ${error.message}`,
+        error.stack
+      );
+      return false;
+    }
+  }
 }

@@ -23,8 +23,11 @@ export interface UserSessionData {
   };
   sessionType?: SessionType;
   lobbyData?: {
-    lobbyId: string;
-    participantVariables: Record<string, any>;
+    lobbyId?: string;
+    groupSessionId?: string;
+    role?: string;
+    joinedAt?: Date;
+    participantVariables?: Record<string, any>;
   };
 }
 

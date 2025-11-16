@@ -1,6 +1,8 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Inject } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
 import { InjectQueue } from "@nestjs/bull";
 import { Queue } from "bull";
+import { Repository } from "typeorm";
 import { BaseNodeHandler } from "./base-node-handler";
 import { FlowContext } from "./base-node-handler.interface";
 import { GroupSessionService } from "../group-session.service";
@@ -9,18 +11,37 @@ import { TelegramService } from "../../telegram/telegram.service";
 import { BotsService } from "../bots.service";
 import { RedisService } from "../../websocket/services/redis.service";
 import { ConditionOperator } from "../../../database/entities/bot-flow-node.entity";
+import { BotFlow } from "../../../database/entities/bot-flow.entity";
+import { BotFlowNode } from "../../../database/entities/bot-flow-node.entity";
+import { CustomLoggerService } from "../../../common/logger.service";
+import { MessagesService } from "../../messages/messages.service";
+import { ActivityLogService } from "../../activity-log/activity-log.service";
 
 @Injectable()
 export class GroupActionNodeHandler extends BaseNodeHandler {
   constructor(
     private readonly groupSessionService: GroupSessionService,
     private readonly sessionStorageService: SessionStorageService,
-    private readonly telegramService: TelegramService,
-    private readonly botsService: BotsService,
+    @InjectRepository(BotFlow) botFlowRepository: Repository<BotFlow>,
+    @InjectRepository(BotFlowNode)
+    botFlowNodeRepository: Repository<BotFlowNode>,
+    telegramService: TelegramService,
+    botsService: BotsService,
+    logger: CustomLoggerService,
+    messagesService: MessagesService,
+    activityLogService: ActivityLogService,
     private readonly redisService: RedisService,
     @InjectQueue("group-actions") private readonly groupActionsQueue: Queue
   ) {
-    super();
+    super(
+      botFlowRepository,
+      botFlowNodeRepository,
+      telegramService,
+      botsService,
+      logger,
+      messagesService,
+      activityLogService
+    );
   }
 
   canHandle(nodeType: string): boolean {
@@ -74,11 +95,13 @@ export class GroupActionNodeHandler extends BaseNodeHandler {
           return; // condition сам управляет переходом
 
         default:
-          throw new Error(`Неизвестный тип действия: ${groupAction.actionType}`);
+          throw new Error(
+            `Неизвестный тип действия: ${groupAction.actionType}`
+          );
       }
 
       // Переходим к следующему узлу (кроме condition)
-      await this.moveToNextNode(context);
+      await this.moveToNextNode(context, context.currentNode.nodeId);
     } catch (error) {
       this.logger.error(`Ошибка в GROUP_ACTION узле:`, error);
       await this.handleNodeError(context, error);
@@ -241,11 +264,10 @@ export class GroupActionNodeHandler extends BaseNodeHandler {
       throw new Error("Отсутствует конфигурация aggregate");
     }
 
-    const { operation, sourceVariable, targetVariable, scope } = aggregateConfig;
+    const { operation, sourceVariable, targetVariable, scope } =
+      aggregateConfig;
 
-    this.logger.log(
-      `Выполнение aggregate ${operation} для группы ${group.id}`
-    );
+    this.logger.log(`Выполнение aggregate ${operation} для группы ${group.id}`);
 
     // Получаем исходные данные
     let sourceData: any[];
@@ -255,17 +277,16 @@ export class GroupActionNodeHandler extends BaseNodeHandler {
       sourceData = group.sharedVariables[sourceVariable];
     } else {
       // Собираем из индивидуальных переменных всех участников
-      const sessions =
-        await this.groupSessionService.getParticipantSessions(group.id);
+      const sessions = await this.groupSessionService.getParticipantSessions(
+        group.id
+      );
       sourceData = sessions
         .map((s) => s.variables[sourceVariable])
         .filter((v) => v !== undefined);
     }
 
     if (!Array.isArray(sourceData)) {
-      throw new Error(
-        `Исходные данные ${sourceVariable} не являются массивом`
-      );
+      throw new Error(`Исходные данные ${sourceVariable} не являются массивом`);
     }
 
     // Выполняем агрегацию
@@ -273,17 +294,11 @@ export class GroupActionNodeHandler extends BaseNodeHandler {
 
     switch (operation) {
       case "sum":
-        result = sourceData.reduce(
-          (sum, val) => sum + (Number(val) || 0),
-          0
-        );
+        result = sourceData.reduce((sum, val) => sum + (Number(val) || 0), 0);
         break;
 
       case "avg":
-        const sum = sourceData.reduce(
-          (s, val) => s + (Number(val) || 0),
-          0
-        );
+        const sum = sourceData.reduce((s, val) => s + (Number(val) || 0), 0);
         result = sourceData.length > 0 ? sum / sourceData.length : 0;
         break;
 
@@ -419,4 +434,3 @@ export class GroupActionNodeHandler extends BaseNodeHandler {
     return result;
   }
 }
-

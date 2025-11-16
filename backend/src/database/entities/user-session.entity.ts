@@ -77,8 +77,11 @@ export class UserSession {
 
   @Column({ type: "jsonb", nullable: true })
   lobbyData: {
-    lobbyId: string;
-    participantVariables: Record<string, any>;
+    lobbyId?: string;
+    groupSessionId?: string;
+    role?: string;
+    joinedAt?: Date;
+    participantVariables?: Record<string, any>;
   };
 
   @CreateDateColumn()

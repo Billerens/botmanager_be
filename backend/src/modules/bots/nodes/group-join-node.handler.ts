@@ -1,18 +1,30 @@
 import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
 import { BaseNodeHandler } from "./base-node-handler";
 import { FlowContext } from "./base-node-handler.interface";
 import { GroupSessionService } from "../group-session.service";
 import { TelegramService } from "../../telegram/telegram.service";
 import { BotsService } from "../bots.service";
+import { BotFlow } from "../../../database/entities/bot-flow.entity";
+import { BotFlowNode } from "../../../database/entities/bot-flow-node.entity";
+import { CustomLoggerService } from "../../../common/logger.service";
+import { MessagesService } from "../../messages/messages.service";
+import { ActivityLogService } from "../../activity-log/activity-log.service";
 
 @Injectable()
 export class GroupJoinNodeHandler extends BaseNodeHandler {
   constructor(
     private readonly groupSessionService: GroupSessionService,
-    private readonly telegramService: TelegramService,
-    private readonly botsService: BotsService
+    @InjectRepository(BotFlow) botFlowRepository: Repository<BotFlow>,
+    @InjectRepository(BotFlowNode) botFlowNodeRepository: Repository<BotFlowNode>,
+    telegramService: TelegramService,
+    botsService: BotsService,
+    logger: CustomLoggerService,
+    messagesService: MessagesService,
+    activityLogService: ActivityLogService
   ) {
-    super();
+    super(botFlowRepository, botFlowNodeRepository, telegramService, botsService, logger, messagesService, activityLogService);
   }
 
   canHandle(nodeType: string): boolean {
@@ -57,7 +69,7 @@ export class GroupJoinNodeHandler extends BaseNodeHandler {
           context,
           "Группа не найдена или больше не существует."
         );
-        await this.moveToNextNode(context);
+        await this.moveToNextNode(context, context.currentNode.nodeId);
         return;
       }
 
@@ -68,12 +80,12 @@ export class GroupJoinNodeHandler extends BaseNodeHandler {
         const onFullAction = groupJoin.onFullAction || "reject";
 
         if (onFullAction === "reject") {
-          await this.sendMessage(
-            context,
-            "К сожалению, группа уже полна. Попробуйте позже."
-          );
-          await this.moveToNextNode(context);
-          return;
+        await this.sendMessage(
+          context,
+          "К сожалению, группа уже полна. Попробуйте позже."
+        );
+        await this.moveToNextNode(context, context.currentNode.nodeId);
+        return;
         } else if (onFullAction === "create_new") {
           // Создаем новую группу автоматически
           this.logger.log("Создаем новую группу т.к. текущая полна");
@@ -97,7 +109,7 @@ export class GroupJoinNodeHandler extends BaseNodeHandler {
             context,
             `Создана новая группа. ID: ${newGroup.id}`
           );
-          await this.moveToNextNode(context);
+          await this.moveToNextNode(context, context.currentNode.nodeId);
           return;
         }
         // onFullAction === "queue" пока не реализуем, просто отклоняем
@@ -124,7 +136,7 @@ export class GroupJoinNodeHandler extends BaseNodeHandler {
       );
 
       // Переходим к следующему узлу
-      await this.moveToNextNode(context);
+      await this.moveToNextNode(context, context.currentNode.nodeId);
     } catch (error) {
       this.logger.error(`Ошибка в GROUP_JOIN узле:`, error);
       await this.handleNodeError(context, error);

@@ -1,12 +1,39 @@
 import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
 import { BaseNodeHandler } from "./base-node-handler";
 import { FlowContext } from "./base-node-handler.interface";
 import { GroupSessionService } from "../group-session.service";
+import { BotFlow } from "../../../database/entities/bot-flow.entity";
+import { BotFlowNode } from "../../../database/entities/bot-flow-node.entity";
+import { TelegramService } from "../../telegram/telegram.service";
+import { BotsService } from "../bots.service";
+import { CustomLoggerService } from "../../../common/logger.service";
+import { MessagesService } from "../../messages/messages.service";
+import { ActivityLogService } from "../../activity-log/activity-log.service";
 
 @Injectable()
 export class GroupCreateNodeHandler extends BaseNodeHandler {
-  constructor(private readonly groupSessionService: GroupSessionService) {
-    super();
+  constructor(
+    private readonly groupSessionService: GroupSessionService,
+    @InjectRepository(BotFlow) botFlowRepository: Repository<BotFlow>,
+    @InjectRepository(BotFlowNode)
+    botFlowNodeRepository: Repository<BotFlowNode>,
+    telegramService: TelegramService,
+    botsService: BotsService,
+    logger: CustomLoggerService,
+    messagesService: MessagesService,
+    activityLogService: ActivityLogService
+  ) {
+    super(
+      botFlowRepository,
+      botFlowNodeRepository,
+      telegramService,
+      botsService,
+      logger,
+      messagesService,
+      activityLogService
+    );
   }
 
   canHandle(nodeType: string): boolean {
@@ -54,11 +81,10 @@ export class GroupCreateNodeHandler extends BaseNodeHandler {
       };
 
       // Переходим к следующему узлу
-      await this.moveToNextNode(context);
+      await this.moveToNextNode(context, context.currentNode.nodeId);
     } catch (error) {
       this.logger.error(`Ошибка в GROUP_CREATE узле:`, error);
       await this.handleNodeError(context, error);
     }
   }
 }
-

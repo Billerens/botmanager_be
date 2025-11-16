@@ -59,6 +59,13 @@ export interface UserSession {
     timestamp: Date;
     timeout: number;
   };
+  lobbyData?: {
+    lobbyId?: string;
+    groupSessionId?: string;
+    role?: string;
+    joinedAt?: Date;
+    participantVariables?: Record<string, any>;
+  };
 }
 
 export interface EndpointData {

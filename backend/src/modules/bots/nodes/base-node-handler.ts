@@ -730,4 +730,27 @@ export abstract class BaseNodeHandler implements INodeHandler {
 
     return result;
   }
+
+  /**
+   * Обрабатывает ошибку выполнения узла
+   */
+  protected async handleNodeError(context: FlowContext, error: any): Promise<void> {
+    this.logger.error(`Ошибка выполнения узла ${context.currentNode?.nodeId}:`, error);
+
+    // Отправляем сообщение об ошибке пользователю, если возможно
+    try {
+      if (context.message?.chat?.id && context.bot) {
+        await this.sendAndSaveMessage(
+          context.bot,
+          context.message.chat.id,
+          "Произошла ошибка при обработке вашего запроса. Попробуйте еще раз."
+        );
+      }
+    } catch (sendError) {
+      this.logger.error("Ошибка отправки сообщения об ошибке:", sendError);
+    }
+
+    // Можно добавить логику перехода к следующему узлу или завершения сессии
+    // Пока просто логируем ошибку
+  }
 }

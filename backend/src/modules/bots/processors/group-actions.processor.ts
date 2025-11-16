@@ -113,8 +113,6 @@ export class GroupActionsProcessor {
       this.logger.log(
         `Broadcast завершен. Успешно: ${processed}, Ошибок: ${failed}`
       );
-
-      return { processed, failed };
     } catch (error) {
       this.logger.error(`Ошибка в broadcast processor:`, error);
       throw error;
@@ -134,8 +132,6 @@ export class GroupActionsProcessor {
 
     // Логика сбора данных уже реализована в handler
     // Здесь можно добавить дополнительную асинхронную обработку при необходимости
-
-    return { status: "completed" };
   }
 
   /**
@@ -151,7 +147,5 @@ export class GroupActionsProcessor {
 
     // Здесь можно добавить логику для различных типов уведомлений
     // Например: участник присоединился, покинул группу, изменение состояния и т.д.
-
-    return { status: "completed" };
   }
 }
