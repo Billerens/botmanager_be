@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { BotFlow, FlowStatus } from "../../database/entities/bot-flow.entity";
@@ -8,6 +8,10 @@ import {
 } from "../../database/entities/bot-flow-node.entity";
 import { TelegramService } from "../telegram/telegram.service";
 import { BotsService } from "./bots.service";
+import {
+  SessionStorageService,
+  UserSessionData,
+} from "./session-storage.service";
 import { CustomLoggerService } from "../../common/logger.service";
 import { MessagesService } from "../messages/messages.service";
 import {
@@ -59,8 +63,7 @@ export interface EndpointData {
 }
 
 @Injectable()
-export class FlowExecutionService {
-  private userSessions = new Map<string, UserSession>();
+export class FlowExecutionService implements OnModuleInit {
   // Глобальное хранилище данных эндпоинтов: ключ = "botId-nodeId"
   private endpointDataStore = new Map<string, EndpointData>();
 
@@ -71,6 +74,7 @@ export class FlowExecutionService {
     private readonly botFlowNodeRepository: Repository<BotFlowNode>,
     private readonly telegramService: TelegramService,
     private readonly botsService: BotsService,
+    private readonly sessionStorageService: SessionStorageService,
     private readonly logger: CustomLoggerService,
     private readonly messagesService: MessagesService,
     private readonly nodeHandlerService: NodeHandlerService,
@@ -96,6 +100,19 @@ export class FlowExecutionService {
   ) {
     // Регистрируем все обработчики
     this.registerNodeHandlers();
+  }
+
+  async onModuleInit() {
+    // Миграция существующих сессий из памяти в постоянное хранилище
+    await this.migrateExistingSessions();
+
+    // Запуск периодической очистки сессий (каждые 24 часа)
+    setInterval(
+      () => {
+        this.cleanupSessions();
+      },
+      24 * 60 * 60 * 1000
+    );
   }
 
   private registerNodeHandlers(): void {
@@ -190,9 +207,21 @@ export class FlowExecutionService {
       this.logger.log(`Session key: ${sessionKey}`);
 
       // Получаем или создаем сессию пользователя
-      let session = this.userSessions.get(sessionKey);
-      if (!session) {
+      let sessionData = await this.sessionStorageService.getSession(
+        bot.id,
+        userId
+      );
+      let session: UserSession;
+
+      if (!sessionData) {
         this.logger.log(`Создаем новую сессию для пользователя ${userId}`);
+        sessionData = {
+          userId,
+          chatId,
+          botId: bot.id,
+          variables: {},
+          lastActivity: new Date(),
+        };
         session = {
           userId,
           chatId,
@@ -200,14 +229,23 @@ export class FlowExecutionService {
           variables: {},
           lastActivity: new Date(),
         };
-        this.userSessions.set(sessionKey, session);
+        await this.sessionStorageService.saveSession(sessionData);
       } else {
         this.logger.log(
           `Найдена существующая сессия для пользователя ${userId}`
         );
         this.logger.log(
-          `Текущий узел: ${session.currentNodeId || "не установлен"}`
+          `Текущий узел: ${sessionData.currentNodeId || "не установлен"}`
         );
+        session = {
+          userId: sessionData.userId,
+          chatId: sessionData.chatId,
+          botId: sessionData.botId,
+          currentNodeId: sessionData.currentNodeId,
+          variables: sessionData.variables,
+          lastActivity: sessionData.lastActivity,
+          locationRequest: sessionData.locationRequest,
+        };
       }
 
       // Находим активный flow для бота
@@ -348,7 +386,7 @@ export class FlowExecutionService {
   }
 
   private async executeNode(context: FlowContext): Promise<void> {
-    const { currentNode } = context;
+    const { currentNode, session } = context;
 
     if (!currentNode) return;
 
@@ -362,6 +400,19 @@ export class FlowExecutionService {
 
       if (handler) {
         await handler.execute(context);
+
+        // Сохраняем изменения сессии после выполнения узла
+        const sessionData: UserSessionData = {
+          userId: session.userId,
+          chatId: session.chatId,
+          botId: session.botId,
+          currentNodeId: session.currentNodeId,
+          variables: session.variables,
+          lastActivity: session.lastActivity,
+          locationRequest: session.locationRequest,
+        };
+
+        await this.sessionStorageService.saveSession(sessionData);
       } else {
         this.logger.warn(`Неизвестный тип узла: ${currentNode.type}`);
       }
@@ -494,22 +545,68 @@ export class FlowExecutionService {
   }
 
   // Очистка старых сессий
-  cleanupSessions(): void {
-    const now = new Date();
-    const maxAge = 24 * 60 * 60 * 1000; // 24 часа
+  async cleanupSessions(): Promise<void> {
+    try {
+      // Очистка сессий в SessionStorageService (старше 1 года помечаются как expired)
+      await this.sessionStorageService.cleanupExpiredSessions();
 
-    for (const [key, session] of this.userSessions.entries()) {
-      if (now.getTime() - session.lastActivity.getTime() > maxAge) {
-        this.userSessions.delete(key);
+      // Очистка старых данных эндпоинтов (старше 7 дней)
+      const maxEndpointAge = 7 * 24 * 60 * 60 * 1000;
+      const now = new Date();
+      for (const [key, endpointData] of this.endpointDataStore.entries()) {
+        if (
+          now.getTime() - endpointData.receivedAt.getTime() >
+          maxEndpointAge
+        ) {
+          this.endpointDataStore.delete(key);
+        }
       }
+
+      this.logger.log("Очистка сессий завершена");
+    } catch (error) {
+      this.logger.error("Ошибка очистки сессий:", error);
     }
+  }
 
-    // Очистка старых данных эндпоинтов (старше 7 дней)
-    const maxEndpointAge = 7 * 24 * 60 * 60 * 1000;
-    for (const [key, endpointData] of this.endpointDataStore.entries()) {
-      if (now.getTime() - endpointData.receivedAt.getTime() > maxEndpointAge) {
-        this.endpointDataStore.delete(key);
+  /**
+   * Миграция существующих сессий из памяти в постоянное хранилище
+   * Вызывается при запуске приложения для сохранения сессий при перезапуске
+   */
+  async migrateExistingSessions(): Promise<void> {
+    try {
+      // Проверяем, есть ли сессии в памяти (для обратной совместимости)
+      if (this.userSessions && this.userSessions.size > 0) {
+        this.logger.log(
+          `Найдено ${this.userSessions.size} сессий в памяти для миграции`
+        );
+
+        // Конвертируем Map в массив для миграции
+        const sessionsToMigrate: UserSessionData[] = [];
+        for (const [sessionKey, session] of this.userSessions.entries()) {
+          sessionsToMigrate.push({
+            userId: session.userId,
+            chatId: session.chatId,
+            botId: session.botId,
+            currentNodeId: session.currentNodeId,
+            variables: session.variables,
+            lastActivity: session.lastActivity,
+            locationRequest: session.locationRequest,
+          });
+        }
+
+        // Миграция через SessionStorageService
+        await this.sessionStorageService.migrateInMemorySessions(
+          new Map(sessionsToMigrate.map((s) => [`${s.botId}-${s.userId}`, s]))
+        );
+
+        // Очищаем память после успешной миграции
+        this.userSessions.clear();
+        this.logger.log("Миграция сессий завершена успешно");
+      } else {
+        this.logger.log("Сессий в памяти не найдено, миграция не требуется");
       }
+    } catch (error) {
+      this.logger.error("Ошибка миграции сессий:", error);
     }
   }
 
@@ -517,24 +614,25 @@ export class FlowExecutionService {
    * Сбрасывает все сессии для указанного бота
    * @param botId - ID бота
    */
-  resetBotSessions(botId: string): void {
-    const sessionsToDelete: string[] = [];
+  async resetBotSessions(botId: string): Promise<void> {
+    try {
+      // Получаем все активные сессии для бота
+      const activeSessions =
+        await this.sessionStorageService.getActiveSessionsForBot(botId);
 
-    // Находим все сессии для данного бота
-    for (const [key, session] of this.userSessions.entries()) {
-      if (session.botId === botId) {
-        sessionsToDelete.push(key);
+      let deletedCount = 0;
+      for (const sessionData of activeSessions) {
+        await this.sessionStorageService.deleteSession(
+          botId,
+          sessionData.userId
+        );
+        deletedCount++;
       }
-    }
 
-    // Удаляем найденные сессии
-    for (const key of sessionsToDelete) {
-      this.userSessions.delete(key);
+      this.logger.log(`Сброшено ${deletedCount} сессий для бота ${botId}`);
+    } catch (error) {
+      this.logger.error(`Ошибка сброса сессий для бота ${botId}:`, error);
     }
-
-    this.logger.log(
-      `Сброшено ${sessionsToDelete.length} сессий для бота ${botId}`
-    );
   }
 
   /**
@@ -648,9 +746,25 @@ export class FlowExecutionService {
   /**
    * Получает сессию пользователя (для внутреннего использования)
    */
-  getUserSession(botId: string, userId: string): UserSession | undefined {
-    const sessionKey = `${botId}-${userId}`;
-    return this.userSessions.get(sessionKey);
+  async getUserSession(
+    botId: string,
+    userId: string
+  ): Promise<UserSession | undefined> {
+    const sessionData = await this.sessionStorageService.getSession(
+      botId,
+      userId
+    );
+    if (!sessionData) return undefined;
+
+    return {
+      userId: sessionData.userId,
+      chatId: sessionData.chatId,
+      botId: sessionData.botId,
+      currentNodeId: sessionData.currentNodeId,
+      variables: sessionData.variables,
+      lastActivity: sessionData.lastActivity,
+      locationRequest: sessionData.locationRequest,
+    };
   }
 
   /**
@@ -662,26 +776,39 @@ export class FlowExecutionService {
     nodeId: string
   ): Promise<void> {
     try {
-      const sessionKey = `${botId}-${userId}`;
-      const session = this.userSessions.get(sessionKey);
+      const sessionData = await this.sessionStorageService.getSession(
+        botId,
+        userId
+      );
 
-      if (!session) {
+      if (!sessionData) {
         this.logger.warn(
-          `Сессия не найдена для продолжения flow: ${sessionKey}`
+          `Сессия не найдена для продолжения flow: ${botId}-${userId}`
         );
         return;
       }
 
       // Проверяем, что текущая нода - это endpoint нода, на которой остановился flow
-      if (session.currentNodeId !== nodeId) {
+      if (sessionData.currentNodeId !== nodeId) {
         this.logger.warn(
-          `Текущая нода ${session.currentNodeId} не совпадает с endpoint нодой ${nodeId}`
+          `Текущая нода ${sessionData.currentNodeId} не совпадает с endpoint нодой ${nodeId}`
         );
       }
 
       this.logger.log(
         `Продолжение flow для пользователя ${userId} с ноды ${nodeId}`
       );
+
+      // Создаем объект session для совместимости
+      const session: UserSession = {
+        userId: sessionData.userId,
+        chatId: sessionData.chatId,
+        botId: sessionData.botId,
+        currentNodeId: sessionData.currentNodeId,
+        variables: sessionData.variables,
+        lastActivity: sessionData.lastActivity,
+        locationRequest: sessionData.locationRequest,
+      };
 
       // Находим активный flow
       const activeFlow = await this.botFlowRepository.findOne({

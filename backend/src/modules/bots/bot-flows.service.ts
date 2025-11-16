@@ -169,7 +169,7 @@ export class BotFlowsService {
 
       // Если Flow активен, сбрасываем все сессии бота
       if (savedFlow.status === FlowStatus.ACTIVE) {
-        this.flowExecutionService.resetBotSessions(botId);
+        await this.flowExecutionService.resetBotSessions(botId);
       }
 
       // Логируем обновление flow
@@ -197,7 +197,7 @@ export class BotFlowsService {
 
     // Если Flow активен, сбрасываем все сессии бота
     if (updatedFlow.status === FlowStatus.ACTIVE) {
-      this.flowExecutionService.resetBotSessions(botId);
+      await this.flowExecutionService.resetBotSessions(botId);
     }
 
     // Логируем обновление flow (без изменения узлов)
@@ -278,7 +278,7 @@ export class BotFlowsService {
     const savedFlow = await this.botFlowRepository.save(flow);
 
     // Сбрасываем все сессии бота при активации Flow
-    this.flowExecutionService.resetBotSessions(botId);
+    await this.flowExecutionService.resetBotSessions(botId);
 
     // Логируем активацию flow
     this.activityLogService

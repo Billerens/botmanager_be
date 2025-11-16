@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from "@nestjs/common";
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createClient, RedisClientType } from "redis";
 
@@ -26,7 +31,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private async connect() {
     try {
       const redisConfig = this.configService.get("redis");
-      
+
       const redisOptions = {
         socket: {
           host: redisConfig.host,
@@ -57,7 +62,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.isConnected = true;
       this.logger.log("Redis подключен успешно (pub/sub)");
     } catch (error) {
-      this.logger.error(`Ошибка подключения к Redis: ${error.message}`, error.stack);
+      this.logger.error(
+        `Ошибка подключения к Redis: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -73,7 +81,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.isConnected = false;
       this.logger.log("Redis отключен");
     } catch (error) {
-      this.logger.error(`Ошибка отключения от Redis: ${error.message}`, error.stack);
+      this.logger.error(
+        `Ошибка отключения от Redis: ${error.message}`,
+        error.stack
+      );
     }
   }
 
@@ -89,7 +100,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       await this.publisher.publish(channel, JSON.stringify(message));
       this.logger.debug(`Сообщение опубликовано в канал ${channel}`);
     } catch (error) {
-      this.logger.error(`Ошибка публикации в Redis: ${error.message}`, error.stack);
+      this.logger.error(
+        `Ошибка публикации в Redis: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -97,7 +111,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   /**
    * Подписывается на канал Redis
    */
-  async subscribe(channel: string, callback: (message: any) => void): Promise<void> {
+  async subscribe(
+    channel: string,
+    callback: (message: any) => void
+  ): Promise<void> {
     if (!this.isConnected || !this.subscriber) {
       throw new Error("Redis не подключен");
     }
@@ -108,13 +125,18 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
           const parsedMessage = JSON.parse(message);
           callback(parsedMessage);
         } catch (error) {
-          this.logger.error(`Ошибка парсинга сообщения из Redis: ${error.message}`);
+          this.logger.error(
+            `Ошибка парсинга сообщения из Redis: ${error.message}`
+          );
           callback(message);
         }
       });
       this.logger.debug(`Подписка на канал ${channel} установлена`);
     } catch (error) {
-      this.logger.error(`Ошибка подписки на Redis канал: ${error.message}`, error.stack);
+      this.logger.error(
+        `Ошибка подписки на Redis канал: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -131,7 +153,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       await this.subscriber.unsubscribe(channel);
       this.logger.debug(`Отписка от канала ${channel}`);
     } catch (error) {
-      this.logger.error(`Ошибка отписки от Redis канала: ${error.message}`, error.stack);
+      this.logger.error(
+        `Ошибка отписки от Redis канала: ${error.message}`,
+        error.stack
+      );
     }
   }
 
@@ -148,7 +173,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * @param data - данные для сохранения
    * @returns ID записи в стриме
    */
-  async addToStream(streamKey: string, data: Record<string, string>): Promise<string> {
+  async addToStream(
+    streamKey: string,
+    data: Record<string, string>
+  ): Promise<string> {
     if (!this.isConnected || !this.publisher) {
       throw new Error("Redis не подключен");
     }
@@ -158,7 +186,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.logger.debug(`Сообщение добавлено в стрим ${streamKey}, ID: ${id}`);
       return id;
     } catch (error) {
-      this.logger.error(`Ошибка добавления в стрим: ${error.message}`, error.stack);
+      this.logger.error(
+        `Ошибка добавления в стрим: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -194,10 +225,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         message: msg.message,
       }));
 
-      this.logger.debug(`Прочитано ${messages.length} сообщений из стрима ${streamKey}`);
+      this.logger.debug(
+        `Прочитано ${messages.length} сообщений из стрима ${streamKey}`
+      );
       return messages;
     } catch (error) {
-      this.logger.error(`Ошибка чтения из стрима: ${error.message}`, error.stack);
+      this.logger.error(
+        `Ошибка чтения из стрима: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -215,10 +251,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     try {
       const deletedCount = await this.publisher.xDel(streamKey, ids);
-      this.logger.debug(`Удалено ${deletedCount} сообщений из стрима ${streamKey}`);
+      this.logger.debug(
+        `Удалено ${deletedCount} сообщений из стрима ${streamKey}`
+      );
       return deletedCount;
     } catch (error) {
-      this.logger.error(`Ошибка удаления из стрима: ${error.message}`, error.stack);
+      this.logger.error(
+        `Ошибка удаления из стрима: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -229,15 +270,24 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * @param maxLength - максимальная длина стрима
    * @param approximate - использовать приблизительную обрезку (быстрее)
    */
-  async trimStream(streamKey: string, maxLength: number, approximate = true): Promise<void> {
+  async trimStream(
+    streamKey: string,
+    maxLength: number,
+    approximate = true
+  ): Promise<void> {
     if (!this.isConnected || !this.publisher) {
       throw new Error("Redis не подключен");
     }
 
     try {
-      await this.publisher.xTrim(streamKey, approximate ? "MAXLEN" : "MAXLEN", maxLength, {
-        strategyModifier: approximate ? "~" : undefined,
-      });
+      await this.publisher.xTrim(
+        streamKey,
+        approximate ? "MAXLEN" : "MAXLEN",
+        maxLength,
+        {
+          strategyModifier: approximate ? "~" : undefined,
+        }
+      );
       this.logger.debug(`Стрим ${streamKey} обрезан до ${maxLength} сообщений`);
     } catch (error) {
       this.logger.error(`Ошибка обрезки стрима: ${error.message}`, error.stack);
@@ -259,7 +309,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       const length = await this.publisher.xLen(streamKey);
       return length;
     } catch (error) {
-      this.logger.error(`Ошибка получения длины стрима: ${error.message}`, error.stack);
+      this.logger.error(
+        `Ошибка получения длины стрима: ${error.message}`,
+        error.stack
+      );
       return 0;
     }
   }
@@ -277,7 +330,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       await this.publisher.del(streamKey);
       this.logger.debug(`Стрим ${streamKey} удален`);
     } catch (error) {
-      this.logger.error(`Ошибка удаления стрима: ${error.message}`, error.stack);
+      this.logger.error(
+        `Ошибка удаления стрима: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -296,9 +352,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       const keys = await this.publisher.keys(pattern);
       return keys;
     } catch (error) {
-      this.logger.error(`Ошибка получения ключей стримов: ${error.message}`, error.stack);
+      this.logger.error(
+        `Ошибка получения ключей стримов: ${error.message}`,
+        error.stack
+      );
       return [];
     }
   }
 }
-

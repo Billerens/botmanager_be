@@ -10,6 +10,7 @@ import { Category } from "../../database/entities/category.entity";
 import { Message } from "../../database/entities/message.entity";
 import { Lead } from "../../database/entities/lead.entity";
 import { Specialist } from "../../database/entities/specialist.entity";
+import { UserSession } from "../../database/entities/user-session.entity";
 import { BotsService } from "./bots.service";
 import { BotsController } from "./bots.controller";
 import { PublicBotsController } from "./public-bots.controller";
@@ -22,6 +23,7 @@ import { MessagesModule } from "../messages/messages.module";
 import { ProductsModule } from "../products/products.module";
 import { CartModule } from "../cart/cart.module";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
+import { WebSocketModule } from "../websocket/websocket.module";
 import { CustomLoggerService } from "../../common/logger.service";
 import {
   NodeHandlerService,
@@ -45,6 +47,7 @@ import {
   CalculatorNodeHandler,
 } from "./nodes";
 import { DatabaseService } from "./database.service";
+import { SessionStorageService } from "./session-storage.service";
 
 @Module({
   imports: [
@@ -58,18 +61,21 @@ import { DatabaseService } from "./database.service";
       Message,
       Lead,
       Specialist,
+      UserSession,
     ]),
     forwardRef(() => TelegramModule),
     MessagesModule,
     ProductsModule,
     CartModule,
     ActivityLogModule,
+    WebSocketModule,
   ],
   providers: [
     BotsService,
     BotFlowsService,
     FlowExecutionService,
     DatabaseService,
+    SessionStorageService,
     CustomLoggerService,
     NodeHandlerService,
     StartNodeHandler,
@@ -97,6 +103,6 @@ import { DatabaseService } from "./database.service";
     BotFlowsController,
     EndpointController,
   ],
-  exports: [BotsService, BotFlowsService, FlowExecutionService],
+  exports: [BotsService, BotFlowsService, FlowExecutionService, SessionStorageService],
 })
 export class BotsModule {}
