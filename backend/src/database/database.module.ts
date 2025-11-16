@@ -20,6 +20,7 @@ import { Cart } from "./entities/cart.entity";
 import { Order } from "./entities/order.entity";
 import { ShopPromocode } from "./entities/shop-promocode.entity";
 import { UserSession } from "./entities/user-session.entity";
+import { BotCustomData } from "./entities/bot-custom-data.entity";
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { UserSession } from "./entities/user-session.entity";
           Order,
           ShopPromocode,
           UserSession,
+          BotCustomData,
         ],
         synchronize: configService.get("NODE_ENV") === "development",
         logging: false,
@@ -80,6 +82,7 @@ import { UserSession } from "./entities/user-session.entity";
       Order,
       ShopPromocode,
       UserSession,
+      BotCustomData,
     ]),
   ],
   exports: [TypeOrmModule],

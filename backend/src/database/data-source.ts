@@ -17,6 +17,8 @@ import { Booking } from "./entities/booking.entity";
 import { Cart } from "./entities/cart.entity";
 import { Order } from "./entities/order.entity";
 import { ShopPromocode } from "./entities/shop-promocode.entity";
+import { UserSession } from "./entities/user-session.entity";
+import { BotCustomData } from "./entities/bot-custom-data.entity";
 
 // Загружаем переменные окружения
 config();
@@ -48,6 +50,8 @@ export const AppDataSource = new DataSource({
     Cart,
     Order,
     ShopPromocode,
+    UserSession,
+    BotCustomData,
   ],
   migrations: ["src/database/migrations/*.ts"],
   subscribers: ["src/database/subscribers/*.ts"],
