@@ -220,7 +220,7 @@ export class SessionStorageService implements OnModuleDestroy {
     const redisKey = `session:${sessionKey}`;
     const serialized = JSON.stringify(sessionData);
 
-    await this.redisService.set(redisKey, serialized, "EX", this.SESSION_TTL);
+    await this.redisService.set(redisKey, serialized, { EX: this.SESSION_TTL });
   }
 
   private async saveToDb(
