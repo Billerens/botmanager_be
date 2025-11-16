@@ -30,6 +30,11 @@ export enum NodeType {
   GROUP = "group",
   LOCATION = "location",
   CALCULATOR = "calculator",
+  // Групповые операции
+  GROUP_CREATE = "group_create",
+  GROUP_JOIN = "group_join",
+  GROUP_ACTION = "group_action",
+  GROUP_LEAVE = "group_leave",
 }
 
 export enum MessageNodeType {
@@ -262,6 +267,66 @@ export class BotFlowNode {
       variableName: string; // Имя переменной для сохранения результата
       precision?: number; // Количество знаков после запятой (по умолчанию 2)
       format?: "number" | "currency" | "percentage"; // Формат вывода
+    };
+
+    // Для GROUP_CREATE нод
+    groupCreate?: {
+      variableName?: string; // Куда сохранить groupSessionId
+      maxParticipants?: number; // Максимальное количество участников
+      metadata?: Record<string, any>; // Пользовательские метаданные
+    };
+
+    // Для GROUP_JOIN нод
+    groupJoin?: {
+      groupIdSource: string; // Откуда взять ID группы (переменная или константа)
+      role?: string; // Опциональная роль участника
+      onFullAction?: "queue" | "reject" | "create_new"; // Действие если группа полна
+    };
+
+    // Для GROUP_ACTION нод
+    groupAction?: {
+      actionType: "broadcast" | "collect" | "aggregate" | "condition";
+
+      // Для broadcast (отправить всем участникам)
+      broadcast?: {
+        message: string; // Текст сообщения (поддержка {переменных})
+        excludeSelf?: boolean; // Не отправлять себе
+        buttons?: Array<{
+          text: string;
+          callbackData?: string;
+          url?: string;
+        }>;
+      };
+
+      // Для collect (собрать данные от участников)
+      collect?: {
+        variableName: string; // Какую переменную собрать
+        aggregateAs: string; // Куда сохранить массив результатов
+        timeout?: number; // Таймаут ожидания в секундах
+        waitForAll?: boolean; // Ждать всех участников (по умолчанию true)
+      };
+
+      // Для aggregate (агрегировать данные)
+      aggregate?: {
+        operation: "sum" | "avg" | "min" | "max" | "count" | "list";
+        sourceVariable: string; // Откуда брать данные
+        targetVariable: string; // Куда сохранить результат
+        scope: "group" | "individual"; // В общие или индивидуальные переменные
+      };
+
+      // Для condition (проверка условий группы)
+      condition?: {
+        field: string; // Что проверять (participantCount, sharedVariables.X)
+        operator: ConditionOperator;
+        value: any;
+      };
+    };
+
+    // Для GROUP_LEAVE нод
+    groupLeave?: {
+      notifyOthers?: boolean; // Уведомить других участников
+      notificationMessage?: string; // Текст уведомления
+      cleanupIfEmpty?: boolean; // Удалить группу если опустела
     };
 
     // Общие настройки

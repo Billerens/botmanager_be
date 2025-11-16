@@ -40,7 +40,12 @@ import {
   DatabaseNodeHandler,
   LocationNodeHandler,
   CalculatorNodeHandler,
+  GroupCreateNodeHandler,
+  GroupJoinNodeHandler,
+  GroupActionNodeHandler,
+  GroupLeaveNodeHandler,
 } from "./nodes";
+import { GroupSessionService } from "./group-session.service";
 
 export interface UserSession {
   userId: string;
@@ -78,6 +83,7 @@ export class FlowExecutionService implements OnModuleInit {
     private readonly logger: CustomLoggerService,
     private readonly messagesService: MessagesService,
     private readonly nodeHandlerService: NodeHandlerService,
+    private readonly groupSessionService: GroupSessionService,
     // Node handlers
     private readonly startNodeHandler: StartNodeHandler,
     private readonly messageNodeHandler: MessageNodeHandler,
@@ -96,7 +102,12 @@ export class FlowExecutionService implements OnModuleInit {
     private readonly broadcastNodeHandler: BroadcastNodeHandler,
     private readonly databaseNodeHandler: DatabaseNodeHandler,
     private readonly locationNodeHandler: LocationNodeHandler,
-    private readonly calculatorNodeHandler: CalculatorNodeHandler
+    private readonly calculatorNodeHandler: CalculatorNodeHandler,
+    // Group handlers
+    private readonly groupCreateNodeHandler: GroupCreateNodeHandler,
+    private readonly groupJoinNodeHandler: GroupJoinNodeHandler,
+    private readonly groupActionNodeHandler: GroupActionNodeHandler,
+    private readonly groupLeaveNodeHandler: GroupLeaveNodeHandler
   ) {
     // Регистрируем все обработчики
     this.registerNodeHandlers();
@@ -161,6 +172,23 @@ export class FlowExecutionService implements OnModuleInit {
       "calculator",
       this.calculatorNodeHandler
     );
+    // Group handlers
+    this.nodeHandlerService.registerHandler(
+      "group_create",
+      this.groupCreateNodeHandler
+    );
+    this.nodeHandlerService.registerHandler(
+      "group_join",
+      this.groupJoinNodeHandler
+    );
+    this.nodeHandlerService.registerHandler(
+      "group_action",
+      this.groupActionNodeHandler
+    );
+    this.nodeHandlerService.registerHandler(
+      "group_leave",
+      this.groupLeaveNodeHandler
+    );
 
     // Устанавливаем callback для всех обработчиков
     const handlers = [
@@ -182,6 +210,10 @@ export class FlowExecutionService implements OnModuleInit {
       this.databaseNodeHandler,
       this.locationNodeHandler,
       this.calculatorNodeHandler,
+      this.groupCreateNodeHandler,
+      this.groupJoinNodeHandler,
+      this.groupActionNodeHandler,
+      this.groupLeaveNodeHandler,
     ];
 
     handlers.forEach((handler) => {
@@ -265,6 +297,14 @@ export class FlowExecutionService implements OnModuleInit {
         );
       });
 
+      // Проверяем, находится ли пользователь в группе
+      let groupSession = null;
+      if (session.lobbyData?.groupSessionId) {
+        groupSession = await this.groupSessionService.findById(
+          session.lobbyData.groupSessionId
+        );
+      }
+
       // Создаем контекст выполнения
       const context: FlowContext = {
         bot,
@@ -273,6 +313,8 @@ export class FlowExecutionService implements OnModuleInit {
         session,
         flow: activeFlow,
         reachedThroughTransition: false, // По умолчанию узел не достигнут через переход
+        groupSession: groupSession || undefined,
+        isGroupContext: !!groupSession,
       };
 
       // Определяем текущий узел

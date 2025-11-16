@@ -11,6 +11,9 @@ export interface FlowContext {
   currentNode?: BotFlowNode;
   // Флаг, указывающий, что узел был достигнут через переход от другого узла
   reachedThroughTransition?: boolean;
+  // Групповой контекст
+  groupSession?: any; // GroupSession entity
+  isGroupContext?: boolean; // Флаг, что выполнение в контексте группы
 }
 
 export interface INodeHandler {

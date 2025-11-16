@@ -1,5 +1,6 @@
 import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { BullModule } from "@nestjs/bull";
 
 import { Bot } from "../../database/entities/bot.entity";
 import { BotCustomData } from "../../database/entities/bot-custom-data.entity";
@@ -11,6 +12,7 @@ import { Message } from "../../database/entities/message.entity";
 import { Lead } from "../../database/entities/lead.entity";
 import { Specialist } from "../../database/entities/specialist.entity";
 import { UserSession } from "../../database/entities/user-session.entity";
+import { GroupSession } from "../../database/entities/group-session.entity";
 import { BotsService } from "./bots.service";
 import { BotsController } from "./bots.controller";
 import { PublicBotsController } from "./public-bots.controller";
@@ -45,9 +47,15 @@ import {
   DatabaseNodeHandler,
   LocationNodeHandler,
   CalculatorNodeHandler,
+  GroupCreateNodeHandler,
+  GroupJoinNodeHandler,
+  GroupActionNodeHandler,
+  GroupLeaveNodeHandler,
 } from "./nodes";
 import { DatabaseService } from "./database.service";
 import { SessionStorageService } from "./session-storage.service";
+import { GroupSessionService } from "./group-session.service";
+import { GroupActionsProcessor } from "./processors/group-actions.processor";
 
 @Module({
   imports: [
@@ -62,7 +70,11 @@ import { SessionStorageService } from "./session-storage.service";
       Lead,
       Specialist,
       UserSession,
+      GroupSession,
     ]),
+    BullModule.registerQueue({
+      name: "group-actions",
+    }),
     forwardRef(() => TelegramModule),
     MessagesModule,
     ProductsModule,
@@ -76,6 +88,8 @@ import { SessionStorageService } from "./session-storage.service";
     FlowExecutionService,
     DatabaseService,
     SessionStorageService,
+    GroupSessionService,
+    GroupActionsProcessor,
     CustomLoggerService,
     NodeHandlerService,
     StartNodeHandler,
@@ -96,6 +110,10 @@ import { SessionStorageService } from "./session-storage.service";
     DatabaseNodeHandler,
     LocationNodeHandler,
     CalculatorNodeHandler,
+    GroupCreateNodeHandler,
+    GroupJoinNodeHandler,
+    GroupActionNodeHandler,
+    GroupLeaveNodeHandler,
   ],
   controllers: [
     BotsController,
@@ -103,6 +121,12 @@ import { SessionStorageService } from "./session-storage.service";
     BotFlowsController,
     EndpointController,
   ],
-  exports: [BotsService, BotFlowsService, FlowExecutionService, SessionStorageService],
+  exports: [
+    BotsService,
+    BotFlowsService,
+    FlowExecutionService,
+    SessionStorageService,
+    GroupSessionService,
+  ],
 })
 export class BotsModule {}
