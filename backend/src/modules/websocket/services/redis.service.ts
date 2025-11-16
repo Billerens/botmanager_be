@@ -359,4 +359,49 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return [];
     }
   }
+
+  /**
+   * Получить значение по ключу
+   */
+  async get(key: string): Promise<string | null> {
+    try {
+      return await this.publisher.get(key);
+    } catch (error) {
+      this.logger.error(
+        `Ошибка получения ключа ${key}: ${error.message}`,
+        error.stack
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Установить значение по ключу
+   */
+  async set(key: string, value: string, options?: any): Promise<string | null> {
+    try {
+      return await this.publisher.set(key, value, options);
+    } catch (error) {
+      this.logger.error(
+        `Ошибка установки ключа ${key}: ${error.message}`,
+        error.stack
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Удалить ключ
+   */
+  async del(key: string): Promise<number> {
+    try {
+      return await this.publisher.del(key);
+    } catch (error) {
+      this.logger.error(
+        `Ошибка удаления ключа ${key}: ${error.message}`,
+        error.stack
+      );
+      return 0;
+    }
+  }
 }

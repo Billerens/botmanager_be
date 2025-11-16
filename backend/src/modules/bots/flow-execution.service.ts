@@ -103,9 +103,6 @@ export class FlowExecutionService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    // Миграция существующих сессий из памяти в постоянное хранилище
-    await this.migrateExistingSessions();
-
     // Запуск периодической очистки сессий (каждые 24 часа)
     setInterval(
       () => {
@@ -569,48 +566,6 @@ export class FlowExecutionService implements OnModuleInit {
   }
 
   /**
-   * Миграция существующих сессий из памяти в постоянное хранилище
-   * Вызывается при запуске приложения для сохранения сессий при перезапуске
-   */
-  async migrateExistingSessions(): Promise<void> {
-    try {
-      // Проверяем, есть ли сессии в памяти (для обратной совместимости)
-      if (this.userSessions && this.userSessions.size > 0) {
-        this.logger.log(
-          `Найдено ${this.userSessions.size} сессий в памяти для миграции`
-        );
-
-        // Конвертируем Map в массив для миграции
-        const sessionsToMigrate: UserSessionData[] = [];
-        for (const [sessionKey, session] of this.userSessions.entries()) {
-          sessionsToMigrate.push({
-            userId: session.userId,
-            chatId: session.chatId,
-            botId: session.botId,
-            currentNodeId: session.currentNodeId,
-            variables: session.variables,
-            lastActivity: session.lastActivity,
-            locationRequest: session.locationRequest,
-          });
-        }
-
-        // Миграция через SessionStorageService
-        await this.sessionStorageService.migrateInMemorySessions(
-          new Map(sessionsToMigrate.map((s) => [`${s.botId}-${s.userId}`, s]))
-        );
-
-        // Очищаем память после успешной миграции
-        this.userSessions.clear();
-        this.logger.log("Миграция сессий завершена успешно");
-      } else {
-        this.logger.log("Сессий в памяти не найдено, миграция не требуется");
-      }
-    } catch (error) {
-      this.logger.error("Ошибка миграции сессий:", error);
-    }
-  }
-
-  /**
    * Сбрасывает все сессии для указанного бота
    * @param botId - ID бота
    */
@@ -682,8 +637,7 @@ export class FlowExecutionService implements OnModuleInit {
     isWaitingForEndpoint?: boolean;
     sessionExists: boolean;
   }> {
-    const sessionKey = `${botId}-${userId}`;
-    const session = this.userSessions.get(sessionKey);
+    const session = await this.sessionStorageService.getSession(botId, userId);
 
     // Если сессии нет - точно нет выполнения
     if (!session) {
