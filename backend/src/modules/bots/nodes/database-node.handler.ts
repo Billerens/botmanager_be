@@ -142,11 +142,34 @@ export class DatabaseNodeHandler extends BaseNodeHandler {
     }
 
     // Подставляем переменные в data объекте
-    if (processed.data && typeof processed.data === "object") {
-      processed.data = this.substituteVariablesInObject(
-        processed.data,
-        context
-      );
+    if (processed.data) {
+      // Если data - строка, пытаемся распарсить как JSON
+      if (typeof processed.data === "string") {
+        try {
+          processed.data = JSON.parse(processed.data);
+        } catch (error) {
+          // Если не JSON, просто подставляем переменные в строку
+          processed.data = this.substituteVariables(processed.data, context);
+        }
+      }
+
+      // Если data - объект, подставляем переменные в его значения
+      if (
+        typeof processed.data === "object" &&
+        !Array.isArray(processed.data)
+      ) {
+        processed.data = this.substituteVariablesInObject(
+          processed.data,
+          context
+        );
+      }
+
+      if (Array.isArray(processed.data)) {
+        processed.data = this.substituteVariables(
+          JSON.stringify(processed.data),
+          context
+        );
+      }
     }
 
     return processed;
