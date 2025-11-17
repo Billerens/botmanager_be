@@ -21,6 +21,7 @@ export * from "./broadcast-node.handler";
 export * from "./database-node.handler";
 export * from "./location-node.handler";
 export * from "./calculator-node.handler";
+export * from "./transform-node.handler";
 // Group handlers
 export * from "./group-create-node.handler";
 export * from "./group-join-node.handler";

@@ -387,6 +387,7 @@ export class BotFlowsService {
       group: NodeType.GROUP,
       location: NodeType.LOCATION,
       calculator: NodeType.CALCULATOR,
+      transform: NodeType.TRANSFORM,
       group_create: NodeType.GROUP_CREATE,
       group_join: NodeType.GROUP_JOIN,
       group_action: NodeType.GROUP_ACTION,

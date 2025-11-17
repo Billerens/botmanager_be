@@ -40,6 +40,7 @@ import {
   DatabaseNodeHandler,
   LocationNodeHandler,
   CalculatorNodeHandler,
+  TransformNodeHandler,
   GroupCreateNodeHandler,
   GroupJoinNodeHandler,
   GroupActionNodeHandler,
@@ -110,6 +111,7 @@ export class FlowExecutionService implements OnModuleInit {
     private readonly databaseNodeHandler: DatabaseNodeHandler,
     private readonly locationNodeHandler: LocationNodeHandler,
     private readonly calculatorNodeHandler: CalculatorNodeHandler,
+    private readonly transformNodeHandler: TransformNodeHandler,
     // Group handlers
     private readonly groupCreateNodeHandler: GroupCreateNodeHandler,
     private readonly groupJoinNodeHandler: GroupJoinNodeHandler,
@@ -179,6 +181,10 @@ export class FlowExecutionService implements OnModuleInit {
       "calculator",
       this.calculatorNodeHandler
     );
+    this.nodeHandlerService.registerHandler(
+      "transform",
+      this.transformNodeHandler
+    );
     // Group handlers
     this.nodeHandlerService.registerHandler(
       "group_create",
@@ -217,6 +223,7 @@ export class FlowExecutionService implements OnModuleInit {
       this.databaseNodeHandler,
       this.locationNodeHandler,
       this.calculatorNodeHandler,
+      this.transformNodeHandler,
       this.groupCreateNodeHandler,
       this.groupJoinNodeHandler,
       this.groupActionNodeHandler,

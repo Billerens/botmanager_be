@@ -28,6 +28,7 @@ export enum FlowNodeType {
   GROUP = "group",
   LOCATION = "location",
   CALCULATOR = "calculator",
+  TRANSFORM = "transform",
   GROUP_CREATE = "group_create",
   GROUP_JOIN = "group_join",
   GROUP_ACTION = "group_action",
@@ -303,6 +304,14 @@ export class FlowNodeDataDto {
     variableName: string;
     precision?: number;
     format?: "number" | "currency" | "percentage";
+  };
+
+  @IsOptional()
+  @IsObject()
+  transform?: {
+    code: string;
+    variableName?: string;
+    inputVariable?: string;
   };
 
   @IsOptional()

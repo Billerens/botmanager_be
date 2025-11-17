@@ -30,6 +30,7 @@ export enum NodeType {
   GROUP = "group",
   LOCATION = "location",
   CALCULATOR = "calculator",
+  TRANSFORM = "transform",
   // Групповые операции
   GROUP_CREATE = "group_create",
   GROUP_JOIN = "group_join",
@@ -269,6 +270,13 @@ export class BotFlowNode {
       format?: "number" | "currency" | "percentage"; // Формат вывода
     };
 
+    // Для TRANSFORM нод
+    transform?: {
+      code: string; // JavaScript код для выполнения
+      variableName?: string; // Имя переменной для сохранения результата (опционально)
+      inputVariable?: string; // Имя входной переменной (опционально, по умолчанию все переменные доступны)
+    };
+
     // Для GROUP_CREATE нод
     groupCreate?: {
       variableName?: string; // Куда сохранить groupSessionId
@@ -410,5 +418,9 @@ export class BotFlowNode {
 
   get isCalculator(): boolean {
     return this.type === NodeType.CALCULATOR;
+  }
+
+  get isTransform(): boolean {
+    return this.type === NodeType.TRANSFORM;
   }
 }
