@@ -16,7 +16,6 @@ import { ActivityLog } from "./activity-log.entity";
 import { BotCustomData } from "./bot-custom-data.entity";
 import { Product } from "./product.entity";
 import { Specialist } from "./specialist.entity";
-import { CustomPage } from "../../modules/custom-pages/entities/custom-page.entity";
 
 export enum BotStatus {
   ACTIVE = "active",
@@ -137,9 +136,6 @@ export class Bot {
 
   @OneToMany(() => BotCustomData, (customData) => customData.bot)
   customData: BotCustomData[];
-
-  @OneToMany(() => CustomPage, (customPage) => customPage.bot)
-  customPages: CustomPage[];
 
   // Поля для магазина
   @Column({ default: false })

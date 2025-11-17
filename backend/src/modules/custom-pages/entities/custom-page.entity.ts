@@ -45,7 +45,7 @@ export class CustomPage {
   botCommand: string; // Команда в боте, например "contacts"
 
   // Связь с ботом
-  @ManyToOne(() => Bot, (bot) => bot.customPages, { onDelete: "CASCADE" })
+  @ManyToOne(() => Bot, { onDelete: "CASCADE" })
   @JoinColumn({ name: "botId" })
   bot: Bot;
 
