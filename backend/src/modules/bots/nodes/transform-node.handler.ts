@@ -14,6 +14,7 @@ import {
 } from "../../../database/entities/activity-log.entity";
 import { FlowContext } from "./base-node-handler.interface";
 import { BaseNodeHandler } from "./base-node-handler";
+import * as vm from "vm";
 
 @Injectable()
 export class TransformNodeHandler extends BaseNodeHandler {
@@ -176,38 +177,63 @@ export class TransformNodeHandler extends BaseNodeHandler {
   }
 
   /**
-   * Безопасное выполнение JavaScript кода через eval
-   * ВАЖНО: eval может быть опасным
+   * Безопасное выполнение JavaScript кода в изолированном контексте
+   * Использует Node.js VM для изоляции от глобальных объектов
    */
   private executeCode(code: string, context: Record<string, any>): any {
     try {
-      // Создаем функцию с контекстом
-      // Используем Function конструктор для более безопасного выполнения
-      // (хотя все равно это eval по сути)
-      // Оборачиваем код в IIFE, чтобы можно было использовать return
-      const contextKeys = Object.keys(context);
-      const contextValues = Object.values(context);
+      // Создаем изолированный контекст выполнения
+      // Ограничиваем доступ к глобальным объектам
+      const sandbox: Record<string, any> = {
+        // Разрешаем только безопасные глобальные объекты
+        console: {
+          log: (...args: any[]) => this.logger.log(args.join(" ")),
+          warn: (...args: any[]) => this.logger.warn(args.join(" ")),
+          error: (...args: any[]) => this.logger.error(args.join(" ")),
+        },
+        // Базовые JavaScript объекты
+        JSON: JSON,
+        Math: Math,
+        Date: Date,
+        String: String,
+        Number: Number,
+        Boolean: Boolean,
+        Array: Array,
+        Object: Object,
+        RegExp: RegExp,
+        Error: Error,
+        TypeError: TypeError,
+        RangeError: RangeError,
+        // Разрешаем методы для работы с массивами и объектами
+        parseInt: parseInt,
+        parseFloat: parseFloat,
+        isNaN: isNaN,
+        isFinite: isFinite,
+        encodeURIComponent: encodeURIComponent,
+        decodeURIComponent: decodeURIComponent,
+        // Добавляем контекстные переменные
+        ...context,
+      };
 
-      // Создаем строку с параметрами функции
-      const paramsString = contextKeys.join(", ");
+      // Создаем изолированный контекст VM
+      const vmContext = vm.createContext(sandbox);
 
-      // Создаем тело функции с кодом
-      // Всегда оборачиваем код в функцию, чтобы можно было использовать return
-      // и чтобы переменные контекста были доступны напрямую
-      const functionBody = `
-        "use strict";
-        try {
+      // Оборачиваем код в функцию для поддержки return
+      const wrappedCode = `
+        (function() {
+          "use strict";
           ${code}
-        } catch (error) {
-          throw new Error("Ошибка выполнения кода: " + error.message);
-        }
+        })();
       `;
 
-      // eslint-disable-next-line no-new-func
-      const func = new Function(paramsString, functionBody);
+      // Создаем скрипт с ограничениями
+      const script = new vm.Script(wrappedCode);
 
-      // Выполняем функцию с переданным контекстом
-      const result = func(...contextValues);
+      // Выполняем код в изолированном контексте
+      const result = script.runInContext(vmContext, {
+        timeout: 5000,
+        breakOnSigint: true,
+      });
 
       return result;
     } catch (error) {
@@ -218,6 +244,15 @@ export class TransformNodeHandler extends BaseNodeHandler {
             ? error
             : String(error);
       const errorStack = error instanceof Error ? error.stack : "";
+
+      // Специальная обработка ошибок таймаута
+      if (errorMessage.includes("Script execution timed out")) {
+        this.logger.error("Выполнение кода превысило лимит времени (5 секунд)");
+        throw new Error(
+          "Выполнение кода превысило лимит времени. Упростите код или уменьшите количество операций."
+        );
+      }
+
       this.logger.error(`Детали ошибки выполнения кода: ${errorMessage}`);
       if (errorStack) {
         this.logger.error(`Стек ошибки: ${errorStack}`);
