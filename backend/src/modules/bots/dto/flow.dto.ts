@@ -52,6 +52,19 @@ export class KeyboardButtonDto {
   webApp?: any;
 }
 
+export class TransformDto {
+  @IsString()
+  code: string;
+
+  @IsOptional()
+  @IsString()
+  variableName?: string;
+
+  @IsOptional()
+  @IsString()
+  inputVariable?: string;
+}
+
 export class FlowNodeDataDto {
   @IsString()
   label: string;
@@ -307,12 +320,9 @@ export class FlowNodeDataDto {
   };
 
   @IsOptional()
-  @IsObject()
-  transform?: {
-    code: string;
-    variableName?: string;
-    inputVariable?: string;
-  };
+  @ValidateNested()
+  @Type(() => TransformDto)
+  transform?: TransformDto;
 
   @IsOptional()
   @IsObject()
