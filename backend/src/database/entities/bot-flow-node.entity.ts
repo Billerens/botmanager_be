@@ -87,6 +87,9 @@ export class BotFlowNode {
 
   @Column({ type: "json" })
   data: {
+    // Обязательное поле для всех нод
+    label: string;
+
     // Для NEW_MESSAGE нод
     newMessage?: {
       text?: string; // Конкретный текст сообщения для фильтрации
