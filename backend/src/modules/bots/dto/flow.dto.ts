@@ -18,6 +18,7 @@ export enum FlowNodeType {
   FORM = "form",
   DELAY = "delay",
   VARIABLE = "variable",
+  DATABASE = "database",
   FILE = "file",
   WEBHOOK = "webhook",
   RANDOM = "random",
@@ -25,6 +26,12 @@ export enum FlowNodeType {
   ENDPOINT = "endpoint",
   BROADCAST = "broadcast",
   GROUP = "group",
+  LOCATION = "location",
+  CALCULATOR = "calculator",
+  GROUP_CREATE = "group_create",
+  GROUP_JOIN = "group_join",
+  GROUP_ACTION = "group_action",
+  GROUP_LEAVE = "group_leave",
 }
 
 export class KeyboardButtonDto {
@@ -262,6 +269,97 @@ export class FlowNodeDataDto {
     title?: string;
     width?: number;
     height?: number;
+  };
+
+  @IsOptional()
+  @IsObject()
+  database?: {
+    dataSource: "bot_data" | "custom_storage";
+    table?: string;
+    collection?: string;
+    operation: "select" | "insert" | "update" | "delete" | "count";
+    where?: string;
+    data?: Record<string, any>;
+    limit?: number;
+    offset?: number;
+    orderBy?: string;
+    key?: string;
+  };
+
+  @IsOptional()
+  @IsObject()
+  location?: {
+    requestText: string;
+    timeout?: number;
+    variableName?: string;
+    successMessage?: string;
+    errorMessage?: string;
+  };
+
+  @IsOptional()
+  @IsObject()
+  calculator?: {
+    expression: string;
+    variableName: string;
+    precision?: number;
+    format?: "number" | "currency" | "percentage";
+  };
+
+  @IsOptional()
+  @IsObject()
+  groupCreate?: {
+    variableName?: string;
+    maxParticipants?: number;
+    metadata?: Record<string, any>;
+  };
+
+  @IsOptional()
+  @IsObject()
+  groupJoin?: {
+    groupIdSource: string;
+    role?: string;
+    onFullAction?: "queue" | "reject" | "create_new";
+  };
+
+  @IsOptional()
+  @IsObject()
+  groupAction?: {
+    actionType: "broadcast" | "collect" | "aggregate" | "condition";
+    broadcast?: {
+      message: string;
+      excludeSelf?: boolean;
+      buttons?: KeyboardButtonDto[];
+    };
+    collect?: {
+      variableName: string;
+      aggregateAs: string;
+      timeout?: number;
+      waitForAll?: boolean;
+    };
+    aggregate?: {
+      operation: "sum" | "avg" | "min" | "max" | "count" | "list";
+      sourceVariable: string;
+      targetVariable: string;
+      scope: "group" | "individual";
+    };
+    condition?: {
+      field: string;
+      operator:
+        | "equals"
+        | "greaterThan"
+        | "lessThan"
+        | "isEmpty"
+        | "isNotEmpty";
+      value: any;
+    };
+  };
+
+  @IsOptional()
+  @IsObject()
+  groupLeave?: {
+    notifyOthers?: boolean;
+    notificationMessage?: string;
+    cleanupIfEmpty?: boolean;
   };
 }
 
