@@ -19,6 +19,7 @@ import { Order } from "./entities/order.entity";
 import { ShopPromocode } from "./entities/shop-promocode.entity";
 import { UserSession } from "./entities/user-session.entity";
 import { BotCustomData } from "./entities/bot-custom-data.entity";
+import { CustomPage } from "./entities/custom-page.entity";
 
 // Загружаем переменные окружения
 config();
@@ -52,6 +53,7 @@ export const AppDataSource = new DataSource({
     ShopPromocode,
     UserSession,
     BotCustomData,
+    CustomPage,
   ],
   migrations: ["src/database/migrations/*.ts"],
   subscribers: ["src/database/subscribers/*.ts"],

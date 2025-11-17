@@ -7,7 +7,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from "typeorm";
-import { Bot } from "../../../database/entities/bot.entity";
+import { Bot } from "./bot.entity";
 
 export enum CustomPageStatus {
   ACTIVE = "active",
