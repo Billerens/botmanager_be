@@ -5,10 +5,7 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import {
-  CustomPage,
-  CustomPageStatus,
-} from "../../../database/entities/custom-page.entity";
+import { CustomPage, CustomPageStatus } from "../entities/custom-page.entity";
 import { Bot } from "../../../database/entities/bot.entity";
 import {
   CreateCustomPageDto,
@@ -68,12 +65,18 @@ export class CustomPagesService {
     });
 
     const savedPage = await this.customPageRepository.save(customPage);
-    return this.toResponseDto(savedPage);
+    // Загружаем страницу с связью бота для корректного формирования URL
+    const pageWithBot = await this.customPageRepository.findOne({
+      where: { id: savedPage.id },
+      relations: ["bot"],
+    });
+    return this.toResponseDto(pageWithBot!);
   }
 
   async findAll(botId: string): Promise<CustomPageResponseDto[]> {
     const pages = await this.customPageRepository.find({
       where: { botId },
+      relations: ["bot"],
       order: { createdAt: "DESC" },
     });
 
@@ -211,7 +214,7 @@ export class CustomPagesService {
       isWebAppOnly: page.isWebAppOnly,
       botCommand: page.botCommand,
       botId: page.botId,
-      botUsername: page.bot.username,
+      botUsername: page.bot?.username || "unknown",
       createdAt: page.createdAt,
       updatedAt: page.updatedAt,
       url: page.url,
@@ -226,7 +229,7 @@ export class CustomPagesService {
       description: page.description,
       content: page.content,
       botId: page.botId,
-      botUsername: page.bot.username,
+      botUsername: page.bot?.username || "unknown",
       createdAt: page.createdAt,
       updatedAt: page.updatedAt,
       url: page.url,

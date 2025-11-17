@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { CustomPageStatus } from "../../../database/entities/custom-page.entity";
+import { CustomPageStatus } from "../entities/custom-page.entity";
 
 export class CustomPageResponseDto {
   @ApiProperty({

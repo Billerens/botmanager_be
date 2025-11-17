@@ -8,7 +8,7 @@ import {
   Matches,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { CustomPageStatus } from "../../../database/entities/custom-page.entity";
+import { CustomPageStatus } from "../entities/custom-page.entity";
 
 export class CreateCustomPageDto {
   @ApiProperty({
@@ -17,9 +17,7 @@ export class CreateCustomPageDto {
   })
   @IsString()
   @MinLength(1, { message: "Название страницы обязательно" })
-  @MaxLength(100, {
-    message: "Название страницы не должно превышать 100 символов",
-  })
+  @MaxLength(100, { message: "Название страницы не должно превышать 100 символов" })
   title: string;
 
   @ApiProperty({
@@ -86,9 +84,7 @@ export class UpdateCustomPageDto {
   @IsOptional()
   @IsString()
   @MinLength(1, { message: "Название страницы не может быть пустым" })
-  @MaxLength(100, {
-    message: "Название страницы не должно превышать 100 символов",
-  })
+  @MaxLength(100, { message: "Название страницы не должно превышать 100 символов" })
   title?: string;
 
   @ApiPropertyOptional({
@@ -115,8 +111,7 @@ export class UpdateCustomPageDto {
 
   @ApiPropertyOptional({
     description: "HTML/Markdown контент страницы",
-    example:
-      "<h1>Обновленные контакты</h1><p>Новый телефон: +7 (999) 987-65-43</p>",
+    example: "<h1>Обновленные контакты</h1><p>Новый телефон: +7 (999) 987-65-43</p>",
   })
   @IsOptional()
   @IsString()
