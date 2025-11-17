@@ -376,6 +376,7 @@ export class BotFlowsService {
       form: NodeType.FORM,
       delay: NodeType.DELAY,
       variable: NodeType.VARIABLE,
+      database: NodeType.DATABASE,
       file: NodeType.FILE,
       random: NodeType.RANDOM,
       integration: NodeType.INTEGRATION,
@@ -384,6 +385,12 @@ export class BotFlowsService {
       endpoint: NodeType.ENDPOINT,
       broadcast: NodeType.BROADCAST,
       group: NodeType.GROUP,
+      location: NodeType.LOCATION,
+      calculator: NodeType.CALCULATOR,
+      group_create: NodeType.GROUP_CREATE,
+      group_join: NodeType.GROUP_JOIN,
+      group_action: NodeType.GROUP_ACTION,
+      group_leave: NodeType.GROUP_LEAVE,
     };
 
     if (!typeMap[type]) {
