@@ -47,19 +47,8 @@ export class PublicCustomPagesController {
     description: "Страница не найдена",
   })
   async getCustomPageById(@Param("id") id: string): Promise<PublicCustomPageResponseDto> {
-    // Для публичного доступа по ID нужно найти страницу и проверить статус
-    const page = await this.customPagesService.findOne("", id); // botId будет проверен в сервисе
-    return {
-      id: page.id,
-      title: page.title,
-      slug: page.slug,
-      description: page.description,
-      content: page.content,
-      botId: page.botId,
-      botUsername: page.botUsername,
-      createdAt: page.createdAt,
-      updatedAt: page.updatedAt,
-      url: page.url,
-    };
+    // Для публичного доступа по ID используем прямой доступ через сервис
+    const response = await this.customPagesService.getPublicPageById(id);
+    return response;
   }
 }

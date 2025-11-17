@@ -1,10 +1,20 @@
-import { Injectable, NotFoundException, ConflictException } from "@nestjs/common";
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { CustomPage, CustomPageStatus } from "../entities/custom-page.entity";
-import { Bot } from "../../bots/bot.entity";
-import { CreateCustomPageDto, UpdateCustomPageDto } from "../dto/custom-page.dto";
-import { CustomPageResponseDto, PublicCustomPageResponseDto } from "../dto/custom-page-response.dto";
+import { Bot } from "../../../database/entities/bot.entity";
+import {
+  CreateCustomPageDto,
+  UpdateCustomPageDto,
+} from "../dto/custom-page.dto";
+import {
+  CustomPageResponseDto,
+  PublicCustomPageResponseDto,
+} from "../dto/custom-page-response.dto";
 
 @Injectable()
 export class CustomPagesService {
@@ -12,10 +22,13 @@ export class CustomPagesService {
     @InjectRepository(CustomPage)
     private readonly customPageRepository: Repository<CustomPage>,
     @InjectRepository(Bot)
-    private readonly botRepository: Repository<Bot>,
+    private readonly botRepository: Repository<Bot>
   ) {}
 
-  async create(botId: string, createDto: CreateCustomPageDto): Promise<CustomPageResponseDto> {
+  async create(
+    botId: string,
+    createDto: CreateCustomPageDto
+  ): Promise<CustomPageResponseDto> {
     // Проверяем, существует ли бот
     const bot = await this.botRepository.findOne({ where: { id: botId } });
     if (!bot) {
@@ -27,7 +40,9 @@ export class CustomPagesService {
       where: { botId, slug: createDto.slug },
     });
     if (existingPage) {
-      throw new ConflictException(`Страница с slug "${createDto.slug}" уже существует для этого бота`);
+      throw new ConflictException(
+        `Страница с slug "${createDto.slug}" уже существует для этого бота`
+      );
     }
 
     // Если указана botCommand, проверяем её уникальность для бота
@@ -36,7 +51,9 @@ export class CustomPagesService {
         where: { botId, botCommand: createDto.botCommand },
       });
       if (existingCommand) {
-        throw new ConflictException(`Команда "${createDto.botCommand}" уже используется другой страницей`);
+        throw new ConflictException(
+          `Команда "${createDto.botCommand}" уже используется другой страницей`
+        );
       }
     }
 
@@ -57,7 +74,7 @@ export class CustomPagesService {
       order: { createdAt: "DESC" },
     });
 
-    return pages.map(page => this.toResponseDto(page));
+    return pages.map((page) => this.toResponseDto(page));
   }
 
   async findOne(botId: string, id: string): Promise<CustomPageResponseDto> {
@@ -73,12 +90,15 @@ export class CustomPagesService {
     return this.toResponseDto(page);
   }
 
-  async findBySlug(botUsername: string, slug: string): Promise<PublicCustomPageResponseDto> {
+  async findBySlug(
+    botUsername: string,
+    slug: string
+  ): Promise<PublicCustomPageResponseDto> {
     const page = await this.customPageRepository.findOne({
       where: {
         slug,
         bot: { username: botUsername },
-        status: CustomPageStatus.ACTIVE
+        status: CustomPageStatus.ACTIVE,
       },
       relations: ["bot"],
     });
@@ -90,7 +110,10 @@ export class CustomPagesService {
     return this.toPublicResponseDto(page);
   }
 
-  async findByBotCommand(botId: string, botCommand: string): Promise<CustomPageResponseDto | null> {
+  async findByBotCommand(
+    botId: string,
+    botCommand: string
+  ): Promise<CustomPageResponseDto | null> {
     const page = await this.customPageRepository.findOne({
       where: { botId, botCommand, status: CustomPageStatus.ACTIVE },
       relations: ["bot"],
@@ -103,7 +126,24 @@ export class CustomPagesService {
     return this.toResponseDto(page);
   }
 
-  async update(botId: string, id: string, updateDto: UpdateCustomPageDto): Promise<CustomPageResponseDto> {
+  async getPublicPageById(id: string): Promise<PublicCustomPageResponseDto> {
+    const page = await this.customPageRepository.findOne({
+      where: { id, status: CustomPageStatus.ACTIVE },
+      relations: ["bot"],
+    });
+
+    if (!page) {
+      throw new NotFoundException(`Страница с ID ${id} не найдена`);
+    }
+
+    return this.toPublicResponseDto(page);
+  }
+
+  async update(
+    botId: string,
+    id: string,
+    updateDto: UpdateCustomPageDto
+  ): Promise<CustomPageResponseDto> {
     const page = await this.customPageRepository.findOne({
       where: { id, botId },
     });
@@ -118,7 +158,9 @@ export class CustomPagesService {
         where: { botId, slug: updateDto.slug },
       });
       if (existingPage) {
-        throw new ConflictException(`Страница с slug "${updateDto.slug}" уже существует для этого бота`);
+        throw new ConflictException(
+          `Страница с slug "${updateDto.slug}" уже существует для этого бота`
+        );
       }
     }
 
@@ -128,7 +170,9 @@ export class CustomPagesService {
         where: { botId, botCommand: updateDto.botCommand },
       });
       if (existingCommand) {
-        throw new ConflictException(`Команда "${updateDto.botCommand}" уже используется другой страницей`);
+        throw new ConflictException(
+          `Команда "${updateDto.botCommand}" уже используется другой страницей`
+        );
       }
     }
 
