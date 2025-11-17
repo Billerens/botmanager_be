@@ -226,8 +226,10 @@ export class DatabaseService {
       operation,
       key,
       data,
+      where,
       limit = 100,
       offset = 0,
+      orderBy,
     } = config;
 
     if (!collection) {
@@ -244,8 +246,39 @@ export class DatabaseService {
           .where("custom.botId = :botId", { botId })
           .andWhere("custom.collection = :collection", { collection });
 
-        if (key) {
+        // Если указан where, используем его для поиска по key (поддерживает ILIKE)
+        if (where) {
+          const sanitizedWhere = this.sanitizeWhereClause(where);
+          if (sanitizedWhere) {
+            // Пытаемся извлечь паттерн для ILIKE/LIKE и использовать параметризованный запрос
+            const likeMatch = sanitizedWhere.match(
+              /^\s*key\s+(ILIKE|LIKE)\s+(['"])([^'"]*)\2\s*$/i
+            );
+            if (likeMatch) {
+              const pattern = likeMatch[3];
+              const operator = likeMatch[1].toUpperCase();
+              queryBuilder.andWhere(`custom.key ${operator} :keyPattern`, {
+                keyPattern: pattern,
+              });
+            } else {
+              // Для других условий заменяем "key" на "custom.key" и используем как есть
+              // (переменные уже подставлены в database-node.handler.ts)
+              const keyWhere = sanitizedWhere.replace(
+                /\bkey\b/gi,
+                "custom.key"
+              );
+              queryBuilder.andWhere(keyWhere);
+            }
+          }
+        } else if (key) {
+          // Если where не указан, но есть key - используем точное совпадение
           queryBuilder.andWhere("custom.key = :key", { key });
+        }
+
+        if (orderBy) {
+          // Заменяем "key" на "custom.key" в orderBy
+          const keyOrderBy = orderBy.replace(/\bkey\b/gi, "custom.key");
+          queryBuilder.orderBy(keyOrderBy);
         }
 
         queryBuilder.limit(Math.min(limit, 1000)).offset(offset);
@@ -261,16 +294,139 @@ export class DatabaseService {
 
         return {
           success: true,
-          data: key ? mappedResults[0] : mappedResults,
+          data: mappedResults,
           count: mappedResults.length,
         };
 
       case "insert":
+        if (!data) {
+          return {
+            success: false,
+            error: "Data required for insert operation",
+          };
+        }
+
+        if (!key) {
+          return {
+            success: false,
+            error: "Key required for custom storage operations",
+          };
+        }
+
+        // Для insert всегда создаем новую запись
+        // Если запись с таким key уже существует, генерируем уникальный под-ключ
+        let finalKey = key;
+        let baseRecord = await this.customDataRepository.findOne({
+          where: { botId, collection, key: finalKey },
+        });
+
+        if (baseRecord) {
+          // Базовая запись существует - используем metadata.lastIndex для генерации под-ключа
+          // lastIndex хранит последний использованный индекс под-ключа
+          // Если lastIndex = 0, то следующая запись будет item_1
+          const lastIndex = (baseRecord.metadata?.lastIndex as number) ?? 0;
+          const newIndex = lastIndex + 1;
+          finalKey = `${key}_item_${newIndex}`;
+
+          // Обновляем lastIndex в базовой записи (никогда не уменьшается)
+          const updatedMetadata = {
+            ...(baseRecord.metadata || {}),
+            lastIndex: newIndex,
+          };
+          baseRecord.metadata = updatedMetadata;
+          await this.customDataRepository.save(baseRecord);
+
+          this.logger.log(
+            `Key "${key}" already exists, using generated key: "${finalKey}" (lastIndex: ${newIndex})`
+          );
+        } else {
+          // Базовая запись не существует - проверяем, есть ли под-записи
+          // (могли остаться после удаления базовой записи)
+          const existingSubKeys = await this.customDataRepository.find({
+            where: {
+              botId,
+              collection,
+            },
+          });
+
+          // Ищем максимальный индекс среди существующих под-записей с таким паттерном
+          const subKeyPattern = new RegExp(
+            `^${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}_item_(\\d+)$`
+          );
+          let maxIndex = 0;
+
+          for (const record of existingSubKeys) {
+            if (record.key && subKeyPattern.test(record.key)) {
+              const match = record.key.match(subKeyPattern);
+              if (match) {
+                const index = parseInt(match[1], 10);
+                if (index > maxIndex) {
+                  maxIndex = index;
+                }
+              }
+            }
+          }
+
+          if (maxIndex > 0) {
+            // Найдены под-записи - создаем базовую запись с lastIndex = maxIndex
+            // и следующая запись будет иметь индекс maxIndex + 1
+            const baseMetadata = {
+              ...(config.data?.metadata || {}),
+              lastIndex: maxIndex,
+            };
+
+            const newBaseRecord = this.customDataRepository.create({
+              botId,
+              collection,
+              key: finalKey,
+              data,
+              dataType: CustomDataType.JSON_TABLE,
+              metadata: baseMetadata,
+            });
+            const savedBaseRecord =
+              await this.customDataRepository.save(newBaseRecord);
+            this.logger.log(
+              `Base record "${key}" recreated with lastIndex=${maxIndex} (found existing sub-keys)`
+            );
+            return { success: true, data: savedBaseRecord };
+          } else {
+            // Под-записей нет - создаем базовую запись с metadata.lastIndex = 0
+            const baseMetadata = {
+              ...(config.data?.metadata || {}),
+              lastIndex: 0,
+            };
+
+            const newBaseRecord = this.customDataRepository.create({
+              botId,
+              collection,
+              key: finalKey,
+              data,
+              dataType: CustomDataType.JSON_TABLE,
+              metadata: baseMetadata,
+            });
+            const savedBaseRecord =
+              await this.customDataRepository.save(newBaseRecord);
+            return { success: true, data: savedBaseRecord };
+          }
+        }
+
+        // Создаем новую запись с финальным ключом (под-ключ)
+        const newRecord = this.customDataRepository.create({
+          botId,
+          collection,
+          key: finalKey,
+          data,
+          dataType: CustomDataType.JSON_TABLE,
+          metadata: config.data?.metadata,
+        });
+        const savedRecord = await this.customDataRepository.save(newRecord);
+        return { success: true, data: savedRecord };
+
       case "update":
         if (!data) {
           return {
             success: false,
-            error: "Data required for insert/update operation",
+            error: "Data required for update operation",
           };
         }
 
@@ -282,29 +438,23 @@ export class DatabaseService {
         }
 
         // Ищем существующую запись
-        let existingRecord = await this.customDataRepository.findOne({
+        let existingRecordForUpdate = await this.customDataRepository.findOne({
           where: { botId, collection, key },
         });
 
-        if (existingRecord) {
+        if (existingRecordForUpdate) {
           // Обновляем
-          existingRecord.data = data;
-          existingRecord.metadata =
-            config.data?.metadata || existingRecord.metadata;
-          await this.customDataRepository.save(existingRecord);
-          return { success: true, data: existingRecord };
+          existingRecordForUpdate.data = data;
+          existingRecordForUpdate.metadata =
+            config.data?.metadata || existingRecordForUpdate.metadata;
+          await this.customDataRepository.save(existingRecordForUpdate);
+          return { success: true, data: existingRecordForUpdate };
         } else {
-          // Создаем новую
-          const newRecord = this.customDataRepository.create({
-            botId,
-            collection,
-            key,
-            data,
-            dataType: CustomDataType.JSON_TABLE,
-            metadata: config.data?.metadata,
-          });
-          const savedRecord = await this.customDataRepository.save(newRecord);
-          return { success: true, data: savedRecord };
+          // Запись не найдена - возвращаем ошибку для update
+          return {
+            success: false,
+            error: `Record with key "${key}" not found. Use insert to create new records.`,
+          };
         }
 
       case "delete":
@@ -314,7 +464,31 @@ export class DatabaseService {
           .where("custom.botId = :botId", { botId })
           .andWhere("custom.collection = :collection", { collection });
 
-        if (key) {
+        // Если указан where, используем его для поиска по key (поддерживает ILIKE)
+        if (where) {
+          const sanitizedWhere = this.sanitizeWhereClause(where);
+          if (sanitizedWhere) {
+            // Пытаемся извлечь паттерн для ILIKE/LIKE и использовать параметризованный запрос
+            const likeMatch = sanitizedWhere.match(
+              /^\s*key\s+(ILIKE|LIKE)\s+(['"])([^'"]*)\2\s*$/i
+            );
+            if (likeMatch) {
+              const pattern = likeMatch[3];
+              const operator = likeMatch[1].toUpperCase();
+              deleteQuery.andWhere(`custom.key ${operator} :keyPattern`, {
+                keyPattern: pattern,
+              });
+            } else {
+              // Для других условий заменяем "key" на "custom.key" и используем как есть
+              const keyWhere = sanitizedWhere.replace(
+                /\bkey\b/gi,
+                "custom.key"
+              );
+              deleteQuery.andWhere(keyWhere);
+            }
+          }
+        } else if (key) {
+          // Если where не указан, но есть key - используем точное совпадение
           deleteQuery.andWhere("custom.key = :key", { key });
         }
 
@@ -328,7 +502,31 @@ export class DatabaseService {
           .where("custom.botId = :botId", { botId })
           .andWhere("custom.collection = :collection", { collection });
 
-        if (key) {
+        // Если указан where, используем его для поиска по key (поддерживает ILIKE)
+        if (where) {
+          const sanitizedWhere = this.sanitizeWhereClause(where);
+          if (sanitizedWhere) {
+            // Пытаемся извлечь паттерн для ILIKE/LIKE и использовать параметризованный запрос
+            const likeMatch = sanitizedWhere.match(
+              /^\s*key\s+(ILIKE|LIKE)\s+(['"])([^'"]*)\2\s*$/i
+            );
+            if (likeMatch) {
+              const pattern = likeMatch[3];
+              const operator = likeMatch[1].toUpperCase();
+              countQuery.andWhere(`custom.key ${operator} :keyPattern`, {
+                keyPattern: pattern,
+              });
+            } else {
+              // Для других условий заменяем "key" на "custom.key" и используем как есть
+              const keyWhere = sanitizedWhere.replace(
+                /\bkey\b/gi,
+                "custom.key"
+              );
+              countQuery.andWhere(keyWhere);
+            }
+          }
+        } else if (key) {
+          // Если where не указан, но есть key - используем точное совпадение
           countQuery.andWhere("custom.key = :key", { key });
         }
 
@@ -370,11 +568,28 @@ export class DatabaseService {
       }
     }
 
-    // Проверяем базовую структуру - должны быть только разрешенные символы
-    const allowedPattern = /^[a-zA-Z0-9_\.\s=\<\>\!\+\-\(\)\'\"\&\|\s]+$/;
+    // Проверяем базовую структуру - разрешаем ILIKE, LIKE, %, _ для паттернов
+    // Разрешаем: буквы, цифры, точки, пробелы, операторы сравнения, кавычки, скобки, ILIKE, LIKE, %, _
+    const allowedPattern = /^[a-zA-Z0-9_\.\s=\<\>\!\+\-\(\)\'\"\&\|\%\s]+$/i;
     if (!allowedPattern.test(where)) {
       this.logger.warn(`Invalid characters in where clause: ${where}`);
       return null;
+    }
+
+    // Проверяем, что ILIKE и LIKE используются правильно (не в опасных конструкциях)
+    const likePattern = /\b(ILIKE|LIKE)\s+['"]/i;
+    if (likePattern.test(where)) {
+      // Проверяем, что после ILIKE/LIKE идет строка с паттерном
+      const likeMatch = where.match(/\b(ILIKE|LIKE)\s+(['"])([^'"]*)\2/i);
+      if (likeMatch) {
+        // Паттерн должен содержать только безопасные символы
+        const pattern = likeMatch[3];
+        const patternAllowed = /^[a-zA-Z0-9_\.\s\%\_\-]+$/;
+        if (!patternAllowed.test(pattern)) {
+          this.logger.warn(`Invalid pattern in ILIKE/LIKE: ${pattern}`);
+          return null;
+        }
+      }
     }
 
     return where;
