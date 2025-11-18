@@ -398,7 +398,7 @@ export class FlowExecutionService implements OnModuleInit {
           );
           const pageUrl = await this.customPagesBotService.getPageUrlByCommand(
             bot.id,
-            message.text.substring(1)
+            message.text
           );
           if (pageUrl) {
             this.logger.log(

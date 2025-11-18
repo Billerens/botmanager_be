@@ -62,7 +62,7 @@ export class CustomPagesBotService {
       return pages
         .filter(page => page.status === 'active' && page.botCommand)
         .map(page => ({
-          command: page.botCommand!.substring(1), // Убираем /
+          command: page.botCommand!.substring(1), // Убираем / для Telegram API
           description: `📄 ${page.title}`,
         }));
     } catch (error) {
