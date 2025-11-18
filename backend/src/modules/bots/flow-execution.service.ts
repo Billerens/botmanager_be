@@ -47,6 +47,7 @@ import {
   GroupLeaveNodeHandler,
 } from "./nodes";
 import { GroupSessionService } from "./group-session.service";
+import { CustomPagesBotService } from "../custom-pages/services/custom-pages-bot.service";
 
 export interface UserSession {
   userId: string;
@@ -92,6 +93,7 @@ export class FlowExecutionService implements OnModuleInit {
     private readonly messagesService: MessagesService,
     private readonly nodeHandlerService: NodeHandlerService,
     private readonly groupSessionService: GroupSessionService,
+    private readonly customPagesBotService: CustomPagesBotService,
     // Node handlers
     private readonly startNodeHandler: StartNodeHandler,
     private readonly messageNodeHandler: MessageNodeHandler,
@@ -388,6 +390,26 @@ export class FlowExecutionService implements OnModuleInit {
             this.logger.log(`Команда "/booking" - открываем бронирование`);
             await this.handleBookingCommand(bot, message);
             return; // Не обрабатываем через flow
+          }
+        } else if (message.text && message.text.startsWith("/")) {
+          // Проверяем, является ли это командой custom page
+          this.logger.log(
+            `Получена команда "${message.text}". Проверяем, является ли это командой custom page`
+          );
+          const pageUrl = await this.customPagesBotService.getPageUrlByCommand(
+            bot.id,
+            message.text.substring(1)
+          );
+          if (pageUrl) {
+            this.logger.log(
+              `Найдена custom page для команды "${message.text}": ${pageUrl}`
+            );
+            await this.handleCustomPageCommand(bot, message, pageUrl);
+            return; // Не обрабатываем через flow
+          } else {
+            this.logger.log(
+              `Команда "${message.text}" не является командой custom page`
+            );
           }
         } else {
           this.logger.log(`Сообщение не "/start" - ищем NEW_MESSAGE узел`);
@@ -1035,6 +1057,51 @@ export class FlowExecutionService implements OnModuleInit {
     } catch (error) {
       this.logger.error(
         `Ошибка при обработке команды /booking: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Обрабатывает команду custom page для открытия страницы
+   */
+  private async handleCustomPageCommand(
+    bot: any,
+    message: any,
+    pageUrl: string
+  ): Promise<void> {
+    try {
+      // Расшифровываем токен бота
+      const decryptedToken = this.botsService.decryptToken(bot.token);
+
+      // Отправляем сообщение с кнопкой для открытия custom page
+      const keyboard = {
+        inline_keyboard: [
+          [
+            {
+              text: "Открыть страницу",
+              web_app: {
+                url: pageUrl,
+              },
+            },
+          ],
+        ],
+      };
+
+      const messageText = "Нажмите кнопку ниже, чтобы открыть страницу.";
+
+      await this.telegramService.sendMessage(
+        decryptedToken,
+        message.chat.id.toString(),
+        messageText,
+        { reply_markup: keyboard }
+      );
+
+      this.logger.log(
+        `Отправлено сообщение с custom page для пользователя ${message.from.id}: ${pageUrl}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Ошибка при обработке команды custom page: ${error.message}`
       );
     }
   }

@@ -4,6 +4,7 @@ import axios from "axios";
 import FormData from "form-data";
 import * as fs from "fs";
 import { Bot } from "../../database/entities/bot.entity";
+import { CustomPagesBotService } from "../custom-pages/services/custom-pages-bot.service";
 
 export interface TelegramBotInfo {
   id: number;
@@ -69,7 +70,10 @@ export interface TelegramUpdate {
 export class TelegramService {
   private readonly baseUrl: string;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private customPagesBotService: CustomPagesBotService
+  ) {
     this.baseUrl = this.configService.get<string>(
       "TELEGRAM_BOT_API_URL",
       "https://api.telegram.org/bot"
@@ -177,6 +181,19 @@ export class TelegramService {
         console.log(
           `Команда /booking НЕ добавлена для бота ${bot.id}: isBookingEnabled=${bot.isBookingEnabled}, bookingButtonTypes=${JSON.stringify(bot.bookingButtonTypes)}`
         );
+      }
+
+      // Добавляем команды custom pages
+      try {
+        const pageCommands = await this.customPagesBotService.generateBotCommands(bot.id);
+        commands.push(...pageCommands);
+        if (pageCommands.length > 0) {
+          console.log(
+            `Добавлены команды custom pages для бота ${bot.id}: ${pageCommands.map(c => `/${c.command}`).join(', ')}`
+          );
+        }
+      } catch (error) {
+        console.error(`Ошибка при добавлении команд custom pages для бота ${bot.id}:`, error.message);
       }
 
       const response = await axios.post(

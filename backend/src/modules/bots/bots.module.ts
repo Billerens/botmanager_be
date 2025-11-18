@@ -26,6 +26,7 @@ import { ProductsModule } from "../products/products.module";
 import { CartModule } from "../cart/cart.module";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
 import { WebSocketModule } from "../websocket/websocket.module";
+import { CustomPagesModule } from "../custom-pages/custom-pages.module";
 import { CustomLoggerService } from "../../common/logger.service";
 import {
   NodeHandlerService,
@@ -82,6 +83,7 @@ import { GroupActionsProcessor } from "./processors/group-actions.processor";
     CartModule,
     ActivityLogModule,
     WebSocketModule,
+    CustomPagesModule,
   ],
   providers: [
     BotsService,

@@ -50,4 +50,23 @@ export class CustomPagesBotService {
     const url = await this.getPageUrlByCommand(botId, command);
     return url !== null;
   }
+
+  /**
+   * Генерирует список команд для бота
+   * @param botId ID бота
+   * @returns Массив команд для меню бота
+   */
+  async generateBotCommands(botId: string): Promise<Array<{ command: string; description: string }>> {
+    try {
+      const pages = await this.customPagesService.findAll(botId);
+      return pages
+        .filter(page => page.status === 'active' && page.botCommand)
+        .map(page => ({
+          command: page.botCommand!.substring(1), // Убираем /
+          description: `📄 ${page.title}`,
+        }));
+    } catch (error) {
+      return [];
+    }
+  }
 }

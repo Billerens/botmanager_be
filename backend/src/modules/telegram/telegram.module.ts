@@ -8,6 +8,7 @@ import { BotsModule } from "../bots/bots.module";
 import { MessagesModule } from "../messages/messages.module";
 import { LeadsModule } from "../leads/leads.module";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
+import { CustomPagesModule } from "../custom-pages/custom-pages.module";
 import { Message } from "../../database/entities/message.entity";
 import { Bot } from "../../database/entities/bot.entity";
 
@@ -24,6 +25,7 @@ import { Bot } from "../../database/entities/bot.entity";
     forwardRef(() => MessagesModule),
     LeadsModule,
     ActivityLogModule,
+    CustomPagesModule,
   ],
   providers: [TelegramService],
   controllers: [TelegramController],
