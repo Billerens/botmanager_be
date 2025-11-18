@@ -63,6 +63,6 @@ export class CustomPage {
     const frontendUrl =
       process.env.FRONTEND_URL || "https://botmanagertest.online";
     const botUsername = (this.bot as Bot)?.username || "unknown";
-    return `${frontendUrl}/${botUsername}/${this.slug}`;
+    return `${frontendUrl}/pages/${botUsername}/${this.slug}`;
   }
 }
