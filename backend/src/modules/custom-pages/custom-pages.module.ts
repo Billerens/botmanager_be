@@ -1,7 +1,7 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
-import { CustomPage } from "./entities/custom-page.entity";
+import { CustomPage } from "../../database/entities/custom-page.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import { CustomPagesService } from "./services/custom-pages.service";
 import { CustomPagesController } from "./controllers/custom-pages.controller";

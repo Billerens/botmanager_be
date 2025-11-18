@@ -5,7 +5,7 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { CustomPage, CustomPageStatus } from "../entities/custom-page.entity";
+import { CustomPage, CustomPageStatus } from "../../../database/entities/custom-page.entity";
 import { Bot } from "../../../database/entities/bot.entity";
 import {
   CreateCustomPageDto,
