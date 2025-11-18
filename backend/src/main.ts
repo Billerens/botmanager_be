@@ -5,6 +5,7 @@ import { getSchemaPath } from "@nestjs/swagger";
 import { ConfigService } from "@nestjs/config";
 import helmet from "helmet";
 import compression from "compression";
+import * as bodyParser from "body-parser";
 import { AppModule } from "./app.module";
 import { ValidationExceptionFilter } from "./common/filters/validation-exception.filter";
 import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
@@ -246,13 +247,17 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule, {
     logger: ["error", "warn", "log", "debug", "verbose"],
-    bodyParser: true, // Включаем body parser по умолчанию
+    bodyParser: false, // Отключаем встроенный body parser для кастомной настройки
   });
   const configService = app.get(ConfigService);
 
   // Безопасность
   app.use(helmet());
   app.use(compression());
+
+  // Настройка body parser с увеличенным лимитом для больших HTML файлов
+  app.use(bodyParser.json({ limit: '10mb' }));
+  app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
   // Middleware для парсинга JSON, даже если Content-Type не установлен
   // Это помогает, когда клиент забывает установить Content-Type: application/json

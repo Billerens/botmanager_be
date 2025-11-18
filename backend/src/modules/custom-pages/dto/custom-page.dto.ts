@@ -47,6 +47,7 @@ export class CreateCustomPageDto {
   })
   @IsString()
   @MinLength(1, { message: "Контент страницы обязателен" })
+  @MaxLength(5000000, { message: "Контент страницы не должен превышать 5MB" })
   content: string;
 
   @ApiPropertyOptional({
@@ -116,6 +117,7 @@ export class UpdateCustomPageDto {
   @IsOptional()
   @IsString()
   @MinLength(1, { message: "Контент страницы не может быть пустым" })
+  @MaxLength(5000000, { message: "Контент страницы не должен превышать 5MB" })
   content?: string;
 
   @ApiPropertyOptional({
