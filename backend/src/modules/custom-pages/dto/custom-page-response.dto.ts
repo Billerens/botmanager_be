@@ -142,4 +142,10 @@ export class PublicCustomPageResponseDto {
     example: "https://botmanagertest.online/my_restaurant_bot/contacts",
   })
   url: string;
+
+  @ApiProperty({
+    description: "Открывать только в Telegram WebApp",
+    example: false,
+  })
+  isWebAppOnly: boolean;
 }
