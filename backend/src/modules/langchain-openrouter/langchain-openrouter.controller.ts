@@ -143,6 +143,29 @@ export class LangChainOpenRouterController {
   ): Promise<void> {
     this.logger.log(`Начало потоковой генерации`);
 
+    // Интервал heartbeat для поддержания соединения (15 секунд)
+    const HEARTBEAT_INTERVAL = 15000;
+    let heartbeatTimer: NodeJS.Timeout | null = null;
+    let isStreamEnded = false;
+
+    // Функция для отправки heartbeat
+    const sendHeartbeat = () => {
+      if (!isStreamEnded) {
+        const heartbeatData = JSON.stringify({ heartbeat: true, done: false });
+        response.write(`data: ${heartbeatData}\n\n`);
+        this.logger.debug("Heartbeat отправлен для поддержания SSE соединения");
+      }
+    };
+
+    // Функция для остановки heartbeat
+    const stopHeartbeat = () => {
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+      isStreamEnded = true;
+    };
+
     try {
       // Настраиваем заголовки для SSE
       response.setHeader("Content-Type", "text/event-stream");
@@ -150,14 +173,31 @@ export class LangChainOpenRouterController {
       response.setHeader("Connection", "keep-alive");
       response.setHeader("X-Accel-Buffering", "no");
 
+      // Отправляем начальный чанк для подтверждения соединения
+      const initData = JSON.stringify({ init: true, done: false });
+      response.write(`data: ${initData}\n\n`);
+
+      // Запускаем heartbeat для поддержания соединения
+      heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+
+      // Обработка закрытия соединения клиентом
+      response.on("close", () => {
+        this.logger.log("SSE соединение закрыто клиентом");
+        stopHeartbeat();
+      });
+
       // Получаем генератор потока
       const stream = this.langchainService.chatStream(request);
 
       // Отправляем данные по мере их поступления
       for await (const chunk of stream) {
+        if (isStreamEnded) break;
         const data = JSON.stringify({ content: chunk, done: false });
         response.write(`data: ${data}\n\n`);
       }
+
+      // Останавливаем heartbeat
+      stopHeartbeat();
 
       // Отправляем финальный чанк
       const finalData = JSON.stringify({ content: "", done: true });
@@ -168,6 +208,9 @@ export class LangChainOpenRouterController {
 
       this.logger.log(`Потоковая генерация завершена`);
     } catch (error) {
+      // Останавливаем heartbeat при ошибке
+      stopHeartbeat();
+
       this.logger.error(`Ошибка при потоковой генерации: ${error.message}`);
 
       // Отправляем ошибку в потоке
