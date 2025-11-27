@@ -233,6 +233,7 @@ export class BotFlowNode {
     endpoint?: {
       url: string;
       accessKey: string;
+      disableAccessKey?: boolean; // Если true - проверка X-Access-Key отключена (небезопасно!)
       waitingMessage?: string;
     };
 

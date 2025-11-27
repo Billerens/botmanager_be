@@ -115,12 +115,18 @@ export class EndpointController {
       throw new NotFoundException("URL эндпоинта не совпадает");
     }
 
-    // Проверяем Access Key
-    if (!accessKey || accessKey !== endpointData.accessKey) {
-      this.logger.error(
-        `Неверный Access Key для эндпоинта ${nodeId} бота ${botId}`
+    // Проверяем Access Key (если не отключена проверка)
+    if (endpointData.disableAccessKey) {
+      this.logger.warn(
+        `⚠️ Проверка Access Key отключена для эндпоинта ${nodeId} бота ${botId}. Это небезопасно!`
       );
-      throw new UnauthorizedException("Неверный Access Key");
+    } else {
+      if (!accessKey || accessKey !== endpointData.accessKey) {
+        this.logger.error(
+          `Неверный Access Key для эндпоинта ${nodeId} бота ${botId}`
+        );
+        throw new UnauthorizedException("Неверный Access Key");
+      }
     }
 
     this.logger.log(`Эндпоинт найден и авторизован`);
