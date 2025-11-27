@@ -399,10 +399,106 @@ export class UploadService {
         }
 
         const uploadPromise = (async () => {
-          const content = await zipEntry.async("nodebuffer");
+          let content = await zipEntry.async("nodebuffer");
           const mimeType =
             mime.lookup(relativePath) || "application/octet-stream";
           const s3Key = `${staticPath}/${relativePath}`;
+
+          // Для HTML файлов заменяем абсолютные пути на относительные
+          // Vite/Webpack генерируют пути вида /assets/..., которые нужно преобразовать в ./assets/...
+          if (mimeType === "text/html") {
+            let htmlContent = content.toString("utf-8");
+
+            // Заменяем абсолютные пути в атрибутах src, href, content (для og:image и т.д.)
+            // Паттерн: (src|href|content)="/path" -> (src|href|content)="./path"
+            htmlContent = htmlContent.replace(
+              /((?:src|href|content)\s*=\s*["'])\/(?!\/)/g,
+              "$1./"
+            );
+
+            // Заменяем пути в CSS url()
+            // Паттерн: url("/path") -> url("./path") или url('/path') -> url('./path')
+            htmlContent = htmlContent.replace(
+              /url\(\s*["']\/(?!\/)/g,
+              'url("./'
+            );
+
+            // Заменяем пути в import() и динамических импортах в inline скриптах
+            // Паттерн: import("/path") -> import("./path")
+            htmlContent = htmlContent.replace(
+              /import\(\s*["']\/(?!\/)/g,
+              'import("./'
+            );
+
+            content = Buffer.from(htmlContent, "utf-8");
+
+            this.logger.debug(
+              `Replaced absolute paths with relative paths in ${relativePath}`
+            );
+          }
+
+          // Для CSS файлов заменяем абсолютные пути на относительные
+          if (mimeType === "text/css") {
+            let cssContent = content.toString("utf-8");
+
+            // Заменяем пути в url() для фонов, шрифтов и т.д.
+            // Паттерн: url("/path") -> url("./path") или url('/path') -> url('./path')
+            // Также обрабатываем url(/path) без кавычек
+            cssContent = cssContent.replace(/url\(\s*["']\/(?!\/)/g, 'url("./');
+            cssContent = cssContent.replace(/url\(\s*\/(?!\/)/g, "url(./");
+
+            // Заменяем @import с абсолютными путями
+            // Паттерн: @import "/path" -> @import "./path"
+            cssContent = cssContent.replace(
+              /(@import\s+["'])\/(?!\/)/g,
+              "$1./"
+            );
+            // Паттерн: @import url("/path") -> @import url("./path")
+            cssContent = cssContent.replace(
+              /(@import\s+url\(\s*["']?)\/(?!\/)/g,
+              "$1./"
+            );
+
+            content = Buffer.from(cssContent, "utf-8");
+
+            this.logger.debug(
+              `Replaced absolute paths with relative paths in CSS: ${relativePath}`
+            );
+          }
+
+          // Для JS файлов заменяем абсолютные пути на относительные
+          if (
+            mimeType === "application/javascript" ||
+            mimeType === "text/javascript"
+          ) {
+            let jsContent = content.toString("utf-8");
+
+            // Заменяем динамические импорты
+            // Паттерн: import("/path") -> import("./path")
+            jsContent = jsContent.replace(
+              /import\(\s*["']\/(?!\/)/g,
+              'import("./'
+            );
+
+            // Заменяем пути к статическим ресурсам (assets, chunks, images и т.д.)
+            jsContent = jsContent.replace(/(["'])\/assets\//g, "$1./assets/");
+            jsContent = jsContent.replace(/(["'])\/chunks\//g, "$1./chunks/");
+            jsContent = jsContent.replace(/(["'])\/images\//g, "$1./images/");
+            jsContent = jsContent.replace(/(["'])\/fonts\//g, "$1./fonts/");
+            jsContent = jsContent.replace(/(["'])\/static\//g, "$1./static/");
+
+            // Обрабатываем new URL("/path", import.meta.url) паттерн (Vite)
+            jsContent = jsContent.replace(
+              /new\s+URL\(\s*["']\/(?!\/)/g,
+              'new URL("./'
+            );
+
+            content = Buffer.from(jsContent, "utf-8");
+
+            this.logger.debug(
+              `Replaced absolute paths with relative paths in JS: ${relativePath}`
+            );
+          }
 
           // Используем uploadFileWithPath для сохранения оригинального пути
           await this.s3Service.uploadFileWithPath(content, s3Key, mimeType);
