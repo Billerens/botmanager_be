@@ -1,6 +1,9 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { S3Service } from "../../common/s3.service";
 import { ImageConversionService } from "../../common/image-conversion.service";
+import * as JSZip from "jszip";
+import * as mime from "mime-types";
+import { CustomPageAsset } from "../../database/entities/custom-page.entity";
 
 @Injectable()
 export class UploadService {
@@ -332,6 +335,150 @@ export class UploadService {
       this.logger.log(`Successfully deleted category image`);
     } catch (error) {
       this.logger.error(`Error deleting category image: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Загружает ZIP-архив с бандлом статической страницы в S3
+   * @param pageId ID страницы для формирования пути
+   * @param zipBuffer Buffer с ZIP-архивом
+   * @returns Информация о загруженных файлах
+   */
+  async uploadCustomPageBundle(
+    pageId: string,
+    zipBuffer: Buffer
+  ): Promise<{
+    staticPath: string;
+    assets: CustomPageAsset[];
+    entryPoint: string;
+  }> {
+    try {
+      this.logger.log(`Uploading custom page bundle for page ${pageId}`);
+
+      const zip = await JSZip.loadAsync(zipBuffer);
+      const assets: CustomPageAsset[] = [];
+      const staticPath = `custom-pages/${pageId}`;
+
+      // Находим корневую директорию в архиве (если есть)
+      const entries = Object.entries(zip.files);
+      let rootPrefix = "";
+
+      // Проверяем, есть ли общая корневая папка (например, "dist/" или "build/")
+      const firstEntry = entries.find(([_, file]) => !file.dir);
+      if (firstEntry) {
+        const pathParts = firstEntry[0].split("/");
+        if (
+          pathParts.length > 1 &&
+          entries.every(([path]) => path.startsWith(pathParts[0] + "/"))
+        ) {
+          rootPrefix = pathParts[0] + "/";
+        }
+      }
+
+      // Загружаем все файлы
+      const uploadPromises: Promise<void>[] = [];
+
+      for (const [path, zipEntry] of entries) {
+        if (zipEntry.dir) continue;
+
+        // Убираем корневой префикс из пути
+        let relativePath = path;
+        if (rootPrefix && path.startsWith(rootPrefix)) {
+          relativePath = path.substring(rootPrefix.length);
+        }
+
+        // Пропускаем скрытые файлы и системные файлы
+        if (
+          relativePath.startsWith(".") ||
+          relativePath.includes("/.") ||
+          relativePath === "Thumbs.db" ||
+          relativePath === ".DS_Store"
+        ) {
+          continue;
+        }
+
+        const uploadPromise = (async () => {
+          const content = await zipEntry.async("nodebuffer");
+          const mimeType =
+            mime.lookup(relativePath) || "application/octet-stream";
+          const s3Key = `${staticPath}/${relativePath}`;
+
+          await this.s3Service.uploadFile(
+            content,
+            relativePath,
+            mimeType,
+            staticPath
+          );
+
+          assets.push({
+            fileName: relativePath,
+            s3Key,
+            size: content.length,
+            mimeType,
+          });
+        })();
+
+        uploadPromises.push(uploadPromise);
+      }
+
+      await Promise.all(uploadPromises);
+
+      // Определяем точку входа
+      let entryPoint = "index.html";
+      const hasIndexHtml = assets.some(
+        (a) => a.fileName === "index.html" || a.fileName.endsWith("/index.html")
+      );
+
+      if (!hasIndexHtml) {
+        // Ищем первый HTML файл
+        const htmlFile = assets.find((a) => a.mimeType === "text/html");
+        if (htmlFile) {
+          entryPoint = htmlFile.fileName;
+        }
+      }
+
+      this.logger.log(
+        `Successfully uploaded ${assets.length} files for page ${pageId}`
+      );
+
+      return {
+        staticPath,
+        assets,
+        entryPoint,
+      };
+    } catch (error) {
+      this.logger.error(`Error uploading custom page bundle: ${error.message}`);
+      throw new Error(`Ошибка загрузки бандла: ${error.message}`);
+    }
+  }
+
+  /**
+   * Удаляет все файлы статической страницы из S3
+   * @param assets Список файлов для удаления
+   */
+  async deleteCustomPageBundle(assets: CustomPageAsset[]): Promise<void> {
+    try {
+      if (!assets || assets.length === 0) {
+        return;
+      }
+
+      this.logger.log(
+        `Deleting ${assets.length} files from custom page bundle`
+      );
+
+      // Формируем URL файлов для удаления
+      const fileUrls = assets.map((asset) => {
+        const s3Endpoint = process.env.AWS_S3_ENDPOINT;
+        const bucket = process.env.AWS_S3_BUCKET || "botmanager-products";
+        return `${s3Endpoint}/${bucket}/${asset.s3Key}`;
+      });
+
+      await this.s3Service.deleteMultipleFiles(fileUrls);
+
+      this.logger.log(`Successfully deleted custom page bundle`);
+    } catch (error) {
+      this.logger.error(`Error deleting custom page bundle: ${error.message}`);
       throw error;
     }
   }

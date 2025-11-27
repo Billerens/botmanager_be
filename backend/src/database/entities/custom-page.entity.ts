@@ -14,6 +14,18 @@ export enum CustomPageStatus {
   INACTIVE = "inactive",
 }
 
+export enum CustomPageType {
+  INLINE = "inline", // HTML контент хранится в поле content
+  STATIC = "static", // Статические файлы хранятся в S3
+}
+
+export interface CustomPageAsset {
+  fileName: string; // Оригинальное имя файла (например, "index.html", "assets/main.js")
+  s3Key: string; // Путь в S3 (например, "custom-pages/{pageId}/index.html")
+  size: number; // Размер файла в байтах
+  mimeType: string; // MIME тип файла
+}
+
 @Entity("custom_pages")
 export class CustomPage {
   @PrimaryGeneratedColumn("uuid")
@@ -28,8 +40,24 @@ export class CustomPage {
   @Column({ type: "text", nullable: true })
   description: string;
 
-  @Column({ type: "text" })
-  content: string; // HTML/Markdown контент
+  @Column({
+    type: "enum",
+    enum: CustomPageType,
+    default: CustomPageType.INLINE,
+  })
+  pageType: CustomPageType;
+
+  @Column({ type: "text", nullable: true })
+  content: string; // HTML/Markdown контент (для inline режима)
+
+  @Column({ type: "text", nullable: true })
+  staticPath: string; // Путь к папке в S3 (для static режима), например "custom-pages/{pageId}"
+
+  @Column({ type: "varchar", default: "index.html" })
+  entryPoint: string; // Точка входа для static режима
+
+  @Column({ type: "simple-json", nullable: true })
+  assets: CustomPageAsset[] | null; // Список файлов для static режима
 
   @Column({
     type: "enum",
@@ -64,5 +92,15 @@ export class CustomPage {
       process.env.FRONTEND_URL || "https://botmanagertest.online";
     const botUsername = (this.bot as Bot)?.username || "unknown";
     return `${frontendUrl}/pages/${botUsername}/${this.slug}`;
+  }
+
+  // Геттер для URL статических файлов
+  get staticUrl(): string | null {
+    if (this.pageType !== CustomPageType.STATIC || !this.staticPath) {
+      return null;
+    }
+    const s3Endpoint = process.env.AWS_S3_ENDPOINT;
+    const bucket = process.env.AWS_S3_BUCKET || "botmanager-products";
+    return `${s3Endpoint}/${bucket}/${this.staticPath}`;
   }
 }

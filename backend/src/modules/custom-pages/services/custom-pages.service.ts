@@ -2,12 +2,14 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import {
   CustomPage,
   CustomPageStatus,
+  CustomPageType,
 } from "../../../database/entities/custom-page.entity";
 import { Bot } from "../../../database/entities/bot.entity";
 import {
@@ -18,6 +20,7 @@ import {
   CustomPageResponseDto,
   PublicCustomPageResponseDto,
 } from "../dto/custom-page-response.dto";
+import { UploadService } from "../../upload/upload.service";
 
 @Injectable()
 export class CustomPagesService {
@@ -25,7 +28,8 @@ export class CustomPagesService {
     @InjectRepository(CustomPage)
     private readonly customPageRepository: Repository<CustomPage>,
     @InjectRepository(Bot)
-    private readonly botRepository: Repository<Bot>
+    private readonly botRepository: Repository<Bot>,
+    private readonly uploadService: UploadService
   ) {}
 
   async create(
@@ -60,11 +64,23 @@ export class CustomPagesService {
       }
     }
 
+    // Определяем тип страницы
+    const pageType = createDto.pageType || CustomPageType.INLINE;
+
+    // Для inline режима контент обязателен
+    if (pageType === CustomPageType.INLINE && !createDto.content) {
+      throw new BadRequestException(
+        "Контент страницы обязателен для inline режима"
+      );
+    }
+
     const customPage = this.customPageRepository.create({
       ...createDto,
       botId,
+      pageType,
       status: createDto.status || CustomPageStatus.ACTIVE,
       isWebAppOnly: createDto.isWebAppOnly || false,
+      entryPoint: createDto.entryPoint || "index.html",
     });
 
     const savedPage = await this.customPageRepository.save(customPage);
@@ -74,6 +90,49 @@ export class CustomPagesService {
       relations: ["bot"],
     });
     return this.toResponseDto(pageWithBot!);
+  }
+
+  /**
+   * Загружает ZIP-архив для static страницы
+   */
+  async uploadBundle(
+    botId: string,
+    pageId: string,
+    zipBuffer: Buffer
+  ): Promise<CustomPageResponseDto> {
+    const page = await this.customPageRepository.findOne({
+      where: { id: pageId, botId },
+      relations: ["bot"],
+    });
+
+    if (!page) {
+      throw new NotFoundException(`Страница с ID ${pageId} не найдена`);
+    }
+
+    // Если у страницы уже есть бандл, удаляем его
+    if (page.assets && page.assets.length > 0) {
+      await this.uploadService.deleteCustomPageBundle(page.assets);
+    }
+
+    // Загружаем новый бандл
+    const { staticPath, assets, entryPoint } =
+      await this.uploadService.uploadCustomPageBundle(pageId, zipBuffer);
+
+    // Обновляем страницу
+    await this.customPageRepository.update(pageId, {
+      pageType: CustomPageType.STATIC,
+      staticPath,
+      assets,
+      entryPoint,
+      content: null, // Очищаем inline контент
+    });
+
+    const updatedPage = await this.customPageRepository.findOne({
+      where: { id: pageId },
+      relations: ["bot"],
+    });
+
+    return this.toResponseDto(updatedPage!);
   }
 
   async findAll(botId: string): Promise<CustomPageResponseDto[]> {
@@ -203,6 +262,15 @@ export class CustomPagesService {
       throw new NotFoundException(`Страница с ID ${id} не найдена`);
     }
 
+    // Если это static страница с файлами, удаляем их из S3
+    if (
+      page.pageType === CustomPageType.STATIC &&
+      page.assets &&
+      page.assets.length > 0
+    ) {
+      await this.uploadService.deleteCustomPageBundle(page.assets);
+    }
+
     await this.customPageRepository.remove(page);
   }
 
@@ -212,7 +280,12 @@ export class CustomPagesService {
       title: page.title,
       slug: page.slug,
       description: page.description,
+      pageType: page.pageType,
       content: page.content,
+      staticPath: page.staticPath,
+      entryPoint: page.entryPoint,
+      assets: page.assets,
+      staticUrl: page.staticUrl,
       status: page.status,
       isWebAppOnly: page.isWebAppOnly,
       botCommand: page.botCommand,
@@ -230,7 +303,10 @@ export class CustomPagesService {
       title: page.title,
       slug: page.slug,
       description: page.description,
+      pageType: page.pageType,
       content: page.content,
+      staticUrl: page.staticUrl,
+      entryPoint: page.entryPoint,
       botId: page.botId,
       botUsername: page.bot?.username || "unknown",
       createdAt: page.createdAt,

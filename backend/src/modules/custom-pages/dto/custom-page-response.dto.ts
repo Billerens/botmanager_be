@@ -1,5 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { CustomPageStatus } from "../../../database/entities/custom-page.entity";
+import {
+  CustomPageStatus,
+  CustomPageType,
+  CustomPageAsset,
+} from "../../../database/entities/custom-page.entity";
 
 export class CustomPageResponseDto {
   @ApiProperty({
@@ -27,10 +31,53 @@ export class CustomPageResponseDto {
   description?: string;
 
   @ApiProperty({
-    description: "HTML/Markdown контент страницы",
+    description: "Тип страницы: inline (HTML в БД) или static (файлы в S3)",
+    example: CustomPageType.INLINE,
+    enum: CustomPageType,
+  })
+  pageType: CustomPageType;
+
+  @ApiPropertyOptional({
+    description: "HTML/Markdown контент страницы (для inline режима)",
     example: "<h1>Контакты</h1><p>Телефон: +7 (999) 123-45-67</p>",
   })
-  content: string;
+  content?: string;
+
+  @ApiPropertyOptional({
+    description: "Путь к папке в S3 (для static режима)",
+    example: "custom-pages/123e4567-e89b-12d3-a456-426614174000",
+  })
+  staticPath?: string;
+
+  @ApiProperty({
+    description: "Точка входа для static режима",
+    example: "index.html",
+  })
+  entryPoint: string;
+
+  @ApiPropertyOptional({
+    description: "Список файлов для static режима",
+    type: "array",
+    items: {
+      type: "object",
+      properties: {
+        fileName: { type: "string", example: "index.html" },
+        s3Key: {
+          type: "string",
+          example: "custom-pages/123e4567/index.html",
+        },
+        size: { type: "number", example: 1024 },
+        mimeType: { type: "string", example: "text/html" },
+      },
+    },
+  })
+  assets?: CustomPageAsset[];
+
+  @ApiPropertyOptional({
+    description: "URL для доступа к статическим файлам (для static режима)",
+    example: "https://s3.example.com/bucket/custom-pages/123e4567",
+  })
+  staticUrl?: string;
 
   @ApiProperty({
     description: "Статус страницы",
@@ -108,10 +155,29 @@ export class PublicCustomPageResponseDto {
   description?: string;
 
   @ApiProperty({
-    description: "HTML/Markdown контент страницы",
+    description: "Тип страницы: inline (HTML в БД) или static (файлы в S3)",
+    example: CustomPageType.INLINE,
+    enum: CustomPageType,
+  })
+  pageType: CustomPageType;
+
+  @ApiPropertyOptional({
+    description: "HTML/Markdown контент страницы (для inline режима)",
     example: "<h1>Контакты</h1><p>Телефон: +7 (999) 123-45-67</p>",
   })
-  content: string;
+  content?: string;
+
+  @ApiPropertyOptional({
+    description: "URL для доступа к статическим файлам (для static режима)",
+    example: "https://s3.example.com/bucket/custom-pages/123e4567",
+  })
+  staticUrl?: string;
+
+  @ApiProperty({
+    description: "Точка входа для static режима",
+    example: "index.html",
+  })
+  entryPoint: string;
 
   @ApiProperty({
     description: "ID бота",

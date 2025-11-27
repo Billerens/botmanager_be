@@ -7,9 +7,10 @@ import { CustomPagesService } from "./services/custom-pages.service";
 import { CustomPagesController } from "./controllers/custom-pages.controller";
 import { PublicCustomPagesController } from "./controllers/public-custom-pages.controller";
 import { CustomPagesBotService } from "./services/custom-pages-bot.service";
+import { UploadModule } from "../upload/upload.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([CustomPage, Bot])],
+  imports: [TypeOrmModule.forFeature([CustomPage, Bot]), UploadModule],
   providers: [CustomPagesService, CustomPagesBotService],
   controllers: [CustomPagesController, PublicCustomPagesController],
   exports: [CustomPagesService, CustomPagesBotService],
