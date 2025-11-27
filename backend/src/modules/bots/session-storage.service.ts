@@ -194,6 +194,33 @@ export class SessionStorageService implements OnModuleDestroy {
   }
 
   /**
+   * Получить сессии, ожидающие данные на конкретной ноде
+   */
+  async getSessionsWaitingOnNode(
+    botId: string,
+    nodeId: string
+  ): Promise<UserSessionData[]> {
+    try {
+      const dbSessions = await this.sessionRepository.find({
+        where: {
+          botId,
+          currentNodeId: nodeId,
+          status: SessionStatus.ACTIVE,
+        },
+        order: { lastActivity: "DESC" },
+      });
+
+      return dbSessions.map((session) => this.entityToData(session));
+    } catch (error) {
+      this.logger.error(
+        `Ошибка получения сессий, ожидающих на ноде ${nodeId}:`,
+        error
+      );
+      return [];
+    }
+  }
+
+  /**
    * Перенести все сессии из памяти в постоянное хранилище
    * Используется для миграции существующих сессий
    */

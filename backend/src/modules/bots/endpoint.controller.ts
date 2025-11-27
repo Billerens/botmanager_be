@@ -18,6 +18,7 @@ import { BotFlowNode } from "../../database/entities/bot-flow-node.entity";
 import { Bot, BotStatus } from "../../database/entities/bot.entity";
 import { CustomLoggerService } from "../../common/logger.service";
 import { FlowExecutionService } from "./flow-execution.service";
+import { SessionStorageService } from "./session-storage.service";
 
 @ApiTags("Эндпоинты")
 @Controller("endpoint")
@@ -30,7 +31,8 @@ export class EndpointController {
     @InjectRepository(Bot)
     private readonly botRepository: Repository<Bot>,
     private readonly logger: CustomLoggerService,
-    private readonly flowExecutionService: FlowExecutionService
+    private readonly flowExecutionService: FlowExecutionService,
+    private readonly sessionStorageService: SessionStorageService
   ) {}
 
   @Post(":botId/:nodeId/:url")
@@ -163,34 +165,38 @@ export class EndpointController {
       this.flowExecutionService.saveEndpointData(botId, nodeId, variables);
 
       // Находим все активные сессии, ожидающие данные от этого endpoint
-      const allSessions = this.flowExecutionService["userSessions"];
+      const waitingSessions =
+        await this.sessionStorageService.getSessionsWaitingOnNode(
+          botId,
+          nodeId
+        );
       const sessionsToProcess: string[] = [];
 
-      // Ищем сессии, остановленные на этом endpoint узле
-      for (const [sessionKey, session] of allSessions.entries()) {
-        if (session.botId === botId && session.currentNodeId === nodeId) {
-          // Обновляем переменные в сессии
-          Object.assign(session.variables, variables);
-          session.lastActivity = new Date();
-          sessionsToProcess.push(session.userId);
-          this.logger.log(
-            `Найдена сессия пользователя ${session.userId}, ожидающая данные от endpoint ${nodeId}`
-          );
-        }
+      // Обновляем переменные в найденных сессиях
+      for (const session of waitingSessions) {
+        Object.assign(session.variables, variables);
+        session.lastActivity = new Date();
+        await this.sessionStorageService.saveSession(session, true);
+        sessionsToProcess.push(session.userId);
+        this.logger.log(
+          `Найдена сессия пользователя ${session.userId}, ожидающая данные от endpoint ${nodeId}`
+        );
       }
 
       // Если передан userId, проверяем что его сессия тоже обновлена
       if (userId) {
         this.logger.log(`Найден userId: ${userId}, сохраняем в сессию`);
 
-        const sessionKey = `${botId}-${userId}`;
-        let userSession =
-          this.flowExecutionService["userSessions"].get(sessionKey);
+        let userSession = await this.sessionStorageService.getSession(
+          botId,
+          userId
+        );
 
         if (userSession) {
           // Обновляем переменные в существующей сессии (если еще не обновлена)
           Object.assign(userSession.variables, variables);
           userSession.lastActivity = new Date();
+          await this.sessionStorageService.saveSession(userSession, true);
 
           this.logger.log(
             `Переменные сохранены в сессию пользователя ${userId}`
@@ -218,10 +224,7 @@ export class EndpointController {
             lastActivity: new Date(),
           };
 
-          this.flowExecutionService["userSessions"].set(
-            sessionKey,
-            userSession
-          );
+          await this.sessionStorageService.saveSession(userSession, true);
 
           this.logger.log(
             `Создана новая сессия для пользователя ${userId}. Запуск flow с endpoint ноды...`
@@ -293,7 +296,6 @@ export class EndpointController {
 
       // Создаем временную системную сессию для выполнения flow
       const systemUserId = `system_${Date.now()}`;
-      const systemSessionKey = `${botId}-${systemUserId}`;
 
       const systemSession = {
         userId: systemUserId,
@@ -304,10 +306,7 @@ export class EndpointController {
         lastActivity: new Date(),
       };
 
-      this.flowExecutionService["userSessions"].set(
-        systemSessionKey,
-        systemSession
-      );
+      await this.sessionStorageService.saveSession(systemSession, true);
 
       this.logger.log(
         `Создана системная сессия ${systemUserId} для выполнения flow с endpoint ноды`
@@ -316,20 +315,20 @@ export class EndpointController {
       // Запускаем выполнение flow с endpoint ноды
       this.flowExecutionService
         .continueFlowFromEndpoint(botId, systemUserId, nodeId)
-        .then(() => {
+        .then(async () => {
           // После выполнения удаляем системную сессию
-          this.flowExecutionService["userSessions"].delete(systemSessionKey);
+          await this.sessionStorageService.deleteSession(botId, systemUserId);
           this.logger.log(
             `Системная сессия ${systemUserId} удалена после выполнения flow`
           );
         })
-        .catch((error) => {
+        .catch(async (error) => {
           this.logger.error(
             `Ошибка при выполнении flow в системной сессии: ${error.message}`,
             error.stack
           );
           // Удаляем системную сессию даже при ошибке
-          this.flowExecutionService["userSessions"].delete(systemSessionKey);
+          await this.sessionStorageService.deleteSession(botId, systemUserId);
         });
 
       return {
