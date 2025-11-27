@@ -404,12 +404,8 @@ export class UploadService {
             mime.lookup(relativePath) || "application/octet-stream";
           const s3Key = `${staticPath}/${relativePath}`;
 
-          await this.s3Service.uploadFile(
-            content,
-            relativePath,
-            mimeType,
-            staticPath
-          );
+          // Используем uploadFileWithPath для сохранения оригинального пути
+          await this.s3Service.uploadFileWithPath(content, s3Key, mimeType);
 
           assets.push({
             fileName: relativePath,

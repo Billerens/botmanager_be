@@ -64,6 +64,35 @@ export class S3Service {
   }
 
   /**
+   * Загружает файл в S3 с сохранением оригинального пути (для static pages)
+   */
+  async uploadFileWithPath(
+    file: Buffer,
+    s3Key: string,
+    contentType: string
+  ): Promise<string> {
+    try {
+      const command = new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: s3Key,
+        Body: file,
+        ContentType: contentType,
+        ACL: "public-read",
+      });
+
+      await this.s3Client.send(command);
+
+      const fileUrl = this.getFileUrl(s3Key);
+      this.logger.log(`File uploaded successfully: ${fileUrl}`);
+
+      return fileUrl;
+    } catch (error) {
+      this.logger.error(`Error uploading file with path: ${error.message}`);
+      throw new Error(`Failed to upload file: ${error.message}`);
+    }
+  }
+
+  /**
    * Удаляет файл из S3
    */
   async deleteFile(fileUrl: string): Promise<void> {
