@@ -62,8 +62,9 @@ export class CreateCustomPageDto {
       "HTML/Markdown контент страницы (обязателен для inline режима)",
     example: "<h1>Контакты</h1><p>Телефон: +7 (999) 123-45-67</p>",
   })
-  @ValidateIf((o) => o.pageType !== CustomPageType.STATIC)
-  @IsString()
+  @IsOptional()
+  @ValidateIf((o) => !o.pageType || o.pageType === CustomPageType.INLINE)
+  @IsString({ message: "Контент страницы должен быть строкой" })
   @MinLength(1, { message: "Контент страницы обязателен для inline режима" })
   @MaxLength(5000000, { message: "Контент страницы не должен превышать 5MB" })
   content?: string;
