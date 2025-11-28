@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, SelectQueryBuilder } from "typeorm";
+import { Repository } from "typeorm";
 import { Bot } from "../../database/entities/bot.entity";
 import {
   BotCustomData,
@@ -10,6 +10,14 @@ import { Message } from "../../database/entities/message.entity";
 import { Lead } from "../../database/entities/lead.entity";
 import { Product } from "../../database/entities/product.entity";
 import { Specialist } from "../../database/entities/specialist.entity";
+import { Category } from "../../database/entities/category.entity";
+import { Order } from "../../database/entities/order.entity";
+import { Service } from "../../database/entities/service.entity";
+import { Booking } from "../../database/entities/booking.entity";
+import { Cart } from "../../database/entities/cart.entity";
+import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
+import { TimeSlot } from "../../database/entities/time-slot.entity";
+import { CustomPage } from "../../database/entities/custom-page.entity";
 import { CustomLoggerService } from "../../common/logger.service";
 
 export interface DatabaseQueryConfig {
@@ -47,6 +55,22 @@ export class DatabaseService {
     private readonly productRepository: Repository<Product>,
     @InjectRepository(Specialist)
     private readonly specialistRepository: Repository<Specialist>,
+    @InjectRepository(Category)
+    private readonly categoryRepository: Repository<Category>,
+    @InjectRepository(Order)
+    private readonly orderRepository: Repository<Order>,
+    @InjectRepository(Service)
+    private readonly serviceRepository: Repository<Service>,
+    @InjectRepository(Booking)
+    private readonly bookingRepository: Repository<Booking>,
+    @InjectRepository(Cart)
+    private readonly cartRepository: Repository<Cart>,
+    @InjectRepository(ShopPromocode)
+    private readonly promocodeRepository: Repository<ShopPromocode>,
+    @InjectRepository(TimeSlot)
+    private readonly timeSlotRepository: Repository<TimeSlot>,
+    @InjectRepository(CustomPage)
+    private readonly customPageRepository: Repository<CustomPage>,
     private readonly logger: CustomLoggerService
   ) {}
 
@@ -86,7 +110,7 @@ export class DatabaseService {
     } = config;
 
     // Проверяем разрешения для таблиц
-    const allowedTables = {
+    const allowedTables: Record<string, Record<string, boolean>> = {
       messages: { select: true, count: true },
       leads: { select: true, insert: true, update: true, count: true },
       products: {
@@ -97,6 +121,32 @@ export class DatabaseService {
         count: true,
       },
       specialists: { select: true, insert: true, update: true, count: true },
+      categories: {
+        select: true,
+        insert: true,
+        update: true,
+        delete: true,
+        count: true,
+      },
+      orders: { select: true, insert: true, update: true, count: true },
+      services: {
+        select: true,
+        insert: true,
+        update: true,
+        delete: true,
+        count: true,
+      },
+      bookings: { select: true, insert: true, update: true, count: true },
+      carts: { select: true, update: true, count: true },
+      promocodes: {
+        select: true,
+        insert: true,
+        update: true,
+        delete: true,
+        count: true,
+      },
+      time_slots: { select: true, insert: true, update: true, count: true },
+      custom_pages: { select: true, count: true },
     };
 
     if (!allowedTables[table] || !allowedTables[table][operation]) {
@@ -106,11 +156,19 @@ export class DatabaseService {
       };
     }
 
-    const repositories = {
+    const repositories: Record<string, Repository<any>> = {
       messages: this.messageRepository,
       leads: this.leadRepository,
       products: this.productRepository,
       specialists: this.specialistRepository,
+      categories: this.categoryRepository,
+      orders: this.orderRepository,
+      services: this.serviceRepository,
+      bookings: this.bookingRepository,
+      carts: this.cartRepository,
+      promocodes: this.promocodeRepository,
+      time_slots: this.timeSlotRepository,
+      custom_pages: this.customPageRepository,
     };
 
     const repository = repositories[table];
@@ -118,11 +176,9 @@ export class DatabaseService {
       return { success: false, error: `Table ${table} not found` };
     }
 
-    let queryBuilder: SelectQueryBuilder<any>;
-
     switch (operation) {
-      case "select":
-        queryBuilder = repository
+      case "select": {
+        const selectQuery = repository
           .createQueryBuilder(table)
           .where(`${table}.botId = :botId`, { botId });
 
@@ -130,21 +186,22 @@ export class DatabaseService {
           // Простая защита от SQL инъекций - только разрешенные операторы
           const sanitizedWhere = this.sanitizeWhereClause(where);
           if (sanitizedWhere) {
-            queryBuilder.andWhere(sanitizedWhere);
+            selectQuery.andWhere(sanitizedWhere);
           }
         }
 
         if (orderBy) {
-          queryBuilder.orderBy(orderBy);
+          selectQuery.orderBy(orderBy);
         }
 
-        queryBuilder.limit(Math.min(limit, 1000)).offset(offset);
+        selectQuery.limit(Math.min(limit, 1000)).offset(offset);
 
-        const result = await queryBuilder.getMany();
+        const result = await selectQuery.getMany();
         return { success: true, data: result, count: result.length };
+      }
 
-      case "count":
-        queryBuilder = repository
+      case "count": {
+        const countQuery = repository
           .createQueryBuilder(table)
           .select(`COUNT(${table}.id)`, "count")
           .where(`${table}.botId = :botId`, { botId });
@@ -152,14 +209,15 @@ export class DatabaseService {
         if (where) {
           const sanitizedWhere = this.sanitizeWhereClause(where);
           if (sanitizedWhere) {
-            queryBuilder.andWhere(sanitizedWhere);
+            countQuery.andWhere(sanitizedWhere);
           }
         }
 
-        const countResult = await queryBuilder.getRawOne();
+        const countResult = await countQuery.getRawOne();
         return { success: true, count: parseInt(countResult.count) || 0 };
+      }
 
-      case "insert":
+      case "insert": {
         if (!data) {
           return {
             success: false,
@@ -171,8 +229,9 @@ export class DatabaseService {
         const newEntity = repository.create(insertData);
         const savedEntity = await repository.save(newEntity);
         return { success: true, data: savedEntity };
+      }
 
-      case "update":
+      case "update": {
         if (!data) {
           return {
             success: false,
@@ -180,7 +239,7 @@ export class DatabaseService {
           };
         }
 
-        queryBuilder = repository
+        const updateQuery = repository
           .createQueryBuilder(table)
           .update()
           .set(data)
@@ -189,15 +248,16 @@ export class DatabaseService {
         if (where) {
           const sanitizedWhere = this.sanitizeWhereClause(where);
           if (sanitizedWhere) {
-            queryBuilder.andWhere(sanitizedWhere);
+            updateQuery.andWhere(sanitizedWhere);
           }
         }
 
-        const updateResult = await queryBuilder.execute();
+        const updateResult = await updateQuery.execute();
         return { success: true, count: updateResult.affected };
+      }
 
-      case "delete":
-        queryBuilder = repository
+      case "delete": {
+        const deleteQuery = repository
           .createQueryBuilder(table)
           .delete()
           .where(`${table}.botId = :botId`, { botId });
@@ -205,12 +265,13 @@ export class DatabaseService {
         if (where) {
           const sanitizedWhere = this.sanitizeWhereClause(where);
           if (sanitizedWhere) {
-            queryBuilder.andWhere(sanitizedWhere);
+            deleteQuery.andWhere(sanitizedWhere);
           }
         }
 
-        const deleteResult = await queryBuilder.execute();
+        const deleteResult = await deleteQuery.execute();
         return { success: true, count: deleteResult.affected };
+      }
 
       default:
         return { success: false, error: "Unsupported operation" };
@@ -631,6 +692,103 @@ export class DatabaseService {
         "phone",
         "email",
         "isActive",
+        "createdAt",
+      ],
+      categories: [
+        "id",
+        "name",
+        "description",
+        "imageUrl",
+        "isActive",
+        "sortOrder",
+        "parentId",
+        "createdAt",
+      ],
+      orders: [
+        "id",
+        "telegramUsername",
+        "items",
+        "customerData",
+        "additionalMessage",
+        "status",
+        "totalPrice",
+        "currency",
+        "appliedPromocodeId",
+        "promocodeDiscount",
+        "createdAt",
+      ],
+      services: [
+        "id",
+        "name",
+        "description",
+        "imageUrl",
+        "price",
+        "duration",
+        "isActive",
+        "category",
+        "requirements",
+        "notes",
+        "createdAt",
+      ],
+      bookings: [
+        "id",
+        "clientName",
+        "clientPhone",
+        "clientEmail",
+        "telegramUserId",
+        "telegramUsername",
+        "notes",
+        "status",
+        "source",
+        "specialistId",
+        "serviceId",
+        "timeSlotId",
+        "createdAt",
+      ],
+      carts: [
+        "id",
+        "telegramUsername",
+        "items",
+        "appliedPromocodeId",
+        "createdAt",
+        "updatedAt",
+      ],
+      promocodes: [
+        "id",
+        "code",
+        "type",
+        "value",
+        "applicableTo",
+        "categoryId",
+        "productId",
+        "usageLimit",
+        "maxUsageCount",
+        "currentUsageCount",
+        "isActive",
+        "validFrom",
+        "validUntil",
+        "createdAt",
+      ],
+      time_slots: [
+        "id",
+        "startTime",
+        "endTime",
+        "isAvailable",
+        "isBooked",
+        "specialistId",
+        "metadata",
+        "createdAt",
+      ],
+      custom_pages: [
+        "id",
+        "title",
+        "slug",
+        "description",
+        "pageType",
+        "content",
+        "status",
+        "isWebAppOnly",
+        "botCommand",
         "createdAt",
       ],
     };

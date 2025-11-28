@@ -172,9 +172,9 @@ export class LangChainOpenRouterService {
 
     // ВАЖНО: Добавляем настройки приватности для OpenRouter
     // Это предотвращает использование данных для обучения моделей
-    modelKwargs.provider = {
-      data_collection: "deny", // Запрещаем сбор данных для обучения
-    };
+    // modelKwargs.provider = {
+    //   data_collection: "deny", // Запрещаем сбор данных для обучения
+    // };
 
     // Формируем конфигурацию
     const configuration: any = {

@@ -13,6 +13,13 @@ import { Lead } from "../../database/entities/lead.entity";
 import { Specialist } from "../../database/entities/specialist.entity";
 import { UserSession } from "../../database/entities/user-session.entity";
 import { GroupSession } from "../../database/entities/group-session.entity";
+import { Order } from "../../database/entities/order.entity";
+import { Service } from "../../database/entities/service.entity";
+import { Booking } from "../../database/entities/booking.entity";
+import { Cart } from "../../database/entities/cart.entity";
+import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
+import { TimeSlot } from "../../database/entities/time-slot.entity";
+import { CustomPage } from "../../database/entities/custom-page.entity";
 import { BotsService } from "./bots.service";
 import { BotsController } from "./bots.controller";
 import { PublicBotsController } from "./public-bots.controller";
@@ -73,6 +80,13 @@ import { GroupActionsProcessor } from "./processors/group-actions.processor";
       Specialist,
       UserSession,
       GroupSession,
+      Order,
+      Service,
+      Booking,
+      Cart,
+      ShopPromocode,
+      TimeSlot,
+      CustomPage,
     ]),
     BullModule.registerQueue({
       name: "group-actions",
