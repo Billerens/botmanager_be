@@ -3,6 +3,8 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
@@ -21,6 +23,7 @@ import {
   PublicCustomPageResponseDto,
 } from "../dto/custom-page-response.dto";
 import { UploadService } from "../../upload/upload.service";
+import { TelegramService } from "../../telegram/telegram.service";
 
 @Injectable()
 export class CustomPagesService {
@@ -29,7 +32,9 @@ export class CustomPagesService {
     private readonly customPageRepository: Repository<CustomPage>,
     @InjectRepository(Bot)
     private readonly botRepository: Repository<Bot>,
-    private readonly uploadService: UploadService
+    private readonly uploadService: UploadService,
+    @Inject(forwardRef(() => TelegramService))
+    private readonly telegramService: TelegramService
   ) {}
 
   async create(
@@ -89,6 +94,12 @@ export class CustomPagesService {
       where: { id: savedPage.id },
       relations: ["bot"],
     });
+
+    // Если указана botCommand, обновляем команды бота
+    if (createDto.botCommand) {
+      await this.updateBotCommands(botId);
+    }
+
     return this.toResponseDto(pageWithBot!);
   }
 
@@ -260,11 +271,22 @@ export class CustomPagesService {
       });
     }
 
+    // Проверяем, нужно ли обновлять команды бота
+    const needUpdateCommands =
+      updateDto.botCommand !== undefined || // botCommand изменился (включая удаление)
+      updateDto.status !== undefined || // статус изменился
+      updateDto.showInMenu !== undefined; // видимость в меню изменилась
+
     await this.customPageRepository.update(id, updateDto);
     const updatedPage = await this.customPageRepository.findOne({
       where: { id },
       relations: ["bot"],
     });
+
+    // Обновляем команды бота если изменились botCommand или status
+    if (needUpdateCommands) {
+      await this.updateBotCommands(botId);
+    }
 
     return this.toResponseDto(updatedPage!);
   }
@@ -278,6 +300,9 @@ export class CustomPagesService {
       throw new NotFoundException(`Страница с ID ${id} не найдена`);
     }
 
+    // Запоминаем, была ли у страницы команда (для обновления меню бота)
+    const hadBotCommand = !!page.botCommand;
+
     // Если это static страница с файлами, удаляем их из S3
     if (
       page.pageType === CustomPageType.STATIC &&
@@ -288,6 +313,11 @@ export class CustomPagesService {
     }
 
     await this.customPageRepository.remove(page);
+
+    // Обновляем команды бота, если удалённая страница имела команду
+    if (hadBotCommand) {
+      await this.updateBotCommands(botId);
+    }
   }
 
   private toResponseDto(page: CustomPage): CustomPageResponseDto {
@@ -305,6 +335,7 @@ export class CustomPagesService {
       status: page.status,
       isWebAppOnly: page.isWebAppOnly,
       botCommand: page.botCommand,
+      showInMenu: page.showInMenu,
       botId: page.botId,
       botUsername: page.bot?.username || "unknown",
       createdAt: page.createdAt,
@@ -330,5 +361,32 @@ export class CustomPagesService {
       url: page.url,
       isWebAppOnly: page.isWebAppOnly,
     };
+  }
+
+  /**
+   * Обновляет команды бота в Telegram после изменений в CustomPages
+   * @param botId ID бота
+   */
+  private async updateBotCommands(botId: string): Promise<void> {
+    try {
+      const bot = await this.botRepository.findOne({ where: { id: botId } });
+      if (!bot || !bot.token) {
+        console.warn(
+          `Не удалось обновить команды бота ${botId}: бот не найден или отсутствует токен`
+        );
+        return;
+      }
+
+      await this.telegramService.setBotCommands(bot.token, bot);
+      console.log(
+        `Команды бота ${botId} обновлены после изменения CustomPages`
+      );
+    } catch (error) {
+      console.error(
+        `Ошибка при обновлении команд бота ${botId}:`,
+        error.message
+      );
+      // Не бросаем ошибку, чтобы не прерывать основную операцию
+    }
   }
 }

@@ -104,6 +104,15 @@ export class CreateCustomPageDto {
   @IsString()
   @MaxLength(50, { message: "Команда не должна превышать 50 символов" })
   botCommand?: string;
+
+  @ApiPropertyOptional({
+    description: "Отображать команду в меню бота",
+    example: true,
+    default: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  showInMenu?: boolean;
 }
 
 export class UpdateCustomPageDto {
@@ -194,4 +203,12 @@ export class UpdateCustomPageDto {
   @IsString()
   @MaxLength(50, { message: "Команда не должна превышать 50 символов" })
   botCommand?: string;
+
+  @ApiPropertyOptional({
+    description: "Отображать команду в меню бота",
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  showInMenu?: boolean;
 }

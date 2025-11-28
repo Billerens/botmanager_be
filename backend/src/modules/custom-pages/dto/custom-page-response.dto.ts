@@ -99,6 +99,12 @@ export class CustomPageResponseDto {
   botCommand?: string;
 
   @ApiProperty({
+    description: "Отображать команду в меню бота",
+    example: true,
+  })
+  showInMenu: boolean;
+
+  @ApiProperty({
     description: "ID бота",
     example: "123e4567-e89b-12d3-a456-426614174000",
   })

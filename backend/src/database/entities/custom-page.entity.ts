@@ -72,6 +72,9 @@ export class CustomPage {
   @Column({ nullable: true })
   botCommand: string; // Команда в боте, например "contacts"
 
+  @Column({ default: true })
+  showInMenu: boolean; // Отображать команду в меню бота (если false - команда работает, но не видна в меню)
+
   // Связь с ботом
   @ManyToOne(() => Bot, { onDelete: "CASCADE" })
   @JoinColumn({ name: "botId" })

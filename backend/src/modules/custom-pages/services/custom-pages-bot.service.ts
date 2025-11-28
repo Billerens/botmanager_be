@@ -11,9 +11,15 @@ export class CustomPagesBotService {
    * @param command Команда после /page
    * @returns URL страницы или null если страница не найдена
    */
-  async getPageUrlByCommand(botId: string, command: string): Promise<string | null> {
+  async getPageUrlByCommand(
+    botId: string,
+    command: string
+  ): Promise<string | null> {
     try {
-      const page = await this.customPagesService.findByBotCommand(botId, command);
+      const page = await this.customPagesService.findByBotCommand(
+        botId,
+        command
+      );
       return page ? page.url : null;
     } catch (error) {
       // Если страница не найдена, возвращаем null
@@ -26,12 +32,14 @@ export class CustomPagesBotService {
    * @param botId ID бота
    * @returns Массив кнопок для inline клавиатуры
    */
-  async generatePageButtons(botId: string): Promise<Array<{ text: string; url: string }>> {
+  async generatePageButtons(
+    botId: string
+  ): Promise<Array<{ text: string; url: string }>> {
     try {
       const pages = await this.customPagesService.findAll(botId);
       return pages
-        .filter(page => page.status === 'active')
-        .map(page => ({
+        .filter((page) => page.status === "active")
+        .map((page) => ({
           text: page.title,
           url: page.url,
         }));
@@ -56,12 +64,17 @@ export class CustomPagesBotService {
    * @param botId ID бота
    * @returns Массив команд для меню бота
    */
-  async generateBotCommands(botId: string): Promise<Array<{ command: string; description: string }>> {
+  async generateBotCommands(
+    botId: string
+  ): Promise<Array<{ command: string; description: string }>> {
     try {
       const pages = await this.customPagesService.findAll(botId);
       return pages
-        .filter(page => page.status === 'active' && page.botCommand)
-        .map(page => ({
+        .filter(
+          (page) =>
+            page.status === "active" && page.botCommand && page.showInMenu
+        )
+        .map((page) => ({
           command: page.botCommand!.substring(1), // Убираем / для Telegram API
           description: `📄 ${page.title}`,
         }));
