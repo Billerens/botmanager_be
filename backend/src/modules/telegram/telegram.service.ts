@@ -379,6 +379,27 @@ export class TelegramService {
         return results.length > 0 ? results[0] : null;
       }
 
+      // Проверяем, является ли ошибка связана с парсингом HTML entities
+      if (
+        error.response?.data?.description?.includes("can't parse entities") ||
+        error.response?.data?.description?.includes("Unsupported start tag")
+      ) {
+        console.log(
+          "HTML содержит неподдерживаемые теги, отправляем как обычный текст"
+        );
+        // Отправляем без parse_mode
+        const plainOptions = { ...options };
+        delete plainOptions.parse_mode;
+
+        const results = await this.sendLongMessage(
+          token,
+          chatId,
+          text,
+          plainOptions
+        );
+        return results.length > 0 ? results[0] : null;
+      }
+
       console.error("Ошибка отправки сообщения:", {
         message: error.message,
         status: error.response?.status,
