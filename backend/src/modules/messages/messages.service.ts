@@ -1059,7 +1059,7 @@ export class MessagesService {
 
           console.log(`Reply markup:`, replyMarkup);
 
-          const result = await this.telegramService.sendMessage(
+          const results = await this.telegramService.sendLongMessage(
             decryptedToken,
             chatId,
             data.text,
@@ -1071,20 +1071,23 @@ export class MessagesService {
 
           console.log(
             `Результат отправки сообщения:`,
-            result ? "успешно" : "ошибка"
+            results.length > 0 ? `успешно (${results.length} частей)` : "ошибка"
           );
 
-          if (result) {
+          if (results.length > 0) {
             success = true;
-            console.log(`Сообщение отправлено пользователю ${chatId}`);
+            console.log(
+              `Сообщение отправлено пользователю ${chatId}${results.length > 1 ? ` (${results.length} частей)` : ""}`
+            );
 
-            // Сохраняем сообщение в БД
+            // Сохраняем сообщения в БД (сохраняем информацию о первом сообщении)
             try {
+              const firstResult = results[0];
               await this.createMessage({
                 botId,
-                telegramMessageId: result.message_id,
+                telegramMessageId: firstResult.message_id,
                 telegramChatId: chatId,
-                telegramUserId: result.from?.id?.toString() || "",
+                telegramUserId: firstResult.from?.id?.toString() || "",
                 type: MessageType.OUTGOING,
                 contentType: MessageContentType.TEXT,
                 text: data.text,

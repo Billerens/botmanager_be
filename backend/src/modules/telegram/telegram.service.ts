@@ -185,15 +185,19 @@ export class TelegramService {
 
       // Добавляем команды custom pages
       try {
-        const pageCommands = await this.customPagesBotService.generateBotCommands(bot.id);
+        const pageCommands =
+          await this.customPagesBotService.generateBotCommands(bot.id);
         commands.push(...pageCommands);
         if (pageCommands.length > 0) {
           console.log(
-            `Добавлены команды custom pages для бота ${bot.id}: ${pageCommands.map(c => `/${c.command}`).join(', ')}`
+            `Добавлены команды custom pages для бота ${bot.id}: ${pageCommands.map((c) => `/${c.command}`).join(", ")}`
           );
         }
       } catch (error) {
-        console.error(`Ошибка при добавлении команд custom pages для бота ${bot.id}:`, error.message);
+        console.error(
+          `Ошибка при добавлении команд custom pages для бота ${bot.id}:`,
+          error.message
+        );
       }
 
       const response = await axios.post(
@@ -362,6 +366,19 @@ export class TelegramService {
       console.log(`Ответ Telegram API:`, response.data);
       return response.data.ok ? response.data.result : null;
     } catch (error) {
+      // Проверяем, является ли ошибка "text is too long"
+      if (error.response?.data?.description?.includes("text is too long")) {
+        console.log("Текст слишком длинный, используем sendLongMessage");
+        // Используем sendLongMessage для автоматического разбития и возвращаем первое сообщение
+        const results = await this.sendLongMessage(
+          token,
+          chatId,
+          text,
+          options
+        );
+        return results.length > 0 ? results[0] : null;
+      }
+
       console.error("Ошибка отправки сообщения:", {
         message: error.message,
         status: error.response?.status,
@@ -372,6 +389,98 @@ export class TelegramService {
       });
       return null;
     }
+  }
+
+  /**
+   * Отправляет длинное сообщение, автоматически разбивая его на части
+   * если текст превышает лимит Telegram (4096 символов)
+   */
+  async sendLongMessage(
+    token: string,
+    chatId: string,
+    text: string,
+    options: {
+      parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
+      reply_markup?: any;
+      reply_to_message_id?: number;
+      disable_web_page_preview?: boolean;
+    } = {}
+  ): Promise<any[]> {
+    const MAX_MESSAGE_LENGTH = 4096;
+    const results: any[] = [];
+
+    if (text.length <= MAX_MESSAGE_LENGTH) {
+      // Если текст помещается в одно сообщение, отправляем обычным способом
+      const result = await this.sendMessage(token, chatId, text, options);
+      return result ? [result] : [];
+    }
+
+    // Разбиваем текст на части по границам слов
+    const parts = this.splitTextIntoParts(text, MAX_MESSAGE_LENGTH);
+
+    console.log(`Текст разбит на ${parts.length} частей для отправки`);
+
+    // Отправляем каждую часть как отдельное сообщение
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const isLastPart = i === parts.length - 1;
+
+      // Reply markup и reply_to_message_id применяем только к последнему сообщению
+      const partOptions = isLastPart
+        ? options
+        : {
+            parse_mode: options.parse_mode,
+            disable_web_page_preview: options.disable_web_page_preview,
+          };
+
+      const result = await this.sendMessage(token, chatId, part, partOptions);
+      if (result) {
+        results.push(result);
+      }
+
+      // Небольшая задержка между отправкой частей, чтобы избежать rate limiting
+      if (i < parts.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Разбивает текст на части по границам слов, не превышая максимальную длину
+   */
+  private splitTextIntoParts(text: string, maxLength: number): string[] {
+    const parts: string[] = [];
+    let currentPart = "";
+
+    // Разбиваем текст на слова
+    const words = text.split(" ");
+
+    for (const word of words) {
+      // Если добавление слова превысит лимит
+      if ((currentPart + " " + word).length > maxLength) {
+        if (currentPart.length > 0) {
+          // Сохраняем текущую часть
+          parts.push(currentPart.trim());
+          currentPart = word;
+        } else {
+          // Если даже одно слово превышает лимит, разбиваем его принудительно
+          parts.push(word.substring(0, maxLength));
+          currentPart = word.substring(maxLength);
+        }
+      } else {
+        // Добавляем слово к текущей части
+        currentPart += (currentPart.length > 0 ? " " : "") + word;
+      }
+    }
+
+    // Добавляем последнюю часть
+    if (currentPart.length > 0) {
+      parts.push(currentPart.trim());
+    }
+
+    return parts;
   }
 
   async sendPhoto(
