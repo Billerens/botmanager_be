@@ -142,7 +142,7 @@ export class CustomPagesController {
   @UseInterceptors(
     FileInterceptor("file", {
       limits: {
-        fileSize: 50 * 1024 * 1024, // 50MB максимум
+        fileSize: 70 * 1024 * 1024, // 70MB максимум
       },
       fileFilter: (_req, file, callback) => {
         if (
