@@ -244,6 +244,22 @@ export class CustomPagesService {
       }
     }
 
+    // Если тип страницы меняется с STATIC на другой тип, удаляем связанные файлы
+    if (
+      updateDto.pageType &&
+      updateDto.pageType !== CustomPageType.STATIC &&
+      page.pageType === CustomPageType.STATIC &&
+      page.assets &&
+      page.assets.length > 0
+    ) {
+      await this.uploadService.deleteCustomPageBundle(page.assets);
+      // Очищаем поля связанные с файлами в базе данных
+      await this.customPageRepository.update(id, {
+        staticPath: null,
+        assets: null,
+      });
+    }
+
     await this.customPageRepository.update(id, updateDto);
     const updatedPage = await this.customPageRepository.findOne({
       where: { id },
