@@ -72,13 +72,27 @@ export class S3Service {
     contentType: string
   ): Promise<string> {
     try {
-      const command = new PutObjectCommand({
+      const commandInput: any = {
         Bucket: this.bucket,
         Key: s3Key,
         Body: file,
         ContentType: contentType,
         ACL: "public-read",
-      });
+      };
+
+      // Для Brotli-сжатых файлов устанавливаем правильные заголовки
+      if (s3Key.endsWith(".br")) {
+        // Определяем оригинальный Content-Type без .br расширения
+        const originalContentType = this.getContentTypeForBrotliFile(s3Key);
+        commandInput.ContentType = originalContentType;
+        commandInput.ContentEncoding = "br";
+
+        this.logger.debug(
+          `Uploading Brotli file: ${s3Key}, Content-Type: ${originalContentType}, Content-Encoding: br`
+        );
+      }
+
+      const command = new PutObjectCommand(commandInput);
 
       await this.s3Client.send(command);
 
@@ -159,6 +173,45 @@ export class S3Service {
   private extractFileNameFromUrl(fileUrl: string): string {
     const url = new URL(fileUrl);
     return url.pathname.substring(1); // Убираем первый слеш
+  }
+
+  /**
+   * Определяет правильный Content-Type для Brotli-сжатого файла
+   */
+  private getContentTypeForBrotliFile(s3Key: string): string {
+    // Убираем .br расширение и определяем тип по оригинальному имени файла
+    const originalKey = s3Key.replace(/\.br$/, "");
+    const fileName = originalKey.split("/").pop() || "";
+
+    // Определяем Content-Type на основе расширения файла
+    if (fileName.endsWith(".js")) {
+      return "application/javascript";
+    } else if (fileName.endsWith(".css")) {
+      return "text/css";
+    } else if (fileName.endsWith(".html") || fileName.endsWith(".htm")) {
+      return "text/html";
+    } else if (fileName.endsWith(".json")) {
+      return "application/json";
+    } else if (fileName.endsWith(".svg")) {
+      return "image/svg+xml";
+    } else if (fileName.endsWith(".woff2")) {
+      return "font/woff2";
+    } else if (fileName.endsWith(".woff")) {
+      return "font/woff";
+    } else if (fileName.endsWith(".ttf")) {
+      return "font/ttf";
+    } else if (fileName.endsWith(".png")) {
+      return "image/png";
+    } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+      return "image/jpeg";
+    } else if (fileName.endsWith(".webp")) {
+      return "image/webp";
+    } else if (fileName.endsWith(".ico")) {
+      return "image/x-icon";
+    } else {
+      // По умолчанию используем application/octet-stream для неизвестных типов
+      return "application/octet-stream";
+    }
   }
 
   /**
