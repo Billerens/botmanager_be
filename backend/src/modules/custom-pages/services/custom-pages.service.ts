@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
+import * as crypto from "crypto";
 import {
   CustomPage,
   CustomPageStatus,
@@ -377,10 +378,17 @@ export class CustomPagesService {
         return;
       }
 
-      await this.telegramService.setBotCommands(bot.token, bot);
-      console.log(
-        `Команды бота ${botId} обновлены после изменения CustomPages`
+      const decryptedToken = this.decryptToken(bot.token);
+      const success = await this.telegramService.setBotCommands(
+        decryptedToken,
+        bot
       );
+      if (success) {
+        console.log(
+          `Команды бота ${botId} обновлены после изменения CustomPages`
+        );
+      }
+      // Если success === false, ошибка уже залогирована в telegramService
     } catch (error) {
       console.error(
         `Ошибка при обновлении команд бота ${botId}:`,
@@ -388,5 +396,25 @@ export class CustomPagesService {
       );
       // Не бросаем ошибку, чтобы не прерывать основную операцию
     }
+  }
+
+  /**
+   * Расшифровка токена бота (копия из BotsService)
+   */
+  private decryptToken(encryptedToken: string): string {
+    const algorithm = "aes-256-cbc";
+    const keyString =
+      process.env.ENCRYPTION_KEY || "your-32-character-secret-key-here";
+    const key = crypto.scryptSync(keyString, "salt", 32);
+
+    const parts = encryptedToken.split(":");
+    const iv = Buffer.from(parts[0], "hex");
+    const encrypted = parts[1];
+
+    const decipher = crypto.createDecipheriv(algorithm, key, iv);
+    let decrypted = decipher.update(encrypted, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+
+    return decrypted;
   }
 }
