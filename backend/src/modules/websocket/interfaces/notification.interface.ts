@@ -51,11 +51,22 @@ export enum NotificationType {
   SHOP_PROMOCODE_USED = "shop_promocode.used",
   SHOP_PROMOCODE_UNLINKED = "shop_promocode.unlinked",
 
+  // Категории
+  CATEGORY_CREATED = "category.created",
+  CATEGORY_UPDATED = "category.updated",
+  CATEGORY_DELETED = "category.deleted",
+
   // Аналитика
   STATS_UPDATED = "stats.updated",
+  PRODUCT_STATS_UPDATED = "product_stats.updated",
 
   // Пользователи
   USER_UPDATED = "user.updated",
+
+  // Custom Pages
+  CUSTOM_PAGE_CREATED = "custom_page.created",
+  CUSTOM_PAGE_UPDATED = "custom_page.updated",
+  CUSTOM_PAGE_DELETED = "custom_page.deleted",
 
   // Системные
   SYSTEM_NOTIFICATION = "system.notification",

@@ -25,6 +25,8 @@ import {
 } from "../dto/custom-page-response.dto";
 import { UploadService } from "../../upload/upload.service";
 import { TelegramService } from "../../telegram/telegram.service";
+import { NotificationService } from "../../websocket/services/notification.service";
+import { NotificationType } from "../../websocket/interfaces/notification.interface";
 
 @Injectable()
 export class CustomPagesService {
@@ -35,11 +37,13 @@ export class CustomPagesService {
     private readonly botRepository: Repository<Bot>,
     private readonly uploadService: UploadService,
     @Inject(forwardRef(() => TelegramService))
-    private readonly telegramService: TelegramService
+    private readonly telegramService: TelegramService,
+    private readonly notificationService: NotificationService
   ) {}
 
   async create(
     botId: string,
+    userId: string,
     createDto: CreateCustomPageDto
   ): Promise<CustomPageResponseDto> {
     // Проверяем, существует ли бот
@@ -100,6 +104,24 @@ export class CustomPagesService {
     if (createDto.botCommand) {
       await this.updateBotCommands(botId);
     }
+
+    // Отправляем уведомление о создании страницы
+    this.notificationService
+      .sendToUser(userId, NotificationType.CUSTOM_PAGE_CREATED, {
+        botId,
+        customPage: {
+          id: pageWithBot!.id,
+          slug: pageWithBot!.slug,
+          title: pageWithBot!.title,
+          status: pageWithBot!.status,
+        },
+      })
+      .catch((error) => {
+        this.logger.error(
+          "Ошибка отправки уведомления о создании custom page:",
+          error
+        );
+      });
 
     return this.toResponseDto(pageWithBot!);
   }
@@ -222,6 +244,7 @@ export class CustomPagesService {
   async update(
     botId: string,
     id: string,
+    userId: string,
     updateDto: UpdateCustomPageDto
   ): Promise<CustomPageResponseDto> {
     const page = await this.customPageRepository.findOne({
@@ -289,10 +312,28 @@ export class CustomPagesService {
       await this.updateBotCommands(botId);
     }
 
+    // Отправляем уведомление об обновлении страницы
+    this.notificationService
+      .sendToUser(userId, NotificationType.CUSTOM_PAGE_UPDATED, {
+        botId,
+        customPage: {
+          id: updatedPage!.id,
+          slug: updatedPage!.slug,
+          title: updatedPage!.title,
+          status: updatedPage!.status,
+        },
+      })
+      .catch((error) => {
+        this.logger.error(
+          "Ошибка отправки уведомления об обновлении custom page:",
+          error
+        );
+      });
+
     return this.toResponseDto(updatedPage!);
   }
 
-  async remove(botId: string, id: string): Promise<void> {
+  async remove(botId: string, id: string, userId: string): Promise<void> {
     const page = await this.customPageRepository.findOne({
       where: { id, botId },
     });
@@ -312,6 +353,23 @@ export class CustomPagesService {
     ) {
       await this.uploadService.deleteCustomPageBundle(page.assets);
     }
+
+    // Отправляем уведомление об удалении страницы
+    this.notificationService
+      .sendToUser(userId, NotificationType.CUSTOM_PAGE_DELETED, {
+        botId,
+        customPage: {
+          id: page.id,
+          slug: page.slug,
+          title: page.title,
+        },
+      })
+      .catch((error) => {
+        this.logger.error(
+          "Ошибка отправки уведомления об удалении custom page:",
+          error
+        );
+      });
 
     await this.customPageRepository.remove(page);
 

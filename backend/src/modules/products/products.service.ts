@@ -78,17 +78,34 @@ export class ProductsService {
     const savedProduct = await this.productRepository.save(product);
 
     // Отправляем уведомление о создании продукта
-    this.notificationService.sendToUser(userId, NotificationType.PRODUCT_CREATED, {
-      botId,
-      product: {
-        id: savedProduct.id,
-        name: savedProduct.name,
-        price: savedProduct.price,
-        stockQuantity: savedProduct.stockQuantity,
-      },
-    }).catch((error) => {
-      this.logger.error("Ошибка отправки уведомления о создании продукта:", error);
-    });
+    this.notificationService
+      .sendToUser(userId, NotificationType.PRODUCT_CREATED, {
+        botId,
+        product: {
+          id: savedProduct.id,
+          name: savedProduct.name,
+          price: savedProduct.price,
+          stockQuantity: savedProduct.stockQuantity,
+        },
+      })
+      .catch((error) => {
+        this.logger.error(
+          "Ошибка отправки уведомления о создании продукта:",
+          error
+        );
+      });
+
+    // Отправляем уведомление об обновлении статистики продуктов
+    this.notificationService
+      .sendToUser(userId, NotificationType.PRODUCT_STATS_UPDATED, {
+        botId,
+      })
+      .catch((error) => {
+        this.logger.error(
+          "Ошибка отправки уведомления об обновлении статистики продуктов:",
+          error
+        );
+      });
 
     // Логируем создание продукта
     this.activityLogService
@@ -246,18 +263,35 @@ export class ProductsService {
     const updatedProduct = await this.productRepository.save(product);
 
     // Отправляем уведомление об обновлении продукта
-    this.notificationService.sendToUser(userId, NotificationType.PRODUCT_UPDATED, {
-      botId,
-      product: {
-        id: updatedProduct.id,
-        name: updatedProduct.name,
-        price: updatedProduct.price,
-        stockQuantity: updatedProduct.stockQuantity,
-      },
-      changes: updateProductDto,
-    }).catch((error) => {
-      this.logger.error("Ошибка отправки уведомления об обновлении продукта:", error);
-    });
+    this.notificationService
+      .sendToUser(userId, NotificationType.PRODUCT_UPDATED, {
+        botId,
+        product: {
+          id: updatedProduct.id,
+          name: updatedProduct.name,
+          price: updatedProduct.price,
+          stockQuantity: updatedProduct.stockQuantity,
+        },
+        changes: updateProductDto,
+      })
+      .catch((error) => {
+        this.logger.error(
+          "Ошибка отправки уведомления об обновлении продукта:",
+          error
+        );
+      });
+
+    // Отправляем уведомление об обновлении статистики продуктов
+    this.notificationService
+      .sendToUser(userId, NotificationType.PRODUCT_STATS_UPDATED, {
+        botId,
+      })
+      .catch((error) => {
+        this.logger.error(
+          "Ошибка отправки уведомления об обновлении статистики продуктов:",
+          error
+        );
+      });
 
     // Логируем обновление продукта
     this.activityLogService
@@ -303,12 +337,29 @@ export class ProductsService {
     await this.productRepository.remove(product);
 
     // Отправляем уведомление об удалении продукта
-    this.notificationService.sendToUser(userId, NotificationType.PRODUCT_DELETED, {
-      botId,
-      product: productData,
-    }).catch((error) => {
-      this.logger.error("Ошибка отправки уведомления об удалении продукта:", error);
-    });
+    this.notificationService
+      .sendToUser(userId, NotificationType.PRODUCT_DELETED, {
+        botId,
+        product: productData,
+      })
+      .catch((error) => {
+        this.logger.error(
+          "Ошибка отправки уведомления об удалении продукта:",
+          error
+        );
+      });
+
+    // Отправляем уведомление об обновлении статистики продуктов
+    this.notificationService
+      .sendToUser(userId, NotificationType.PRODUCT_STATS_UPDATED, {
+        botId,
+      })
+      .catch((error) => {
+        this.logger.error(
+          "Ошибка отправки уведомления об обновлении статистики продуктов:",
+          error
+        );
+      });
 
     // Логируем удаление продукта
     this.activityLogService
@@ -376,22 +427,26 @@ export class ProductsService {
 
     // Проверяем, стал ли запас низким (меньше 5 единиц)
     const lowStockThreshold = 5;
-    if (updatedProduct.stockQuantity <= lowStockThreshold && oldStock > lowStockThreshold) {
+    if (
+      updatedProduct.stockQuantity <= lowStockThreshold &&
+      oldStock > lowStockThreshold
+    ) {
       // Отправляем уведомление о низком запасе
-      this.notificationService.sendToUser(
-        userId,
-        NotificationType.PRODUCT_STOCK_LOW,
-        {
+      this.notificationService
+        .sendToUser(userId, NotificationType.PRODUCT_STOCK_LOW, {
           botId,
           product: {
             id: updatedProduct.id,
             name: updatedProduct.name,
             stockQuantity: updatedProduct.stockQuantity,
           },
-        }
-      ).catch((error) => {
-        this.logger.error("Ошибка отправки уведомления о низком запасе:", error);
-      });
+        })
+        .catch((error) => {
+          this.logger.error(
+            "Ошибка отправки уведомления о низком запасе:",
+            error
+          );
+        });
     }
 
     // Логируем изменение стока

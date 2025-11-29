@@ -10,6 +10,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Request,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import {
@@ -55,9 +56,14 @@ export class CustomPagesController {
   })
   async create(
     @Param("botId") botId: string,
+    @Request() req: any,
     @Body() createCustomPageDto: CreateCustomPageDto
   ): Promise<CustomPageResponseDto> {
-    return this.customPagesService.create(botId, createCustomPageDto);
+    return this.customPagesService.create(
+      botId,
+      req.user.id,
+      createCustomPageDto
+    );
   }
 
   @Get()
@@ -116,9 +122,15 @@ export class CustomPagesController {
   async update(
     @Param("botId") botId: string,
     @Param("id") id: string,
+    @Request() req: any,
     @Body() updateCustomPageDto: UpdateCustomPageDto
   ): Promise<CustomPageResponseDto> {
-    return this.customPagesService.update(botId, id, updateCustomPageDto);
+    return this.customPagesService.update(
+      botId,
+      id,
+      req.user.id,
+      updateCustomPageDto
+    );
   }
 
   @Delete(":id")
@@ -133,9 +145,10 @@ export class CustomPagesController {
   })
   async remove(
     @Param("botId") botId: string,
-    @Param("id") id: string
+    @Param("id") id: string,
+    @Request() req: any
   ): Promise<void> {
-    return this.customPagesService.remove(botId, id);
+    return this.customPagesService.remove(botId, id, req.user.id);
   }
 
   @Post(":id/upload-bundle")

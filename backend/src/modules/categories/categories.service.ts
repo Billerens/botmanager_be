@@ -19,6 +19,8 @@ import {
   ActivityType,
   ActivityLevel,
 } from "../../database/entities/activity-log.entity";
+import { NotificationService } from "../websocket/services/notification.service";
+import { NotificationType } from "../websocket/interfaces/notification.interface";
 
 @Injectable()
 export class CategoriesService {
@@ -31,7 +33,8 @@ export class CategoriesService {
     private readonly botRepository: Repository<Bot>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
-    private readonly activityLogService: ActivityLogService
+    private readonly activityLogService: ActivityLogService,
+    private readonly notificationService: NotificationService
   ) {}
 
   async create(
@@ -66,6 +69,17 @@ export class CategoriesService {
     });
 
     const savedCategory = await this.categoryRepository.save(category);
+
+    // Отправляем уведомление о создании категории
+    this.notificationService.sendToUser(userId, NotificationType.CATEGORY_CREATED, {
+      botId,
+      category: {
+        id: savedCategory.id,
+        name: savedCategory.name,
+      },
+    }).catch((error) => {
+      this.logger.error("Ошибка отправки уведомления о создании категории:", error);
+    });
 
     // Логируем создание категории
     this.activityLogService
@@ -196,6 +210,17 @@ export class CategoriesService {
     Object.assign(category, updateCategoryDto);
     const updatedCategory = await this.categoryRepository.save(category);
 
+    // Отправляем уведомление об обновлении категории
+    this.notificationService.sendToUser(userId, NotificationType.CATEGORY_UPDATED, {
+      botId,
+      category: {
+        id: updatedCategory.id,
+        name: updatedCategory.name,
+      },
+    }).catch((error) => {
+      this.logger.error("Ошибка отправки уведомления об обновлении категории:", error);
+    });
+
     // Логируем обновление категории
     this.activityLogService
       .create({
@@ -248,6 +273,17 @@ export class CategoriesService {
     };
 
     await this.categoryRepository.remove(category);
+
+    // Отправляем уведомление об удалении категории
+    this.notificationService.sendToUser(userId, NotificationType.CATEGORY_DELETED, {
+      botId,
+      category: {
+        id: categoryData.id,
+        name: categoryData.name,
+      },
+    }).catch((error) => {
+      this.logger.error("Ошибка отправки уведомления об удалении категории:", error);
+    });
 
     // Логируем удаление категории
     this.activityLogService

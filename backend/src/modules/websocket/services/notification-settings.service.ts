@@ -166,15 +166,45 @@ export class NotificationSettingsService {
         type: NotificationType.SHOP_PROMOCODE_UNLINKED,
         defaultEnabled: true,
       },
+      // Категории
+      {
+        type: NotificationType.CATEGORY_CREATED,
+        defaultEnabled: true,
+      },
+      {
+        type: NotificationType.CATEGORY_UPDATED,
+        defaultEnabled: true,
+      },
+      {
+        type: NotificationType.CATEGORY_DELETED,
+        defaultEnabled: true,
+      },
       // Аналитика
       {
         type: NotificationType.STATS_UPDATED,
+        defaultEnabled: false,
+      },
+      {
+        type: NotificationType.PRODUCT_STATS_UPDATED,
         defaultEnabled: false,
       },
       // Пользователи
       {
         type: NotificationType.USER_UPDATED,
         defaultEnabled: false,
+      },
+      // Custom Pages
+      {
+        type: NotificationType.CUSTOM_PAGE_CREATED,
+        defaultEnabled: true,
+      },
+      {
+        type: NotificationType.CUSTOM_PAGE_UPDATED,
+        defaultEnabled: true,
+      },
+      {
+        type: NotificationType.CUSTOM_PAGE_DELETED,
+        defaultEnabled: true,
       },
       // Системные
       {
