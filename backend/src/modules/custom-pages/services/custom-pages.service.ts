@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Logger,
   Inject,
   forwardRef,
 } from "@nestjs/common";
@@ -30,6 +31,8 @@ import { NotificationType } from "../../websocket/interfaces/notification.interf
 
 @Injectable()
 export class CustomPagesService {
+  private readonly logger = new Logger(CustomPagesService.name);
+
   constructor(
     @InjectRepository(CustomPage)
     private readonly customPageRepository: Repository<CustomPage>,
