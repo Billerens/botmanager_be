@@ -351,9 +351,10 @@ export class TelegramService {
     try {
       // Очищаем HTML если используется HTML parse_mode
       let processedText = text;
-      if (options.parse_mode === "HTML") {
-        processedText = this.sanitizeHtmlForTelegram(text);
-      }
+
+      // if (options.parse_mode === "HTML") {
+      //   processedText = this.sanitizeHtmlForTelegram(text);
+      // }
 
       const url = `${this.baseUrl}${token}/sendMessage`;
       console.log(`Отправляем сообщение на URL: ${url}`);
@@ -435,9 +436,10 @@ export class TelegramService {
   ): Promise<any[]> {
     // Очищаем HTML если используется HTML parse_mode
     let processedText = text;
-    if (options.parse_mode === "HTML") {
-      processedText = this.sanitizeHtmlForTelegram(text);
-    }
+
+    // if (options.parse_mode === "HTML") {
+    //   processedText = this.sanitizeHtmlForTelegram(text);
+    // }
 
     const MAX_MESSAGE_LENGTH = 4096;
     const results: any[] = [];
@@ -509,9 +511,6 @@ export class TelegramService {
       /<\/?(?!\/?(b|i|u|s|a|code|pre)\b)[^>]*>/gi,
       ""
     );
-
-    // Очищаем множественные пустые строки
-    sanitized = sanitized.replace(/\n\s*\n/g, "\n");
 
     // Удаляем лишние пробелы в начале и конце
     sanitized = sanitized.trim();
