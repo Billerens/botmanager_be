@@ -131,6 +131,7 @@ export class TransformNodeHandler extends BaseNodeHandler {
       bot: {
         id: bot.id,
         name: bot.name,
+        username: bot.username,
       },
       // Информация о текущем узле
       node: {

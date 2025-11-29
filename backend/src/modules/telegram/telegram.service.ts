@@ -349,17 +349,23 @@ export class TelegramService {
     } = {}
   ): Promise<any> {
     try {
+      // Очищаем HTML если используется HTML parse_mode
+      let processedText = text;
+      if (options.parse_mode === "HTML") {
+        processedText = this.sanitizeHtmlForTelegram(text);
+      }
+
       const url = `${this.baseUrl}${token}/sendMessage`;
       console.log(`Отправляем сообщение на URL: ${url}`);
       console.log(`Данные:`, {
         chat_id: chatId,
-        text: text.substring(0, 50) + "...",
+        text: processedText.substring(0, 50) + "...",
         ...options,
       });
 
       const response = await axios.post(url, {
         chat_id: chatId,
-        text,
+        text: processedText,
         ...options,
       });
 
@@ -427,17 +433,28 @@ export class TelegramService {
       disable_web_page_preview?: boolean;
     } = {}
   ): Promise<any[]> {
+    // Очищаем HTML если используется HTML parse_mode
+    let processedText = text;
+    if (options.parse_mode === "HTML") {
+      processedText = this.sanitizeHtmlForTelegram(text);
+    }
+
     const MAX_MESSAGE_LENGTH = 4096;
     const results: any[] = [];
 
-    if (text.length <= MAX_MESSAGE_LENGTH) {
+    if (processedText.length <= MAX_MESSAGE_LENGTH) {
       // Если текст помещается в одно сообщение, отправляем обычным способом
-      const result = await this.sendMessage(token, chatId, text, options);
+      const result = await this.sendMessage(
+        token,
+        chatId,
+        processedText,
+        options
+      );
       return result ? [result] : [];
     }
 
     // Разбиваем текст на части по границам слов
-    const parts = this.splitTextIntoParts(text, MAX_MESSAGE_LENGTH);
+    const parts = this.splitTextIntoParts(processedText, MAX_MESSAGE_LENGTH);
 
     console.log(`Текст разбит на ${parts.length} частей для отправки`);
 
@@ -466,6 +483,40 @@ export class TelegramService {
     }
 
     return results;
+  }
+
+  /**
+   * Очищает HTML текст, оставляя только теги, поддерживаемые Telegram Bot API
+   * Поддерживаемые теги: b, i, u, s, a, code, pre
+   */
+  sanitizeHtmlForTelegram(html: string): string {
+    if (!html) return html;
+
+    // Удаляем DOCTYPE и другие неподдерживаемые конструкции
+    let sanitized = html.replace(/<!DOCTYPE[^>]*>/gi, "");
+    sanitized = sanitized.replace(/<html[^>]*>/gi, "");
+    sanitized = sanitized.replace(/<\/html>/gi, "");
+    sanitized = sanitized.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "");
+    sanitized = sanitized.replace(/<body[^>]*>/gi, "");
+    sanitized = sanitized.replace(/<\/body>/gi, "");
+    sanitized = sanitized.replace(/<meta[^>]*>/gi, "");
+    sanitized = sanitized.replace(/<link[^>]*>/gi, "");
+    sanitized = sanitized.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+    sanitized = sanitized.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+
+    // Удаляем все неподдерживаемые теги, но сохраняем их содержимое
+    sanitized = sanitized.replace(
+      /<\/?(?!\/?(b|i|u|s|a|code|pre)\b)[^>]*>/gi,
+      ""
+    );
+
+    // Очищаем множественные пустые строки
+    sanitized = sanitized.replace(/\n\s*\n/g, "\n");
+
+    // Удаляем лишние пробелы в начале и конце
+    sanitized = sanitized.trim();
+
+    return sanitized;
   }
 
   /**
