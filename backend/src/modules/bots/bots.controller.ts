@@ -409,10 +409,6 @@ export class BotsController {
     @Body() dto: UpdateBotUserPermissionsDto,
     @Request() req
   ) {
-    console.log(`Updating permissions for user ${userId} on bot ${botId}`);
-    console.log(`New permissions:`, JSON.stringify(dto.permissions, null, 2));
-    console.log(`Granted by user: ${req.user.id}`);
-
     await this.botPermissionsService.setBulkPermissions(
       botId,
       userId,
@@ -433,9 +429,7 @@ export class BotsController {
     @Param("id") botId: string,
     @Param("userId") userId: string
   ) {
-    console.log(`Removing user ${userId} from bot ${botId}`);
     await this.botPermissionsService.removeUserFromBot(botId, userId);
-    console.log(`User ${userId} successfully removed from bot ${botId}`);
     return { message: "Пользователь удален из бота" };
   }
 

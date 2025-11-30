@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  Logger,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
@@ -17,8 +16,6 @@ import { User } from "../../database/entities/user.entity";
 
 @Injectable()
 export class BotPermissionsService {
-  private readonly logger = new Logger(BotPermissionsService.name);
-
   constructor(
     @InjectRepository(BotUser)
     private botUserRepository: Repository<BotUser>,
@@ -190,32 +187,10 @@ export class BotPermissionsService {
     permissions: Record<BotEntity, PermissionAction[]>,
     grantedByUserId: string
   ): Promise<void> {
-    this.logger.log(
-      `setBulkPermissions called with botId: ${botId}, userId: ${userId}, grantedByUserId: ${grantedByUserId}`
-    );
-
     // Проверяем, что бот существует
     const bot = await this.botRepository.findOne({ where: { id: botId } });
     if (!bot) {
       throw new NotFoundException("Бот не найден");
-    }
-
-    // Проверяем, что целевой пользователь существует
-    const targetUser = await this.userRepository.findOne({
-      where: { id: userId },
-    });
-    if (!targetUser) {
-      throw new NotFoundException("Целевой пользователь не найден");
-    }
-
-    // Проверяем, что пользователь, устанавливающий разрешения, существует
-    const grantedByUser = await this.userRepository.findOne({
-      where: { id: grantedByUserId },
-    });
-    if (!grantedByUser) {
-      throw new NotFoundException(
-        "Пользователь, устанавливающий разрешения, не найден"
-      );
     }
 
     // Проверяем права устанавливающего пользователя
@@ -253,66 +228,31 @@ export class BotPermissionsService {
 
         let permission = existingMap.get(key);
         if (!permission) {
-          if (shouldGrant) {
-            // Создаем только если разрешение должно быть предоставлено
-            this.logger.log(
-              `Creating new permission: ${entity}.${action} = ${shouldGrant}`
-            );
-            permission = this.botUserPermissionRepository.create({
-              botId,
-              userId,
-              entity: entity as BotEntity,
-              action,
-              granted: shouldGrant,
-              grantedByUserId,
-            });
-            toSave.push(permission);
-          }
+          permission = this.botUserPermissionRepository.create({
+            botId,
+            userId,
+            entity: entity as BotEntity,
+            action,
+            granted: shouldGrant,
+            grantedByUserId,
+          });
         } else {
-          if (permission.granted !== shouldGrant) {
-            this.logger.log(
-              `Updating permission: ${entity}.${action} from ${permission.granted} to ${shouldGrant}`
-            );
-            permission.granted = shouldGrant;
-            permission.grantedByUserId = grantedByUserId;
-            toSave.push(permission);
-          }
-          existingMap.delete(key); // Удаляем из map, чтобы знать что обработали
+          permission.granted = shouldGrant;
+          permission.grantedByUserId = grantedByUserId;
         }
+
+        toSave.push(permission);
+        existingMap.delete(key); // Удаляем из map, чтобы знать что обработали
       });
     });
 
     // Сохраняем изменения
-    this.logger.log(`Saving ${toSave.length} permission records`);
     await this.botUserPermissionRepository.save(toSave);
 
     // Удаляем неиспользуемые разрешения (которые были сняты)
     if (existingMap.size > 0) {
       const toDelete = Array.from(existingMap.values());
-      this.logger.log(`Removing ${toDelete.length} permission records`);
       await this.botUserPermissionRepository.remove(toDelete);
-    }
-
-    // Проверяем, было ли снято разрешение на управление пользователями
-    const hasUserManagementPermission =
-      permissions[BotEntity.BOT_USERS]?.includes(PermissionAction.UPDATE) ??
-      false;
-    const hadUserManagementPermission = existingPermissions.some(
-      (p) =>
-        p.entity === BotEntity.BOT_USERS &&
-        p.action === PermissionAction.UPDATE &&
-        p.granted
-    );
-
-    // Если разрешение на управление пользователями было снято, удаляем все разрешения, установленные этим пользователем
-    if (hadUserManagementPermission && !hasUserManagementPermission) {
-      this.logger.log(
-        `Removing all permissions granted by user ${userId} on bot ${botId}`
-      );
-      await this.botUserPermissionRepository.delete({
-        botId,
-        grantedByUserId: userId,
-      });
     }
 
     // Обновляем кэшированные разрешения в BotUser
@@ -363,8 +303,6 @@ export class BotPermissionsService {
    * Удаляет пользователя из бота
    */
   async removeUserFromBot(botId: string, userId: string): Promise<void> {
-    this.logger.log(`Removing user ${userId} from bot ${botId}`);
-
     // Проверяем, что бот существует
     const bot = await this.botRepository.findOne({ where: { id: botId } });
     if (!bot) {
@@ -377,22 +315,10 @@ export class BotPermissionsService {
     }
 
     // Удаляем пользователя
-    const botUserDeleted = await this.botUserRepository.delete({
-      botId,
-      userId,
-    });
-    this.logger.log(`Deleted ${botUserDeleted.affected} bot user records`);
+    await this.botUserRepository.delete({ botId, userId });
 
     // Удаляем все его разрешения
-    const permissionsDeleted = await this.botUserPermissionRepository.delete({
-      botId,
-      userId,
-    });
-    this.logger.log(
-      `Deleted ${permissionsDeleted.affected} permission records`
-    );
-
-    this.logger.log(`User ${userId} successfully removed from bot ${botId}`);
+    await this.botUserPermissionRepository.delete({ botId, userId });
   }
 
   /**
