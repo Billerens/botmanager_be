@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { Lead } from "../../database/entities/lead.entity";
@@ -12,7 +12,7 @@ import { BotsModule } from "../bots/bots.module";
   imports: [
     TypeOrmModule.forFeature([Lead, Bot]),
     ActivityLogModule,
-    BotsModule,
+    forwardRef(() => BotsModule),
   ],
   providers: [LeadsService],
   controllers: [LeadsController],
