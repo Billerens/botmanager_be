@@ -1,11 +1,21 @@
-import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, LessThan } from "typeorm";
-import { BotInvitation, BotInvitationStatus } from "../../database/entities/bot-invitation.entity";
+import {
+  BotInvitation,
+  BotInvitationStatus,
+} from "../../database/entities/bot-invitation.entity";
 import { BotUser } from "../../database/entities/bot-user.entity";
 import { User } from "../../database/entities/user.entity";
 import { Bot } from "../../database/entities/bot.entity";
-import { PermissionAction, BotEntity } from "../../database/entities/bot-user-permission.entity";
+import {
+  PermissionAction,
+  BotEntity,
+} from "../../database/entities/bot-user-permission.entity";
 import { BotPermissionsService } from "./bot-permissions.service";
 import { BotNotificationsService } from "./bot-notifications.service";
 import { v4 as uuidv4 } from "uuid";
@@ -22,7 +32,7 @@ export class BotInvitationsService {
     @InjectRepository(Bot)
     private botRepository: Repository<Bot>,
     private botPermissionsService: BotPermissionsService,
-    private botNotificationsService: BotNotificationsService,
+    private botNotificationsService: BotNotificationsService
   ) {}
 
   /**
@@ -33,7 +43,7 @@ export class BotInvitationsService {
     invitedTelegramId: string,
     permissions: Record<BotEntity, PermissionAction[]>,
     invitedByUserId: string,
-    message?: string,
+    message?: string
   ): Promise<BotInvitation> {
     // Проверяем, что бот существует и приглашающий имеет права
     const bot = await this.botRepository.findOne({ where: { id: botId } });
@@ -46,10 +56,12 @@ export class BotInvitationsService {
       invitedByUserId,
       botId,
       BotEntity.BOT_USERS,
-      PermissionAction.CREATE,
+      PermissionAction.CREATE
     );
     if (invitedByUserId !== bot.ownerId && !canInvite) {
-      throw new BadRequestException("Недостаточно прав для приглашения пользователей");
+      throw new BadRequestException(
+        "Недостаточно прав для приглашения пользователей"
+      );
     }
 
     // Проверяем, не приглашен ли уже этот пользователь
@@ -90,8 +102,21 @@ export class BotInvitationsService {
 
     const savedInvitation = await this.botInvitationRepository.save(invitation);
 
+    // Загружаем приглашение с отношениями для отправки уведомления
+    const invitationWithRelations = await this.botInvitationRepository.findOne({
+      where: { id: savedInvitation.id },
+      relations: ["bot", "invitedByUser"],
+    });
+
+    if (!invitationWithRelations) {
+      throw new Error("Не удалось загрузить созданное приглашение");
+    }
+
     // Отправляем уведомление в Telegram
-    await this.botNotificationsService.sendInvitationNotification(savedInvitation, message);
+    await this.botNotificationsService.sendInvitationNotification(
+      invitationWithRelations,
+      message
+    );
 
     return savedInvitation;
   }
@@ -103,7 +128,7 @@ export class BotInvitationsService {
     // Находим приглашение
     const invitation = await this.botInvitationRepository.findOne({
       where: { invitationToken: token },
-      relations: ['bot'],
+      relations: ["bot", "invitedByUser"],
     });
     if (!invitation) {
       throw new NotFoundException("Приглашение не найдено");
@@ -128,7 +153,9 @@ export class BotInvitationsService {
     }
 
     if (invitation.invitedTelegramId !== user.telegramId) {
-      throw new BadRequestException("Приглашение не предназначено для этого пользователя");
+      throw new BadRequestException(
+        "Приглашение не предназначено для этого пользователя"
+      );
     }
 
     // Добавляем пользователя к боту
@@ -136,7 +163,7 @@ export class BotInvitationsService {
       invitation.botId,
       userId,
       undefined,
-      invitation.permissions,
+      invitation.permissions
     );
 
     // Устанавливаем разрешения
@@ -144,7 +171,7 @@ export class BotInvitationsService {
       invitation.botId,
       userId,
       invitation.permissions,
-      invitation.invitedByUserId,
+      invitation.invitedByUserId
     );
 
     // Обновляем статус приглашения
@@ -152,7 +179,9 @@ export class BotInvitationsService {
     await this.botInvitationRepository.save(invitation);
 
     // Отправляем уведомление пригласившему пользователю
-    await this.botNotificationsService.sendInvitationAcceptedNotification(invitation);
+    await this.botNotificationsService.sendInvitationAcceptedNotification(
+      invitation
+    );
   }
 
   /**
@@ -161,6 +190,7 @@ export class BotInvitationsService {
   async declineInvitation(token: string, userId: string): Promise<void> {
     const invitation = await this.botInvitationRepository.findOne({
       where: { invitationToken: token },
+      relations: ["bot", "invitedByUser"],
     });
     if (!invitation) {
       throw new NotFoundException("Приглашение не найдено");
@@ -169,37 +199,46 @@ export class BotInvitationsService {
     // Проверяем, что пользователь соответствует приглашению
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user || invitation.invitedTelegramId !== user.telegramId) {
-      throw new BadRequestException("Приглашение не предназначено для этого пользователя");
+      throw new BadRequestException(
+        "Приглашение не предназначено для этого пользователя"
+      );
     }
 
     invitation.status = BotInvitationStatus.DECLINED;
     await this.botInvitationRepository.save(invitation);
 
     // Отправляем уведомление пригласившему пользователю
-    await this.botNotificationsService.sendInvitationDeclinedNotification(invitation);
+    await this.botNotificationsService.sendInvitationDeclinedNotification(
+      invitation
+    );
   }
 
   /**
    * Получает приглашения для бота
    */
-  async getBotInvitations(botId: string, invitedByUserId: string): Promise<BotInvitation[]> {
+  async getBotInvitations(
+    botId: string,
+    invitedByUserId: string
+  ): Promise<BotInvitation[]> {
     // Проверяем права
     const canView = await this.botPermissionsService.hasPermission(
       invitedByUserId,
       botId,
       BotEntity.BOT_USERS,
-      PermissionAction.READ,
+      PermissionAction.READ
     );
 
     const bot = await this.botRepository.findOne({ where: { id: botId } });
     if (invitedByUserId !== bot?.ownerId && !canView) {
-      throw new BadRequestException("Недостаточно прав для просмотра приглашений");
+      throw new BadRequestException(
+        "Недостаточно прав для просмотра приглашений"
+      );
     }
 
     return await this.botInvitationRepository.find({
       where: { botId },
-      relations: ['bot', 'invitedByUser', 'invitedUser'],
-      order: { createdAt: 'DESC' },
+      relations: ["bot", "invitedByUser", "invitedUser"],
+      order: { createdAt: "DESC" },
     });
   }
 
@@ -214,15 +253,19 @@ export class BotInvitationsService {
 
     return await this.botInvitationRepository.find({
       where: { invitedTelegramId: user.telegramId },
-      relations: ['bot', 'invitedByUser'],
-      order: { createdAt: 'DESC' },
+      relations: ["bot", "invitedByUser"],
+      order: { createdAt: "DESC" },
     });
   }
 
   /**
    * Отменяет приглашение
    */
-  async cancelInvitation(botId: string, invitationId: string, cancelledByUserId: string): Promise<void> {
+  async cancelInvitation(
+    botId: string,
+    invitationId: string,
+    cancelledByUserId: string
+  ): Promise<void> {
     const invitation = await this.botInvitationRepository.findOne({
       where: { id: invitationId, botId },
     });
@@ -235,7 +278,7 @@ export class BotInvitationsService {
       cancelledByUserId,
       botId,
       BotEntity.BOT_USERS,
-      PermissionAction.DELETE,
+      PermissionAction.DELETE
     );
 
     const bot = await this.botRepository.findOne({ where: { id: botId } });
@@ -255,7 +298,7 @@ export class BotInvitationsService {
         status: BotInvitationStatus.PENDING,
         expiresAt: LessThan(new Date()),
       },
-      { status: BotInvitationStatus.EXPIRED },
+      { status: BotInvitationStatus.EXPIRED }
     );
   }
 }
