@@ -1,8 +1,16 @@
-import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { BotUser } from "../../database/entities/bot-user.entity";
-import { BotUserPermission, PermissionAction, BotEntity } from "../../database/entities/bot-user-permission.entity";
+import {
+  BotUserPermission,
+  PermissionAction,
+  BotEntity,
+} from "../../database/entities/bot-user-permission.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import { User } from "../../database/entities/user.entity";
 
@@ -16,7 +24,7 @@ export class BotPermissionsService {
     @InjectRepository(Bot)
     private botRepository: Repository<Bot>,
     @InjectRepository(User)
-    private userRepository: Repository<User>,
+    private userRepository: Repository<User>
   ) {}
 
   /**
@@ -43,7 +51,7 @@ export class BotPermissionsService {
     userId: string,
     botId: string,
     entity: BotEntity,
-    action: PermissionAction,
+    action: PermissionAction
   ): Promise<boolean> {
     // Владелец всегда имеет полный доступ
     const bot = await this.botRepository.findOne({
@@ -64,7 +72,7 @@ export class BotPermissionsService {
    */
   async getUserPermissions(
     userId: string,
-    botId: string,
+    botId: string
   ): Promise<Record<BotEntity, PermissionAction[]>> {
     // Владелец всегда имеет полный доступ
     const bot = await this.botRepository.findOne({
@@ -74,10 +82,13 @@ export class BotPermissionsService {
       // Возвращаем все возможные разрешения для владельца
       const allEntities = Object.values(BotEntity);
       const allActions = Object.values(PermissionAction);
-      return allEntities.reduce((acc, entity) => {
-        acc[entity] = [...allActions];
-        return acc;
-      }, {} as Record<BotEntity, PermissionAction[]>);
+      return allEntities.reduce(
+        (acc, entity) => {
+          acc[entity] = [...allActions];
+          return acc;
+        },
+        {} as Record<BotEntity, PermissionAction[]>
+      );
     }
 
     // Получаем детальные разрешения из базы
@@ -86,15 +97,18 @@ export class BotPermissionsService {
     });
 
     // Группируем по сущностям
-    const result: Record<BotEntity, PermissionAction[]> = {} as Record<BotEntity, PermissionAction[]>;
+    const result: Record<BotEntity, PermissionAction[]> = {} as Record<
+      BotEntity,
+      PermissionAction[]
+    >;
 
     // Инициализируем пустые массивы
-    Object.values(BotEntity).forEach(entity => {
+    Object.values(BotEntity).forEach((entity) => {
       result[entity] = [];
     });
 
     // Заполняем разрешенными действиями
-    permissions.forEach(permission => {
+    permissions.forEach((permission) => {
       if (!result[permission.entity]) {
         result[permission.entity] = [];
       }
@@ -113,7 +127,7 @@ export class BotPermissionsService {
     entity: BotEntity,
     action: PermissionAction,
     granted: boolean,
-    grantedByUserId: string,
+    grantedByUserId: string
   ): Promise<void> {
     // Проверяем, что бот существует
     const bot = await this.botRepository.findOne({ where: { id: botId } });
@@ -121,15 +135,25 @@ export class BotPermissionsService {
       throw new NotFoundException("Бот не найден");
     }
 
+    // Проверяем, что пользователь добавлен к боту
+    const botUser = await this.botUserRepository.findOne({
+      where: { botId, userId },
+    });
+    if (!botUser) {
+      throw new NotFoundException("Пользователь не добавлен к этому боту");
+    }
+
     // Проверяем, что устанавливающий пользователь имеет право управлять пользователями
     const canManageUsers = await this.hasPermission(
       grantedByUserId,
       botId,
       BotEntity.BOT_USERS,
-      PermissionAction.UPDATE,
+      PermissionAction.UPDATE
     );
     if (grantedByUserId !== bot.ownerId && !canManageUsers) {
-      throw new BadRequestException("Недостаточно прав для управления пользователями");
+      throw new BadRequestException(
+        "Недостаточно прав для управления пользователями"
+      );
     }
 
     // Находим или создаем запись о разрешении
@@ -161,7 +185,7 @@ export class BotPermissionsService {
     botId: string,
     userId: string,
     permissions: Record<BotEntity, PermissionAction[]>,
-    grantedByUserId: string,
+    grantedByUserId: string
   ): Promise<void> {
     // Проверяем, что бот существует
     const bot = await this.botRepository.findOne({ where: { id: botId } });
@@ -169,15 +193,25 @@ export class BotPermissionsService {
       throw new NotFoundException("Бот не найден");
     }
 
+    // Проверяем, что пользователь добавлен к боту
+    const botUser = await this.botUserRepository.findOne({
+      where: { botId, userId },
+    });
+    if (!botUser) {
+      throw new NotFoundException("Пользователь не добавлен к этому боту");
+    }
+
     // Проверяем права устанавливающего пользователя
     const canManageUsers = await this.hasPermission(
       grantedByUserId,
       botId,
       BotEntity.BOT_USERS,
-      PermissionAction.UPDATE,
+      PermissionAction.UPDATE
     );
     if (grantedByUserId !== bot.ownerId && !canManageUsers) {
-      throw new BadRequestException("Недостаточно прав для управления пользователями");
+      throw new BadRequestException(
+        "Недостаточно прав для управления пользователями"
+      );
     }
 
     // Получаем текущие разрешения
@@ -187,7 +221,7 @@ export class BotPermissionsService {
 
     // Создаем map для быстрого поиска
     const existingMap = new Map<string, BotUserPermission>();
-    existingPermissions.forEach(p => {
+    existingPermissions.forEach((p) => {
       const key = `${p.entity}_${p.action}`;
       existingMap.set(key, p);
     });
@@ -196,7 +230,7 @@ export class BotPermissionsService {
     const toSave: BotUserPermission[] = [];
 
     Object.entries(permissions).forEach(([entity, actions]) => {
-      Object.values(PermissionAction).forEach(action => {
+      Object.values(PermissionAction).forEach((action) => {
         const key = `${entity}_${action}`;
         const shouldGrant = actions.includes(action);
 
@@ -240,7 +274,7 @@ export class BotPermissionsService {
     botId: string,
     userId: string,
     displayName?: string,
-    permissions?: Record<BotEntity, PermissionAction[]>,
+    permissions?: Record<BotEntity, PermissionAction[]>
   ): Promise<BotUser> {
     // Проверяем, что бот существует
     const bot = await this.botRepository.findOne({ where: { id: botId } });
@@ -301,8 +335,8 @@ export class BotPermissionsService {
   async getBotUsers(botId: string): Promise<BotUser[]> {
     return await this.botUserRepository.find({
       where: { botId },
-      relations: ['user'],
-      order: { createdAt: 'ASC' },
+      relations: ["user"],
+      order: { createdAt: "ASC" },
     });
   }
 
@@ -318,15 +352,15 @@ export class BotPermissionsService {
     // Получаем боты где пользователь добавлен как пользователь
     const botUsers = await this.botUserRepository.find({
       where: { userId },
-      relations: ['bot'],
+      relations: ["bot"],
     });
 
-    const sharedBots = botUsers.map(bu => bu.bot);
+    const sharedBots = botUsers.map((bu) => bu.bot);
 
     // Объединяем и удаляем дубликаты
     const allBots = [...ownedBots, ...sharedBots];
-    const uniqueBots = allBots.filter((bot, index, self) =>
-      self.findIndex(b => b.id === bot.id) === index
+    const uniqueBots = allBots.filter(
+      (bot, index, self) => self.findIndex((b) => b.id === bot.id) === index
     );
 
     return uniqueBots;
@@ -338,11 +372,8 @@ export class BotPermissionsService {
   private async updateBotUserPermissions(
     botId: string,
     userId: string,
-    permissions: Record<BotEntity, PermissionAction[]>,
+    permissions: Record<BotEntity, PermissionAction[]>
   ): Promise<void> {
-    await this.botUserRepository.update(
-      { botId, userId },
-      { permissions },
-    );
+    await this.botUserRepository.update({ botId, userId }, { permissions });
   }
 }
