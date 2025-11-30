@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Body,
   Patch,
   Param,
@@ -27,6 +28,22 @@ import { CreateBotDto, UpdateBotDto } from "./dto/bot.dto";
 import { BotResponseDto, BotStatsResponseDto } from "./dto/bot-response.dto";
 import { ButtonSettingsDto } from "./dto/command-button-settings.dto";
 import { CartService } from "../cart/cart.service";
+import { BotPermissionsService } from "./bot-permissions.service";
+import { BotInvitationsService } from "./bot-invitations.service";
+import {
+  CreateBotUserDto,
+  UpdateBotUserPermissionsDto,
+  BotUserResponseDto,
+} from "./dto/bot-user.dto";
+import {
+  CreateBotInvitationDto,
+  BotInvitationResponseDto,
+} from "./dto/bot-invitation.dto";
+import { BotPermission } from "./decorators/bot-permission.decorator";
+import {
+  BotEntity,
+  PermissionAction,
+} from "../../database/entities/bot-user-permission.entity";
 
 @ApiTags("Боты")
 @Controller("bots")
@@ -35,7 +52,9 @@ import { CartService } from "../cart/cart.service";
 export class BotsController {
   constructor(
     private readonly botsService: BotsService,
-    private readonly cartService: CartService
+    private readonly cartService: CartService,
+    private readonly botPermissionsService: BotPermissionsService,
+    private readonly botInvitationsService: BotInvitationsService
   ) {}
 
   @Post()
@@ -280,5 +299,323 @@ export class BotsController {
     await this.botsService.findOne(id, req.user.id);
 
     return this.cartService.removeCartItemByAdmin(id, cartId, productId);
+  }
+
+  // ========== Эндпоинты для управления пользователями бота ==========
+
+  @Get(":id/users")
+  @ApiOperation({ summary: "Получить список пользователей бота" })
+  @ApiResponse({
+    status: 200,
+    description: "Список пользователей получен",
+    schema: {
+      type: "array",
+      items: { $ref: getSchemaPath(BotUserResponseDto) },
+    },
+  })
+  @BotPermission(BotEntity.BOT_USERS, PermissionAction.READ)
+  async getBotUsers(@Param("id") botId: string) {
+    const users = await this.botPermissionsService.getBotUsers(botId);
+    return users.map((user) => ({
+      id: user.id,
+      botId: user.botId,
+      userId: user.userId,
+      displayName: user.displayName,
+      permissions: user.permissions,
+      createdAt: user.createdAt,
+      user: user.user
+        ? {
+            id: user.user.id,
+            telegramId: user.user.telegramId,
+            telegramUsername: user.user.telegramUsername,
+            firstName: user.user.firstName,
+            lastName: user.user.lastName,
+          }
+        : undefined,
+    }));
+  }
+
+  @Post(":id/users")
+  @ApiOperation({ summary: "Добавить пользователя к боту" })
+  @ApiResponse({
+    status: 201,
+    description: "Пользователь добавлен к боту",
+    schema: { $ref: getSchemaPath(BotUserResponseDto) },
+  })
+  @BotPermission(BotEntity.BOT_USERS, PermissionAction.CREATE)
+  async addUserToBot(
+    @Param("id") botId: string,
+    @Body() dto: CreateBotUserDto,
+    @Request() req
+  ) {
+    // Для добавления пользователя нужен его ID, а не telegramId
+    // Сначала найдем пользователя по telegramId или создадим нового
+    const user = await this.botPermissionsService.addUserToBot(
+      botId,
+      dto.telegramId, // Пока что передаем telegramId как userId для тестирования
+      dto.displayName,
+      dto.permissions
+    );
+
+    // Устанавливаем разрешения
+    await this.botPermissionsService.setBulkPermissions(
+      botId,
+      user.userId,
+      dto.permissions,
+      req.user.id
+    );
+
+    return {
+      id: user.id,
+      botId: user.botId,
+      userId: user.userId,
+      displayName: user.displayName,
+      permissions: user.permissions,
+      createdAt: user.createdAt,
+    };
+  }
+
+  @Put(":id/users/:userId/permissions")
+  @ApiOperation({ summary: "Обновить разрешения пользователя на боте" })
+  @ApiResponse({
+    status: 200,
+    description: "Разрешения обновлены",
+  })
+  @BotPermission(BotEntity.BOT_USERS, PermissionAction.UPDATE)
+  async updateUserPermissions(
+    @Param("id") botId: string,
+    @Param("userId") userId: string,
+    @Body() dto: UpdateBotUserPermissionsDto,
+    @Request() req
+  ) {
+    await this.botPermissionsService.setBulkPermissions(
+      botId,
+      userId,
+      dto.permissions,
+      req.user.id
+    );
+    return { message: "Разрешения обновлены" };
+  }
+
+  @Delete(":id/users/:userId")
+  @ApiOperation({ summary: "Удалить пользователя из бота" })
+  @ApiResponse({
+    status: 200,
+    description: "Пользователь удален из бота",
+  })
+  @BotPermission(BotEntity.BOT_USERS, PermissionAction.DELETE)
+  async removeUserFromBot(
+    @Param("id") botId: string,
+    @Param("userId") userId: string
+  ) {
+    await this.botPermissionsService.removeUserFromBot(botId, userId);
+    return { message: "Пользователь удален из бота" };
+  }
+
+  @Get(":id/my-permissions")
+  @ApiOperation({ summary: "Получить свои разрешения на боте" })
+  @ApiResponse({
+    status: 200,
+    description: "Разрешения получены",
+  })
+  async getMyPermissions(@Param("id") botId: string, @Request() req) {
+    return await this.botPermissionsService.getUserPermissions(
+      req.user.id,
+      botId
+    );
+  }
+
+  // ========== Эндпоинты для приглашений ==========
+
+  @Post(":id/invitations")
+  @ApiOperation({ summary: "Пригласить пользователя к боту" })
+  @ApiResponse({
+    status: 201,
+    description: "Приглашение отправлено",
+    schema: { $ref: getSchemaPath(BotInvitationResponseDto) },
+  })
+  @BotPermission(BotEntity.BOT_USERS, PermissionAction.CREATE)
+  async createInvitation(
+    @Param("id") botId: string,
+    @Body() dto: CreateBotInvitationDto,
+    @Request() req
+  ) {
+    const invitation = await this.botInvitationsService.createInvitation(
+      botId,
+      dto.telegramId,
+      dto.permissions,
+      req.user.id,
+      dto.message
+    );
+
+    return {
+      id: invitation.id,
+      botId: invitation.botId,
+      invitedTelegramId: invitation.invitedTelegramId,
+      invitedUserId: invitation.invitedUserId,
+      status: invitation.status,
+      permissions: invitation.permissions,
+      invitedByUserId: invitation.invitedByUserId,
+      invitationToken: invitation.invitationToken,
+      expiresAt: invitation.expiresAt,
+      createdAt: invitation.createdAt,
+      updatedAt: invitation.updatedAt,
+      bot: invitation.bot
+        ? {
+            id: invitation.bot.id,
+            name: invitation.bot.name,
+            username: invitation.bot.username,
+          }
+        : undefined,
+      invitedByUser: invitation.invitedByUser
+        ? {
+            id: invitation.invitedByUser.id,
+            firstName: invitation.invitedByUser.firstName,
+            lastName: invitation.invitedByUser.lastName,
+          }
+        : undefined,
+    };
+  }
+
+  @Get(":id/invitations")
+  @ApiOperation({ summary: "Получить приглашения бота" })
+  @ApiResponse({
+    status: 200,
+    description: "Список приглашений получен",
+    schema: {
+      type: "array",
+      items: { $ref: getSchemaPath(BotInvitationResponseDto) },
+    },
+  })
+  @BotPermission(BotEntity.BOT_USERS, PermissionAction.READ)
+  async getBotInvitations(@Param("id") botId: string, @Request() req) {
+    const invitations = await this.botInvitationsService.getBotInvitations(
+      botId,
+      req.user.id
+    );
+    return invitations.map((invitation) => ({
+      id: invitation.id,
+      botId: invitation.botId,
+      invitedTelegramId: invitation.invitedTelegramId,
+      invitedUserId: invitation.invitedUserId,
+      status: invitation.status,
+      permissions: invitation.permissions,
+      invitedByUserId: invitation.invitedByUserId,
+      invitationToken: invitation.invitationToken,
+      expiresAt: invitation.expiresAt,
+      createdAt: invitation.createdAt,
+      updatedAt: invitation.updatedAt,
+      bot: invitation.bot
+        ? {
+            id: invitation.bot.id,
+            name: invitation.bot.name,
+            username: invitation.bot.username,
+          }
+        : undefined,
+      invitedByUser: invitation.invitedByUser
+        ? {
+            id: invitation.invitedByUser.id,
+            firstName: invitation.invitedByUser.firstName,
+            lastName: invitation.invitedByUser.lastName,
+          }
+        : undefined,
+      invitedUser: invitation.invitedUser
+        ? {
+            id: invitation.invitedUser.id,
+            telegramId: invitation.invitedUser.telegramId,
+            telegramUsername: invitation.invitedUser.telegramUsername,
+            firstName: invitation.invitedUser.firstName,
+            lastName: invitation.invitedUser.lastName,
+          }
+        : undefined,
+    }));
+  }
+
+  @Delete(":id/invitations/:invitationId")
+  @ApiOperation({ summary: "Отменить приглашение" })
+  @ApiResponse({
+    status: 200,
+    description: "Приглашение отменено",
+  })
+  @BotPermission(BotEntity.BOT_USERS, PermissionAction.DELETE)
+  async cancelInvitation(
+    @Param("id") botId: string,
+    @Param("invitationId") invitationId: string,
+    @Request() req
+  ) {
+    await this.botInvitationsService.cancelInvitation(
+      botId,
+      invitationId,
+      req.user.id
+    );
+    return { message: "Приглашение отменено" };
+  }
+
+  @Post("invitations/:token/accept")
+  @ApiOperation({ summary: "Принять приглашение" })
+  @ApiResponse({
+    status: 200,
+    description: "Приглашение принято",
+  })
+  async acceptInvitation(@Param("token") token: string, @Request() req) {
+    await this.botInvitationsService.acceptInvitation(token, req.user.id);
+    return { message: "Приглашение принято" };
+  }
+
+  @Post("invitations/:token/decline")
+  @ApiOperation({ summary: "Отклонить приглашение" })
+  @ApiResponse({
+    status: 200,
+    description: "Приглашение отклонено",
+  })
+  async declineInvitation(@Param("token") token: string, @Request() req) {
+    await this.botInvitationsService.declineInvitation(token, req.user.id);
+    return { message: "Приглашение отклонено" };
+  }
+
+  @Get("my-invitations")
+  @ApiOperation({ summary: "Получить свои приглашения" })
+  @ApiResponse({
+    status: 200,
+    description: "Список приглашений получен",
+  })
+  async getMyInvitations(@Request() req) {
+    const invitations = await this.botInvitationsService.getUserInvitations(
+      req.user.id
+    );
+    return invitations.map((invitation) => ({
+      id: invitation.id,
+      botId: invitation.botId,
+      invitedTelegramId: invitation.invitedTelegramId,
+      status: invitation.status,
+      permissions: invitation.permissions,
+      invitedByUserId: invitation.invitedByUserId,
+      expiresAt: invitation.expiresAt,
+      createdAt: invitation.createdAt,
+      bot: invitation.bot
+        ? {
+            id: invitation.bot.id,
+            name: invitation.bot.name,
+            username: invitation.bot.username,
+          }
+        : undefined,
+      invitedByUser: invitation.invitedByUser
+        ? {
+            id: invitation.invitedByUser.id,
+            firstName: invitation.invitedByUser.firstName,
+            lastName: invitation.invitedByUser.lastName,
+          }
+        : undefined,
+    }));
+  }
+
+  @Get("shared")
+  @ApiOperation({ summary: "Получить боты доступные пользователю" })
+  @ApiResponse({
+    status: 200,
+    description: "Список ботов получен",
+  })
+  async getSharedBots(@Request() req) {
+    return await this.botPermissionsService.getUserBots(req.user.id);
   }
 }

@@ -22,6 +22,9 @@ import { ShopPromocode } from "./entities/shop-promocode.entity";
 import { UserSession } from "./entities/user-session.entity";
 import { BotCustomData } from "./entities/bot-custom-data.entity";
 import { CustomPage } from "./entities/custom-page.entity";
+import { BotUser } from "./entities/bot-user.entity";
+import { BotUserPermission } from "./entities/bot-user-permission.entity";
+import { BotInvitation } from "./entities/bot-invitation.entity";
 
 @Module({
   imports: [
@@ -55,6 +58,9 @@ import { CustomPage } from "./entities/custom-page.entity";
           UserSession,
           BotCustomData,
           CustomPage,
+          BotUser,
+          BotUserPermission,
+          BotInvitation,
         ],
         synchronize: configService.get("NODE_ENV") === "development",
         logging: false,
@@ -86,6 +92,9 @@ import { CustomPage } from "./entities/custom-page.entity";
       UserSession,
       BotCustomData,
       CustomPage,
+      BotUser,
+      BotUserPermission,
+      BotInvitation,
     ]),
   ],
   exports: [TypeOrmModule],

@@ -20,6 +20,9 @@ import { Cart } from "../../database/entities/cart.entity";
 import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
 import { TimeSlot } from "../../database/entities/time-slot.entity";
 import { CustomPage } from "../../database/entities/custom-page.entity";
+import { BotUser } from "../../database/entities/bot-user.entity";
+import { BotUserPermission } from "../../database/entities/bot-user-permission.entity";
+import { BotInvitation } from "../../database/entities/bot-invitation.entity";
 import { BotsService } from "./bots.service";
 import { BotsController } from "./bots.controller";
 import { PublicBotsController } from "./public-bots.controller";
@@ -65,6 +68,9 @@ import { DatabaseService } from "./database.service";
 import { SessionStorageService } from "./session-storage.service";
 import { GroupSessionService } from "./group-session.service";
 import { GroupActionsProcessor } from "./processors/group-actions.processor";
+import { BotPermissionsService } from "./bot-permissions.service";
+import { BotInvitationsService } from "./bot-invitations.service";
+import { BotNotificationsService } from "./bot-notifications.service";
 
 @Module({
   imports: [
@@ -87,6 +93,9 @@ import { GroupActionsProcessor } from "./processors/group-actions.processor";
       ShopPromocode,
       TimeSlot,
       CustomPage,
+      BotUser,
+      BotUserPermission,
+      BotInvitation,
     ]),
     BullModule.registerQueue({
       name: "group-actions",
@@ -132,6 +141,9 @@ import { GroupActionsProcessor } from "./processors/group-actions.processor";
     GroupJoinNodeHandler,
     GroupActionNodeHandler,
     GroupLeaveNodeHandler,
+    BotPermissionsService,
+    BotInvitationsService,
+    BotNotificationsService,
   ],
   controllers: [
     BotsController,
@@ -145,6 +157,9 @@ import { GroupActionsProcessor } from "./processors/group-actions.processor";
     FlowExecutionService,
     SessionStorageService,
     GroupSessionService,
+    BotPermissionsService,
+    BotInvitationsService,
+    BotNotificationsService,
   ],
 })
 export class BotsModule {}
