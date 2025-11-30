@@ -282,6 +282,7 @@ ${this.formatPermissions(permissions)}
       [BotEntity.SHOP_SETTINGS]: "Настройки магазина",
       [BotEntity.BOOKING_SETTINGS]: "Настройки бронирования",
       [BotEntity.CUSTOM_PAGES]: "Кастомные страницы",
+      [BotEntity.SHOP_PROMOCODES]: "Промокоды магазина",
       [BotEntity.BOT_USERS]: "Пользователи бота",
     };
 
