@@ -551,6 +551,16 @@ export class BotsController {
     return { message: "Приглашение отменено" };
   }
 
+  @Get("invitations/:token")
+  @ApiOperation({ summary: "Получить информацию о приглашении по токену" })
+  @ApiResponse({
+    status: 200,
+    description: "Информация о приглашении",
+  })
+  async getInvitationByToken(@Param("token") token: string) {
+    return await this.botInvitationsService.getInvitationByToken(token);
+  }
+
   @Post("invitations/:token/accept")
   @ApiOperation({ summary: "Принять приглашение" })
   @ApiResponse({

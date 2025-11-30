@@ -315,6 +315,49 @@ export class BotInvitationsService {
   }
 
   /**
+   * Получить публичную информацию о приглашении по токену
+   */
+  async getInvitationByToken(token: string): Promise<any> {
+    const invitation = await this.botInvitationRepository.findOne({
+      where: { invitationToken: token },
+      relations: ["bot", "invitedByUser"],
+    });
+
+    if (!invitation) {
+      throw new NotFoundException("Приглашение не найдено");
+    }
+
+    // Проверяем статус
+    if (invitation.status !== BotInvitationStatus.PENDING) {
+      throw new BadRequestException("Приглашение уже обработано");
+    }
+
+    // Проверяем срок действия
+    if (invitation.expiresAt && invitation.expiresAt < new Date()) {
+      invitation.status = BotInvitationStatus.EXPIRED;
+      await this.botInvitationRepository.save(invitation);
+      throw new BadRequestException("Срок действия приглашения истек");
+    }
+
+    // Возвращаем публичную информацию
+    return {
+      id: invitation.id,
+      bot: {
+        id: invitation.bot.id,
+        name: invitation.bot.name,
+        username: invitation.bot.username,
+      },
+      invitedByUser: {
+        firstName: invitation.invitedByUser?.firstName,
+        lastName: invitation.invitedByUser?.lastName,
+      },
+      permissions: invitation.permissions,
+      expiresAt: invitation.expiresAt,
+      createdAt: invitation.createdAt,
+    };
+  }
+
+  /**
    * Очищает истекшие приглашения
    */
   async cleanupExpiredInvitations(): Promise<void> {

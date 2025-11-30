@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import axios from "axios";
+import { AuthService } from "../auth/auth.service";
 
 import { User } from "../../database/entities/user.entity";
 
@@ -45,7 +46,8 @@ export class AssistantBotService implements OnModuleInit {
   constructor(
     private configService: ConfigService,
     @InjectRepository(User)
-    private userRepository: Repository<User>
+    private userRepository: Repository<User>,
+    private authService: AuthService
   ) {
     this.botToken = this.configService.get<string>("app.telegramBotToken");
     this.telegramApiUrl = this.configService.get<string>(
@@ -136,12 +138,14 @@ export class AssistantBotService implements OnModuleInit {
         this.logger.log(`✅ Пользователь найден: ${existingUser.id}`);
         await this.sendWelcomeBackMessage(chat.id, from.first_name);
       } else {
-        // Новый пользователь - показываем инструкции по регистрации
-        this.logger.log(`📝 Новый пользователь, отправка инструкций`);
-        await this.sendRegistrationInstructions(
-          chat.id,
+        // Новый пользователь - автоматически регистрируем его
+        this.logger.log(`📝 Новый пользователь, автоматическая регистрация`);
+        await this.autoRegisterUser(
+          telegramId,
           from.first_name,
-          telegramId
+          from.last_name,
+          from.username,
+          chat.id
         );
       }
     } catch (error) {
@@ -156,10 +160,85 @@ export class AssistantBotService implements OnModuleInit {
     chatId: number,
     firstName: string
   ): Promise<void> {
-    const message = `Привет, ${firstName}! 👋\n\nДобро пожаловать обратно в BotManager! Ваш аккаунт уже зарегистрирован и готов к использованию.\n\nДля управления ботами перейдите в веб-интерфейс: ${this.configService.get("app.frontendUrl")}`;
+    const message = `Привет, ${firstName}! 👋\n\nДобро пожаловать обратно в BotManager! Ваш аккаунт зарегистрирован и готов к использованию.\n\n🔗 Веб-интерфейс: ${this.configService.get("app.frontendUrl")}\n\n💡 Используйте свои учетные данные для входа или авторизуйтесь через Telegram.`;
 
     this.logger.log(`📤 Отправка приветствия пользователю ${chatId}`);
     await this.sendMessage(chatId, message);
+  }
+
+  private async autoRegisterUser(
+    telegramId: string,
+    firstName?: string,
+    lastName?: string,
+    username?: string,
+    chatId?: number
+  ): Promise<void> {
+    try {
+      // Генерируем временный пароль
+      const tempPassword = this.generateTempPassword();
+
+      this.logger.log(
+        `🔐 Автоматическая регистрация пользователя ${telegramId}`
+      );
+
+      // Регистрируем пользователя через AuthService
+      const result = await this.authService.register({
+        telegramId,
+        telegramUsername: username,
+        firstName: firstName || "",
+        lastName: lastName || "",
+        password: tempPassword,
+      });
+
+      if (result.user) {
+        this.logger.log(
+          `✅ Пользователь ${telegramId} автоматически зарегистрирован`
+        );
+
+        // Отправляем сообщение с учетными данными
+        if (chatId) {
+          await this.sendRegistrationSuccessMessage(
+            chatId,
+            firstName || "Пользователь",
+            telegramId,
+            tempPassword
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `❌ Ошибка автоматической регистрации пользователя ${telegramId}:`,
+        error
+      );
+
+      // В случае ошибки отправляем инструкции по ручной регистрации
+      if (chatId && firstName) {
+        await this.sendRegistrationInstructions(chatId, firstName, telegramId);
+      }
+    }
+  }
+
+  private generateTempPassword(): string {
+    // Генерируем пароль из 12 символов: буквы + цифры
+    const chars =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let password = "";
+    for (let i = 0; i < 12; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+  }
+
+  private async sendRegistrationSuccessMessage(
+    chatId: number,
+    firstName: string,
+    telegramId: string,
+    password: string
+  ): Promise<void> {
+    const message = `Привет, ${firstName}! 🎉\n\nВы успешно зарегистрированы в BotManager!\n\n🔐 Ваши учетные данные:\n• Telegram ID: \`${telegramId}\`\n• Временный пароль: \`${password}\`\n\n⚠️ **Важно:** Рекомендуем сразу изменить пароль после первого входа!\n\n🔗 Веб-интерфейс: ${this.configService.get("app.frontendUrl")}\n\nТеперь вы можете создавать и управлять Telegram ботами! 🤖`;
+
+    this.logger.log(`📤 Отправка данных регистрации пользователю ${chatId}`);
+    await this.sendMessage(chatId, message, { parse_mode: "Markdown" });
   }
 
   private async sendRegistrationInstructions(

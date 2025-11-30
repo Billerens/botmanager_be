@@ -5,6 +5,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { AssistantBotService } from "./assistant-bot.service";
 import { AssistantBotController } from "./assistant-bot.controller";
 import { User } from "../../database/entities/user.entity";
+import { AuthModule } from "../auth/auth.module";
 
 /**
  * Модуль бота-ассистента BotManager
@@ -18,6 +19,7 @@ import { User } from "../../database/entities/user.entity";
   imports: [
     ConfigModule,
     TypeOrmModule.forFeature([User]),
+    AuthModule,
   ],
   providers: [AssistantBotService],
   controllers: [AssistantBotController],
