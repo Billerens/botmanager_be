@@ -23,7 +23,7 @@ import {
 } from "@nestjs/swagger";
 
 import { BotsService } from "./bots.service";
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { JwtAuthGuard, Public } from "../auth/guards/jwt-auth.guard";
 import { CreateBotDto, UpdateBotDto } from "./dto/bot.dto";
 import { BotResponseDto, BotStatsResponseDto } from "./dto/bot-response.dto";
 import { ButtonSettingsDto } from "./dto/command-button-settings.dto";
@@ -552,6 +552,7 @@ export class BotsController {
   }
 
   @Get("invitations/:token")
+  @Public()
   @ApiOperation({ summary: "Получить информацию о приглашении по токену" })
   @ApiResponse({
     status: 200,
