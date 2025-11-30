@@ -6,11 +6,13 @@ import { Category } from "../../database/entities/category.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import { Product } from "../../database/entities/product.entity";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
+import { BotsModule } from "../bots/bots.module";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Category, Bot, Product]),
     ActivityLogModule,
+    BotsModule,
   ],
   controllers: [CategoriesController],
   providers: [CategoriesService],

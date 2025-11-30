@@ -9,12 +9,14 @@ import { PublicCustomPagesController } from "./controllers/public-custom-pages.c
 import { CustomPagesBotService } from "./services/custom-pages-bot.service";
 import { UploadModule } from "../upload/upload.module";
 import { TelegramModule } from "../telegram/telegram.module";
+import { BotsModule } from "../bots/bots.module";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([CustomPage, Bot]),
     UploadModule,
     forwardRef(() => TelegramModule),
+    BotsModule,
   ],
   providers: [CustomPagesService, CustomPagesBotService],
   controllers: [CustomPagesController, PublicCustomPagesController],

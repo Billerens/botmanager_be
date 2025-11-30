@@ -1,14 +1,19 @@
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { Module } from "@nestjs/common";
+import { TypeOrmModule } from "@nestjs/typeorm";
 
-import { Lead } from '../../database/entities/lead.entity';
-import { Bot } from '../../database/entities/bot.entity';
-import { LeadsService } from './leads.service';
-import { LeadsController } from './leads.controller';
-import { ActivityLogModule } from '../activity-log/activity-log.module';
+import { Lead } from "../../database/entities/lead.entity";
+import { Bot } from "../../database/entities/bot.entity";
+import { LeadsService } from "./leads.service";
+import { LeadsController } from "./leads.controller";
+import { ActivityLogModule } from "../activity-log/activity-log.module";
+import { BotsModule } from "../bots/bots.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Lead, Bot]), ActivityLogModule],
+  imports: [
+    TypeOrmModule.forFeature([Lead, Bot]),
+    ActivityLogModule,
+    BotsModule,
+  ],
   providers: [LeadsService],
   controllers: [LeadsController],
   exports: [LeadsService],

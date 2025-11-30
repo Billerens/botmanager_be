@@ -5,9 +5,10 @@ import { AnalyticsController } from './analytics.controller';
 import { Bot } from '../../database/entities/bot.entity';
 import { Message } from '../../database/entities/message.entity';
 import { Lead } from '../../database/entities/lead.entity';
+import { BotsModule } from '../bots/bots.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Bot, Message, Lead])],
+  imports: [TypeOrmModule.forFeature([Bot, Message, Lead]), BotsModule],
   providers: [AnalyticsService],
   controllers: [AnalyticsController],
   exports: [AnalyticsService],

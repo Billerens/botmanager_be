@@ -7,11 +7,13 @@ import { Bot } from "../../database/entities/bot.entity";
 import { Category } from "../../database/entities/category.entity";
 import { Product } from "../../database/entities/product.entity";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
+import { BotsModule } from "../bots/bots.module";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ShopPromocode, Bot, Category, Product]),
     ActivityLogModule,
+    BotsModule,
   ],
   controllers: [ShopPromocodesController],
   providers: [ShopPromocodesService],
