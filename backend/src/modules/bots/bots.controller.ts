@@ -409,6 +409,10 @@ export class BotsController {
     @Body() dto: UpdateBotUserPermissionsDto,
     @Request() req
   ) {
+    console.log(`Updating permissions for user ${userId} on bot ${botId}`);
+    console.log(`New permissions:`, JSON.stringify(dto.permissions, null, 2));
+    console.log(`Granted by user: ${req.user.id}`);
+
     await this.botPermissionsService.setBulkPermissions(
       botId,
       userId,

@@ -202,12 +202,37 @@ export class BotInvitationsService {
       await this.botUserRepository.save(botUser);
     }
 
+    // Проверяем, что все необходимые сущности существуют перед установкой разрешений
+    const botExists = await this.botRepository.findOne({
+      where: { id: invitation.botId },
+    });
+    if (!botExists) {
+      throw new BadRequestException("Бот не найден");
+    }
+
+    const targetUserExists = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+    if (!targetUserExists) {
+      throw new BadRequestException("Целевой пользователь не найден");
+    }
+
+    // Проверяем, существует ли пригласивший пользователь
+    const invitedByUser = await this.userRepository.findOne({
+      where: { id: invitation.invitedByUserId },
+    });
+
     // Устанавливаем разрешения (всегда, для синхронизации)
+    const grantedByUserId = invitedByUser ? invitation.invitedByUserId : userId;
+    this.logger.log(
+      `Setting bulk permissions for bot ${invitation.botId}, user ${userId}, granted by ${grantedByUserId}`
+    );
+
     await this.botPermissionsService.setBulkPermissions(
       invitation.botId,
       userId,
       invitation.permissions,
-      invitation.invitedByUserId
+      grantedByUserId
     );
 
     // Обновляем статус приглашения
