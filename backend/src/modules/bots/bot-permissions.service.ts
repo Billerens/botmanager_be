@@ -193,14 +193,6 @@ export class BotPermissionsService {
       throw new NotFoundException("Бот не найден");
     }
 
-    // Проверяем, что пользователь добавлен к боту
-    const botUser = await this.botUserRepository.findOne({
-      where: { botId, userId },
-    });
-    if (!botUser) {
-      throw new NotFoundException("Пользователь не добавлен к этому боту");
-    }
-
     // Проверяем права устанавливающего пользователя
     const canManageUsers = await this.hasPermission(
       grantedByUserId,
