@@ -297,4 +297,11 @@ export class AssistantBotService implements OnModuleInit {
       throw error;
     }
   }
+
+  /**
+   * Получить токен бота-ассистента
+   */
+  getBotToken(): string {
+    return this.botToken;
+  }
 }

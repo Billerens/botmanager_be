@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, LessThan } from "typeorm";
@@ -22,6 +23,8 @@ import { v4 as uuidv4 } from "uuid";
 
 @Injectable()
 export class BotInvitationsService {
+  private readonly logger = new Logger(BotInvitationsService.name);
+
   constructor(
     @InjectRepository(BotInvitation)
     private botInvitationRepository: Repository<BotInvitation>,
@@ -64,16 +67,25 @@ export class BotInvitationsService {
       );
     }
 
-    // Проверяем, не приглашен ли уже этот пользователь
+    // Проверяем существующие приглашения
     const existingInvitation = await this.botInvitationRepository.findOne({
       where: {
         botId,
         invitedTelegramId,
         status: BotInvitationStatus.PENDING,
       },
+      order: { createdAt: "DESC" },
     });
+
     if (existingInvitation) {
-      throw new BadRequestException("Пользователь уже приглашен в этот бот");
+      // Если приглашение создано более часа назад, отменяем его и создаем новое
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      if (existingInvitation.createdAt < oneHourAgo) {
+        existingInvitation.status = BotInvitationStatus.EXPIRED;
+        await this.botInvitationRepository.save(existingInvitation);
+      } else {
+        throw new BadRequestException("Пользователь уже приглашен в этот бот");
+      }
     }
 
     // Проверяем, не добавлен ли уже этот пользователь
@@ -113,10 +125,23 @@ export class BotInvitationsService {
     }
 
     // Отправляем уведомление в Telegram
-    await this.botNotificationsService.sendInvitationNotification(
-      invitationWithRelations,
-      message
-    );
+    try {
+      await this.botNotificationsService.sendInvitationNotification(
+        invitationWithRelations,
+        message
+      );
+    } catch (error) {
+      this.logger.error(
+        `Ошибка отправки приглашения пользователю ${invitedTelegramId} для бота ${botId}:`,
+        error
+      );
+      // Если отправка уведомления не удалась, отменяем приглашение
+      savedInvitation.status = BotInvitationStatus.EXPIRED;
+      await this.botInvitationRepository.save(savedInvitation);
+      throw new BadRequestException(
+        "Не удалось отправить приглашение пользователю"
+      );
+    }
 
     return savedInvitation;
   }

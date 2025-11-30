@@ -38,6 +38,7 @@ import { CartModule } from "../cart/cart.module";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
 import { WebSocketModule } from "../websocket/websocket.module";
 import { CustomPagesModule } from "../custom-pages/custom-pages.module";
+import { AssistantBotModule } from "../assistant-bot/assistant-bot.module";
 import { CustomLoggerService } from "../../common/logger.service";
 import {
   NodeHandlerService,
@@ -109,6 +110,7 @@ import { BotNotificationsService } from "./bot-notifications.service";
     ActivityLogModule,
     WebSocketModule,
     CustomPagesModule,
+    AssistantBotModule,
   ],
   providers: [
     BotsService,

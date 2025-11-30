@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { TelegramService } from "../telegram/telegram.service";
+import { AssistantBotService } from "../assistant-bot/assistant-bot.service";
 import { BotInvitation } from "../../database/entities/bot-invitation.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import {
@@ -15,7 +16,8 @@ export class BotNotificationsService {
 
   constructor(
     private readonly telegramService: TelegramService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly assistantBotService: AssistantBotService
   ) {
     this.frontendUrl = this.configService.get(
       "FRONTEND_URL",
@@ -74,8 +76,7 @@ ${this.formatPermissions(invitation.permissions)}
         ],
       };
 
-      // Получаем токен бота для отправки сообщения
-      // Предполагаем, что у нас есть метод для получения токена бота
+      // Получаем токен assistant-bot для отправки уведомления о приглашении
       const botToken = await this.getBotToken(invitation.botId);
 
       if (!botToken) {
@@ -306,13 +307,21 @@ ${this.formatPermissions(permissions)}
   }
 
   /**
-   * Получает токен бота (нужно реализовать логику получения)
+   * Получает токен бота-ассистента для отправки системных уведомлений
+   * Все уведомления отправляются через assistant-bot, а не через управляемые боты
    */
   private async getBotToken(botId: string): Promise<string | null> {
-    // TODO: Реализовать получение токена бота из базы данных
-    // Пока возвращаем null, чтобы не ломать логику
-    this.logger.warn(`Метод getBotToken не реализован для бота ${botId}`);
-    return null;
+    try {
+      const botToken = this.assistantBotService.getBotToken();
+      if (!botToken) {
+        this.logger.error(`Токен assistant-bot не найден`);
+        return null;
+      }
+      return botToken;
+    } catch (error) {
+      this.logger.error(`Ошибка получения токена assistant-bot:`, error);
+      return null;
+    }
   }
 
   /**
