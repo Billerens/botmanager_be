@@ -433,7 +433,9 @@ export class BotsController {
     @Param("id") botId: string,
     @Param("userId") userId: string
   ) {
+    console.log(`Removing user ${userId} from bot ${botId}`);
     await this.botPermissionsService.removeUserFromBot(botId, userId);
+    console.log(`User ${userId} successfully removed from bot ${botId}`);
     return { message: "Пользователь удален из бота" };
   }
 

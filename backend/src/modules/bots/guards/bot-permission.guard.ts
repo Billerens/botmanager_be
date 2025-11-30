@@ -41,6 +41,10 @@ export class BotPermissionGuard implements CanActivate {
     const user = request.user;
     const botId = request.params?.id || request.params?.botId;
 
+    this.logger.log(
+      `Checking permissions for user ${user?.id}, bot ${botId}, method ${request.method} ${request.url}`
+    );
+
     if (!user) {
       throw new ForbiddenException("Пользователь не авторизован");
     }

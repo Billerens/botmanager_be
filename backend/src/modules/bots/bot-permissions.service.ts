@@ -363,6 +363,8 @@ export class BotPermissionsService {
    * Удаляет пользователя из бота
    */
   async removeUserFromBot(botId: string, userId: string): Promise<void> {
+    this.logger.log(`Removing user ${userId} from bot ${botId}`);
+
     // Проверяем, что бот существует
     const bot = await this.botRepository.findOne({ where: { id: botId } });
     if (!bot) {
@@ -375,10 +377,22 @@ export class BotPermissionsService {
     }
 
     // Удаляем пользователя
-    await this.botUserRepository.delete({ botId, userId });
+    const botUserDeleted = await this.botUserRepository.delete({
+      botId,
+      userId,
+    });
+    this.logger.log(`Deleted ${botUserDeleted.affected} bot user records`);
 
     // Удаляем все его разрешения
-    await this.botUserPermissionRepository.delete({ botId, userId });
+    const permissionsDeleted = await this.botUserPermissionRepository.delete({
+      botId,
+      userId,
+    });
+    this.logger.log(
+      `Deleted ${permissionsDeleted.affected} permission records`
+    );
+
+    this.logger.log(`User ${userId} successfully removed from bot ${botId}`);
   }
 
   /**
