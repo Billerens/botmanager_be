@@ -183,15 +183,26 @@ export class BotInvitationsService {
       );
     }
 
-    // Добавляем пользователя к боту
-    await this.botPermissionsService.addUserToBot(
-      invitation.botId,
-      userId,
-      undefined,
-      invitation.permissions
-    );
+    // Проверяем, добавлен ли пользователь к боту
+    let botUser = await this.botUserRepository.findOne({
+      where: { botId: invitation.botId, userId },
+    });
 
-    // Устанавливаем разрешения
+    if (!botUser) {
+      // Добавляем пользователя к боту, если он еще не добавлен
+      botUser = await this.botPermissionsService.addUserToBot(
+        invitation.botId,
+        userId,
+        undefined,
+        invitation.permissions
+      );
+    } else {
+      // Если пользователь уже добавлен, обновляем его разрешения
+      botUser.permissions = invitation.permissions;
+      await this.botUserRepository.save(botUser);
+    }
+
+    // Устанавливаем разрешения (всегда, для синхронизации)
     await this.botPermissionsService.setBulkPermissions(
       invitation.botId,
       userId,
