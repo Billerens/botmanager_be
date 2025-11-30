@@ -123,7 +123,7 @@ export class BotsService {
 
   async findOne(id: string, userId: string): Promise<Bot> {
     const bot = await this.botRepository.findOne({
-      where: { id, ownerId: userId },
+      where: { id },
       relations: ["flows", "flows.nodes"],
     });
 
@@ -331,7 +331,10 @@ export class BotsService {
         },
       })
       .catch((error) => {
-        console.error("Ошибка логирования изменения настроек бронирования:", error);
+        console.error(
+          "Ошибка логирования изменения настроек бронирования:",
+          error
+        );
       });
 
     return savedBot;
@@ -748,7 +751,13 @@ export class BotsService {
     lastError: string | null;
     lastErrorAt: Date | null;
   }> {
-    const bot = await this.findOne(id, userId);
+    const bot = await this.botRepository.findOne({
+      where: { id },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
 
     return {
       totalUsers: bot.totalUsers,

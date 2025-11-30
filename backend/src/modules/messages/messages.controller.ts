@@ -26,6 +26,12 @@ import {
 } from "@nestjs/swagger";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { BotPermissionGuard } from "../bots/guards/bot-permission.guard";
+import { BotPermission } from "../bots/decorators/bot-permission.decorator";
+import {
+  BotEntity,
+  PermissionAction,
+} from "../../database/entities/bot-user-permission.entity";
 import { MessagesService } from "./messages.service";
 import { TelegramService } from "../telegram/telegram.service";
 import { BroadcastDto } from "./dto/broadcast.dto";
@@ -43,7 +49,7 @@ import {
 
 @ApiTags("Сообщения")
 @Controller("messages")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, BotPermissionGuard)
 @ApiBearerAuth()
 export class MessagesController {
   constructor(
@@ -73,6 +79,7 @@ export class MessagesController {
     description: "Бот не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.MESSAGES, PermissionAction.READ)
   async getBotMessages(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any,
@@ -111,6 +118,7 @@ export class MessagesController {
     description: "Бот или диалог не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.MESSAGES, PermissionAction.READ)
   async getDialog(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Param("chatId") chatId: string,
@@ -143,6 +151,7 @@ export class MessagesController {
     description: "Бот не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.ANALYTICS, PermissionAction.READ)
   async getBotMessageStats(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any
@@ -174,6 +183,7 @@ export class MessagesController {
     description: "Бот не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.MESSAGES, PermissionAction.READ)
   async getBotDialogs(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any,
@@ -217,6 +227,7 @@ export class MessagesController {
     description: "Бот не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.MESSAGES, PermissionAction.READ)
   async getBotGroups(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any,
@@ -255,6 +266,7 @@ export class MessagesController {
     description: "Бот не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.ANALYTICS, PermissionAction.READ)
   async getBotDialogStats(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any
@@ -291,6 +303,7 @@ export class MessagesController {
     description: "Бот или диалог не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.MESSAGES, PermissionAction.DELETE)
   async deleteDialog(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Param("chatId") chatId: string,
@@ -321,6 +334,7 @@ export class MessagesController {
     description: "Бот не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.MESSAGES, PermissionAction.READ)
   async getBotUsers(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any,
@@ -389,6 +403,7 @@ export class MessagesController {
     description: "Бот или файл не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.MESSAGES, PermissionAction.READ)
   async getMediaFile(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Param("fileId") fileId: string,
@@ -455,6 +470,7 @@ export class MessagesController {
     description: "Бот не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.MESSAGES, PermissionAction.CREATE)
   async sendBroadcast(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any,

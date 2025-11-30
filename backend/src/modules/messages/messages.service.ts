@@ -119,9 +119,9 @@ export class MessagesService {
   ) {}
 
   async getBotMessages(botId: string, userId: string, filters: MessageFilters) {
-    // Проверяем, что бот принадлежит пользователю
+    // Проверяем, что бот существует (права доступа проверены guard'ом)
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
+      where: { id: botId },
     });
 
     if (!bot) {
@@ -169,9 +169,9 @@ export class MessagesService {
     userId: string,
     filters: { page: number; limit: number }
   ) {
-    // Проверяем, что бот принадлежит пользователю
+    // Проверяем, что бот существует (права доступа проверены guard'ом)
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
+      where: { id: botId },
     });
 
     if (!bot) {
@@ -238,9 +238,9 @@ export class MessagesService {
     botId: string,
     userId: string
   ): Promise<MessageStats> {
-    // Проверяем, что бот принадлежит пользователю
+    // Проверяем, что бот существует (права доступа проверены guard'ом)
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
+      where: { id: botId },
     });
 
     if (!bot) {
@@ -353,9 +353,9 @@ export class MessagesService {
   }
 
   async getBotDialogs(botId: string, userId: string, filters: DialogFilters) {
-    // Проверяем, что бот принадлежит пользователю
+    // Проверяем, что бот существует (права доступа проверены guard'ом)
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
+      where: { id: botId },
     });
 
     if (!bot) {
@@ -563,9 +563,9 @@ export class MessagesService {
   }
 
   async getBotDialogStats(botId: string, userId: string): Promise<DialogStats> {
-    // Проверяем, что бот принадлежит пользователю
+    // Проверяем, что бот существует (права доступа проверены guard'ом)
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
+      where: { id: botId },
     });
 
     if (!bot) {
@@ -614,9 +614,9 @@ export class MessagesService {
     chatId: string,
     userId: string
   ): Promise<{ success: boolean; deletedCount: number }> {
-    // Проверяем, что бот принадлежит пользователю
+    // Проверяем, что бот существует (права доступа проверены guard'ом)
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
+      where: { id: botId },
     });
 
     if (!bot) {
@@ -669,9 +669,9 @@ export class MessagesService {
     userId: string,
     filters: UserFilters
   ): Promise<BotUsersResponse> {
-    // Проверяем, что бот принадлежит пользователю
+    // Проверяем, что бот существует (права доступа проверены guard'ом)
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
+      where: { id: botId },
     });
 
     if (!bot) {
@@ -791,9 +791,9 @@ export class MessagesService {
   }
 
   async sendBroadcast(botId: string, userId: string, data: BroadcastDto) {
-    // Проверяем, что бот принадлежит пользователю
+    // Проверяем, что бот существует (права доступа проверены guard'ом)
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
+      where: { id: botId },
     });
 
     if (!bot) {
@@ -1206,9 +1206,9 @@ export class MessagesService {
     fileName?: string;
     token: string;
   } | null> {
-    // Проверяем, что бот принадлежит пользователю
+    // Проверяем, что бот существует (права доступа проверены guard'ом)
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
+      where: { id: botId },
     });
 
     if (!bot) {

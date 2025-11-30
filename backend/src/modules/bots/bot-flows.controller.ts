@@ -16,13 +16,19 @@ import {
   ApiBearerAuth,
 } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { BotPermissionGuard } from "./guards/bot-permission.guard";
 import { UseGuards } from "@nestjs/common";
 import { BotFlowsService } from "./bot-flows.service";
 import { CreateFlowDto, UpdateFlowDto } from "./dto/flow.dto";
+import { BotPermission } from "./decorators/bot-permission.decorator";
+import {
+  BotEntity,
+  PermissionAction,
+} from "../../database/entities/bot-user-permission.entity";
 
 @ApiTags("Диалоги бота")
 @Controller("bots/:botId/flows")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, BotPermissionGuard)
 @ApiBearerAuth()
 export class BotFlowsController {
   constructor(private readonly botFlowsService: BotFlowsService) {}
@@ -45,6 +51,7 @@ export class BotFlowsController {
   @ApiResponse({ status: 200, description: "Список диалогов получен" })
   @ApiResponse({ status: 401, description: "Неавторизован" })
   @ApiResponse({ status: 404, description: "Бот не найден" })
+  @BotPermission(BotEntity.FLOWS, PermissionAction.READ)
   async findAll(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Request() req: any
@@ -57,6 +64,7 @@ export class BotFlowsController {
   @ApiResponse({ status: 200, description: "Диалог получен" })
   @ApiResponse({ status: 401, description: "Неавторизован" })
   @ApiResponse({ status: 404, description: "Диалог не найден" })
+  @BotPermission(BotEntity.FLOWS, PermissionAction.READ)
   async findOne(
     @Param("botId", ParseUUIDPipe) botId: string,
     @Param("flowId", ParseUUIDPipe) flowId: string,

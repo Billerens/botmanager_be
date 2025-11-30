@@ -23,6 +23,12 @@ import {
   getSchemaPath,
 } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
+import { BotPermissionGuard } from "../../bots/guards/bot-permission.guard";
+import { BotPermission } from "../../bots/decorators/bot-permission.decorator";
+import {
+  BotEntity,
+  PermissionAction,
+} from "../../../database/entities/bot-user-permission.entity";
 import { CustomPagesService } from "../services/custom-pages.service";
 import {
   CreateCustomPageDto,
@@ -32,7 +38,7 @@ import { CustomPageResponseDto } from "../dto/custom-page-response.dto";
 
 @ApiTags("Кастомные страницы")
 @Controller("bots/:botId/custom-pages")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, BotPermissionGuard)
 @ApiBearerAuth()
 export class CustomPagesController {
   constructor(private readonly customPagesService: CustomPagesService) {}
@@ -50,6 +56,7 @@ export class CustomPagesController {
     status: 404,
     description: "Бот не найден",
   })
+  @BotPermission(BotEntity.CUSTOM_PAGES, PermissionAction.CREATE)
   @ApiResponse({
     status: 409,
     description: "Slug или команда уже используются",
@@ -76,6 +83,7 @@ export class CustomPagesController {
       items: { $ref: getSchemaPath(CustomPageResponseDto) },
     },
   })
+  @BotPermission(BotEntity.CUSTOM_PAGES, PermissionAction.READ)
   async findAll(
     @Param("botId") botId: string
   ): Promise<CustomPageResponseDto[]> {
@@ -95,6 +103,7 @@ export class CustomPagesController {
     status: 404,
     description: "Страница не найдена",
   })
+  @BotPermission(BotEntity.CUSTOM_PAGES, PermissionAction.READ)
   async findOne(
     @Param("botId") botId: string,
     @Param("id") id: string
@@ -111,6 +120,7 @@ export class CustomPagesController {
       $ref: getSchemaPath(CustomPageResponseDto),
     },
   })
+  @BotPermission(BotEntity.CUSTOM_PAGES, PermissionAction.UPDATE)
   @ApiResponse({
     status: 404,
     description: "Страница не найдена",
@@ -139,6 +149,7 @@ export class CustomPagesController {
     status: 200,
     description: "Страница удалена",
   })
+  @BotPermission(BotEntity.CUSTOM_PAGES, PermissionAction.DELETE)
   @ApiResponse({
     status: 404,
     description: "Страница не найдена",
@@ -152,6 +163,7 @@ export class CustomPagesController {
   }
 
   @Post(":id/upload-bundle")
+  @BotPermission(BotEntity.CUSTOM_PAGES, PermissionAction.UPDATE)
   @UseInterceptors(
     FileInterceptor("file", {
       limits: {

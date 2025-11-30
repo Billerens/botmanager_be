@@ -32,10 +32,16 @@ import {
   ErrorResponseDto,
 } from "./dto/category-response.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { BotPermissionGuard } from "../bots/guards/bot-permission.guard";
+import { BotPermission } from "../bots/decorators/bot-permission.decorator";
+import {
+  BotEntity,
+  PermissionAction,
+} from "../../database/entities/bot-user-permission.entity";
 
 @ApiTags("Категории товаров")
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, BotPermissionGuard)
 @Controller("bots/:botId/categories")
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
@@ -54,6 +60,7 @@ export class CategoriesController {
     description: "Бот или родительская категория не найдена",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.CATEGORIES, PermissionAction.CREATE)
   create(
     @Param("botId") botId: string,
     @Request() req: any,
@@ -70,6 +77,7 @@ export class CategoriesController {
     description: "Список категорий получен",
     type: [CategoryResponseDto],
   })
+  @BotPermission(BotEntity.CATEGORIES, PermissionAction.READ)
   findAll(
     @Param("botId") botId: string,
     @Request() req: any,
@@ -85,6 +93,7 @@ export class CategoriesController {
     description: "Дерево категорий получено",
     type: [CategoryResponseDto],
   })
+  @BotPermission(BotEntity.CATEGORIES, PermissionAction.READ)
   findTree(@Param("botId") botId: string, @Request() req: any) {
     return this.categoriesService.findTree(botId, req.user.id);
   }
@@ -103,6 +112,7 @@ export class CategoriesController {
     description: "Категория не найдена",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.CATEGORIES, PermissionAction.READ)
   findOne(
     @Param("botId") botId: string,
     @Param("id") id: string,
@@ -126,6 +136,7 @@ export class CategoriesController {
     description: "Категория не найдена",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.PRODUCTS, PermissionAction.READ)
   getCategoryProducts(
     @Param("botId") botId: string,
     @Param("id") id: string,
@@ -152,6 +163,7 @@ export class CategoriesController {
     description: "Категория не найдена",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.CATEGORIES, PermissionAction.READ)
   getCategoryStats(
     @Param("botId") botId: string,
     @Param("id") id: string,
@@ -174,6 +186,7 @@ export class CategoriesController {
     description: "Категория не найдена",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.CATEGORIES, PermissionAction.UPDATE)
   update(
     @Param("botId") botId: string,
     @Param("id") id: string,
@@ -206,6 +219,7 @@ export class CategoriesController {
     description: "Категория не найдена",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.CATEGORIES, PermissionAction.DELETE)
   remove(
     @Param("botId") botId: string,
     @Param("id") id: string,

@@ -52,9 +52,9 @@ export class ShopPromocodesService {
     createDto: CreateShopPromocodeDto,
     userId: string
   ): Promise<ShopPromocode> {
-    // Проверяем, что бот принадлежит пользователю
+    // Проверяем, что бот существует (права доступа проверены guard'ом)
     const bot = await this.botRepository.findOne({
-      where: { id: createDto.botId, ownerId: userId },
+      where: { id: createDto.botId },
     });
 
     if (!bot) {
@@ -622,7 +622,7 @@ export class ShopPromocodesService {
     userId: string
   ): Promise<void> {
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
+      where: { id: botId },
     });
 
     if (!bot) {

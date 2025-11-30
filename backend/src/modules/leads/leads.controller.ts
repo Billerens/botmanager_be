@@ -19,6 +19,12 @@ import {
 
 import { LeadsService } from "./leads.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { BotPermissionGuard } from "../bots/guards/bot-permission.guard";
+import { BotPermission } from "../bots/decorators/bot-permission.decorator";
+import {
+  BotEntity,
+  PermissionAction,
+} from "../../database/entities/bot-user-permission.entity";
 import { CreateLeadDto, UpdateLeadDto } from "./dto/lead.dto";
 import {
   LeadResponseDto,
@@ -29,7 +35,7 @@ import {
 
 @ApiTags("Заявки")
 @Controller("leads")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, BotPermissionGuard)
 @ApiBearerAuth()
 export class LeadsController {
   constructor(private readonly leadsService: LeadsService) {}
@@ -59,6 +65,7 @@ export class LeadsController {
       },
     },
   })
+  @BotPermission(BotEntity.LEADS, PermissionAction.READ)
   async findByBot(
     @Param("botId") botId: string,
     @Query("page") page: number = 1,
@@ -89,6 +96,7 @@ export class LeadsController {
       $ref: getSchemaPath(LeadResponseDto),
     },
   })
+  @BotPermission(BotEntity.LEADS, PermissionAction.UPDATE)
   async update(@Param("id") id: string, @Body() updateLeadDto: UpdateLeadDto) {
     return this.leadsService.update(id, updateLeadDto);
   }
@@ -102,6 +110,7 @@ export class LeadsController {
       $ref: getSchemaPath(DeleteResponseDto),
     },
   })
+  @BotPermission(BotEntity.LEADS, PermissionAction.DELETE)
   async remove(@Param("id") id: string) {
     return this.leadsService.delete(id);
   }
@@ -115,6 +124,7 @@ export class LeadsController {
       $ref: getSchemaPath(LeadStatsResponseDto),
     },
   })
+  @BotPermission(BotEntity.ANALYTICS, PermissionAction.READ)
   async getStats(@Param("botId") botId: string) {
     return this.leadsService.getStats(botId);
   }

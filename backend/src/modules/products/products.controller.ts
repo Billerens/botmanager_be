@@ -35,10 +35,16 @@ import {
   DeleteResponseDto,
 } from "./dto/product-response.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { BotPermissionGuard } from "../bots/guards/bot-permission.guard";
+import { BotPermission } from "../bots/decorators/bot-permission.decorator";
+import {
+  BotEntity,
+  PermissionAction,
+} from "../../database/entities/bot-user-permission.entity";
 
 @ApiTags("Продукты")
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, BotPermissionGuard)
 @Controller("bots/:botId/products")
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
@@ -57,6 +63,7 @@ export class ProductsController {
     description: "Бот не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.PRODUCTS, PermissionAction.CREATE)
   create(
     @Param("botId") botId: string,
     @Request() req: any,
@@ -78,6 +85,7 @@ export class ProductsController {
       },
     },
   })
+  @BotPermission(BotEntity.PRODUCTS, PermissionAction.READ)
   findAll(
     @Param("botId") botId: string,
     @Request() req: any,
@@ -113,6 +121,7 @@ export class ProductsController {
     description: "Товар не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.PRODUCTS, PermissionAction.READ)
   findOne(
     @Param("botId") botId: string,
     @Param("id") id: string,
@@ -135,6 +144,7 @@ export class ProductsController {
     description: "Товар не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.PRODUCTS, PermissionAction.UPDATE)
   update(
     @Param("botId") botId: string,
     @Param("id") id: string,
@@ -164,6 +174,7 @@ export class ProductsController {
     description: "Товар не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.PRODUCTS, PermissionAction.UPDATE)
   updateStock(
     @Param("botId") botId: string,
     @Param("id") id: string,
@@ -192,6 +203,7 @@ export class ProductsController {
     description: "Товар не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.PRODUCTS, PermissionAction.UPDATE)
   toggleActive(
     @Param("botId") botId: string,
     @Param("id") id: string,
@@ -215,6 +227,7 @@ export class ProductsController {
     description: "Товар не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.PRODUCTS, PermissionAction.DELETE)
   remove(
     @Param("botId") botId: string,
     @Param("id") id: string,

@@ -32,10 +32,16 @@ import {
 } from "../dto/booking-response.dto";
 import { BookingStatus } from "../../../database/entities/booking.entity";
 import { JwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
+import { BotPermissionGuard } from "../../bots/guards/bot-permission.guard";
+import { BotPermission } from "../../bots/decorators/bot-permission.decorator";
+import {
+  BotEntity,
+  PermissionAction,
+} from "../../../database/entities/bot-user-permission.entity";
 
 @ApiTags("Бронирования")
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, BotPermissionGuard)
 @Controller("bookings")
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
@@ -54,6 +60,7 @@ export class BookingsController {
     description: "Неверные данные",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.BOOKINGS, PermissionAction.CREATE)
   async create(
     @Body() createBookingDto: CreateBookingDto,
     @Query("botId") botId: string,
@@ -74,6 +81,7 @@ export class BookingsController {
       },
     },
   })
+  @BotPermission(BotEntity.BOOKINGS, PermissionAction.READ)
   async findAll(@Query("botId") botId: string, @Request() req) {
     return this.bookingsService.findAll(botId);
   }
@@ -90,6 +98,7 @@ export class BookingsController {
       },
     },
   })
+  @BotPermission(BotEntity.BOOKINGS, PermissionAction.READ)
   async findBySpecialist(
     @Param("specialistId") specialistId: string,
     @Query("botId") botId: string,
@@ -110,6 +119,7 @@ export class BookingsController {
       },
     },
   })
+  @BotPermission(BotEntity.BOOKINGS, PermissionAction.READ)
   async findByDateRange(
     @Query("startDate") startDate: string,
     @Query("endDate") endDate: string,
@@ -133,6 +143,7 @@ export class BookingsController {
       },
     },
   })
+  @BotPermission(BotEntity.BOOKINGS, PermissionAction.READ)
   async getByStatus(
     @Param("status") status: BookingStatus,
     @Query("botId") botId: string,
@@ -153,6 +164,7 @@ export class BookingsController {
       },
     },
   })
+  @BotPermission(BotEntity.BOOKINGS, PermissionAction.READ)
   async getUpcoming(
     @Query("limit") limit: string,
     @Query("botId") botId: string,
@@ -171,6 +183,7 @@ export class BookingsController {
       $ref: getSchemaPath(BookingStatsResponseDto),
     },
   })
+  @BotPermission(BotEntity.ANALYTICS, PermissionAction.READ)
   async getStatistics(@Query("botId") botId: string, @Request() req) {
     return this.bookingsService.getStatistics(botId);
   }
@@ -189,6 +202,7 @@ export class BookingsController {
     description: "Бронирование не найдено",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.BOOKINGS, PermissionAction.READ)
   async findOne(
     @Param("id") id: string,
     @Query("botId") botId: string,

@@ -88,9 +88,9 @@ export class BotFlowsService {
   }
 
   async findAllFlows(botId: string, userId: string): Promise<BotFlow[]> {
-    // Проверяем, что бот принадлежит пользователю
+    // Проверяем, что бот существует (права доступа проверены guard'ом)
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
+      where: { id: botId },
     });
 
     if (!bot) {
@@ -108,9 +108,9 @@ export class BotFlowsService {
     botId: string,
     userId: string
   ): Promise<BotFlow> {
-    // Проверяем, что бот принадлежит пользователю
+    // Проверяем, что бот существует (права доступа проверены guard'ом)
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
+      where: { id: botId },
     });
 
     if (!bot) {

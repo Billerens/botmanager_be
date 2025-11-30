@@ -25,10 +25,16 @@ import {
   ShopPromocodeFiltersDto,
 } from "./dto/shop-promocode.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { BotPermissionGuard } from "../bots/guards/bot-permission.guard";
+import { BotPermission } from "../bots/decorators/bot-permission.decorator";
+import {
+  BotEntity,
+  PermissionAction,
+} from "../../database/entities/bot-user-permission.entity";
 
 @ApiTags("Промокоды магазина")
 @Controller("bots/:botId/shop-promocodes")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, BotPermissionGuard)
 @ApiBearerAuth()
 export class ShopPromocodesController {
   constructor(
@@ -42,6 +48,7 @@ export class ShopPromocodesController {
     status: 201,
     description: "Промокод создан",
   })
+  @BotPermission(BotEntity.SHOP_PROMOCODES, PermissionAction.CREATE)
   @ApiResponse({
     status: 400,
     description: "Неверные данные",
@@ -68,6 +75,7 @@ export class ShopPromocodesController {
     status: 200,
     description: "Список промокодов",
   })
+  @BotPermission(BotEntity.SHOP_PROMOCODES, PermissionAction.READ)
   async findAll(
     @Param("botId") botId: string,
     @Request() req,
@@ -89,6 +97,7 @@ export class ShopPromocodesController {
     status: 404,
     description: "Промокод не найден",
   })
+  @BotPermission(BotEntity.SHOP_PROMOCODES, PermissionAction.READ)
   async findOne(
     @Param("botId") botId: string,
     @Param("id") id: string,
@@ -105,6 +114,7 @@ export class ShopPromocodesController {
     status: 200,
     description: "Промокод обновлен",
   })
+  @BotPermission(BotEntity.SHOP_PROMOCODES, PermissionAction.UPDATE)
   @ApiResponse({
     status: 400,
     description: "Неверные данные",
@@ -130,6 +140,7 @@ export class ShopPromocodesController {
     status: 200,
     description: "Промокод удален",
   })
+  @BotPermission(BotEntity.SHOP_PROMOCODES, PermissionAction.DELETE)
   @ApiResponse({
     status: 404,
     description: "Промокод не найден",

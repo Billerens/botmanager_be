@@ -26,10 +26,16 @@ import {
   ScheduleResponseDto,
 } from "../dto/booking-response.dto";
 import { JwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
+import { BotPermissionGuard } from "../../bots/guards/bot-permission.guard";
+import { BotPermission } from "../../bots/decorators/bot-permission.decorator";
+import {
+  BotEntity,
+  PermissionAction,
+} from "../../../database/entities/bot-user-permission.entity";
 
 @ApiTags("Специалисты")
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, BotPermissionGuard)
 @Controller("specialists")
 export class SpecialistsController {
   constructor(private readonly specialistsService: SpecialistsService) {}
@@ -48,6 +54,7 @@ export class SpecialistsController {
     description: "Неверные данные",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.SPECIALISTS, PermissionAction.CREATE)
   async create(
     @Body() createSpecialistDto: CreateSpecialistDto,
     @Query("botId") botId: string,
@@ -68,6 +75,7 @@ export class SpecialistsController {
       },
     },
   })
+  @BotPermission(BotEntity.SPECIALISTS, PermissionAction.READ)
   async findAll(@Query("botId") botId: string, @Request() req) {
     return this.specialistsService.findAll(botId);
   }
@@ -86,6 +94,7 @@ export class SpecialistsController {
     description: "Специалист не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.SPECIALISTS, PermissionAction.READ)
   async findOne(
     @Param("id") id: string,
     @Query("botId") botId: string,
@@ -108,6 +117,7 @@ export class SpecialistsController {
     description: "Специалист не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.SPECIALISTS, PermissionAction.UPDATE)
   async update(
     @Param("id") id: string,
     @Body() updateSpecialistDto: UpdateSpecialistDto,
@@ -131,6 +141,7 @@ export class SpecialistsController {
     description: "Специалист не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
+  @BotPermission(BotEntity.SPECIALISTS, PermissionAction.DELETE)
   async remove(
     @Param("id") id: string,
     @Query("botId") botId: string,
@@ -149,6 +160,7 @@ export class SpecialistsController {
       $ref: getSchemaPath(ScheduleResponseDto),
     },
   })
+  @BotPermission(BotEntity.SPECIALISTS, PermissionAction.READ)
   async getSchedule(
     @Param("id") id: string,
     @Query("botId") botId: string,
@@ -166,6 +178,7 @@ export class SpecialistsController {
       $ref: getSchemaPath(ScheduleResponseDto),
     },
   })
+  @BotPermission(BotEntity.SPECIALISTS, PermissionAction.UPDATE)
   async updateSchedule(
     @Param("id") id: string,
     @Body() workingHours: any,
@@ -184,6 +197,7 @@ export class SpecialistsController {
       $ref: getSchemaPath(ScheduleResponseDto),
     },
   })
+  @BotPermission(BotEntity.SPECIALISTS, PermissionAction.READ)
   async getScheduleForDay(
     @Param("id") id: string,
     @Param("date") date: string,

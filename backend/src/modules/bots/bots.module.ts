@@ -73,6 +73,7 @@ import { GroupActionsProcessor } from "./processors/group-actions.processor";
 import { BotPermissionsService } from "./bot-permissions.service";
 import { BotInvitationsService } from "./bot-invitations.service";
 import { BotNotificationsService } from "./bot-notifications.service";
+import { BotPermissionGuard } from "./guards/bot-permission.guard";
 
 @Module({
   imports: [
@@ -145,6 +146,7 @@ import { BotNotificationsService } from "./bot-notifications.service";
     GroupJoinNodeHandler,
     GroupActionNodeHandler,
     GroupLeaveNodeHandler,
+    BotPermissionGuard,
     BotPermissionsService,
     BotInvitationsService,
     BotNotificationsService,

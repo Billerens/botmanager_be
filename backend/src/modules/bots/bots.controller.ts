@@ -24,6 +24,7 @@ import {
 
 import { BotsService } from "./bots.service";
 import { JwtAuthGuard, Public } from "../auth/guards/jwt-auth.guard";
+import { BotPermissionGuard } from "./guards/bot-permission.guard";
 import { CreateBotDto, UpdateBotDto } from "./dto/bot.dto";
 import { BotResponseDto, BotStatsResponseDto } from "./dto/bot-response.dto";
 import { ButtonSettingsDto } from "./dto/command-button-settings.dto";
@@ -47,7 +48,7 @@ import {
 
 @ApiTags("Боты")
 @Controller("bots")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, BotPermissionGuard)
 @ApiBearerAuth()
 export class BotsController {
   constructor(
@@ -97,6 +98,7 @@ export class BotsController {
     },
   })
   @ApiResponse({ status: 404, description: "Бот не найден" })
+  @BotPermission(BotEntity.ANALYTICS, PermissionAction.READ)
   async getStats(@Param("id") id: string, @Request() req) {
     return this.botsService.getStats(id, req.user.id);
   }
@@ -109,6 +111,7 @@ export class BotsController {
     description: "Бот уже активен или ошибка активации",
   })
   @ApiResponse({ status: 404, description: "Бот не найден" })
+  @BotPermission(BotEntity.BOT_SETTINGS, PermissionAction.UPDATE)
   async activate(@Param("id") id: string, @Request() req) {
     return this.botsService.activate(id, req.user.id);
   }
@@ -118,6 +121,7 @@ export class BotsController {
   @ApiResponse({ status: 200, description: "Бот деактивирован" })
   @ApiResponse({ status: 400, description: "Бот уже неактивен" })
   @ApiResponse({ status: 404, description: "Бот не найден" })
+  @BotPermission(BotEntity.BOT_SETTINGS, PermissionAction.UPDATE)
   async deactivate(@Param("id") id: string, @Request() req) {
     return this.botsService.deactivate(id, req.user.id);
   }
@@ -126,6 +130,7 @@ export class BotsController {
   @ApiOperation({ summary: "Обновить настройки магазина бота" })
   @ApiResponse({ status: 200, description: "Настройки магазина обновлены" })
   @ApiResponse({ status: 404, description: "Бот не найден" })
+  @BotPermission(BotEntity.SHOP_SETTINGS, PermissionAction.UPDATE)
   async updateShopSettings(
     @Param("id") id: string,
     @Body()
@@ -147,6 +152,7 @@ export class BotsController {
   @ApiOperation({ summary: "Обновить настройки бронирования бота" })
   @ApiResponse({ status: 200, description: "Настройки бронирования обновлены" })
   @ApiResponse({ status: 404, description: "Бот не найден" })
+  @BotPermission(BotEntity.BOOKING_SETTINGS, PermissionAction.UPDATE)
   async updateBookingSettings(
     @Param("id") id: string,
     @Body()
@@ -183,6 +189,7 @@ export class BotsController {
   @ApiOperation({ summary: "Получить бота по ID" })
   @ApiResponse({ status: 200, description: "Бот найден" })
   @ApiResponse({ status: 404, description: "Бот не найден" })
+  @BotPermission(BotEntity.BOT_SETTINGS, PermissionAction.READ)
   async findOne(@Param("id") id: string, @Request() req) {
     return this.botsService.findOne(id, req.user.id);
   }
@@ -220,6 +227,7 @@ export class BotsController {
     type: Boolean,
     description: "Скрывать пустые корзины",
   })
+  @BotPermission(BotEntity.CARTS, PermissionAction.READ)
   async getCartsByBotId(
     @Param("id") id: string,
     @Query("hideEmpty") hideEmpty?: string,
@@ -238,6 +246,7 @@ export class BotsController {
     description: "Корзина очищена",
   })
   @ApiResponse({ status: 404, description: "Бот или корзина не найдены" })
+  @BotPermission(BotEntity.CARTS, PermissionAction.DELETE)
   async clearCartByAdmin(
     @Param("id") id: string,
     @Param("cartId") cartId: string,
@@ -271,6 +280,7 @@ export class BotsController {
     status: 404,
     description: "Бот, корзина или товар не найдены",
   })
+  @BotPermission(BotEntity.CARTS, PermissionAction.UPDATE)
   async updateCartItemByAdmin(
     @Param("id") id: string,
     @Param("cartId") cartId: string,
@@ -299,6 +309,7 @@ export class BotsController {
     status: 404,
     description: "Бот, корзина или товар не найдены",
   })
+  @BotPermission(BotEntity.CARTS, PermissionAction.DELETE)
   async removeCartItemByAdmin(
     @Param("id") id: string,
     @Param("cartId") cartId: string,

@@ -487,7 +487,7 @@ export class ProductsService {
     userId: string
   ): Promise<void> {
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId: userId },
+      where: { id: botId },
     });
 
     if (!bot) {

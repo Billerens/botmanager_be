@@ -24,6 +24,12 @@ import { OrdersService } from "./orders.service";
 import { CreateOrderDto, UpdateOrderStatusDto } from "./dto/order.dto";
 import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { BotPermissionGuard } from "../bots/guards/bot-permission.guard";
+import { BotPermission } from "../bots/decorators/bot-permission.decorator";
+import {
+  BotEntity,
+  PermissionAction,
+} from "../../database/entities/bot-user-permission.entity";
 import { OrderStatus } from "../../database/entities/order.entity";
 
 @ApiTags("Публичные эндпоинты - Заказы")
@@ -124,7 +130,7 @@ export class PublicOrdersController {
 
 @ApiTags("Заказы (Админ)")
 @Controller("bots/:botId/orders")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, BotPermissionGuard)
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
@@ -145,6 +151,7 @@ export class OrdersController {
     status: 404,
     description: "Бот не найден",
   })
+  @BotPermission(BotEntity.ORDERS, PermissionAction.READ)
   async getOrdersByBotId(
     @Param("botId") botId: string,
     @Query("status") status?: OrderStatus
@@ -169,6 +176,7 @@ export class OrdersController {
     status: 404,
     description: "Заказ не найден",
   })
+  @BotPermission(BotEntity.ORDERS, PermissionAction.UPDATE)
   async updateOrderStatus(
     @Param("botId") botId: string,
     @Param("orderId") orderId: string,
@@ -194,6 +202,7 @@ export class OrdersController {
     status: 404,
     description: "Заказ не найден",
   })
+  @BotPermission(BotEntity.ORDERS, PermissionAction.DELETE)
   async deleteOrder(
     @Param("botId") botId: string,
     @Param("orderId") orderId: string
@@ -215,6 +224,7 @@ export class OrdersController {
     status: 404,
     description: "Заказ не найден",
   })
+  @BotPermission(BotEntity.ORDERS, PermissionAction.UPDATE)
   async updateOrderCustomerData(
     @Param("botId") botId: string,
     @Param("orderId") orderId: string,

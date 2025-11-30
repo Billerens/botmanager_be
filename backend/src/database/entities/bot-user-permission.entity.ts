@@ -32,6 +32,7 @@ export enum BotEntity {
   SHOP_SETTINGS = "shop_settings",
   BOOKING_SETTINGS = "booking_settings",
   CUSTOM_PAGES = "custom_pages",
+  SHOP_PROMOCODES = "shop_promocodes",
   BOT_USERS = "bot_users",
 }
 
