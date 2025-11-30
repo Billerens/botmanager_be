@@ -300,6 +300,16 @@ export class BotPermissionsService {
   }
 
   /**
+   * Находит пользователя бота по ID записи
+   */
+  async findBotUserById(botUserId: string): Promise<BotUser | null> {
+    return await this.botUserRepository.findOne({
+      where: { id: botUserId },
+      relations: ["user"],
+    });
+  }
+
+  /**
    * Удаляет пользователя из бота
    */
   async removeUserFromBot(botId: string, userId: string): Promise<void> {

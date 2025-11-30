@@ -405,13 +405,19 @@ export class BotsController {
   @BotPermission(BotEntity.BOT_USERS, PermissionAction.UPDATE)
   async updateUserPermissions(
     @Param("id") botId: string,
-    @Param("userId") userId: string,
+    @Param("userId") botUserId: string,
     @Body() dto: UpdateBotUserPermissionsDto,
     @Request() req
   ) {
+    // Находим пользователя бота по ID записи bot_users
+    const botUser = await this.botPermissionsService.findBotUserById(botUserId);
+    if (!botUser || botUser.botId !== botId) {
+      throw new NotFoundException("Пользователь бота не найден");
+    }
+
     await this.botPermissionsService.setBulkPermissions(
       botId,
-      userId,
+      botUser.userId,
       dto.permissions,
       req.user.id
     );
@@ -427,9 +433,15 @@ export class BotsController {
   @BotPermission(BotEntity.BOT_USERS, PermissionAction.DELETE)
   async removeUserFromBot(
     @Param("id") botId: string,
-    @Param("userId") userId: string
+    @Param("userId") botUserId: string
   ) {
-    await this.botPermissionsService.removeUserFromBot(botId, userId);
+    // Находим пользователя бота по ID записи bot_users
+    const botUser = await this.botPermissionsService.findBotUserById(botUserId);
+    if (!botUser || botUser.botId !== botId) {
+      throw new NotFoundException("Пользователь бота не найден");
+    }
+
+    await this.botPermissionsService.removeUserFromBot(botId, botUser.userId);
     return { message: "Пользователь удален из бота" };
   }
 
