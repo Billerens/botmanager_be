@@ -16,7 +16,7 @@ import { BotsModule } from "../bots/bots.module";
     TypeOrmModule.forFeature([CustomPage, Bot]),
     UploadModule,
     forwardRef(() => TelegramModule),
-    BotsModule,
+    forwardRef(() => BotsModule),
   ],
   providers: [CustomPagesService, CustomPagesBotService],
   controllers: [CustomPagesController, PublicCustomPagesController],

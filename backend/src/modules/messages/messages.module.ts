@@ -13,7 +13,7 @@ import { BotsModule } from "../bots/bots.module";
     TypeOrmModule.forFeature([Message, Bot]),
     forwardRef(() => TelegramModule),
     ActivityLogModule,
-    BotsModule,
+    forwardRef(() => BotsModule),
   ],
   controllers: [MessagesController],
   providers: [MessagesService],

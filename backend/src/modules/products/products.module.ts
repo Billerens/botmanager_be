@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { ProductsService } from "./products.service";
 import { ProductsController } from "./products.controller";
@@ -14,7 +14,7 @@ import { BotsModule } from "../bots/bots.module";
     TypeOrmModule.forFeature([Product, Category, Bot]),
     UploadModule,
     ActivityLogModule,
-    BotsModule,
+    forwardRef(() => BotsModule),
   ],
   controllers: [ProductsController],
   providers: [ProductsService],
