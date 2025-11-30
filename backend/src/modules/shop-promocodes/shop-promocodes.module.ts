@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { ShopPromocodesService } from "./shop-promocodes.service";
 import { ShopPromocodesController } from "./shop-promocodes.controller";
@@ -13,11 +13,10 @@ import { BotsModule } from "../bots/bots.module";
   imports: [
     TypeOrmModule.forFeature([ShopPromocode, Bot, Category, Product]),
     ActivityLogModule,
-    BotsModule,
+    forwardRef(() => BotsModule),
   ],
   controllers: [ShopPromocodesController],
   providers: [ShopPromocodesService],
   exports: [ShopPromocodesService],
 })
 export class ShopPromocodesModule {}
-
