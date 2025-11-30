@@ -20,6 +20,7 @@ import { Cart } from "../../database/entities/cart.entity";
 import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
 import { TimeSlot } from "../../database/entities/time-slot.entity";
 import { CustomPage } from "../../database/entities/custom-page.entity";
+import { User } from "../../database/entities/user.entity";
 import { BotUser } from "../../database/entities/bot-user.entity";
 import { BotUserPermission } from "../../database/entities/bot-user-permission.entity";
 import { BotInvitation } from "../../database/entities/bot-invitation.entity";
@@ -93,6 +94,7 @@ import { BotNotificationsService } from "./bot-notifications.service";
       ShopPromocode,
       TimeSlot,
       CustomPage,
+      User,
       BotUser,
       BotUserPermission,
       BotInvitation,
