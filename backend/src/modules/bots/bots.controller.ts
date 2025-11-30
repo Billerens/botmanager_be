@@ -169,6 +169,16 @@ export class BotsController {
     );
   }
 
+  @Get("shared")
+  @ApiOperation({ summary: "Получить боты доступные пользователю" })
+  @ApiResponse({
+    status: 200,
+    description: "Список ботов получен",
+  })
+  async getSharedBots(@Request() req) {
+    return await this.botPermissionsService.getUserBots(req.user.id);
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "Получить бота по ID" })
   @ApiResponse({ status: 200, description: "Бот найден" })
@@ -618,15 +628,5 @@ export class BotsController {
           }
         : undefined,
     }));
-  }
-
-  @Get("shared")
-  @ApiOperation({ summary: "Получить боты доступные пользователю" })
-  @ApiResponse({
-    status: 200,
-    description: "Список ботов получен",
-  })
-  async getSharedBots(@Request() req) {
-    return await this.botPermissionsService.getUserBots(req.user.id);
   }
 }
