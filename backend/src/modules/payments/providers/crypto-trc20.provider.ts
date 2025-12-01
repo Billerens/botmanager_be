@@ -92,7 +92,8 @@ export class CryptoTRC20Provider extends BasePaymentProvider {
     return {
       name: "USDT TRC-20",
       type: "crypto_trc20",
-      supportedCurrencies: ["USDT"],
+      // Поддерживаем фиатные валюты - они конвертируются в USDT
+      supportedCurrencies: ["RUB", "USD", "EUR", "GBP"],
       supportedMethods: ["crypto"],
       testMode: this.testMode,
     };
@@ -173,6 +174,9 @@ export class CryptoTRC20Provider extends BasePaymentProvider {
         id: paymentId,
         expectedAmount: uniqueAmount,
         originalAmount: request.amount.value,
+        originalCurrency: request.amount.currency,
+        exchangeRate:
+          request.amount.value > 0 ? uniqueAmount / request.amount.value : 1,
         walletAddress: this.config.walletAddress,
         createdAt: now,
         expiresAt,
