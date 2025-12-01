@@ -355,16 +355,13 @@ export class CryptoTRC20Provider extends BasePaymentProvider {
 
   /**
    * Генерация уникальной суммы с "копейками"
+   * Добавляет минимальную уникальную часть (0.0001 - 0.0999 USDT, т.е. максимум ~10 центов)
+   * Это достаточно для уникальной идентификации и при этом не создаёт значительной переплаты
    */
   private generateUniqueAmount(baseAmount: number): number {
-    // Генерируем случайные 4 цифры после запятой (0.0001 - 0.9999)
-    const randomCents = Math.floor(Math.random() * 9999) + 1;
-    const uniquePart = randomCents / 10000;
-
-    // Для сумм < 10 добавляем меньше копеек
-    if (baseAmount < 10) {
-      return parseFloat((baseAmount + uniquePart / 10).toFixed(4));
-    }
+    // Генерируем случайное число 1-999, что даёт диапазон 0.0001 - 0.0999
+    const randomCents = Math.floor(Math.random() * 999) + 1;
+    const uniquePart = randomCents / 10000; // 0.0001 - 0.0999
 
     return parseFloat((baseAmount + uniquePart).toFixed(4));
   }
