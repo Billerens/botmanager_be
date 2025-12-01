@@ -30,7 +30,7 @@ export class StripeProvider extends BasePaymentProvider {
     super('stripe', testMode);
     this.config = config;
     this.client = new Stripe(config.secretKey, {
-      apiVersion: '2025-11-20.acacia',
+      apiVersion: '2025-11-17.clover',
     });
   }
 
@@ -51,7 +51,7 @@ export class StripeProvider extends BasePaymentProvider {
       if (!result.success) {
         return {
           valid: false,
-          errors: result.error.errors.map((e) => e.message),
+          errors: result.error.issues.map((e) => e.message),
         };
       }
 

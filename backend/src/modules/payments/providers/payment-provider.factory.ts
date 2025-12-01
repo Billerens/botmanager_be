@@ -112,7 +112,7 @@ export class PaymentProviderFactory implements IPaymentProviderFactory {
     }
 
     if (!result.success) {
-      const errors = result.error.errors.map((e) => e.message).join(', ');
+      const errors = result.error.issues.map((e) => e.message).join(', ');
       throw new PaymentError(
         `Ошибка конфигурации ${type}: ${errors}`,
         PaymentErrorCode.INVALID_CONFIG,

@@ -1,6 +1,6 @@
-import * as crypto from 'crypto';
-import axios from 'axios';
-import { BasePaymentProvider } from './base-payment.provider';
+import * as crypto from "crypto";
+import axios from "axios";
+import { BasePaymentProvider } from "./base-payment.provider";
 import {
   ValidationResult,
   PaymentRequest,
@@ -11,13 +11,13 @@ import {
   WebhookData,
   ProviderInfo,
   PaymentErrorCode,
-} from '../interfaces/payment-provider.interface';
+} from "../interfaces/payment-provider.interface";
 import {
   RobokassaConfig,
   RobokassaConfigSchema,
   PaymentStatus,
   Currency,
-} from '../schemas/payment.schemas';
+} from "../schemas/payment.schemas";
 
 /**
  * Провайдер для Robokassa
@@ -28,19 +28,19 @@ export class RobokassaProvider extends BasePaymentProvider {
   private baseUrl: string;
 
   constructor(config: RobokassaConfig, testMode: boolean = false) {
-    super('robokassa', testMode);
+    super("robokassa", testMode);
     this.config = config;
     this.baseUrl = testMode
-      ? 'https://auth.robokassa.ru/Merchant/Index.aspx'
-      : 'https://auth.robokassa.ru/Merchant/Index.aspx';
+      ? "https://auth.robokassa.ru/Merchant/Index.aspx"
+      : "https://auth.robokassa.ru/Merchant/Index.aspx";
   }
 
   get info(): ProviderInfo {
     return {
-      name: 'Robokassa',
-      type: 'robokassa',
-      supportedCurrencies: ['RUB', 'USD', 'EUR'],
-      supportedMethods: ['card', 'wallet', 'bank_transfer', 'crypto'],
+      name: "Robokassa",
+      type: "robokassa",
+      supportedCurrencies: ["RUB", "USD", "EUR"],
+      supportedMethods: ["card", "wallet", "bank_transfer", "crypto"],
       testMode: this.testMode,
     };
   }
@@ -52,7 +52,7 @@ export class RobokassaProvider extends BasePaymentProvider {
       if (!result.success) {
         return {
           valid: false,
-          errors: result.error.errors.map((e) => e.message),
+          errors: result.error.issues.map((e) => e.message),
         };
       }
 
@@ -60,13 +60,13 @@ export class RobokassaProvider extends BasePaymentProvider {
     } catch (error) {
       return {
         valid: false,
-        errors: ['Ошибка валидации конфигурации'],
+        errors: ["Ошибка валидации конфигурации"],
       };
     }
   }
 
   async createPayment(request: PaymentRequest): Promise<PaymentResult> {
-    this.logOperation('createPayment', {
+    this.logOperation("createPayment", {
       amount: request.amount,
       orderId: request.orderId,
     });
@@ -80,7 +80,7 @@ export class RobokassaProvider extends BasePaymentProvider {
       const signature = this.generateSignature(
         request.amount.value,
         invoiceId,
-        this.config.password1,
+        this.config.password1
       );
 
       // Формируем URL для оплаты
@@ -88,20 +88,20 @@ export class RobokassaProvider extends BasePaymentProvider {
         MerchantLogin: this.config.merchantLogin,
         OutSum: request.amount.value.toFixed(2),
         InvId: invoiceId,
-        Description: request.description || 'Оплата заказа',
+        Description: request.description || "Оплата заказа",
         SignatureValue: signature,
-        Culture: this.config.culture || 'ru',
-        Encoding: 'utf-8',
+        Culture: this.config.culture || "ru",
+        Encoding: "utf-8",
       });
 
       // Добавляем тестовый режим
       if (this.testMode || this.config.isTest) {
-        params.append('IsTest', '1');
+        params.append("IsTest", "1");
       }
 
       // Добавляем email если есть
       if (request.customer?.email) {
-        params.append('Email', request.customer.email);
+        params.append("Email", request.customer.email);
       }
 
       // Добавляем дополнительные параметры
@@ -116,7 +116,7 @@ export class RobokassaProvider extends BasePaymentProvider {
       return {
         id: invoiceId,
         externalId: invoiceId,
-        status: 'pending',
+        status: "pending",
         amount: request.amount,
         paymentUrl,
         createdAt: new Date(),
@@ -126,18 +126,20 @@ export class RobokassaProvider extends BasePaymentProvider {
         },
       };
     } catch (error: any) {
-      this.logError('createPayment', error, { request });
+      this.logError("createPayment", error, { request });
       throw this.createPaymentError(
-        error.message || 'Ошибка создания платежа',
+        error.message || "Ошибка создания платежа",
         PaymentErrorCode.PROVIDER_ERROR,
         false,
-        error,
+        error
       );
     }
   }
 
-  async getPaymentStatus(externalPaymentId: string): Promise<PaymentStatusInfo> {
-    this.logOperation('getPaymentStatus', { externalPaymentId });
+  async getPaymentStatus(
+    externalPaymentId: string
+  ): Promise<PaymentStatusInfo> {
+    this.logOperation("getPaymentStatus", { externalPaymentId });
 
     try {
       // Robokassa не предоставляет API для проверки статуса
@@ -145,18 +147,18 @@ export class RobokassaProvider extends BasePaymentProvider {
       // Можно использовать XML-интерфейс для проверки
 
       const signature = this.generateMd5(
-        `${this.config.merchantLogin}:${externalPaymentId}:${this.config.password2}`,
+        `${this.config.merchantLogin}:${externalPaymentId}:${this.config.password2}`
       );
 
       const response = await axios.get(
-        'https://auth.robokassa.ru/Merchant/WebService/Service.asmx/OpStateExt',
+        "https://auth.robokassa.ru/Merchant/WebService/Service.asmx/OpStateExt",
         {
           params: {
             MerchantLogin: this.config.merchantLogin,
             InvoiceID: externalPaymentId,
             Signature: signature,
           },
-        },
+        }
       );
 
       // Парсим XML ответ
@@ -168,26 +170,26 @@ export class RobokassaProvider extends BasePaymentProvider {
         status: this.mapStateToStatus(state),
         amount: {
           value: 0, // Robokassa не возвращает сумму в этом запросе
-          currency: 'RUB' as Currency,
+          currency: "RUB" as Currency,
         },
       };
     } catch (error: any) {
-      this.logError('getPaymentStatus', error, { externalPaymentId });
+      this.logError("getPaymentStatus", error, { externalPaymentId });
 
       // Если API недоступен, возвращаем pending
       return {
         id: externalPaymentId,
-        status: 'pending',
+        status: "pending",
         amount: {
           value: 0,
-          currency: 'RUB' as Currency,
+          currency: "RUB" as Currency,
         },
       };
     }
   }
 
   async refund(request: RefundRequest): Promise<RefundResult> {
-    this.logOperation('refund', {
+    this.logOperation("refund", {
       paymentId: request.paymentId,
       amount: request.amount,
     });
@@ -195,39 +197,39 @@ export class RobokassaProvider extends BasePaymentProvider {
     // Robokassa не поддерживает автоматические возвраты через API
     // Возвраты делаются вручную через личный кабинет
     throw this.createPaymentError(
-      'Robokassa не поддерживает автоматические возвраты. Используйте личный кабинет.',
+      "Robokassa не поддерживает автоматические возвраты. Используйте личный кабинет.",
       PaymentErrorCode.REFUND_FAILED,
-      false,
+      false
     );
   }
 
   async cancelPayment(externalPaymentId: string): Promise<PaymentStatusInfo> {
-    this.logOperation('cancelPayment', { externalPaymentId });
+    this.logOperation("cancelPayment", { externalPaymentId });
 
     // Robokassa не поддерживает отмену платежей через API
     throw this.createPaymentError(
-      'Robokassa не поддерживает отмену платежей через API',
+      "Robokassa не поддерживает отмену платежей через API",
       PaymentErrorCode.PROVIDER_ERROR,
-      false,
+      false
     );
   }
 
   async capturePayment(
     externalPaymentId: string,
-    amount?: number,
+    amount?: number
   ): Promise<PaymentStatusInfo> {
-    this.logOperation('capturePayment', { externalPaymentId, amount });
+    this.logOperation("capturePayment", { externalPaymentId, amount });
 
     // Robokassa не поддерживает двухстадийные платежи
     throw this.createPaymentError(
-      'Robokassa не поддерживает двухстадийные платежи',
+      "Robokassa не поддерживает двухстадийные платежи",
       PaymentErrorCode.PROVIDER_ERROR,
-      false,
+      false
     );
   }
 
   async parseWebhook(payload: any, signature?: string): Promise<WebhookData> {
-    this.logOperation('parseWebhook', {
+    this.logOperation("parseWebhook", {
       invId: payload.InvId,
       outSum: payload.OutSum,
     });
@@ -235,32 +237,32 @@ export class RobokassaProvider extends BasePaymentProvider {
     // Верифицируем подпись
     const isValid = await this.verifyWebhookSignature(
       payload,
-      payload.SignatureValue,
+      payload.SignatureValue
     );
 
     if (!isValid) {
       throw this.createPaymentError(
-        'Неверная подпись webhook',
+        "Неверная подпись webhook",
         PaymentErrorCode.WEBHOOK_VERIFICATION_FAILED,
-        false,
+        false
       );
     }
 
     // Извлекаем дополнительные параметры (Shp_*)
     const metadata: Record<string, any> = {};
     Object.entries(payload).forEach(([key, value]) => {
-      if (key.startsWith('Shp_')) {
+      if (key.startsWith("Shp_")) {
         metadata[key.substring(4)] = value;
       }
     });
 
     return {
-      event: 'payment.succeeded',
+      event: "payment.succeeded",
       paymentId: payload.InvId,
-      status: 'succeeded',
+      status: "succeeded",
       amount: {
         value: parseFloat(payload.OutSum),
-        currency: 'RUB' as Currency,
+        currency: "RUB" as Currency,
       },
       metadata,
       rawPayload: payload,
@@ -269,19 +271,19 @@ export class RobokassaProvider extends BasePaymentProvider {
 
   async verifyWebhookSignature(
     payload: any,
-    signature: string,
+    signature: string
   ): Promise<boolean> {
     try {
       // Собираем дополнительные параметры (Shp_*) в отсортированном порядке
       const shpParams: string[] = [];
       Object.keys(payload)
-        .filter((key) => key.startsWith('Shp_'))
+        .filter((key) => key.startsWith("Shp_"))
         .sort()
         .forEach((key) => {
           shpParams.push(`${key}=${payload[key]}`);
         });
 
-      const shpString = shpParams.length > 0 ? `:${shpParams.join(':')}` : '';
+      const shpString = shpParams.length > 0 ? `:${shpParams.join(":")}` : "";
 
       // Формируем строку для проверки подписи ResultURL
       // OutSum:InvId:Password2[:Shp_*]
@@ -289,11 +291,9 @@ export class RobokassaProvider extends BasePaymentProvider {
 
       const calculatedSignature = this.generateMd5(signatureString);
 
-      return (
-        calculatedSignature.toLowerCase() === signature.toLowerCase()
-      );
+      return calculatedSignature.toLowerCase() === signature.toLowerCase();
     } catch (error) {
-      this.logError('verifyWebhookSignature', error as Error);
+      this.logError("verifyWebhookSignature", error as Error);
       return false;
     }
   }
@@ -304,7 +304,7 @@ export class RobokassaProvider extends BasePaymentProvider {
   private generateSignature(
     outSum: number,
     invId: string,
-    password: string,
+    password: string
   ): string {
     // MerchantLogin:OutSum:InvId:Password1
     const signatureString = `${this.config.merchantLogin}:${outSum.toFixed(2)}:${invId}:${password}`;
@@ -315,7 +315,7 @@ export class RobokassaProvider extends BasePaymentProvider {
    * Генерация MD5 хеша
    */
   private generateMd5(data: string): string {
-    return crypto.createHash('md5').update(data).digest('hex');
+    return crypto.createHash("md5").update(data).digest("hex");
   }
 
   /**
@@ -331,15 +331,15 @@ export class RobokassaProvider extends BasePaymentProvider {
     // 100 - операция завершена успешно
 
     const statusMap: Record<number, PaymentStatus> = {
-      5: 'pending',
-      10: 'canceled',
-      50: 'succeeded',
-      60: 'refunded',
-      80: 'pending',
-      100: 'succeeded',
+      5: "pending",
+      10: "canceled",
+      50: "succeeded",
+      60: "refunded",
+      80: "pending",
+      100: "succeeded",
     };
 
-    return statusMap[state] || 'pending';
+    return statusMap[state] || "pending";
   }
 
   /**
@@ -349,4 +349,3 @@ export class RobokassaProvider extends BasePaymentProvider {
     return `OK${invId}`;
   }
 }
-
