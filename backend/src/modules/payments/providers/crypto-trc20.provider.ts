@@ -93,7 +93,7 @@ export class CryptoTRC20Provider extends BasePaymentProvider {
       name: "USDT TRC-20",
       type: "crypto_trc20",
       // Поддерживаем фиатные валюты - они конвертируются в USDT
-      supportedCurrencies: ["RUB", "USD", "EUR", "GBP"],
+      supportedCurrencies: ["RUB", "USD", "EUR", "GBP", "BYN"],
       supportedMethods: ["crypto"],
       testMode: this.testMode,
     };

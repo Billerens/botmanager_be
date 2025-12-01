@@ -31,7 +31,7 @@ export const PaymentMethodEnum = z.enum([
   "google_pay",
 ]);
 
-export const CurrencyEnum = z.enum(["RUB", "USD", "EUR", "GBP"]);
+export const CurrencyEnum = z.enum(["RUB", "USD", "EUR", "GBP", "BYN"]);
 
 // Источники курсов для конвертации криптовалют
 export const CryptoExchangeEnum = z.enum([

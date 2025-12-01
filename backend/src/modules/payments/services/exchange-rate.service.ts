@@ -9,9 +9,16 @@ export interface ExchangeRate {
   timestamp: Date;
 }
 
+// Forex курсы валют к USD (кэш)
+interface ForexRates {
+  rates: Record<string, number>;
+  timestamp: number;
+}
+
 /**
  * Сервис получения курсов криптовалют
  * Поддерживает Binance, CoinGecko, Coinbase, Kraken
+ * С умным фолбэком через буферную валюту (USD)
  */
 @Injectable()
 export class ExchangeRateService {
@@ -21,8 +28,14 @@ export class ExchangeRateService {
   private rateCache: Map<string, { rate: number; timestamp: number }> =
     new Map();
 
+  // Кэш forex курсов
+  private forexCache: ForexRates | null = null;
+
   // Время жизни кэша в мс (1 минута)
   private readonly CACHE_TTL_MS = 60_000;
+
+  // Время жизни forex кэша (5 минут)
+  private readonly FOREX_CACHE_TTL_MS = 300_000;
 
   /**
    * Получение курса фиат -> USDT
@@ -140,20 +153,141 @@ export class ExchangeRateService {
 
   /**
    * Binance rate через USD (для валют без прямой пары)
+   * Использует реальный Forex API для получения курсов
    */
   private async getBinanceRateViaUsd(currency: Currency): Promise<number> {
-    // Получаем курс CURRENCY/USD из Forex API или используем примерный
-    const forexRates: Record<Currency, number> = {
-      RUB: 90, // Примерный курс USD/RUB
-      EUR: 0.92,
-      GBP: 0.79,
+    // Получаем реальный курс USD -> currency
+    const forexRate = await this.getForexRate(currency);
+
+    // USDT ≈ 1 USD, поэтому курс USDT/currency ≈ USD/currency
+    return forexRate;
+  }
+
+  /**
+   * Получение курса USD -> currency из Forex API
+   * Использует бесплатный API exchangerate-api или fallback на frankfurter
+   */
+  private async getForexRate(currency: Currency): Promise<number> {
+    // USD всегда = 1
+    if (currency === "USD") {
+      return 1;
+    }
+
+    // Проверяем кэш
+    if (
+      this.forexCache &&
+      Date.now() - this.forexCache.timestamp < this.FOREX_CACHE_TTL_MS
+    ) {
+      const cached = this.forexCache.rates[currency];
+      if (cached) {
+        return cached;
+      }
+    }
+
+    try {
+      // Пробуем exchangerate.host (бесплатный, без API ключа)
+      const rates = await this.fetchForexRates();
+      return rates[currency] || this.getFallbackForexRate(currency);
+    } catch (error: any) {
+      this.logger.warn(`Forex API failed: ${error.message}, using fallback`);
+      return this.getFallbackForexRate(currency);
+    }
+  }
+
+  /**
+   * Получение курсов от Forex API
+   */
+  private async fetchForexRates(): Promise<Record<string, number>> {
+    // Пробуем несколько API последовательно
+    const apis = [
+      this.fetchFromFrankfurter.bind(this),
+      this.fetchFromExchangeRateApi.bind(this),
+    ];
+
+    for (const fetchFn of apis) {
+      try {
+        const rates = await fetchFn();
+        if (rates && Object.keys(rates).length > 0) {
+          // Сохраняем в кэш
+          this.forexCache = {
+            rates,
+            timestamp: Date.now(),
+          };
+          this.logger.log(`Forex rates updated: ${JSON.stringify(rates)}`);
+          return rates;
+        }
+      } catch (error: any) {
+        this.logger.debug(`Forex API attempt failed: ${error.message}`);
+      }
+    }
+
+    throw new Error("All forex APIs failed");
+  }
+
+  /**
+   * Frankfurter API (бесплатный, без ключа)
+   * https://www.frankfurter.app/docs/
+   */
+  private async fetchFromFrankfurter(): Promise<Record<string, number>> {
+    const response = await fetch(
+      "https://api.frankfurter.app/latest?from=USD&to=EUR,GBP,RUB"
+    );
+
+    if (!response.ok) {
+      throw new Error(`Frankfurter API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    // Frankfurter не поддерживает BYN, добавим расчёт через RUB
+    const rates: Record<string, number> = {
       USD: 1,
+      ...data.rates,
     };
 
-    const usdtUsdRate = 1; // USDT ≈ 1 USD
-    const currencyUsdRate = forexRates[currency] || 1;
+    // BYN примерно = RUB * 0.036 (курс BYN/RUB)
+    if (rates.RUB && !rates.BYN) {
+      rates.BYN = rates.RUB * 0.036;
+    }
 
-    return usdtUsdRate * currencyUsdRate;
+    return rates;
+  }
+
+  /**
+   * ExchangeRate-API (бесплатный лимит 1500 запросов/месяц)
+   * Резервный вариант
+   */
+  private async fetchFromExchangeRateApi(): Promise<Record<string, number>> {
+    const response = await fetch("https://open.er-api.com/v6/latest/USD");
+
+    if (!response.ok) {
+      throw new Error(`ExchangeRate-API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      USD: 1,
+      EUR: data.rates?.EUR || 0.92,
+      GBP: data.rates?.GBP || 0.79,
+      RUB: data.rates?.RUB || 90,
+      BYN: data.rates?.BYN || 3.2,
+    };
+  }
+
+  /**
+   * Fallback курсы (обновляются периодически вручную)
+   * Используются только если все API недоступны
+   */
+  private getFallbackForexRate(currency: Currency): number {
+    const fallbackRates: Record<string, number> = {
+      USD: 1,
+      EUR: 0.92,
+      GBP: 0.79,
+      RUB: 90,
+      BYN: 3.25,
+    };
+
+    this.logger.warn(`Using fallback forex rate for ${currency}`);
+    return fallbackRates[currency] || 1;
   }
 
   /**
@@ -210,9 +344,7 @@ export class ExchangeRateService {
   /**
    * Получение курсов от всех источников для заданной валюты
    */
-  async getAllExchangeRates(
-    fromCurrency: Currency
-  ): Promise<{
+  async getAllExchangeRates(fromCurrency: Currency): Promise<{
     currency: Currency;
     rates: Array<{
       source: CryptoExchange;

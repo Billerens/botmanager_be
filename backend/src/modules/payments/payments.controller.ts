@@ -263,14 +263,14 @@ export class PaymentsController {
   @ApiParam({
     name: "currency",
     description: "Базовая валюта",
-    enum: ["RUB", "USD", "EUR", "GBP"],
+    enum: ["RUB", "USD", "EUR", "GBP", "BYN"],
   })
   @ApiResponse({
     status: 200,
     description: "Курсы от всех источников",
   })
   async getExchangeRates(@Param("currency") currency: string) {
-    const validCurrencies = ["RUB", "USD", "EUR", "GBP"];
+    const validCurrencies = ["RUB", "USD", "EUR", "GBP", "BYN"];
     if (!validCurrencies.includes(currency)) {
       return {
         error: "Invalid currency",
