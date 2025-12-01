@@ -273,8 +273,54 @@ export class PaymentsService {
   ): Promise<void> {
     this.logger.log(`Saving payment settings for bot ${botId}`);
 
-    // Валидируем настройки
+    // Базовая валидация структуры настроек
     const validatedSettings = PaymentSettingsSchema.parse(settings);
+
+    // Дополнительная валидация конфигурации провайдеров только для активных модулей
+    const moduleNames: (keyof typeof validatedSettings.modules)[] = [
+      "shop",
+      "booking",
+      "api",
+    ];
+
+    for (const moduleName of moduleNames) {
+      const moduleConfig = validatedSettings.modules[moduleName];
+
+      // Пропускаем отключённые модули
+      if (!moduleConfig.settings.enabled) {
+        continue;
+      }
+
+      // Валидируем конфигурацию провайдеров только для активных провайдеров
+      for (const providerName of moduleConfig.providers) {
+        const providerConfig = moduleConfig.providerSettings[providerName];
+        if (!providerConfig) {
+          throw new PaymentError(
+            `Конфигурация провайдера ${providerName} не найдена для модуля ${moduleName}`,
+            PaymentErrorCode.INVALID_CONFIG,
+            providerName,
+            false
+          );
+        }
+
+        // Создаём провайдер для валидации конфигурации
+        const provider = this.providerFactory.create(
+          providerName,
+          providerConfig,
+          validatedSettings.global.testMode
+        );
+
+        const validationResult = await provider.validateConfig();
+        if (!validationResult.valid) {
+          throw new PaymentError(
+            `Ошибка конфигурации ${providerName} для модуля ${moduleName}: ${validationResult.errors?.join(", ")}`,
+            PaymentErrorCode.INVALID_CONFIG,
+            providerName,
+            false
+          );
+        }
+      }
+    }
 
     const bot = await this.botRepository.findOne({
       where: { id: botId },
@@ -311,6 +357,27 @@ export class PaymentsService {
     this.logger.log(`Testing payment for bot ${botId}, provider ${provider}`);
 
     const settings = await this.getPaymentSettings(botId);
+
+    // Проверяем, что модуль включён
+    const moduleConfig = settings.modules[module];
+    if (!moduleConfig.settings.enabled) {
+      throw new PaymentError(
+        `Модуль ${module} отключён. Включите модуль перед тестированием.`,
+        PaymentErrorCode.INVALID_CONFIG,
+        provider,
+        false
+      );
+    }
+
+    // Проверяем, что провайдер активирован для модуля
+    if (!moduleConfig.providers.includes(provider)) {
+      throw new PaymentError(
+        `Провайдер ${provider} не активирован для модуля ${module}`,
+        PaymentErrorCode.INVALID_CONFIG,
+        provider,
+        false
+      );
+    }
 
     // Принудительно используем тестовый режим
     const paymentProvider = await this.getProvider(
