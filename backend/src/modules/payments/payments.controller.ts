@@ -25,6 +25,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PaymentsService } from './payments.service';
+import { ExchangeRateService } from './services/exchange-rate.service';
 import {
   CreatePaymentDto,
   RefundPaymentDto,
@@ -34,13 +35,17 @@ import {
   RefundResponseDto,
   PaymentProviderDto,
 } from './dto/payment.dto';
+import { Currency } from './schemas/payment.schemas';
 
 @ApiTags('Payments')
 @Controller('payments')
 export class PaymentsController {
   private readonly logger = new Logger(PaymentsController.name);
 
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly exchangeRateService: ExchangeRateService,
+  ) {}
 
   /**
    * Создание платежа
@@ -246,6 +251,34 @@ export class PaymentsController {
   ): Promise<{ success: boolean }> {
     await this.paymentsService.savePaymentSettings(botId, settings as any);
     return { success: true };
+  }
+
+  /**
+   * Получение курсов криптовалют от всех источников
+   */
+  @Get('exchange-rates/:currency')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Получение курсов криптовалют' })
+  @ApiParam({
+    name: 'currency',
+    description: 'Базовая валюта',
+    enum: ['RUB', 'USD', 'EUR', 'GBP'],
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Курсы от всех источников',
+  })
+  async getExchangeRates(@Param('currency') currency: string) {
+    const validCurrencies = ['RUB', 'USD', 'EUR', 'GBP'];
+    if (!validCurrencies.includes(currency)) {
+      return {
+        error: 'Invalid currency',
+        validCurrencies,
+      };
+    }
+
+    return this.exchangeRateService.getAllExchangeRates(currency as Currency);
   }
 
   /**

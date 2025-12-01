@@ -97,6 +97,7 @@ export const SENSITIVE_FIELDS: Record<string, string[]> = {
   tinkoff: ["secretKey"],
   robokassa: ["password1", "password2", "password3", "password4"],
   stripe: ["secretKey", "webhookSecret"],
+  crypto_trc20: ["tronGridApiKey"],
 };
 
 /**

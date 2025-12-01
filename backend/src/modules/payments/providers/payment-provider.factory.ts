@@ -12,15 +12,18 @@ import {
   TinkoffConfig,
   RobokassaConfig,
   StripeConfig,
+  CryptoTRC20Config,
   YookassaConfigSchema,
   TinkoffConfigSchema,
   RobokassaConfigSchema,
   StripeConfigSchema,
+  CryptoTRC20ConfigSchema,
 } from '../schemas/payment.schemas';
 import { YookassaProvider } from './yookassa.provider';
 import { TinkoffProvider } from './tinkoff.provider';
 import { RobokassaProvider } from './robokassa.provider';
 import { StripeProvider } from './stripe.provider';
+import { CryptoTRC20Provider } from './crypto-trc20.provider';
 
 /**
  * Фабрика для создания экземпляров платежных провайдеров
@@ -55,6 +58,9 @@ export class PaymentProviderFactory implements IPaymentProviderFactory {
       case 'stripe':
         return new StripeProvider(config as StripeConfig, testMode);
 
+      case 'crypto_trc20':
+        return new CryptoTRC20Provider(config as CryptoTRC20Config, testMode);
+
       default:
         throw new PaymentError(
           `Неизвестный тип провайдера: ${type}`,
@@ -69,7 +75,7 @@ export class PaymentProviderFactory implements IPaymentProviderFactory {
    * Получение списка поддерживаемых провайдеров
    */
   getSupportedProviders(): PaymentProvider[] {
-    return ['yookassa', 'tinkoff', 'robokassa', 'stripe'];
+    return ['yookassa', 'tinkoff', 'robokassa', 'stripe', 'crypto_trc20'];
   }
 
   /**
@@ -100,6 +106,10 @@ export class PaymentProviderFactory implements IPaymentProviderFactory {
 
       case 'stripe':
         result = StripeConfigSchema.safeParse(config);
+        break;
+
+      case 'crypto_trc20':
+        result = CryptoTRC20ConfigSchema.safeParse(config);
         break;
 
       default:
@@ -163,6 +173,12 @@ export class PaymentProviderFactory implements IPaymentProviderFactory {
         description: 'Международная платежная система',
         currencies: ['RUB', 'USD', 'EUR', 'GBP'],
         features: ['135+ валют', 'Apple Pay', 'Google Pay', 'Карты'],
+      },
+      crypto_trc20: {
+        name: 'USDT TRC-20',
+        description: 'Криптовалютные платежи USDT в сети TRON',
+        currencies: ['USDT'],
+        features: ['Без комиссии', 'Мгновенные платежи', 'Криптовалюта'],
       },
     };
 

@@ -4,7 +4,7 @@ import {
   Amount,
   CustomerData,
   Currency,
-} from '../schemas/payment.schemas';
+} from "../schemas/payment.schemas";
 
 /**
  * Результат валидации конфигурации провайдера
@@ -59,7 +59,7 @@ export interface RefundRequest {
 export interface RefundResult {
   id: string;
   paymentId: string;
-  status: 'pending' | 'succeeded' | 'failed';
+  status: "pending" | "succeeded" | "failed";
   amount: Amount;
   createdAt: Date;
 }
@@ -138,7 +138,7 @@ export interface IPaymentProvider {
    */
   capturePayment(
     externalPaymentId: string,
-    amount?: number,
+    amount?: number
   ): Promise<PaymentStatusInfo>;
 
   /**
@@ -156,10 +156,11 @@ export interface IPaymentProvider {
  * Конфигурация провайдера (объединение всех типов)
  */
 export type ProviderConfig =
-  | import('../schemas/payment.schemas').YookassaConfig
-  | import('../schemas/payment.schemas').TinkoffConfig
-  | import('../schemas/payment.schemas').RobokassaConfig
-  | import('../schemas/payment.schemas').StripeConfig;
+  | import("../schemas/payment.schemas").YookassaConfig
+  | import("../schemas/payment.schemas").TinkoffConfig
+  | import("../schemas/payment.schemas").RobokassaConfig
+  | import("../schemas/payment.schemas").StripeConfig
+  | import("../schemas/payment.schemas").CryptoTRC20Config;
 
 /**
  * Фабрика провайдеров
@@ -188,10 +189,10 @@ export class PaymentError extends Error {
     public readonly code: string,
     public readonly provider: PaymentProvider,
     public readonly retryable: boolean = false,
-    public readonly originalError?: Error,
+    public readonly originalError?: Error
   ) {
     super(message);
-    this.name = 'PaymentError';
+    this.name = "PaymentError";
   }
 }
 
@@ -199,17 +200,16 @@ export class PaymentError extends Error {
  * Коды ошибок платежей
  */
 export enum PaymentErrorCode {
-  INVALID_CONFIG = 'INVALID_CONFIG',
-  INVALID_AMOUNT = 'INVALID_AMOUNT',
-  INVALID_CURRENCY = 'INVALID_CURRENCY',
-  PAYMENT_DECLINED = 'PAYMENT_DECLINED',
-  PAYMENT_NOT_FOUND = 'PAYMENT_NOT_FOUND',
-  REFUND_FAILED = 'REFUND_FAILED',
-  WEBHOOK_VERIFICATION_FAILED = 'WEBHOOK_VERIFICATION_FAILED',
-  NETWORK_ERROR = 'NETWORK_ERROR',
-  PROVIDER_ERROR = 'PROVIDER_ERROR',
-  RATE_LIMIT = 'RATE_LIMIT',
-  UNAUTHORIZED = 'UNAUTHORIZED',
-  UNKNOWN_ERROR = 'UNKNOWN_ERROR',
+  INVALID_CONFIG = "INVALID_CONFIG",
+  INVALID_AMOUNT = "INVALID_AMOUNT",
+  INVALID_CURRENCY = "INVALID_CURRENCY",
+  PAYMENT_DECLINED = "PAYMENT_DECLINED",
+  PAYMENT_NOT_FOUND = "PAYMENT_NOT_FOUND",
+  REFUND_FAILED = "REFUND_FAILED",
+  WEBHOOK_VERIFICATION_FAILED = "WEBHOOK_VERIFICATION_FAILED",
+  NETWORK_ERROR = "NETWORK_ERROR",
+  PROVIDER_ERROR = "PROVIDER_ERROR",
+  RATE_LIMIT = "RATE_LIMIT",
+  UNAUTHORIZED = "UNAUTHORIZED",
+  UNKNOWN_ERROR = "UNKNOWN_ERROR",
 }
-

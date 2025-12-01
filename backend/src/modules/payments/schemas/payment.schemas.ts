@@ -9,6 +9,7 @@ export const PaymentProviderEnum = z.enum([
   "tinkoff",
   "robokassa",
   "stripe",
+  "crypto_trc20",
 ]);
 
 export const PaymentStatusEnum = z.enum([
@@ -31,6 +32,15 @@ export const PaymentMethodEnum = z.enum([
 ]);
 
 export const CurrencyEnum = z.enum(["RUB", "USD", "EUR", "GBP"]);
+
+// Источники курсов для конвертации криптовалют
+export const CryptoExchangeEnum = z.enum([
+  "binance", // Binance API
+  "coingecko", // CoinGecko API
+  "coinbase", // Coinbase API
+  "kraken", // Kraken API
+  "manual", // Ручной курс
+]);
 
 export const TaxSystemEnum = z.enum([
   "osn", // ОСН
@@ -110,6 +120,32 @@ export const StripeConfigSchema = z.object({
   applicationFee: z.number().min(0).max(100).optional(),
 });
 
+export const CryptoTRC20ConfigSchema = z.object({
+  // Адрес TRC-20 кошелька для приёма USDT
+  walletAddress: z
+    .string()
+    .min(1, "Адрес кошелька обязателен")
+    .regex(/^T[a-zA-Z0-9]{33}$/, "Неверный формат TRC-20 адреса"),
+  // Количество подтверждений для принятия платежа (1-20)
+  confirmationsRequired: z.number().min(1).max(20).default(1),
+  // Интервал проверки в секундах (10-300)
+  checkIntervalSeconds: z.number().min(10).max(300).default(30),
+  // Время жизни счёта в минутах (5-1440)
+  expirationMinutes: z.number().min(5).max(1440).default(60),
+  // Допуск по сумме (для учёта комиссий сети)
+  amountTolerancePercent: z.number().min(0).max(5).default(0.5),
+  // Использовать testnet (Nile/Shasta)
+  useTestnet: z.boolean().default(false),
+  // API ключ TronGrid (опционально, для повышенных лимитов)
+  tronGridApiKey: z.string().optional(),
+  // Источник курса для конвертации фиат -> USDT
+  exchangeRateSource: CryptoExchangeEnum.default("binance"),
+  // Ручной курс (используется если exchangeRateSource = "manual")
+  manualExchangeRate: z.number().positive().optional(),
+  // Наценка/скидка к курсу в процентах (-10% до +10%)
+  exchangeRateMarkup: z.number().min(-10).max(10).default(0),
+});
+
 // ============================================
 // Module Settings
 // ============================================
@@ -144,6 +180,7 @@ export const ModuleProviderSettingsSchema = z.object({
   tinkoff: TinkoffConfigSchema.optional(),
   robokassa: RobokassaConfigSchema.optional(),
   stripe: StripeConfigSchema.optional(),
+  crypto_trc20: CryptoTRC20ConfigSchema.optional(),
 });
 
 export const ModuleConfigSchema = z.object({
@@ -255,6 +292,8 @@ export type YookassaConfig = z.infer<typeof YookassaConfigSchema>;
 export type TinkoffConfig = z.infer<typeof TinkoffConfigSchema>;
 export type RobokassaConfig = z.infer<typeof RobokassaConfigSchema>;
 export type StripeConfig = z.infer<typeof StripeConfigSchema>;
+export type CryptoTRC20Config = z.infer<typeof CryptoTRC20ConfigSchema>;
+export type CryptoExchange = z.infer<typeof CryptoExchangeEnum>;
 
 export type ModulePaymentSettings = z.infer<typeof ModulePaymentSettingsSchema>;
 export type ModuleProviderSettings = z.infer<
