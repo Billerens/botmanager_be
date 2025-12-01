@@ -21,6 +21,14 @@ import {
   PaymentSettingsSchema,
 } from "./schemas/payment.schemas";
 import { Bot } from "../../database/entities/bot.entity";
+import {
+  BotCustomData,
+  CustomDataType,
+} from "../../database/entities/bot-custom-data.entity";
+
+// Константы для хранения настроек платежей
+const PAYMENT_SETTINGS_COLLECTION = "payment_settings";
+const PAYMENT_SETTINGS_KEY = "config";
 
 /**
  * Сервис управления платежами
@@ -33,7 +41,9 @@ export class PaymentsService {
   constructor(
     private readonly providerFactory: PaymentProviderFactory,
     @InjectRepository(Bot)
-    private readonly botRepository: Repository<Bot>
+    private readonly botRepository: Repository<Bot>,
+    @InjectRepository(BotCustomData)
+    private readonly customDataRepository: Repository<BotCustomData>
   ) {}
 
   /**
@@ -235,6 +245,7 @@ export class PaymentsService {
    * Получение настроек платежей для бота
    */
   async getPaymentSettings(botId: string): Promise<PaymentSettings> {
+    // Проверяем существование бота
     const bot = await this.botRepository.findOne({
       where: { id: botId },
     });
@@ -243,17 +254,22 @@ export class PaymentsService {
       throw new NotFoundException(`Бот ${botId} не найден`);
     }
 
-    // Получаем настройки из customData бота
-    const customData = (bot as any).customData || {};
-    const paymentSettings = customData.paymentSettings;
+    // Получаем настройки из BotCustomData
+    const customDataRecord = await this.customDataRepository.findOne({
+      where: {
+        botId,
+        collection: PAYMENT_SETTINGS_COLLECTION,
+        key: PAYMENT_SETTINGS_KEY,
+      },
+    });
 
-    if (!paymentSettings) {
+    if (!customDataRecord) {
       // Возвращаем дефолтные настройки
       return this.getDefaultSettings(botId);
     }
 
     // Валидируем настройки
-    const result = PaymentSettingsSchema.safeParse(paymentSettings);
+    const result = PaymentSettingsSchema.safeParse(customDataRecord.data);
     if (!result.success) {
       this.logger.warn(
         `Invalid payment settings for bot ${botId}, using defaults`
@@ -322,6 +338,7 @@ export class PaymentsService {
       }
     }
 
+    // Проверяем существование бота
     const bot = await this.botRepository.findOne({
       where: { id: botId },
     });
@@ -330,13 +347,30 @@ export class PaymentsService {
       throw new NotFoundException(`Бот ${botId} не найден`);
     }
 
-    // Сохраняем в customData
-    const customData = (bot as any).customData || {};
-    customData.paymentSettings = validatedSettings;
+    // Ищем существующую запись настроек
+    let customDataRecord = await this.customDataRepository.findOne({
+      where: {
+        botId,
+        collection: PAYMENT_SETTINGS_COLLECTION,
+        key: PAYMENT_SETTINGS_KEY,
+      },
+    });
 
-    await this.botRepository.update(botId, {
-      customData,
-    } as any);
+    if (customDataRecord) {
+      // Обновляем существующую запись
+      customDataRecord.data = validatedSettings;
+      await this.customDataRepository.save(customDataRecord);
+    } else {
+      // Создаём новую запись
+      customDataRecord = this.customDataRepository.create({
+        botId,
+        collection: PAYMENT_SETTINGS_COLLECTION,
+        key: PAYMENT_SETTINGS_KEY,
+        data: validatedSettings,
+        dataType: CustomDataType.KEY_VALUE,
+      });
+      await this.customDataRepository.save(customDataRecord);
+    }
 
     // Очищаем кеш провайдеров для этого бота
     this.clearProviderCache(botId);
