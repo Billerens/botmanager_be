@@ -25,6 +25,12 @@ import {
   BotCustomData,
   CustomDataType,
 } from "../../database/entities/bot-custom-data.entity";
+import {
+  encryptProviderConfig,
+  decryptProviderConfig,
+  maskProviderConfig,
+  mergeProviderConfigs,
+} from "./utils/encryption.util";
 
 // Константы для хранения настроек платежей
 const PAYMENT_SETTINGS_COLLECTION = "payment_settings";
@@ -242,7 +248,7 @@ export class PaymentsService {
   }
 
   /**
-   * Получение настроек платежей для бота
+   * Получение настроек платежей для бота (с маскированием секретных данных)
    */
   async getPaymentSettings(botId: string): Promise<PaymentSettings> {
     // Проверяем существование бота
@@ -277,7 +283,93 @@ export class PaymentsService {
       return this.getDefaultSettings(botId);
     }
 
-    return result.data;
+    // Маскируем секретные данные перед отправкой на фронтенд
+    return this.maskSettingsForFrontend(result.data);
+  }
+
+  /**
+   * Получение настроек платежей для внутреннего использования (без маскирования)
+   */
+  private async getPaymentSettingsInternal(
+    botId: string
+  ): Promise<PaymentSettings> {
+    const customDataRecord = await this.customDataRepository.findOne({
+      where: {
+        botId,
+        collection: PAYMENT_SETTINGS_COLLECTION,
+        key: PAYMENT_SETTINGS_KEY,
+      },
+    });
+
+    if (!customDataRecord) {
+      return this.getDefaultSettings(botId);
+    }
+
+    const result = PaymentSettingsSchema.safeParse(customDataRecord.data);
+    if (!result.success) {
+      return this.getDefaultSettings(botId);
+    }
+
+    // Расшифровываем данные для внутреннего использования
+    return this.decryptSettings(result.data);
+  }
+
+  /**
+   * Маскирование секретных данных для отправки на фронтенд
+   */
+  private maskSettingsForFrontend(settings: PaymentSettings): PaymentSettings {
+    const maskedSettings = JSON.parse(JSON.stringify(settings));
+
+    const moduleNames: (keyof typeof settings.modules)[] = [
+      "shop",
+      "booking",
+      "api",
+    ];
+
+    for (const moduleName of moduleNames) {
+      const providerSettings =
+        maskedSettings.modules[moduleName].providerSettings;
+
+      for (const provider of Object.keys(providerSettings)) {
+        if (providerSettings[provider]) {
+          providerSettings[provider] = maskProviderConfig(
+            provider,
+            providerSettings[provider]
+          );
+        }
+      }
+    }
+
+    return maskedSettings;
+  }
+
+  /**
+   * Расшифровка настроек для внутреннего использования
+   */
+  private decryptSettings(settings: PaymentSettings): PaymentSettings {
+    const decryptedSettings = JSON.parse(JSON.stringify(settings));
+
+    const moduleNames: (keyof typeof settings.modules)[] = [
+      "shop",
+      "booking",
+      "api",
+    ];
+
+    for (const moduleName of moduleNames) {
+      const providerSettings =
+        decryptedSettings.modules[moduleName].providerSettings;
+
+      for (const provider of Object.keys(providerSettings)) {
+        if (providerSettings[provider]) {
+          providerSettings[provider] = decryptProviderConfig(
+            provider,
+            providerSettings[provider]
+          );
+        }
+      }
+    }
+
+    return decryptedSettings;
   }
 
   /**
@@ -292,15 +384,67 @@ export class PaymentsService {
     // Базовая валидация структуры настроек
     const validatedSettings = PaymentSettingsSchema.parse(settings);
 
-    // Дополнительная валидация конфигурации провайдеров только для активных модулей
+    // Проверяем существование бота
+    const bot = await this.botRepository.findOne({
+      where: { id: botId },
+    });
+
+    if (!bot) {
+      throw new NotFoundException(`Бот ${botId} не найден`);
+    }
+
+    // Получаем существующие настройки для объединения маскированных полей
+    const existingRecord = await this.customDataRepository.findOne({
+      where: {
+        botId,
+        collection: PAYMENT_SETTINGS_COLLECTION,
+        key: PAYMENT_SETTINGS_KEY,
+      },
+    });
+
+    const existingSettings = existingRecord?.data as
+      | PaymentSettings
+      | undefined;
+
+    // Объединяем и шифруем настройки провайдеров
     const moduleNames: (keyof typeof validatedSettings.modules)[] = [
       "shop",
       "booking",
       "api",
     ];
 
+    const settingsToSave = JSON.parse(JSON.stringify(validatedSettings));
+
     for (const moduleName of moduleNames) {
-      const moduleConfig = validatedSettings.modules[moduleName];
+      const moduleConfig = settingsToSave.modules[moduleName];
+      const existingModuleConfig = existingSettings?.modules[moduleName];
+
+      // Обрабатываем настройки каждого провайдера
+      for (const providerName of Object.keys(moduleConfig.providerSettings)) {
+        const newConfig = moduleConfig.providerSettings[providerName];
+        const existingConfig =
+          existingModuleConfig?.providerSettings[providerName];
+
+        if (newConfig) {
+          // Объединяем с существующими (маскированные поля заменяются на старые)
+          const mergedConfig = mergeProviderConfigs(
+            providerName,
+            existingConfig || {},
+            newConfig
+          );
+
+          // Шифруем секретные поля
+          moduleConfig.providerSettings[providerName] = encryptProviderConfig(
+            providerName,
+            mergedConfig
+          );
+        }
+      }
+    }
+
+    // Дополнительная валидация конфигурации провайдеров только для активных модулей
+    for (const moduleName of moduleNames) {
+      const moduleConfig = settingsToSave.modules[moduleName];
 
       // Пропускаем отключённые модули
       if (!moduleConfig.settings.enabled) {
@@ -319,11 +463,17 @@ export class PaymentsService {
           );
         }
 
+        // Расшифровываем для валидации
+        const decryptedConfig = decryptProviderConfig(
+          providerName,
+          providerConfig
+        );
+
         // Создаём провайдер для валидации конфигурации
         const provider = this.providerFactory.create(
           providerName,
-          providerConfig,
-          validatedSettings.global.testMode
+          decryptedConfig as any, // Конфигурация будет валидирована внутри фабрики
+          settingsToSave.global.testMode
         );
 
         const validationResult = await provider.validateConfig();
@@ -338,38 +488,19 @@ export class PaymentsService {
       }
     }
 
-    // Проверяем существование бота
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-
-    if (!bot) {
-      throw new NotFoundException(`Бот ${botId} не найден`);
-    }
-
-    // Ищем существующую запись настроек
-    let customDataRecord = await this.customDataRepository.findOne({
-      where: {
-        botId,
-        collection: PAYMENT_SETTINGS_COLLECTION,
-        key: PAYMENT_SETTINGS_KEY,
-      },
-    });
-
-    if (customDataRecord) {
-      // Обновляем существующую запись
-      customDataRecord.data = validatedSettings;
-      await this.customDataRepository.save(customDataRecord);
+    // Сохраняем настройки
+    if (existingRecord) {
+      existingRecord.data = settingsToSave;
+      await this.customDataRepository.save(existingRecord);
     } else {
-      // Создаём новую запись
-      customDataRecord = this.customDataRepository.create({
+      const newRecord = this.customDataRepository.create({
         botId,
         collection: PAYMENT_SETTINGS_COLLECTION,
         key: PAYMENT_SETTINGS_KEY,
-        data: validatedSettings,
+        data: settingsToSave,
         dataType: CustomDataType.KEY_VALUE,
       });
-      await this.customDataRepository.save(customDataRecord);
+      await this.customDataRepository.save(newRecord);
     }
 
     // Очищаем кеш провайдеров для этого бота
@@ -464,8 +595,8 @@ export class PaymentsService {
       return this.providerCache.get(cacheKey)!;
     }
 
-    // Получаем настройки
-    const settings = await this.getPaymentSettings(botId);
+    // Получаем настройки (внутренний метод с расшифровкой)
+    const settings = await this.getPaymentSettingsInternal(botId);
     const moduleConfig = settings.modules[module];
 
     // Получаем конфигурацию провайдера
@@ -479,7 +610,7 @@ export class PaymentsService {
       );
     }
 
-    // Создаем провайдер
+    // Создаем провайдер с расшифрованной конфигурацией
     const paymentProvider = this.providerFactory.create(
       provider,
       providerConfig,
