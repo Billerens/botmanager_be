@@ -119,14 +119,24 @@ export const ModulePaymentSettingsSchema = z.object({
   currency: CurrencyEnum.default("RUB"),
   minAmount: z.number().min(0).optional(),
   maxAmount: z.number().min(0).optional(),
-  webhookUrl: z.string().url("Неверный URL").optional(),
+  // Разрешаем пустую строку или валидный URL
+  webhookUrl: z
+    .string()
+    .transform((val) => (val === "" ? undefined : val))
+    .pipe(z.string().url("Неверный URL").optional())
+    .optional(),
   webhookSecret: z.string().optional(),
   supportedPaymentMethods: z.array(PaymentMethodEnum).default(["card", "sbp"]),
   requireCustomerData: z.boolean().default(true),
   allowPartialPayments: z.boolean().default(false),
   sendPaymentConfirmations: z.boolean().default(true),
   sendReceipts: z.boolean().default(true),
-  emailForNotifications: z.string().email("Неверный email").optional(),
+  // Разрешаем пустую строку или валидный email
+  emailForNotifications: z
+    .string()
+    .transform((val) => (val === "" ? undefined : val))
+    .pipe(z.string().email("Неверный email").optional())
+    .optional(),
 });
 
 export const ModuleProviderSettingsSchema = z.object({
