@@ -35,6 +35,7 @@ import { CloudAiModule } from "./modules/cloud-ai/cloud-ai.module";
 import { OpenRouterModule } from "./modules/openrouter/openrouter.module";
 import { LangChainOpenRouterModule } from "./modules/langchain-openrouter/langchain-openrouter.module";
 import { CustomPagesModule } from "./modules/custom-pages/custom-pages.module";
+import { PaymentsModule } from "./modules/payments/payments.module";
 
 @Module({
   imports: [
@@ -92,6 +93,7 @@ import { CustomPagesModule } from "./modules/custom-pages/custom-pages.module";
     OpenRouterModule, // OpenRouter AI провайдер
     LangChainOpenRouterModule, // LangChain + OpenRouter интеграция
     CustomPagesModule, // Кастомные страницы
+    PaymentsModule, // Платежные системы
   ],
 })
 export class AppModule {}
