@@ -42,10 +42,10 @@ export class AiModelSelectorService {
   // Приоритеты моделей по провайдеру (поиск по вхождению подстроки в название)
   private readonly modelPriorities: Record<string, number> = {
     grok: 1,
-    gemini: 2,
-    deepseek: 3,
+    deepseek: 2,
+    llama: 3,
     gpt: 4,
-    llama: 5,
+    gemini: 5,
     qwen: 6,
   };
 
