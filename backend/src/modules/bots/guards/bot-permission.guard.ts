@@ -39,10 +39,14 @@ export class BotPermissionGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const user = request.user;
-    const botId = request.params?.botId || request.params?.id;
+    const botId =
+      request.params?.botId ||
+      request.params?.id ||
+      request.query?.botId ||
+      request.body?.botId;
 
     this.logger.debug(
-      `Checking permissions for user ${user?.id}, botId: ${botId}, params: ${JSON.stringify(request.params)}`
+      `Checking permissions for user ${user?.id}, botId: ${botId}, params: ${JSON.stringify(request.params)}, query: ${JSON.stringify(request.query)}`
     );
 
     if (!user) {
