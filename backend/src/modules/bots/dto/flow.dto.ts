@@ -33,6 +33,9 @@ export enum FlowNodeType {
   GROUP_JOIN = "group_join",
   GROUP_ACTION = "group_action",
   GROUP_LEAVE = "group_leave",
+  // AI узлы
+  AI_SINGLE = "ai_single",
+  AI_CHAT = "ai_chat",
 }
 
 export class KeyboardButtonDto {
@@ -379,6 +382,26 @@ export class FlowNodeDataDto {
     notifyOthers?: boolean;
     notificationMessage?: string;
     cleanupIfEmpty?: boolean;
+  };
+
+  // AI узлы
+  @IsOptional()
+  @IsObject()
+  aiSingle?: {
+    prompt: string;
+    outputVariable: string;
+    maxTokens?: number;
+    temperature?: number;
+  };
+
+  @IsOptional()
+  @IsObject()
+  aiChat?: {
+    systemPrompt: string;
+    welcomeMessage?: string;
+    maxHistoryTokens?: number;
+    temperature?: number;
+    exitKeywords?: string[];
   };
 }
 
