@@ -364,7 +364,6 @@ export class StreamingResponseService {
           lastName: "",
           username: bot.username,
           isBot: true,
-          isStreamed: true,
         },
         isProcessed: true,
         processedAt: new Date(),
