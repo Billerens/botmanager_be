@@ -36,6 +36,9 @@ export enum NodeType {
   GROUP_JOIN = "group_join",
   GROUP_ACTION = "group_action",
   GROUP_LEAVE = "group_leave",
+  // AI узлы
+  AI_SINGLE = "ai_single",
+  AI_CHAT = "ai_chat",
 }
 
 export enum MessageNodeType {
@@ -339,6 +342,23 @@ export class BotFlowNode {
       notifyOthers?: boolean; // Уведомить других участников
       notificationMessage?: string; // Текст уведомления
       cleanupIfEmpty?: boolean; // Удалить группу если опустела
+    };
+
+    // Для AI_SINGLE нод
+    aiSingle?: {
+      prompt: string; // Промпт для AI
+      outputVariable: string; // Имя переменной для сохранения результата
+      maxTokens?: number; // Максимальное количество токенов
+      temperature?: number; // Температура генерации (0-1)
+    };
+
+    // Для AI_CHAT нод
+    aiChat?: {
+      systemPrompt: string; // Системный промпт для AI
+      welcomeMessage?: string; // Приветственное сообщение
+      maxHistoryTokens?: number; // Максимальное количество токенов в истории
+      temperature?: number; // Температура генерации (0-1)
+      exitKeywords?: string[]; // Ключевые слова для выхода из чата
     };
 
     // Общие настройки

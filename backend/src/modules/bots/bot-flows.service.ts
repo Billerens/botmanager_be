@@ -392,6 +392,9 @@ export class BotFlowsService {
       group_join: NodeType.GROUP_JOIN,
       group_action: NodeType.GROUP_ACTION,
       group_leave: NodeType.GROUP_LEAVE,
+      // AI узлы
+      ai_single: NodeType.AI_SINGLE,
+      ai_chat: NodeType.AI_CHAT,
     };
 
     if (!typeMap[type]) {
