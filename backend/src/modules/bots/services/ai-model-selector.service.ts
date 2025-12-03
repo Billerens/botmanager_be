@@ -238,6 +238,103 @@ export class AiModelSelectorService {
   }
 
   /**
+   * Выполняет streaming действие с автоматическим fallback к другим моделям
+   * Возвращает AsyncGenerator и информацию о модели
+   */
+  async executeStreamingWithFallback(
+    createStream: (modelId: string) => AsyncGenerator<string, void, unknown>,
+    maxRetries: number = 3
+  ): Promise<{
+    stream: AsyncGenerator<string, void, unknown>;
+    modelId: string;
+    modelName: string;
+  }> {
+    const models = await this.getAvailableModels();
+
+    if (models.length === 0) {
+      const defaultModelId = "meta-llama/llama-3.3-70b-instruct:free";
+      this.logger.warn("Нет кэшированных моделей, пробуем дефолтную");
+      return {
+        stream: createStream(defaultModelId),
+        modelId: defaultModelId,
+        modelName: "Meta Llama 3.3 70B (free)",
+      };
+    }
+
+    let lastError: Error | null = null;
+    const modelsToTry = models.slice(0, maxRetries);
+
+    for (const model of modelsToTry) {
+      try {
+        this.logger.debug(`Пробуем streaming модель: ${model.id}`);
+
+        // Создаём обёртку-генератор, который проверяет первый чанк
+        const stream = createStream(model.id);
+
+        // Пытаемся получить первый чанк для проверки работоспособности
+        const wrappedStream = this.createValidatingStream(stream, model.id);
+
+        return {
+          stream: wrappedStream,
+          modelId: model.id,
+          modelName: model.name,
+        };
+      } catch (error) {
+        this.logger.warn(
+          `Streaming модель ${model.id} недоступна: ${error.message}`
+        );
+        lastError = error;
+        continue;
+      }
+    }
+
+    if (lastError) {
+      this.logger.error(
+        `Все ${modelsToTry.length} streaming модели недоступны`
+      );
+      throw lastError;
+    }
+
+    throw new Error("Нет доступных AI моделей для streaming");
+  }
+
+  /**
+   * Создаёт обёртку над stream с валидацией
+   */
+  private async *createValidatingStream(
+    stream: AsyncGenerator<string, void, unknown>,
+    modelId: string
+  ): AsyncGenerator<string, void, unknown> {
+    try {
+      for await (const chunk of stream) {
+        yield chunk;
+      }
+    } catch (error) {
+      this.logger.error(`Streaming error для ${modelId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Получает первую доступную модель для streaming
+   */
+  async getStreamingModel(): Promise<{ modelId: string; modelName: string }> {
+    const models = await this.getAvailableModels();
+
+    if (models.length === 0) {
+      return {
+        modelId: "meta-llama/llama-3.3-70b-instruct:free",
+        modelName: "Meta Llama 3.3 70B (free)",
+      };
+    }
+
+    return {
+      modelId: models[0].id,
+      modelName: models[0].name,
+    };
+  }
+
+  /**
    * Оценивает количество параметров модели на основе ID и названия
    */
   private estimateParameters(modelId: string, modelName: string): number {

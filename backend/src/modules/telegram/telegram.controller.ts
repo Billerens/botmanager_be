@@ -47,6 +47,14 @@ import {
 export class TelegramController {
   private readonly logger = new Logger(TelegramController.name);
 
+  // Кэш обработанных update_id для дедупликации (TTL: 5 минут)
+  private readonly processedUpdates = new Map<
+    string,
+    { timestamp: number; processing: boolean }
+  >();
+  private readonly UPDATE_CACHE_TTL = 5 * 60 * 1000; // 5 минут
+  private readonly CLEANUP_INTERVAL = 60 * 1000; // 1 минута
+
   constructor(
     private readonly telegramService: TelegramService,
     private readonly botsService: BotsService,
@@ -59,7 +67,76 @@ export class TelegramController {
     private readonly messageRepository: Repository<Message>,
     @InjectRepository(Bot)
     private readonly botRepository: Repository<Bot>
-  ) {}
+  ) {
+    // Запускаем периодическую очистку кэша обработанных обновлений
+    this.startCacheCleanup();
+  }
+
+  /**
+   * Запускает периодическую очистку устаревших записей в кэше
+   */
+  private startCacheCleanup(): void {
+    setInterval(() => {
+      const now = Date.now();
+      let cleanedCount = 0;
+
+      for (const [key, value] of this.processedUpdates.entries()) {
+        if (now - value.timestamp > this.UPDATE_CACHE_TTL) {
+          this.processedUpdates.delete(key);
+          cleanedCount++;
+        }
+      }
+
+      if (cleanedCount > 0) {
+        this.logger.debug(
+          `Очищено ${cleanedCount} устаревших записей из кэша обновлений`
+        );
+      }
+    }, this.CLEANUP_INTERVAL);
+  }
+
+  /**
+   * Проверяет, было ли обновление уже обработано
+   * Возвращает true, если это дубликат
+   */
+  private isDuplicateUpdate(
+    botId: string,
+    updateId: number
+  ): { isDuplicate: boolean; isProcessing: boolean } {
+    const key = `${botId}:${updateId}`;
+    const cached = this.processedUpdates.get(key);
+
+    if (!cached) {
+      return { isDuplicate: false, isProcessing: false };
+    }
+
+    // Проверяем, не устарела ли запись
+    if (Date.now() - cached.timestamp > this.UPDATE_CACHE_TTL) {
+      this.processedUpdates.delete(key);
+      return { isDuplicate: false, isProcessing: false };
+    }
+
+    return { isDuplicate: true, isProcessing: cached.processing };
+  }
+
+  /**
+   * Отмечает обновление как обрабатываемое
+   */
+  private markUpdateProcessing(botId: string, updateId: number): void {
+    const key = `${botId}:${updateId}`;
+    this.processedUpdates.set(key, { timestamp: Date.now(), processing: true });
+  }
+
+  /**
+   * Отмечает обновление как обработанное
+   */
+  private markUpdateProcessed(botId: string, updateId: number): void {
+    const key = `${botId}:${updateId}`;
+    this.processedUpdates.set(key, {
+      timestamp: Date.now(),
+      processing: false,
+    });
+  }
 
   @Post("webhook/:botId")
   @HttpCode(HttpStatus.OK)
@@ -76,17 +153,40 @@ export class TelegramController {
     @Body() update: TelegramUpdate,
     @Headers() headers: Record<string, string>
   ) {
+    // Проверяем дублирование update_id
+    const { isDuplicate, isProcessing } = this.isDuplicateUpdate(
+      botId,
+      update.update_id
+    );
+
+    if (isDuplicate) {
+      if (isProcessing) {
+        this.logger.warn(
+          `Обновление ${update.update_id} для бота ${botId} уже обрабатывается (дубликат webhook)`
+        );
+      } else {
+        this.logger.debug(
+          `Обновление ${update.update_id} для бота ${botId} уже было обработано (дубликат webhook)`
+        );
+      }
+      // Возвращаем OK, чтобы Telegram не повторял запрос
+      return { ok: true, duplicate: true };
+    }
+
+    // Сразу отмечаем как обрабатываемое, чтобы предотвратить параллельную обработку
+    this.markUpdateProcessing(botId, update.update_id);
+
     try {
       this.logger.log(
-        `Получено обновление для бота ${botId}: ${JSON.stringify({ from: update.message?.from })}`,
-        update
+        `Получено обновление ${update.update_id} для бота ${botId}: ${JSON.stringify({ from: update.message?.from })}`
       );
 
       // Находим бота
       const bot = await this.botsService.findById(botId);
       if (!bot) {
         this.logger.warn(`Бот ${botId} не найден`);
-        return;
+        this.markUpdateProcessed(botId, update.update_id);
+        return { ok: true };
       }
 
       // Проверяем статус бота
@@ -94,15 +194,21 @@ export class TelegramController {
         this.logger.warn(
           `Бот ${botId} неактивен (статус: ${bot.status}), игнорируем обновление`
         );
-        return;
+        this.markUpdateProcessed(botId, update.update_id);
+        return { ok: true };
       }
 
       // Обрабатываем обновление
       await this.processUpdate(bot, update);
 
+      // Отмечаем как успешно обработанное
+      this.markUpdateProcessed(botId, update.update_id);
+
       return { ok: true };
     } catch (error) {
       this.logger.error(`Ошибка обработки webhook для бота ${botId}:`, error);
+      // Отмечаем как обработанное даже при ошибке, чтобы избежать повторной обработки
+      this.markUpdateProcessed(botId, update.update_id);
       return { ok: false, error: error.message };
     }
   }

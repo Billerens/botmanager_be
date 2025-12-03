@@ -70,6 +70,7 @@ import {
   AiChatNodeHandler,
 } from "./nodes";
 import { AiModelSelectorService } from "./services/ai-model-selector.service";
+import { StreamingResponseService } from "./services/streaming-response.service";
 import { DatabaseService } from "./database.service";
 import { SessionStorageService } from "./session-storage.service";
 import { GroupSessionService } from "./group-session.service";
@@ -154,6 +155,7 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
     AiSingleNodeHandler,
     AiChatNodeHandler,
     AiModelSelectorService,
+    StreamingResponseService,
     BotPermissionGuard,
     BotPermissionsService,
     BotInvitationsService,

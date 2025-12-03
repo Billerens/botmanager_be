@@ -12,6 +12,7 @@ import { FlowContext } from "./base-node-handler.interface";
 import { BaseNodeHandler } from "./base-node-handler";
 import { AiModelSelectorService } from "../services/ai-model-selector.service";
 import { LangChainOpenRouterService } from "../../langchain-openrouter/langchain-openrouter.service";
+import { StreamingResponseService } from "../services/streaming-response.service";
 import {
   MessageRole,
   ChatMessageDto,
@@ -80,7 +81,8 @@ export class AiChatNodeHandler extends BaseNodeHandler {
     messagesService: MessagesService,
     activityLogService: ActivityLogService,
     private readonly aiModelSelector: AiModelSelectorService,
-    private readonly langChainService: LangChainOpenRouterService
+    private readonly langChainService: LangChainOpenRouterService,
+    private readonly streamingService: StreamingResponseService
   ) {
     super(
       botFlowRepository,
@@ -243,16 +245,21 @@ export class AiChatNodeHandler extends BaseNodeHandler {
     try {
       // Формируем сообщения для API
       const messages = this.buildMessagesForApi(chatSession);
+      const chatId = message.chat.id.toString();
+      const decryptedToken = this.botsService.decryptToken(bot.token);
 
-      // Получаем ответ от AI
-      const {
-        result: response,
-        modelId,
-        modelName,
-      } = await this.aiModelSelector.executeWithFallback(async (modelId) => {
-        this.logger.log(`AI Chat: Используем модель ${modelId}`);
+      // Получаем модель для streaming
+      const { modelId, modelName } =
+        await this.aiModelSelector.getStreamingModel();
+      this.logger.log(`AI Chat: Используем streaming модель ${modelId}`);
 
-        return this.langChainService.chat({
+      // Пытаемся использовать streaming
+      let aiResponse = "";
+      let streamingSucceeded = false;
+
+      try {
+        // Создаём stream generator
+        const streamGenerator = this.langChainService.chatStream({
           messages,
           model: modelId,
           parameters: {
@@ -260,41 +267,98 @@ export class AiChatNodeHandler extends BaseNodeHandler {
             temperature,
           },
         });
-      });
 
-      const aiResponse =
-        response.content || "Извините, не удалось сформировать ответ.";
+        // ВРЕМЕННО: Добавляем название модели в начало сообщения
+        const messagePrefix = `🤖 [${modelName}]\n\n`;
+
+        // Используем streaming сервис для отправки
+        const result = await this.streamingService.sendStreamingResponse(
+          bot,
+          chatId,
+          streamGenerator,
+          {
+            messagePrefix,
+            initialMessage: "Думаю...",
+            showCursor: true,
+            throttleMs: 800,
+            onTypingNeeded: async () => {
+              await this.telegramService.sendChatAction(
+                decryptedToken,
+                chatId,
+                "typing"
+              );
+            },
+          }
+        );
+
+        aiResponse = result.fullResponse;
+        streamingSucceeded = result.wasStreamed;
+
+        this.logger.log(
+          `AI Chat: Streaming ответ отправлен (${aiResponse.length} символов, ${result.editCount} редактирований)`
+        );
+      } catch (streamError) {
+        this.logger.warn(
+          `AI Chat: Streaming не удался, используем fallback: ${streamError.message}`
+        );
+
+        // Fallback: запускаем typing и используем обычный запрос
+        const stopTyping = this.streamingService.startTypingIndicator(
+          bot,
+          chatId
+        );
+
+        try {
+          const {
+            result: response,
+            modelId: fallbackModelId,
+            modelName: fallbackModelName,
+          } = await this.aiModelSelector.executeWithFallback(
+            async (modelId) => {
+              return this.langChainService.chat({
+                messages,
+                model: modelId,
+                parameters: {
+                  maxTokens: 1000,
+                  temperature,
+                },
+              });
+            }
+          );
+
+          aiResponse =
+            response.content || "Извините, не удалось сформировать ответ.";
+
+          // Отправляем обычным способом
+          const messageWithModelInfo = `🤖 [${fallbackModelName}]\n\n${aiResponse}`;
+          await this.sendAndSaveMessage(bot, chatId, messageWithModelInfo);
+
+          this.logger.log(
+            `AI Chat: Fallback ответ отправлен (${aiResponse.length} символов), модель: ${fallbackModelName}`
+          );
+
+          // Логируем статистику
+          if (response.metadata?.usage) {
+            this.logger.log(
+              `AI Chat: Токены - prompt: ${response.metadata.usage.promptTokens}, completion: ${response.metadata.usage.completionTokens}`
+            );
+          }
+        } finally {
+          stopTyping();
+        }
+      }
 
       // Добавляем ответ в историю (без префикса модели)
-      chatSession.chatHistory.push({
-        role: "assistant",
-        content: aiResponse,
-        timestamp: Date.now(),
-      });
-      chatSession.totalTokensEstimate += this.estimateTokens(aiResponse);
+      if (aiResponse) {
+        chatSession.chatHistory.push({
+          role: "assistant",
+          content: aiResponse,
+          timestamp: Date.now(),
+        });
+        chatSession.totalTokensEstimate += this.estimateTokens(aiResponse);
 
-      // Сохраняем обновленную сессию
-      session.variables[chatSessionKey] = chatSession;
-
-      // ВРЕМЕННО: Добавляем название модели в начало сообщения
-      const messageWithModelInfo = `🤖 [${modelName}]\n\n${aiResponse}`;
-
-      // Отправляем ответ пользователю (с информацией о модели)
-      await this.sendAndSaveMessage(
-        bot,
-        message.chat.id.toString(),
-        messageWithModelInfo
-      );
-
-      this.logger.log(
-        `AI Chat: Ответ отправлен (${aiResponse.length} символов), модель: ${modelName}`
-      );
-
-      // Логируем статистику
-      if (response.metadata?.usage) {
-        this.logger.log(
-          `AI Chat: Токены - prompt: ${response.metadata.usage.promptTokens}, completion: ${response.metadata.usage.completionTokens}`
-        );
+        // Сохраняем обновленную сессию
+        session.variables[chatSessionKey] = chatSession;
       }
     } catch (error) {
       this.logger.error(`AI Chat: Ошибка получения ответа: ${error.message}`);

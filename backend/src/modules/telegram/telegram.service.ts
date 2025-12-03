@@ -679,6 +679,40 @@ export class TelegramService {
     }
   }
 
+  /**
+   * Отправляет действие чата (typing, upload_photo и т.д.)
+   * Статус "typing" автоматически сбрасывается через 5 секунд
+   */
+  async sendChatAction(
+    token: string,
+    chatId: string,
+    action:
+      | "typing"
+      | "upload_photo"
+      | "record_video"
+      | "upload_video"
+      | "record_voice"
+      | "upload_voice"
+      | "upload_document"
+      | "find_location"
+      | "record_video_note"
+      | "upload_video_note"
+  ): Promise<boolean> {
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}${token}/sendChatAction`,
+        {
+          chat_id: chatId,
+          action,
+        }
+      );
+      return response.data.ok;
+    } catch (error) {
+      console.error("Ошибка отправки действия чата:", error.message);
+      return false;
+    }
+  }
+
   async answerCallbackQuery(
     token: string,
     callbackQueryId: string,
