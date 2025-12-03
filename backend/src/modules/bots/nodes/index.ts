@@ -27,3 +27,7 @@ export * from "./group-create-node.handler";
 export * from "./group-join-node.handler";
 export * from "./group-action-node.handler";
 export * from "./group-leave-node.handler";
+
+// AI handlers
+export * from "./ai-single-node.handler";
+export * from "./ai-chat-node.handler";

@@ -39,6 +39,7 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
 import { WebSocketModule } from "../websocket/websocket.module";
 import { CustomPagesModule } from "../custom-pages/custom-pages.module";
 import { AssistantBotModule } from "../assistant-bot/assistant-bot.module";
+import { LangChainOpenRouterModule } from "../langchain-openrouter/langchain-openrouter.module";
 import { CustomLoggerService } from "../../common/logger.service";
 import {
   NodeHandlerService,
@@ -65,7 +66,10 @@ import {
   GroupJoinNodeHandler,
   GroupActionNodeHandler,
   GroupLeaveNodeHandler,
+  AiSingleNodeHandler,
+  AiChatNodeHandler,
 } from "./nodes";
+import { AiModelSelectorService } from "./services/ai-model-selector.service";
 import { DatabaseService } from "./database.service";
 import { SessionStorageService } from "./session-storage.service";
 import { GroupSessionService } from "./group-session.service";
@@ -112,6 +116,7 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
     WebSocketModule,
     CustomPagesModule,
     AssistantBotModule,
+    LangChainOpenRouterModule,
   ],
   providers: [
     BotsService,
@@ -146,6 +151,9 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
     GroupJoinNodeHandler,
     GroupActionNodeHandler,
     GroupLeaveNodeHandler,
+    AiSingleNodeHandler,
+    AiChatNodeHandler,
+    AiModelSelectorService,
     BotPermissionGuard,
     BotPermissionsService,
     BotInvitationsService,
