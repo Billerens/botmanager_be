@@ -78,6 +78,27 @@ export class PublicShopBotResponseDto {
   shopUrl?: string;
 
   @ApiProperty({
+    description: "Username бота в Telegram",
+    example: "my_shop_bot",
+    required: false,
+  })
+  username?: string;
+
+  @ApiProperty({
+    description: "Включен ли браузерный доступ к магазину",
+    example: true,
+    default: false,
+  })
+  shopBrowserAccessEnabled: boolean;
+
+  @ApiProperty({
+    description: "Требуется ли верификация email для браузерного доступа",
+    example: false,
+    default: false,
+  })
+  browserAccessRequireEmailVerification: boolean;
+
+  @ApiProperty({
     description: "Список категорий магазина (с иерархией)",
     example: [
       {
@@ -209,4 +230,25 @@ export class PublicBookingBotResponseDto {
     duration: number;
     isActive: boolean;
   }>;
+
+  @ApiProperty({
+    description: "Username бота в Telegram",
+    example: "my_booking_bot",
+    required: false,
+  })
+  username?: string;
+
+  @ApiProperty({
+    description: "Включен ли браузерный доступ к бронированию",
+    example: true,
+    default: false,
+  })
+  bookingBrowserAccessEnabled: boolean;
+
+  @ApiProperty({
+    description: "Требуется ли верификация email для браузерного доступа",
+    example: false,
+    default: false,
+  })
+  browserAccessRequireEmailVerification: boolean;
 }

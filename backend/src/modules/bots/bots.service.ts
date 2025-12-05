@@ -366,6 +366,10 @@ export class BotsService {
       bookingLogoUrl: bot.bookingLogoUrl,
       bookingCustomStyles: bot.bookingCustomStyles,
       specialists: bot.specialists?.filter((s) => s.isActive) || [],
+      // Настройки браузерного доступа
+      bookingBrowserAccessEnabled: bot.bookingBrowserAccessEnabled ?? false,
+      browserAccessRequireEmailVerification:
+        bot.browserAccessRequireEmailVerification ?? false,
     };
   }
   async getPublicBotForShop(botId: string): Promise<any> {
@@ -419,6 +423,7 @@ export class BotsService {
     return {
       id: bot.id,
       name: bot.name,
+      username: bot.username,
       description: bot.description,
       shopTitle: bot.shopTitle,
       shopDescription: bot.shopDescription,
@@ -428,6 +433,10 @@ export class BotsService {
       shopButtonSettings: bot.shopButtonSettings,
       shopUrl: bot.shopUrl,
       categories: mapCategoryTree(categoryTree),
+      // Настройки браузерного доступа
+      shopBrowserAccessEnabled: bot.shopBrowserAccessEnabled ?? false,
+      browserAccessRequireEmailVerification:
+        bot.browserAccessRequireEmailVerification ?? false,
     };
   }
 
