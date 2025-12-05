@@ -29,8 +29,7 @@ export class TransformNodeHandler extends BaseNodeHandler {
     this.logger.log(`Узел ID: ${currentNode.nodeId}`);
     this.logger.log(`Пользователь: ${session.userId}`);
 
-    // Получаем настройки transform из данных узла
-    const transformData = (currentNode.data as any)?.transform;
+    const transformData = currentNode.data.transform;
 
     if (!transformData) {
       this.logger.warn("Настройки transform не заданы в узле");

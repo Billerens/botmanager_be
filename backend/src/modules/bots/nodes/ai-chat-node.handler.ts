@@ -106,8 +106,7 @@ export class AiChatNodeHandler extends BaseNodeHandler {
     this.logger.log(`Узел ID: ${currentNode.nodeId}`);
     this.logger.log(`Пользователь: ${session.userId}`);
 
-    // Получаем данные узла
-    const nodeData = (currentNode.data as any)?.aiChat as AiChatNodeData;
+    const nodeData = currentNode.data.aiChat;
 
     if (!nodeData || !nodeData.systemPrompt) {
       this.logger.warn("AI Chat: Системный промпт не задан в узле");

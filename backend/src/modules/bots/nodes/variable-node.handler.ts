@@ -23,8 +23,7 @@ export class VariableNodeHandler extends BaseNodeHandler {
     this.logger.log(`Узел ID: ${currentNode.nodeId}`);
     this.logger.log(`Пользователь: ${session.userId}`);
 
-    // Получаем переменные из данных узла
-    const variables = (currentNode.data as any)?.variables || {};
+    const variables = currentNode.data.variables || {};
 
     if (!variables || Object.keys(variables).length === 0) {
       this.logger.warn("Переменные не заданы в узле");

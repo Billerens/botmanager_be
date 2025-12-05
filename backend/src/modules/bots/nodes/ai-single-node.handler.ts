@@ -72,8 +72,7 @@ export class AiSingleNodeHandler extends BaseNodeHandler {
     this.logger.log(`Узел ID: ${currentNode.nodeId}`);
     this.logger.log(`Пользователь: ${session.userId}`);
 
-    // Получаем данные узла
-    const nodeData = (currentNode.data as any)?.aiSingle as AiSingleNodeData;
+    const nodeData = currentNode.data.aiSingle;
 
     if (!nodeData || !nodeData.prompt) {
       this.logger.warn("AI Single: Промпт не задан в узле");

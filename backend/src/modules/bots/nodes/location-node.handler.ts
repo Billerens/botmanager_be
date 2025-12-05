@@ -32,8 +32,7 @@ export class LocationNodeHandler extends BaseNodeHandler {
     this.logger.log(`Узел ID: ${currentNode.nodeId}`);
     this.logger.log(`Пользователь: ${session.userId}`);
 
-    // Получаем настройки геолокации из данных узла
-    const locationData = (currentNode.data as any)?.location;
+    const locationData = currentNode.data.location;
 
     if (!locationData) {
       this.logger.warn("Настройки геолокации не заданы в узле");

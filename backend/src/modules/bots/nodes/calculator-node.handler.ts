@@ -29,7 +29,7 @@ export class CalculatorNodeHandler extends BaseNodeHandler {
     this.logger.log(`Пользователь: ${session.userId}`);
 
     // Получаем настройки калькулятора из данных узла
-    const calculatorData = (currentNode.data as any)?.calculator;
+    const calculatorData = currentNode.data.calculator;
 
     if (!calculatorData) {
       this.logger.warn("Настройки калькулятора не заданы в узле");
