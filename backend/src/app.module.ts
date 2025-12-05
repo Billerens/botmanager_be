@@ -37,6 +37,7 @@ import { LangChainOpenRouterModule } from "./modules/langchain-openrouter/langch
 import { CustomPagesModule } from "./modules/custom-pages/custom-pages.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { PublicAuthModule } from "./modules/public-auth/public-auth.module";
+import { MailModule } from "./modules/mail/mail.module";
 
 @Module({
   imports: [
@@ -44,7 +45,14 @@ import { PublicAuthModule } from "./modules/public-auth/public-auth.module";
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ".env",
-      load: [databaseConfig, jwtConfig, appConfig, cloudAiConfig, openrouterConfig, redisConfig],
+      load: [
+        databaseConfig,
+        jwtConfig,
+        appConfig,
+        cloudAiConfig,
+        openrouterConfig,
+        redisConfig,
+      ],
     }),
 
     // Rate limiting
@@ -96,6 +104,7 @@ import { PublicAuthModule } from "./modules/public-auth/public-auth.module";
     CustomPagesModule, // Кастомные страницы
     PaymentsModule, // Платежные системы
     PublicAuthModule, // Авторизация публичных пользователей (браузер)
+    MailModule, // Email сервис
   ],
 })
 export class AppModule {}

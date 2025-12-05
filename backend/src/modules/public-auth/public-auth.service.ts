@@ -23,6 +23,7 @@ import {
   ChangePublicUserPasswordDto,
   LinkTelegramDto,
 } from "./dto/public-auth.dto";
+import { MailService } from "../mail/mail.service";
 
 export interface PublicUserJwtPayload {
   sub: string; // publicUserId
@@ -39,15 +40,14 @@ export class PublicAuthService {
     @InjectRepository(PublicUser)
     private publicUserRepository: Repository<PublicUser>,
     private jwtService: JwtService,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private mailService: MailService
   ) {}
 
   /**
    * Регистрация нового публичного пользователя
    */
-  async register(
-    dto: RegisterPublicUserDto
-  ): Promise<{
+  async register(dto: RegisterPublicUserDto): Promise<{
     user: PublicUser;
     accessToken: string;
     refreshToken: string;
@@ -98,18 +98,24 @@ export class PublicAuthService {
     savedUser.refreshToken = tokens.refreshToken;
     await this.publicUserRepository.save(savedUser);
 
-    // TODO: Отправить email с кодом верификации
-    // await this.emailService.sendVerificationEmail(email, emailVerificationCode);
-
-    this.logger.log(
-      `Код верификации для ${email}: ${emailVerificationCode} (в production отправить по email)`
+    // Отправляем email с кодом верификации
+    const emailSent = await this.mailService.sendVerificationCode(
+      email,
+      emailVerificationCode
     );
+
+    if (emailSent) {
+      this.logger.log(`Код верификации отправлен на ${email}`);
+    } else {
+      this.logger.warn(
+        `Email сервис не настроен. Код верификации для ${email}: ${emailVerificationCode}`
+      );
+    }
 
     return {
       user: this.sanitizeUser(savedUser),
       ...tokens,
-      message:
-        "Регистрация успешна. Код верификации отправлен на ваш email.",
+      message: "Регистрация успешна. Код верификации отправлен на ваш email.",
       requiresEmailVerification: true,
     };
   }
@@ -212,7 +218,9 @@ export class PublicAuthService {
 
     if (!user) {
       // Не раскрываем информацию о существовании пользователя
-      return { message: "Если email существует, код верификации будет отправлен" };
+      return {
+        message: "Если email существует, код верификации будет отправлен",
+      };
     }
 
     if (user.isEmailVerified) {
@@ -229,10 +237,19 @@ export class PublicAuthService {
     user.emailVerificationCodeExpires = emailVerificationCodeExpires;
     await this.publicUserRepository.save(user);
 
-    // TODO: Отправить email
-    this.logger.log(
-      `Повторный код верификации для ${email}: ${emailVerificationCode}`
+    // Отправляем email
+    const emailSent = await this.mailService.sendVerificationCode(
+      email,
+      emailVerificationCode
     );
+
+    if (emailSent) {
+      this.logger.log(`Повторный код верификации отправлен на ${email}`);
+    } else {
+      this.logger.warn(
+        `Email сервис не настроен. Код верификации для ${email}: ${emailVerificationCode}`
+      );
+    }
 
     return { message: "Код верификации отправлен на ваш email" };
   }
@@ -250,20 +267,32 @@ export class PublicAuthService {
     if (!user) {
       // Не раскрываем информацию о существовании пользователя
       return {
-        message: "Если email существует, инструкции по сбросу пароля будут отправлены",
+        message:
+          "Если email существует, инструкции по сбросу пароля будут отправлены",
       };
     }
 
-    // Генерируем токен сброса пароля
-    const resetToken = crypto.randomBytes(32).toString("hex");
-    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 час
+    // Генерируем 6-значный код для сброса пароля (более user-friendly)
+    const resetCode = this.generateVerificationCode();
+    const resetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 минут
 
-    user.passwordResetToken = resetToken;
+    user.passwordResetToken = resetCode;
     user.passwordResetTokenExpires = resetExpires;
     await this.publicUserRepository.save(user);
 
-    // TODO: Отправить email с ссылкой для сброса пароля
-    this.logger.log(`Токен сброса пароля для ${email}: ${resetToken}`);
+    // Отправляем email с кодом сброса пароля
+    const emailSent = await this.mailService.sendPasswordResetCode(
+      email,
+      resetCode
+    );
+
+    if (emailSent) {
+      this.logger.log(`Код сброса пароля отправлен на ${email}`);
+    } else {
+      this.logger.warn(
+        `Email сервис не настроен. Код сброса пароля для ${email}: ${resetCode}`
+      );
+    }
 
     return {
       message: "Инструкции по сбросу пароля отправлены на ваш email",
@@ -454,7 +483,9 @@ export class PublicAuthService {
   /**
    * Валидация JWT payload
    */
-  async validateJwtPayload(payload: PublicUserJwtPayload): Promise<PublicUser | null> {
+  async validateJwtPayload(
+    payload: PublicUserJwtPayload
+  ): Promise<PublicUser | null> {
     if (payload.type !== "public") {
       return null;
     }
@@ -528,4 +559,3 @@ export class PublicAuthService {
     return sanitized as PublicUser;
   }
 }
-
