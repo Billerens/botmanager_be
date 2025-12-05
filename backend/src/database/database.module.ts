@@ -25,6 +25,8 @@ import { CustomPage } from "./entities/custom-page.entity";
 import { BotUser } from "./entities/bot-user.entity";
 import { BotUserPermission } from "./entities/bot-user-permission.entity";
 import { BotInvitation } from "./entities/bot-invitation.entity";
+import { GroupSession } from "./entities/group-session.entity";
+import { PublicUser } from "./entities/public-user.entity";
 
 @Module({
   imports: [
@@ -61,6 +63,8 @@ import { BotInvitation } from "./entities/bot-invitation.entity";
           BotUser,
           BotUserPermission,
           BotInvitation,
+          GroupSession,
+          PublicUser,
         ],
         synchronize: configService.get("NODE_ENV") === "development",
         logging: false,
@@ -95,6 +99,8 @@ import { BotInvitation } from "./entities/bot-invitation.entity";
       BotUser,
       BotUserPermission,
       BotInvitation,
+      GroupSession,
+      PublicUser,
     ]),
   ],
   exports: [TypeOrmModule],
