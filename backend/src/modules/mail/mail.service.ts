@@ -22,9 +22,14 @@ export class MailService {
 
   private initializeTransporter(): void {
     const host = this.configService.get<string>("SMTP_HOST");
-    const port = this.configService.get<number>("SMTP_PORT");
+    const port = this.configService.get<number>("SMTP_PORT") || 587;
     const user = this.configService.get<string>("SMTP_USER");
     const pass = this.configService.get<string>("SMTP_PASS");
+    const secure = port === 465;
+
+    this.logger.log(
+      `SMTP конфигурация: host=${host}, port=${port}, user=${user ? user.substring(0, 3) + "***" : "не задан"}, secure=${secure}`
+    );
 
     if (!host || !user || !pass) {
       this.logger.warn(
@@ -36,20 +41,24 @@ export class MailService {
     try {
       this.transporter = nodemailer.createTransport({
         host,
-        port: port || 587,
-        secure: port === 465, // true для 465, false для других портов
+        port,
+        secure,
         auth: {
           user,
           pass,
         },
         // Таймауты для предотвращения зависания
-        connectionTimeout: 5000, // 5 секунд на подключение
-        greetingTimeout: 5000, // 5 секунд на приветствие
-        socketTimeout: 10000, // 10 секунд на операции с сокетом
+        connectionTimeout: 10000, // 10 секунд на подключение
+        greetingTimeout: 10000, // 10 секунд на приветствие
+        socketTimeout: 15000, // 15 секунд на операции с сокетом
+        // Для отладки проблем с TLS
+        tls: {
+          rejectUnauthorized: false, // Принимать самоподписанные сертификаты
+        },
       });
 
       this.isConfigured = true;
-      this.logger.log(`Email сервис инициализирован: ${host}:${port || 587}`);
+      this.logger.log(`Email сервис инициализирован: ${host}:${port}`);
 
       // Проверяем соединение при старте (неблокирующе)
       this.verifyConnection();
@@ -66,10 +75,15 @@ export class MailService {
 
     try {
       await this.transporter.verify();
-      this.logger.log("SMTP соединение проверено успешно");
-    } catch (error) {
-      this.logger.error("Ошибка проверки SMTP соединения:", error);
-      // Не отключаем сервис - возможно проблема временная
+      this.logger.log("✅ SMTP соединение проверено успешно");
+    } catch (error: any) {
+      this.logger.error(
+        `❌ Ошибка проверки SMTP соединения: ${error?.message}`
+      );
+      this.logger.warn(
+        "Возможные причины: неправильный хост/порт, порт заблокирован на сервере, неверные учётные данные"
+      );
+      // Не отключаем сервис - попробуем отправить email когда понадобится
     }
   }
 
