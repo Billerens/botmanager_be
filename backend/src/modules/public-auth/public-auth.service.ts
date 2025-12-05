@@ -79,6 +79,9 @@ export class PublicAuthService {
       Date.now() + 24 * 60 * 60 * 1000
     ); // 24 часа
 
+    // Проверяем, работает ли email сервис
+    const emailEnabled = this.mailService.isEnabled();
+
     // Создаем пользователя
     const user = this.publicUserRepository.create({
       botId,
@@ -87,9 +90,12 @@ export class PublicAuthService {
       firstName,
       lastName,
       phone,
-      isEmailVerified: false, // Требуется верификация
-      emailVerificationCode,
-      emailVerificationCodeExpires,
+      // Если email сервис не работает - автоверификация
+      isEmailVerified: !emailEnabled,
+      emailVerificationCode: emailEnabled ? emailVerificationCode : null,
+      emailVerificationCodeExpires: emailEnabled
+        ? emailVerificationCodeExpires
+        : null,
     });
 
     const savedUser = await this.publicUserRepository.save(user);
@@ -102,14 +108,18 @@ export class PublicAuthService {
     savedUser.refreshToken = tokens.refreshToken;
     await this.publicUserRepository.save(savedUser);
 
-    // Отправляем email с кодом верификации (неблокирующе)
-    this.sendVerificationEmailAsync(email, emailVerificationCode);
+    // Отправляем email с кодом верификации (неблокирующе) только если сервис работает
+    if (emailEnabled) {
+      this.sendVerificationEmailAsync(email, emailVerificationCode);
+    }
 
     return {
       user: this.sanitizeUser(savedUser),
       ...tokens,
-      message: "Регистрация успешна. Код верификации отправлен на ваш email.",
-      requiresEmailVerification: true,
+      message: emailEnabled
+        ? "Регистрация успешна. Код верификации отправлен на ваш email."
+        : "Регистрация успешна.",
+      requiresEmailVerification: emailEnabled,
     };
   }
 

@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import * as nodemailer from "nodemailer";
 import { Transporter } from "nodemailer";
+import { Resend } from "resend";
 
 export interface EmailOptions {
   to: string;
@@ -10,17 +11,57 @@ export interface EmailOptions {
   html?: string;
 }
 
+type EmailProvider = "resend" | "smtp" | "none";
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
   private transporter: Transporter | null = null;
-  private isConfigured = false;
+  private resend: Resend | null = null;
+  private provider: EmailProvider = "none";
+  private fromEmail: string = "";
 
   constructor(private readonly configService: ConfigService) {
-    this.initializeTransporter();
+    this.initializeProvider();
   }
 
-  private initializeTransporter(): void {
+  /**
+   * Инициализация провайдера email (Resend приоритетнее SMTP)
+   */
+  private initializeProvider(): void {
+    // Сначала пробуем Resend (работает через HTTP, обходит блокировку портов)
+    const resendApiKey = this.configService.get<string>("RESEND_API_KEY");
+    if (resendApiKey) {
+      this.initializeResend(resendApiKey);
+      return;
+    }
+
+    // Если Resend не настроен - пробуем SMTP
+    this.initializeSmtp();
+  }
+
+  /**
+   * Инициализация Resend (HTTP API)
+   */
+  private initializeResend(apiKey: string): void {
+    try {
+      this.resend = new Resend(apiKey);
+      this.fromEmail =
+        this.configService.get<string>("RESEND_FROM") ||
+        "onboarding@resend.dev";
+      this.provider = "resend";
+      this.logger.log(
+        `✅ Email сервис инициализирован: Resend (from: ${this.fromEmail})`
+      );
+    } catch (error) {
+      this.logger.error("Ошибка инициализации Resend:", error);
+    }
+  }
+
+  /**
+   * Инициализация SMTP (fallback)
+   */
+  private initializeSmtp(): void {
     const host = this.configService.get<string>("SMTP_HOST");
     const port = this.configService.get<number>("SMTP_PORT") || 587;
     const user = this.configService.get<string>("SMTP_USER");
@@ -33,7 +74,7 @@ export class MailService {
 
     if (!host || !user || !pass) {
       this.logger.warn(
-        "Email сервис не настроен: отсутствуют SMTP_HOST, SMTP_USER или SMTP_PASS в переменных окружения"
+        "Email сервис не настроен: отсутствуют RESEND_API_KEY или SMTP настройки"
       );
       return;
     }
@@ -47,43 +88,42 @@ export class MailService {
           user,
           pass,
         },
-        // Таймауты для предотвращения зависания
-        connectionTimeout: 10000, // 10 секунд на подключение
-        greetingTimeout: 10000, // 10 секунд на приветствие
-        socketTimeout: 15000, // 15 секунд на операции с сокетом
-        // Для отладки проблем с TLS
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
         tls: {
-          rejectUnauthorized: false, // Принимать самоподписанные сертификаты
+          rejectUnauthorized: false,
         },
       });
 
-      this.isConfigured = true;
-      this.logger.log(`Email сервис инициализирован: ${host}:${port}`);
+      this.fromEmail = this.configService.get<string>("SMTP_FROM") || user;
+      this.provider = "smtp";
+      this.logger.log(`✅ Email сервис инициализирован: SMTP ${host}:${port}`);
 
-      // Проверяем соединение при старте (неблокирующе)
-      this.verifyConnection();
+      // Проверяем соединение (неблокирующе)
+      this.verifySmtpConnection();
     } catch (error) {
-      this.logger.error("Ошибка инициализации email транспорта:", error);
+      this.logger.error("Ошибка инициализации SMTP:", error);
     }
   }
 
   /**
-   * Проверяет соединение с SMTP сервером (неблокирующе)
+   * Проверяет SMTP соединение
    */
-  private async verifyConnection(): Promise<void> {
+  private async verifySmtpConnection(): Promise<void> {
     if (!this.transporter) return;
 
     try {
       await this.transporter.verify();
       this.logger.log("✅ SMTP соединение проверено успешно");
     } catch (error: any) {
-      this.logger.error(
-        `❌ Ошибка проверки SMTP соединения: ${error?.message}`
-      );
+      this.logger.error(`❌ Ошибка SMTP: ${error?.message}`);
       this.logger.warn(
-        "Возможные причины: неправильный хост/порт, порт заблокирован на сервере, неверные учётные данные"
+        "SMTP недоступен. Рекомендуем использовать Resend (RESEND_API_KEY)"
       );
-      // Не отключаем сервис - попробуем отправить email когда понадобится
+      // Отключаем SMTP если не работает
+      this.provider = "none";
+      this.transporter = null;
     }
   }
 
@@ -91,7 +131,14 @@ export class MailService {
    * Проверяет, настроен ли email сервис
    */
   isEnabled(): boolean {
-    return this.isConfigured && this.transporter !== null;
+    return this.provider !== "none";
+  }
+
+  /**
+   * Возвращает текущий провайдер
+   */
+  getProvider(): EmailProvider {
+    return this.provider;
   }
 
   /**
@@ -105,34 +152,74 @@ export class MailService {
       return false;
     }
 
-    const from =
-      this.configService.get<string>("SMTP_FROM") ||
-      this.configService.get<string>("SMTP_USER");
-
-    this.logger.debug(`Отправка email на ${options.to}...`);
     const startTime = Date.now();
+    this.logger.debug(
+      `Отправка email на ${options.to} через ${this.provider}...`
+    );
 
     try {
-      const info = await this.transporter!.sendMail({
-        from,
-        to: options.to,
-        subject: options.subject,
-        text: options.text,
-        html: options.html,
-      });
-
-      const duration = Date.now() - startTime;
-      this.logger.log(
-        `Email отправлен: ${options.to} (messageId: ${info.messageId}, время: ${duration}ms)`
-      );
-      return true;
+      if (this.provider === "resend") {
+        return await this.sendViaResend(options, startTime);
+      } else {
+        return await this.sendViaSmtp(options, startTime);
+      }
     } catch (error: any) {
       const duration = Date.now() - startTime;
       this.logger.error(
-        `Ошибка отправки email на ${options.to} (время: ${duration}ms): ${error?.message || error}`
+        `Ошибка отправки email на ${options.to} (${duration}ms): ${error?.message || error}`
       );
       return false;
     }
+  }
+
+  /**
+   * Отправка через Resend API
+   */
+  private async sendViaResend(
+    options: EmailOptions,
+    startTime: number
+  ): Promise<boolean> {
+    const { data, error } = await this.resend!.emails.send({
+      from: this.fromEmail,
+      to: options.to,
+      subject: options.subject,
+      text: options.text,
+      html: options.html,
+    });
+
+    const duration = Date.now() - startTime;
+
+    if (error) {
+      this.logger.error(`Resend ошибка: ${error.message} (${duration}ms)`);
+      return false;
+    }
+
+    this.logger.log(
+      `✅ Email отправлен через Resend: ${options.to} (id: ${data?.id}, ${duration}ms)`
+    );
+    return true;
+  }
+
+  /**
+   * Отправка через SMTP
+   */
+  private async sendViaSmtp(
+    options: EmailOptions,
+    startTime: number
+  ): Promise<boolean> {
+    const info = await this.transporter!.sendMail({
+      from: this.fromEmail,
+      to: options.to,
+      subject: options.subject,
+      text: options.text,
+      html: options.html,
+    });
+
+    const duration = Date.now() - startTime;
+    this.logger.log(
+      `✅ Email отправлен через SMTP: ${options.to} (messageId: ${info.messageId}, ${duration}ms)`
+    );
+    return true;
   }
 
   /**
