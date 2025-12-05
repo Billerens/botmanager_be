@@ -10,6 +10,7 @@ import {
 } from "typeorm";
 import { Expose } from "class-transformer";
 import { Bot } from "./bot.entity";
+import { PublicUser } from "./public-user.entity";
 
 export interface CartItem {
   productId: string;
@@ -21,7 +22,8 @@ export interface CartItem {
 }
 
 @Entity("carts")
-@Index(["botId", "telegramUsername"], { unique: true })
+@Index(["botId", "telegramUsername"])
+@Index(["botId", "publicUserId"])
 export class Cart {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -29,8 +31,11 @@ export class Cart {
   @Column()
   botId: string;
 
-  @Column()
+  @Column({ nullable: true })
   telegramUsername: string;
+
+  @Column({ nullable: true })
+  publicUserId: string; // ID пользователя для браузерного доступа
 
   @Column({ type: "json", default: "[]" })
   items: CartItem[];
@@ -48,6 +53,10 @@ export class Cart {
   @ManyToOne(() => Bot, { onDelete: "CASCADE" })
   @JoinColumn({ name: "botId" })
   bot: Bot;
+
+  @ManyToOne(() => PublicUser, { nullable: true, onDelete: "CASCADE" })
+  @JoinColumn({ name: "publicUserId" })
+  publicUser?: PublicUser;
 
   // Методы
   @Expose()

@@ -47,6 +47,10 @@ export class AiModelSelectorService {
     gpt: 4,
     gemini: 5,
     qwen: 6,
+    gemma: 7,
+
+    // default (остальные модели)
+    default: 8,
   };
 
   // Минимальное количество параметров (в миллиардах)
@@ -391,7 +395,7 @@ export class AiModelSelectorService {
     }
 
     // Дефолтный приоритет для остальных моделей
-    return 7;
+    return this.modelPriorities.default;
   }
 
   /**

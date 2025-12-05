@@ -10,6 +10,7 @@ import {
 } from "typeorm";
 import { Bot } from "./bot.entity";
 import { CartItem } from "./cart.entity";
+import { PublicUser } from "./public-user.entity";
 
 export enum OrderStatus {
   PENDING = "pending", // Ожидает обработки
@@ -34,6 +35,7 @@ export interface OrderCustomerData {
 
 @Entity("orders")
 @Index(["botId", "telegramUsername"])
+@Index(["botId", "publicUserId"])
 @Index(["botId", "status"])
 export class Order {
   @PrimaryGeneratedColumn("uuid")
@@ -42,8 +44,11 @@ export class Order {
   @Column()
   botId: string;
 
-  @Column()
+  @Column({ nullable: true })
   telegramUsername: string;
+
+  @Column({ nullable: true })
+  publicUserId: string; // ID пользователя для браузерного доступа
 
   @Column({ type: "json" })
   items: CartItem[]; // Структура как в корзине
@@ -83,6 +88,10 @@ export class Order {
   @ManyToOne(() => Bot, { onDelete: "CASCADE" })
   @JoinColumn({ name: "botId" })
   bot: Bot;
+
+  @ManyToOne(() => PublicUser, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "publicUserId" })
+  publicUser?: PublicUser;
 
   // Методы
   get totalItems(): number {

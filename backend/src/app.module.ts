@@ -36,6 +36,7 @@ import { OpenRouterModule } from "./modules/openrouter/openrouter.module";
 import { LangChainOpenRouterModule } from "./modules/langchain-openrouter/langchain-openrouter.module";
 import { CustomPagesModule } from "./modules/custom-pages/custom-pages.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
+import { PublicAuthModule } from "./modules/public-auth/public-auth.module";
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { PaymentsModule } from "./modules/payments/payments.module";
     LangChainOpenRouterModule, // LangChain + OpenRouter интеграция
     CustomPagesModule, // Кастомные страницы
     PaymentsModule, // Платежные системы
+    PublicAuthModule, // Авторизация публичных пользователей (браузер)
   ],
 })
 export class AppModule {}

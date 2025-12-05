@@ -197,4 +197,29 @@ export class UpdateBotDto {
   @IsOptional()
   @IsObject()
   bookingButtonSettings?: ButtonSettingsDto;
+
+  // Настройки браузерного доступа
+  @ApiPropertyOptional({
+    description: "Разрешить доступ к магазину из обычного браузера",
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  shopBrowserAccessEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    description: "Разрешить доступ к бронированию из обычного браузера",
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  bookingBrowserAccessEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    description: "Требовать подтверждение email для браузерного доступа",
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  browserAccessRequireEmailVerification?: boolean;
 }

@@ -186,6 +186,16 @@ export class Bot {
   @Column({ type: "json", nullable: true })
   bookingSettings: BookingSettings;
 
+  // Настройки браузерного доступа
+  @Column({ default: false })
+  shopBrowserAccessEnabled: boolean;
+
+  @Column({ default: false })
+  bookingBrowserAccessEnabled: boolean;
+
+  @Column({ default: false })
+  browserAccessRequireEmailVerification: boolean;
+
   // Методы
   get isActive(): boolean {
     return this.status === BotStatus.ACTIVE;

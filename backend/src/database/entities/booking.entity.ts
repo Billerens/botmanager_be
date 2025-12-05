@@ -7,10 +7,12 @@ import {
   ManyToOne,
   OneToOne,
   JoinColumn,
+  Index,
 } from "typeorm";
 import { Specialist } from "./specialist.entity";
 import { Service } from "./service.entity";
 import { TimeSlot } from "./time-slot.entity";
+import { PublicUser } from "./public-user.entity";
 
 export enum BookingStatus {
   PENDING = "pending",
@@ -37,6 +39,7 @@ export interface BookingReminder {
 }
 
 @Entity("bookings")
+@Index(["publicUserId"])
 export class Booking {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -55,6 +58,9 @@ export class Booking {
 
   @Column({ nullable: true })
   telegramUsername: string;
+
+  @Column({ nullable: true })
+  publicUserId: string; // ID пользователя для браузерного доступа
 
   @Column({ type: "text", nullable: true })
   notes: string;
@@ -125,6 +131,10 @@ export class Booking {
 
   @Column()
   timeSlotId: string;
+
+  @ManyToOne(() => PublicUser, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "publicUserId" })
+  publicUser?: PublicUser;
 
   // Методы
   get isPending(): boolean {
