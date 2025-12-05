@@ -90,7 +90,7 @@ export class PublicAuthController {
     type: PublicAuthMessageResponseDto,
   })
   async resendVerification(@Body() dto: ResendVerificationEmailDto) {
-    return this.publicAuthService.resendVerificationEmail(dto.email);
+    return this.publicAuthService.resendVerificationEmail(dto.botId, dto.email);
   }
 
   @Post("forgot-password")

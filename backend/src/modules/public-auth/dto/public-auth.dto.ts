@@ -4,11 +4,19 @@ import {
   MinLength,
   MaxLength,
   IsOptional,
+  IsUUID,
   Matches,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 export class RegisterPublicUserDto {
+  @ApiProperty({
+    description: "ID бота (магазина)",
+    example: "550e8400-e29b-41d4-a716-446655440000",
+  })
+  @IsUUID("4", { message: "Некорректный формат botId" })
+  botId: string;
+
   @ApiProperty({
     description: "Email пользователя",
     example: "user@example.com",
@@ -56,6 +64,13 @@ export class RegisterPublicUserDto {
 
 export class LoginPublicUserDto {
   @ApiProperty({
+    description: "ID бота (магазина)",
+    example: "550e8400-e29b-41d4-a716-446655440000",
+  })
+  @IsUUID("4", { message: "Некорректный формат botId" })
+  botId: string;
+
+  @ApiProperty({
     description: "Email пользователя",
     example: "user@example.com",
   })
@@ -71,6 +86,13 @@ export class LoginPublicUserDto {
 }
 
 export class VerifyEmailDto {
+  @ApiProperty({
+    description: "ID бота (магазина)",
+    example: "550e8400-e29b-41d4-a716-446655440000",
+  })
+  @IsUUID("4", { message: "Некорректный формат botId" })
+  botId: string;
+
   @ApiProperty({
     description: "Email пользователя",
     example: "user@example.com",
@@ -90,6 +112,13 @@ export class VerifyEmailDto {
 
 export class ResendVerificationEmailDto {
   @ApiProperty({
+    description: "ID бота (магазина)",
+    example: "550e8400-e29b-41d4-a716-446655440000",
+  })
+  @IsUUID("4", { message: "Некорректный формат botId" })
+  botId: string;
+
+  @ApiProperty({
     description: "Email пользователя",
     example: "user@example.com",
   })
@@ -99,6 +128,13 @@ export class ResendVerificationEmailDto {
 
 export class ForgotPasswordDto {
   @ApiProperty({
+    description: "ID бота (магазина)",
+    example: "550e8400-e29b-41d4-a716-446655440000",
+  })
+  @IsUUID("4", { message: "Некорректный формат botId" })
+  botId: string;
+
+  @ApiProperty({
     description: "Email пользователя",
     example: "user@example.com",
   })
@@ -107,6 +143,13 @@ export class ForgotPasswordDto {
 }
 
 export class ResetPasswordDto {
+  @ApiProperty({
+    description: "ID бота (магазина)",
+    example: "550e8400-e29b-41d4-a716-446655440000",
+  })
+  @IsUUID("4", { message: "Некорректный формат botId" })
+  botId: string;
+
   @ApiProperty({
     description: "Токен сброса пароля",
   })
@@ -195,4 +238,3 @@ export class LinkTelegramDto {
   @IsString()
   telegramUsername?: string;
 }
-

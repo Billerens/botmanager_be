@@ -28,6 +28,7 @@ import { MailService } from "../mail/mail.service";
 export interface PublicUserJwtPayload {
   sub: string; // publicUserId
   email: string;
+  botId: string; // ID бота/магазина
   type: "public"; // Для отличия от обычных пользователей админки
 }
 
@@ -54,13 +55,15 @@ export class PublicAuthService {
     message: string;
     requiresEmailVerification: boolean;
   }> {
-    const { email, password, firstName, lastName, phone } = dto;
+    const { botId, email, password, firstName, lastName, phone } = dto;
 
-    this.logger.log(`Регистрация публичного пользователя: ${email}`);
+    this.logger.log(
+      `Регистрация публичного пользователя: ${email} для бота ${botId}`
+    );
 
-    // Проверяем, существует ли пользователь
+    // Проверяем, существует ли пользователь в этом боте
     const existingUser = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase() },
+      where: { email: email.toLowerCase(), botId },
     });
 
     if (existingUser) {
@@ -78,6 +81,7 @@ export class PublicAuthService {
 
     // Создаем пользователя
     const user = this.publicUserRepository.create({
+      botId,
       email: email.toLowerCase(),
       passwordHash,
       firstName,
@@ -117,10 +121,10 @@ export class PublicAuthService {
     accessToken: string;
     refreshToken: string;
   }> {
-    const { email, password } = dto;
+    const { botId, email, password } = dto;
 
     const user = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase() },
+      where: { email: email.toLowerCase(), botId },
     });
 
     if (!user) {
@@ -157,10 +161,10 @@ export class PublicAuthService {
   async verifyEmail(
     dto: VerifyEmailDto
   ): Promise<{ user: PublicUser; message: string }> {
-    const { email, code } = dto;
+    const { botId, email, code } = dto;
 
     const user = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase() },
+      where: { email: email.toLowerCase(), botId },
     });
 
     if (!user) {
@@ -200,9 +204,12 @@ export class PublicAuthService {
   /**
    * Повторная отправка кода верификации
    */
-  async resendVerificationEmail(email: string): Promise<{ message: string }> {
+  async resendVerificationEmail(
+    botId: string,
+    email: string
+  ): Promise<{ message: string }> {
     const user = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase() },
+      where: { email: email.toLowerCase(), botId },
     });
 
     if (!user) {
@@ -236,10 +243,10 @@ export class PublicAuthService {
    * Запрос сброса пароля
    */
   async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
-    const { email } = dto;
+    const { botId, email } = dto;
 
     const user = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase() },
+      where: { email: email.toLowerCase(), botId },
     });
 
     if (!user) {
@@ -270,10 +277,10 @@ export class PublicAuthService {
    * Сброс пароля
    */
   async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
-    const { token, newPassword } = dto;
+    const { botId, token, newPassword } = dto;
 
     const user = await this.publicUserRepository.findOne({
-      where: { passwordResetToken: token },
+      where: { passwordResetToken: token, botId },
     });
 
     if (!user || user.isPasswordResetTokenExpired()) {
@@ -424,9 +431,9 @@ export class PublicAuthService {
       throw new UnauthorizedException("Пользователь не найден");
     }
 
-    // Проверяем, не связан ли уже этот Telegram ID с другим пользователем
+    // Проверяем, не связан ли уже этот Telegram ID с другим пользователем в этом боте
     const existingLink = await this.publicUserRepository.findOne({
-      where: { telegramId: dto.telegramId },
+      where: { telegramId: dto.telegramId, botId: user.botId },
     });
 
     if (existingLink && existingLink.id !== userId) {
@@ -472,19 +479,22 @@ export class PublicAuthService {
   }
 
   /**
-   * Поиск пользователя по email
+   * Поиск пользователя по email в конкретном боте
    */
-  async findByEmail(email: string): Promise<PublicUser | null> {
+  async findByEmail(botId: string, email: string): Promise<PublicUser | null> {
     return this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase() },
+      where: { email: email.toLowerCase(), botId },
     });
   }
 
   /**
-   * Поиск пользователя по Telegram ID
+   * Поиск пользователя по Telegram ID в конкретном боте
    */
-  async findByTelegramId(telegramId: string): Promise<PublicUser | null> {
-    return this.publicUserRepository.findOne({ where: { telegramId } });
+  async findByTelegramId(
+    botId: string,
+    telegramId: string
+  ): Promise<PublicUser | null> {
+    return this.publicUserRepository.findOne({ where: { telegramId, botId } });
   }
 
   // ============ Приватные методы ============
@@ -496,6 +506,7 @@ export class PublicAuthService {
     const payload: PublicUserJwtPayload = {
       sub: user.id,
       email: user.email,
+      botId: user.botId,
       type: "public",
     };
 

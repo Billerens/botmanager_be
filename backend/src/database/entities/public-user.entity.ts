@@ -4,19 +4,31 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany,
+  ManyToOne,
+  JoinColumn,
   Index,
 } from "typeorm";
 import { Exclude } from "class-transformer";
+import { Bot } from "./bot.entity";
 
 @Entity("public_users")
-@Index(["email"], { unique: true })
+@Index(["email", "botId"], { unique: true }) // Email уникален только в рамках одного бота
+@Index(["botId"])
+@Index(["botId", "telegramId"]) // Для поиска по telegramId в рамках бота
 export class PublicUser {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   email: string;
+
+  // Связь с ботом (магазином)
+  @ManyToOne(() => Bot, { onDelete: "CASCADE" })
+  @JoinColumn({ name: "botId" })
+  bot: Bot;
+
+  @Column()
+  botId: string;
 
   @Column()
   @Exclude()
@@ -32,7 +44,7 @@ export class PublicUser {
   phone?: string;
 
   @Column({ nullable: true })
-  telegramId?: string; // Для связывания аккаунтов с Telegram
+  telegramId?: string; // Для связывания аккаунтов с Telegram (уникален в рамках бота)
 
   @Column({ nullable: true })
   telegramUsername?: string;
@@ -88,4 +100,3 @@ export class PublicUser {
     return new Date() > this.passwordResetTokenExpires;
   }
 }
-
