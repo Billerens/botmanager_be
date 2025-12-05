@@ -98,19 +98,8 @@ export class PublicAuthService {
     savedUser.refreshToken = tokens.refreshToken;
     await this.publicUserRepository.save(savedUser);
 
-    // Отправляем email с кодом верификации
-    const emailSent = await this.mailService.sendVerificationCode(
-      email,
-      emailVerificationCode
-    );
-
-    if (emailSent) {
-      this.logger.log(`Код верификации отправлен на ${email}`);
-    } else {
-      this.logger.warn(
-        `Email сервис не настроен. Код верификации для ${email}: ${emailVerificationCode}`
-      );
-    }
+    // Отправляем email с кодом верификации (неблокирующе)
+    this.sendVerificationEmailAsync(email, emailVerificationCode);
 
     return {
       user: this.sanitizeUser(savedUser),
@@ -237,19 +226,8 @@ export class PublicAuthService {
     user.emailVerificationCodeExpires = emailVerificationCodeExpires;
     await this.publicUserRepository.save(user);
 
-    // Отправляем email
-    const emailSent = await this.mailService.sendVerificationCode(
-      email,
-      emailVerificationCode
-    );
-
-    if (emailSent) {
-      this.logger.log(`Повторный код верификации отправлен на ${email}`);
-    } else {
-      this.logger.warn(
-        `Email сервис не настроен. Код верификации для ${email}: ${emailVerificationCode}`
-      );
-    }
+    // Отправляем email (неблокирующе)
+    this.sendVerificationEmailAsync(email, emailVerificationCode);
 
     return { message: "Код верификации отправлен на ваш email" };
   }
@@ -280,19 +258,8 @@ export class PublicAuthService {
     user.passwordResetTokenExpires = resetExpires;
     await this.publicUserRepository.save(user);
 
-    // Отправляем email с кодом сброса пароля
-    const emailSent = await this.mailService.sendPasswordResetCode(
-      email,
-      resetCode
-    );
-
-    if (emailSent) {
-      this.logger.log(`Код сброса пароля отправлен на ${email}`);
-    } else {
-      this.logger.warn(
-        `Email сервис не настроен. Код сброса пароля для ${email}: ${resetCode}`
-      );
-    }
+    // Отправляем email с кодом сброса пароля (неблокирующе)
+    this.sendPasswordResetEmailAsync(email, resetCode);
 
     return {
       message: "Инструкции по сбросу пароля отправлены на ваш email",
@@ -557,5 +524,53 @@ export class PublicAuthService {
     delete (sanitized as any).passwordResetTokenExpires;
     delete (sanitized as any).refreshToken;
     return sanitized as PublicUser;
+  }
+
+  /**
+   * Асинхронная отправка кода верификации (fire-and-forget)
+   * Не блокирует основной запрос
+   */
+  private sendVerificationEmailAsync(email: string, code: string): void {
+    this.mailService
+      .sendVerificationCode(email, code)
+      .then((sent) => {
+        if (sent) {
+          this.logger.log(`Код верификации отправлен на ${email}`);
+        } else {
+          this.logger.warn(
+            `Email сервис не настроен. Код верификации для ${email}: ${code}`
+          );
+        }
+      })
+      .catch((error) => {
+        this.logger.error(
+          `Ошибка отправки кода верификации на ${email}:`,
+          error
+        );
+      });
+  }
+
+  /**
+   * Асинхронная отправка кода сброса пароля (fire-and-forget)
+   * Не блокирует основной запрос
+   */
+  private sendPasswordResetEmailAsync(email: string, code: string): void {
+    this.mailService
+      .sendPasswordResetCode(email, code)
+      .then((sent) => {
+        if (sent) {
+          this.logger.log(`Код сброса пароля отправлен на ${email}`);
+        } else {
+          this.logger.warn(
+            `Email сервис не настроен. Код сброса пароля для ${email}: ${code}`
+          );
+        }
+      })
+      .catch((error) => {
+        this.logger.error(
+          `Ошибка отправки кода сброса пароля на ${email}:`,
+          error
+        );
+      });
   }
 }

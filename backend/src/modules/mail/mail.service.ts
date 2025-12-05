@@ -42,12 +42,34 @@ export class MailService {
           user,
           pass,
         },
+        // Таймауты для предотвращения зависания
+        connectionTimeout: 5000, // 5 секунд на подключение
+        greetingTimeout: 5000, // 5 секунд на приветствие
+        socketTimeout: 10000, // 10 секунд на операции с сокетом
       });
 
       this.isConfigured = true;
       this.logger.log(`Email сервис инициализирован: ${host}:${port || 587}`);
+
+      // Проверяем соединение при старте (неблокирующе)
+      this.verifyConnection();
     } catch (error) {
       this.logger.error("Ошибка инициализации email транспорта:", error);
+    }
+  }
+
+  /**
+   * Проверяет соединение с SMTP сервером (неблокирующе)
+   */
+  private async verifyConnection(): Promise<void> {
+    if (!this.transporter) return;
+
+    try {
+      await this.transporter.verify();
+      this.logger.log("SMTP соединение проверено успешно");
+    } catch (error) {
+      this.logger.error("Ошибка проверки SMTP соединения:", error);
+      // Не отключаем сервис - возможно проблема временная
     }
   }
 
@@ -73,6 +95,9 @@ export class MailService {
       this.configService.get<string>("SMTP_FROM") ||
       this.configService.get<string>("SMTP_USER");
 
+    this.logger.debug(`Отправка email на ${options.to}...`);
+    const startTime = Date.now();
+
     try {
       const info = await this.transporter!.sendMail({
         from,
@@ -82,12 +107,16 @@ export class MailService {
         html: options.html,
       });
 
+      const duration = Date.now() - startTime;
       this.logger.log(
-        `Email отправлен: ${options.to} (messageId: ${info.messageId})`
+        `Email отправлен: ${options.to} (messageId: ${info.messageId}, время: ${duration}ms)`
       );
       return true;
-    } catch (error) {
-      this.logger.error(`Ошибка отправки email на ${options.to}:`, error);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      this.logger.error(
+        `Ошибка отправки email на ${options.to} (время: ${duration}ms): ${error?.message || error}`
+      );
       return false;
     }
   }
