@@ -25,6 +25,14 @@ import {
   ActivityLevel,
 } from "../../database/entities/activity-log.entity";
 
+/**
+ * Идентификатор пользователя для заказов
+ */
+export interface OrderUserIdentifier {
+  telegramUsername?: string;
+  publicUserId?: string;
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -206,18 +214,228 @@ export class OrdersService {
   }
 
   /**
-   * Получить все заказы пользователя для бота
+   * Получить все заказы пользователя для бота (legacy)
+   * @deprecated Используйте getOrdersByUserIdentifier
    */
   async getOrdersByUser(
     botId: string,
     telegramUsername: string
   ): Promise<Order[]> {
+    return this.getOrdersByUserIdentifier(botId, { telegramUsername });
+  }
+
+  /**
+   * Получить все заказы пользователя для бота (универсальный метод)
+   */
+  async getOrdersByUserIdentifier(
+    botId: string,
+    user: OrderUserIdentifier
+  ): Promise<Order[]> {
+    const { telegramUsername, publicUserId } = user;
+
+    let whereClause: any = { botId };
+    if (telegramUsername) {
+      whereClause.telegramUsername = telegramUsername;
+    } else if (publicUserId) {
+      whereClause.publicUserId = publicUserId;
+    }
+
     const orders = await this.orderRepository.find({
-      where: { botId, telegramUsername },
+      where: whereClause,
       order: { createdAt: "DESC" },
     });
 
     return orders;
+  }
+
+  /**
+   * Получить заказ по ID (универсальный метод)
+   */
+  async getOrderByUser(
+    botId: string,
+    orderId: string,
+    user: OrderUserIdentifier
+  ): Promise<Order> {
+    const { telegramUsername, publicUserId } = user;
+
+    let whereClause: any = { id: orderId, botId };
+    if (telegramUsername) {
+      whereClause.telegramUsername = telegramUsername;
+    } else if (publicUserId) {
+      whereClause.publicUserId = publicUserId;
+    }
+
+    const order = await this.orderRepository.findOne({
+      where: whereClause,
+    });
+
+    if (!order) {
+      throw new NotFoundException("Заказ не найден");
+    }
+
+    return order;
+  }
+
+  /**
+   * Создать заказ из корзины (универсальный метод)
+   */
+  async createOrderByUser(
+    botId: string,
+    user: OrderUserIdentifier,
+    createOrderDto: CreateOrderDto
+  ): Promise<Order> {
+    const { telegramUsername, publicUserId } = user;
+    const userLabel = telegramUsername || publicUserId || "unknown";
+
+    // Проверяем существование бота
+    const bot = await this.botRepository.findOne({
+      where: { id: botId },
+    });
+
+    if (!bot) {
+      throw new NotFoundException("Бот не найден");
+    }
+
+    // Получаем корзину пользователя
+    const cart = await this.cartService.getCartByUser(botId, user);
+
+    if (!cart || cart.items.length === 0) {
+      throw new BadRequestException("Корзина пуста");
+    }
+
+    // Проверяем доступность всех товаров
+    for (const item of cart.items) {
+      const product = await this.productRepository.findOne({
+        where: { id: item.productId, botId },
+      });
+
+      if (!product) {
+        throw new BadRequestException(`Товар "${item.name}" больше не доступен`);
+      }
+
+      if (!product.isActive) {
+        throw new BadRequestException(`Товар "${item.name}" больше не доступен`);
+      }
+
+      if (product.stockQuantity < item.quantity) {
+        throw new BadRequestException(
+          `Недостаточно товара "${item.name}" в наличии. Доступно: ${product.stockQuantity}`
+        );
+      }
+    }
+
+    // Рассчитываем итоговую сумму
+    let totalPrice = cart.items.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
+
+    // Применяем промокод если есть
+    let appliedPromocodeData = null;
+    if (cart.appliedPromocodeId) {
+      const promocode = await this.promocodeRepository.findOne({
+        where: { id: cart.appliedPromocodeId, botId },
+      });
+
+      if (promocode) {
+        const validation = await this.shopPromocodesService.validatePromocode(
+          botId,
+          promocode.code,
+          cart
+        );
+
+        if (validation.isValid && validation.discount) {
+          totalPrice = Math.max(0, totalPrice - validation.discount);
+          appliedPromocodeData = {
+            id: promocode.id,
+            code: promocode.code,
+            type: promocode.type,
+            value: promocode.value,
+            discount: validation.discount,
+          };
+        }
+      }
+    }
+
+    // Создаем заказ
+    const order = this.orderRepository.create({
+      botId,
+      telegramUsername: telegramUsername || null,
+      publicUserId: publicUserId || null,
+      items: cart.items,
+      totalPrice,
+      currency: cart.items[0]?.currency || "RUB",
+      status: OrderStatus.PENDING,
+      customerData: createOrderDto.customerData,
+      appliedPromocode: appliedPromocodeData,
+    });
+
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Уменьшаем количество товаров на складе
+    for (const item of cart.items) {
+      await this.productRepository.decrement(
+        { id: item.productId },
+        "stockQuantity",
+        item.quantity
+      );
+    }
+
+    // Увеличиваем счетчик использований промокода
+    if (appliedPromocodeData) {
+      await this.shopPromocodesService.incrementUsageCount(
+        appliedPromocodeData.id
+      );
+    }
+
+    // Очищаем корзину
+    await this.cartService.clearCartByUser(botId, user);
+
+    // Отправляем уведомление владельцу бота
+    if (bot.ownerId) {
+      this.notificationService
+        .sendToUser(bot.ownerId, NotificationType.ORDER_CREATED, {
+          botId,
+          order: {
+            id: savedOrder.id,
+            orderNumber: savedOrder.orderNumber,
+            totalPrice: savedOrder.totalPrice,
+            currency: savedOrder.currency,
+            status: savedOrder.status,
+            itemsCount: savedOrder.items.length,
+            telegramUsername,
+            publicUserId,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка отправки уведомления о новом заказе:", error);
+        });
+
+      // Логируем создание заказа
+      this.activityLogService
+        .create({
+          type: ActivityType.ORDER_CREATED,
+          level: ActivityLevel.SUCCESS,
+          message: `Создан заказ #${savedOrder.orderNumber} от пользователя ${userLabel}`,
+          userId: bot.ownerId,
+          botId,
+          metadata: {
+            orderId: savedOrder.id,
+            orderNumber: savedOrder.orderNumber,
+            totalPrice: savedOrder.totalPrice,
+            currency: savedOrder.currency,
+            itemsCount: savedOrder.items.length,
+            telegramUsername,
+            publicUserId,
+            appliedPromocode: appliedPromocodeData,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка логирования создания заказа:", error);
+        });
+    }
+
+    return savedOrder;
   }
 
   /**

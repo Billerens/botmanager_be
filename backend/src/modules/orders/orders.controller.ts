@@ -22,7 +22,7 @@ import {
 } from "@nestjs/swagger";
 import { OrdersService } from "./orders.service";
 import { CreateOrderDto, UpdateOrderStatusDto } from "./dto/order.dto";
-import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
+import { PublicAccessGuard } from "../public-auth/guards/public-access.guard";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { BotPermissionGuard } from "../bots/guards/bot-permission.guard";
 import { BotPermission } from "../bots/decorators/bot-permission.decorator";
@@ -32,11 +32,32 @@ import {
 } from "../../database/entities/bot-user-permission.entity";
 import { OrderStatus } from "../../database/entities/order.entity";
 
+/**
+ * Идентификатор пользователя для заказов
+ */
+interface OrderUserIdentifier {
+  telegramUsername?: string;
+  publicUserId?: string;
+}
+
 @ApiTags("Публичные эндпоинты - Заказы")
 @Controller("public")
-@UseGuards(TelegramInitDataGuard)
+@UseGuards(PublicAccessGuard)
 export class PublicOrdersController {
   constructor(private readonly ordersService: OrdersService) {}
+
+  /**
+   * Получить идентификатор пользователя из request
+   */
+  private getUserIdentifier(req: any): OrderUserIdentifier {
+    if (req.authType === "telegram" && req.telegramUser?.username) {
+      return { telegramUsername: req.telegramUser.username };
+    }
+    if (req.authType === "browser" && req.publicUser?.id) {
+      return { publicUserId: req.publicUser.id };
+    }
+    throw new UnauthorizedException("Не удалось определить пользователя");
+  }
 
   @Post("bots/:botId/orders")
   @HttpCode(HttpStatus.CREATED)
@@ -56,22 +77,17 @@ export class PublicOrdersController {
   })
   @ApiResponse({
     status: 401,
-    description: "Неверный или устаревший initData",
+    description: "Требуется авторизация",
   })
   async createOrder(
     @Param("botId") botId: string,
     @Request() req,
     @Body() createOrderDto: CreateOrderDto
   ) {
-    const telegramUsername = req.telegramUsername;
-    if (!telegramUsername) {
-      throw new UnauthorizedException(
-        "telegramUsername не найден в валидированных данных"
-      );
-    }
-    return this.ordersService.createOrder(
+    const userIdentifier = this.getUserIdentifier(req);
+    return this.ordersService.createOrderByUser(
       botId,
-      telegramUsername,
+      userIdentifier,
       createOrderDto
     );
   }
@@ -85,16 +101,11 @@ export class PublicOrdersController {
   })
   @ApiResponse({
     status: 401,
-    description: "Неверный или устаревший initData",
+    description: "Требуется авторизация",
   })
   async getOrders(@Param("botId") botId: string, @Request() req) {
-    const telegramUsername = req.telegramUsername;
-    if (!telegramUsername) {
-      throw new UnauthorizedException(
-        "telegramUsername не найден в валидированных данных"
-      );
-    }
-    return this.ordersService.getOrdersByUser(botId, telegramUsername);
+    const userIdentifier = this.getUserIdentifier(req);
+    return this.ordersService.getOrdersByUserIdentifier(botId, userIdentifier);
   }
 
   @Get("bots/:botId/orders/:orderId")
@@ -111,20 +122,15 @@ export class PublicOrdersController {
   })
   @ApiResponse({
     status: 401,
-    description: "Неверный или устаревший initData",
+    description: "Требуется авторизация",
   })
   async getOrder(
     @Param("botId") botId: string,
     @Param("orderId") orderId: string,
     @Request() req
   ) {
-    const telegramUsername = req.telegramUsername;
-    if (!telegramUsername) {
-      throw new UnauthorizedException(
-        "telegramUsername не найден в валидированных данных"
-      );
-    }
-    return this.ordersService.getOrder(botId, orderId, telegramUsername);
+    const userIdentifier = this.getUserIdentifier(req);
+    return this.ordersService.getOrderByUser(botId, orderId, userIdentifier);
   }
 }
 
