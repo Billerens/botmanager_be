@@ -28,15 +28,29 @@ import {
   UpdateCartItemDto,
   RemoveItemFromCartDto,
 } from "./dto/cart.dto";
-import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
+import { PublicAccessGuard } from "../public-auth/guards/public-access.guard";
 import { ValidatePromocodeDto, ApplyPromocodeDto } from "../shop-promocodes/dto/shop-promocode.dto";
 
 @ApiTags("Публичные эндпоинты - Корзина")
 @Controller("public")
-@UseGuards(TelegramInitDataGuard)
+@UseGuards(PublicAccessGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class CartController {
   constructor(private readonly cartService: CartService) {}
+
+  /**
+   * Получить идентификатор пользователя из request
+   * Поддерживает Telegram (telegramUsername) и браузер (publicUserId)
+   */
+  private getUserIdentifier(req: any): { telegramUsername?: string; publicUserId?: string } {
+    if (req.authType === "telegram" && req.telegramUser?.username) {
+      return { telegramUsername: req.telegramUser.username };
+    }
+    if (req.authType === "browser" && req.publicUser?.id) {
+      return { publicUserId: req.publicUser.id };
+    }
+    throw new UnauthorizedException("Не удалось определить пользователя");
+  }
 
   @Get("bots/:botId/cart")
   @ApiOperation({ summary: "Получить корзину пользователя" })
@@ -51,20 +65,14 @@ export class CartController {
   })
   @ApiResponse({
     status: 401,
-    description: "Неверный или устаревший initData",
+    description: "Требуется авторизация",
   })
   async getCart(@Param("botId") botId: string, @Request() req) {
-    const telegramUsername = req.telegramUsername;
-    if (!telegramUsername) {
-      throw new UnauthorizedException(
-        "telegramUsername не найден в валидированных данных"
-      );
-    }
+    const userIdentifier = this.getUserIdentifier(req);
     
-    console.log(`[CART CONTROLLER] getCart called - botId: ${botId}, telegramUsername: ${telegramUsername}`);
-    console.log(`[CART CONTROLLER] User-Agent: ${req.headers['user-agent'] || 'unknown'}`);
+    console.log(`[CART CONTROLLER] getCart called - botId: ${botId}, user:`, userIdentifier);
     
-    const cart = await this.cartService.getCart(botId, telegramUsername);
+    const cart = await this.cartService.getCartByUser(botId, userIdentifier);
     
     console.log(`[CART CONTROLLER] Cart loaded - cartId: ${cart.id}, appliedPromocodeId: ${cart.appliedPromocodeId || 'null'}`);
     
@@ -74,13 +82,7 @@ export class CartController {
       cart
     );
 
-    console.log(`[CART CONTROLLER] PromocodeInfo result:`, {
-      hasPromocodeInfo: !!promocodeInfo,
-      promocodeCode: promocodeInfo?.promocode?.code || 'null',
-      discount: promocodeInfo?.discount || 'null',
-    });
-
-    const response = {
+    return {
       ...cart,
       appliedPromocode: promocodeInfo
         ? {
@@ -89,10 +91,6 @@ export class CartController {
           }
         : null,
     };
-
-    console.log(`[CART CONTROLLER] Response appliedPromocode:`, JSON.stringify(response.appliedPromocode));
-
-    return response;
   }
 
   @Post("bots/:botId/cart/items")
@@ -112,22 +110,17 @@ export class CartController {
   })
   @ApiResponse({
     status: 401,
-    description: "Неверный или устаревший initData",
+    description: "Требуется авторизация",
   })
   async addItem(
     @Param("botId") botId: string,
     @Request() req,
     @Body() addItemDto: AddItemToCartDto
   ) {
-    const telegramUsername = req.telegramUsername;
-    if (!telegramUsername) {
-      throw new UnauthorizedException(
-        "telegramUsername не найден в валидированных данных"
-      );
-    }
-    const cart = await this.cartService.addItem(
+    const userIdentifier = this.getUserIdentifier(req);
+    const cart = await this.cartService.addItemByUser(
       botId,
-      telegramUsername,
+      userIdentifier,
       addItemDto.productId,
       addItemDto.quantity
     );
@@ -138,7 +131,6 @@ export class CartController {
       cart
     );
 
-    // Возвращаем корзину с информацией о промокоде
     return {
       ...cart,
       appliedPromocode: promocodeInfo
@@ -174,26 +166,19 @@ export class CartController {
     @Request() req,
     @Body() updateItemDto: UpdateCartItemDto
   ) {
-    const telegramUsername = req.telegramUsername;
-    if (!telegramUsername) {
-      throw new UnauthorizedException(
-        "telegramUsername не найден в валидированных данных"
-      );
-    }
-    const cart = await this.cartService.updateItem(
+    const userIdentifier = this.getUserIdentifier(req);
+    const cart = await this.cartService.updateItemByUser(
       botId,
-      telegramUsername,
+      userIdentifier,
       updateItemDto.productId,
       updateItemDto.quantity
     );
 
-    // Получаем информацию о примененном промокоде
     const promocodeInfo = await this.cartService.getAppliedPromocodeInfo(
       botId,
       cart
     );
 
-    // Возвращаем корзину с информацией о промокоде
     return {
       ...cart,
       appliedPromocode: promocodeInfo
@@ -227,21 +212,14 @@ export class CartController {
     @Param("productId") productId: string,
     @Request() req
   ) {
-    const telegramUsername = req.telegramUsername;
-    if (!telegramUsername) {
-      throw new UnauthorizedException(
-        "telegramUsername не найден в валидированных данных"
-      );
-    }
-    const cart = await this.cartService.removeItem(botId, telegramUsername, productId);
+    const userIdentifier = this.getUserIdentifier(req);
+    const cart = await this.cartService.removeItemByUser(botId, userIdentifier, productId);
 
-    // Получаем информацию о примененном промокоде
     const promocodeInfo = await this.cartService.getAppliedPromocodeInfo(
       botId,
       cart
     );
 
-    // Возвращаем корзину с информацией о промокоде
     return {
       ...cart,
       appliedPromocode: promocodeInfo
@@ -266,13 +244,8 @@ export class CartController {
     description: "Неверный или устаревший initData",
   })
   async clearCart(@Param("botId") botId: string, @Request() req) {
-    const telegramUsername = req.telegramUsername;
-    if (!telegramUsername) {
-      throw new UnauthorizedException(
-        "telegramUsername не найден в валидированных данных"
-      );
-    }
-    return this.cartService.clearCart(botId, telegramUsername);
+    const userIdentifier = this.getUserIdentifier(req);
+    return this.cartService.clearCartByUser(botId, userIdentifier);
   }
 
   @Post("bots/:botId/cart/promocode/validate")
@@ -295,15 +268,10 @@ export class CartController {
     @Request() req,
     @Body() validateDto: ValidatePromocodeDto
   ) {
-    const telegramUsername = req.telegramUsername;
-    if (!telegramUsername) {
-      throw new UnauthorizedException(
-        "telegramUsername не найден в валидированных данных"
-      );
-    }
-    return this.cartService.validatePromocode(
+    const userIdentifier = this.getUserIdentifier(req);
+    return this.cartService.validatePromocodeByUser(
       botId,
-      telegramUsername,
+      userIdentifier,
       validateDto.code
     );
   }
@@ -328,25 +296,18 @@ export class CartController {
     @Request() req,
     @Body() applyDto: ApplyPromocodeDto
   ) {
-    const telegramUsername = req.telegramUsername;
-    if (!telegramUsername) {
-      throw new UnauthorizedException(
-        "telegramUsername не найден в валидированных данных"
-      );
-    }
-    const cart = await this.cartService.applyPromocode(
+    const userIdentifier = this.getUserIdentifier(req);
+    const cart = await this.cartService.applyPromocodeByUser(
       botId,
-      telegramUsername,
+      userIdentifier,
       applyDto.code
     );
 
-    // Получаем информацию о примененном промокоде
     const promocodeInfo = await this.cartService.getAppliedPromocodeInfo(
       botId,
       cart
     );
 
-    // Возвращаем корзину с информацией о промокоде
     return {
       ...cart,
       appliedPromocode: promocodeInfo
@@ -371,15 +332,9 @@ export class CartController {
     description: "Неверный или устаревший initData",
   })
   async removePromocode(@Param("botId") botId: string, @Request() req) {
-    const telegramUsername = req.telegramUsername;
-    if (!telegramUsername) {
-      throw new UnauthorizedException(
-        "telegramUsername не найден в валидированных данных"
-      );
-    }
-    const cart = await this.cartService.removePromocode(botId, telegramUsername);
+    const userIdentifier = this.getUserIdentifier(req);
+    const cart = await this.cartService.removePromocodeByUser(botId, userIdentifier);
     
-    // Возвращаем корзину без промокода
     return {
       ...cart,
       appliedPromocode: null,
