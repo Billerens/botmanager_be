@@ -10,12 +10,7 @@ import {
   Res,
 } from "@nestjs/common";
 import { Response } from "express";
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiParam,
-} from "@nestjs/swagger";
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger";
 import { OpenRouterService } from "../../common/openrouter.service";
 import {
   OpenRouterChatRequestDto,
@@ -28,9 +23,9 @@ import {
 /**
  * Контроллер для работы с OpenRouter API
  * Предоставляет эндпоинты для chat completions и получения статистики
- * 
+ *
  * Примеры использования API:
- * 
+ *
  * 1. Простой chat completion запрос:
  * POST /api/v1/openrouter/chat/completions
  * Body: {
@@ -40,7 +35,7 @@ import {
  *   "model": "meta-llama/llama-3.3-70b-instruct",
  *   "temperature": 0.7
  * }
- * 
+ *
  * 2. Стриминговый запрос:
  * POST /api/v1/openrouter/chat/completions
  * Body: {
@@ -49,7 +44,7 @@ import {
  *   ],
  *   "stream": true
  * }
- * 
+ *
  * 3. Запрос с изображением:
  * POST /api/v1/openrouter/chat/completions
  * Body: {
@@ -64,13 +59,13 @@ import {
  *   ],
  *   "model": "anthropic/claude-3.5-sonnet"
  * }
- * 
+ *
  * 4. Получение статистики генерации:
  * GET /api/v1/openrouter/generation/{id}
- * 
+ *
  * 5. Получение списка бесплатных моделей:
  * GET /api/v1/openrouter/models/free
- * 
+ *
  * 6. Получение всех доступных моделей:
  * GET /api/v1/openrouter/models
  */
@@ -131,7 +126,7 @@ export class OpenRouterController {
           request
         )) {
           dataSent = true; // Отметим, что данные начали отправляться
-          
+
           // Отправляем чанк в формате SSE
           res.write(`data: ${JSON.stringify(chunk)}\n\n`);
 
@@ -328,15 +323,15 @@ export class OpenRouterController {
   }
 
   /**
-   * Получить список бесплатных моделей
+   * Получить список бесплатных моделей с количеством параметров > 27b
    * ВАЖНО: Этот роут должен быть перед @Get("models"), иначе будет перекрыт
    */
   @Get("models/free")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: "Get free models",
+    summary: "Get free models (>27B parameters)",
     description:
-      "Получает список бесплатных моделей OpenRouter (где pricing.prompt === '0' и pricing.completion === '0')",
+      "Получает список бесплатных моделей OpenRouter (где pricing.prompt === '0' и pricing.completion === '0') с количеством параметров более 27 миллиардов",
   })
   @ApiResponse({
     status: 200,
@@ -422,4 +417,3 @@ export class OpenRouterController {
     };
   }
 }
-

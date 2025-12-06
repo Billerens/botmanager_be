@@ -319,10 +319,58 @@ export class OpenRouterService {
     }
   }
 
+  // Минимальное количество параметров для фильтрации моделей (27 миллиардов)
+  private readonly MIN_PARAMETERS = 26_999_999_999;
+
+  /**
+   * Извлекает количество параметров из ID или названия модели
+   * Например: "llama-3.3-70b-instruct" -> 70000000000 (70b)
+   * @param model Модель OpenRouter
+   * @returns Количество параметров или null, если не удалось извлечь
+   */
+  private extractParametersFromModel(model: OpenRouterModelDto): number | null {
+    // Если модель имеет явное поле num_parameters, используем его
+    if (model.num_parameters && model.num_parameters > 0) {
+      return model.num_parameters;
+    }
+
+    // Пытаемся извлечь из ID или названия модели
+    // Паттерны: "70b", "70B", "7b", "405b", "8x7b" (MOE модели), "8x22b"
+    const textToSearch = `${model.id} ${model.name}`.toLowerCase();
+
+    // Паттерн для MOE моделей (например, "8x7b" = 56b, "8x22b" = 176b)
+    const moeMatch = textToSearch.match(/(\d+)x(\d+)b/i);
+    if (moeMatch) {
+      const experts = parseInt(moeMatch[1], 10);
+      const paramsPerExpert = parseInt(moeMatch[2], 10);
+      return experts * paramsPerExpert * 1_000_000_000;
+    }
+
+    // Паттерн для обычных моделей (например, "70b", "405b", "7b")
+    // Ищем число перед 'b' или 'B', которое не является частью другого слова
+    const paramMatch = textToSearch.match(
+      /[^0-9](\d+(?:\.\d+)?)\s*b(?:[^a-z]|$)/i
+    );
+    if (paramMatch) {
+      const params = parseFloat(paramMatch[1]);
+      return params * 1_000_000_000;
+    }
+
+    // Альтернативный паттерн для моделей с дефисом перед числом (например, "-70b-")
+    const altMatch = textToSearch.match(/-(\d+(?:\.\d+)?)b[-:]/i);
+    if (altMatch) {
+      const params = parseFloat(altMatch[1]);
+      return params * 1_000_000_000;
+    }
+
+    return null;
+  }
+
   /**
    * Получает список бесплатных моделей OpenRouter
    * Фильтрует модели, где pricing.prompt === "0" и pricing.completion === "0"
-   * @returns Список бесплатных моделей
+   * Автоматически фильтрует модели с количеством параметров > 27b
+   * @returns Список бесплатных моделей с параметрами > 27b
    */
   async getFreeModels(): Promise<ModelsListResponseDto> {
     try {
@@ -330,7 +378,7 @@ export class OpenRouterService {
 
       const allModels = await this.getModels();
 
-      // Фильтруем только бесплатные модели
+      // Фильтруем только бесплатные модели с параметрами > 27b
       const freeModels = allModels.data.filter((model) => {
         const isPromptFree =
           model.pricing?.prompt === "0" || model.pricing?.prompt === "0.0";
@@ -338,10 +386,33 @@ export class OpenRouterService {
           model.pricing?.completion === "0" ||
           model.pricing?.completion === "0.0";
 
-        return isPromptFree && isCompletionFree;
+        if (!isPromptFree || !isCompletionFree) {
+          return false;
+        }
+
+        // Проверяем количество параметров
+        const params = this.extractParametersFromModel(model);
+
+        if (params === null) {
+          this.logger.debug(
+            `Skipping free model ${model.id}: unable to determine parameter count`
+          );
+          return false;
+        }
+
+        const meetsMinParams = params > this.MIN_PARAMETERS;
+        if (!meetsMinParams) {
+          this.logger.debug(
+            `Skipping free model ${model.id}: ${params / 1_000_000_000}B < ${this.MIN_PARAMETERS / 1_000_000_000}B minimum`
+          );
+        }
+
+        return meetsMinParams;
       });
 
-      this.logger.debug(`Found ${freeModels.length} free models`);
+      this.logger.debug(
+        `Found ${freeModels.length} free models with parameters > ${this.MIN_PARAMETERS / 1_000_000_000}B`
+      );
 
       // Сортируем по имени для удобства
       freeModels.sort((a, b) => a.name.localeCompare(b.name));
@@ -362,9 +433,9 @@ export class OpenRouterService {
 
   /**
    * Получает список платных моделей OpenRouter
-   * Если OPENROUTER_ALLOWED_MODELS не задан или пуст, возвращает все модели
-   * Иначе фильтрует модели по списку из OPENROUTER_ALLOWED_MODELS
-   * @returns Список платных моделей (все или из разрешенного списка)
+   * Автоматически фильтрует модели с количеством параметров > 27b
+   * Если OPENROUTER_ALLOWED_MODELS задан, дополнительно фильтрует по этому списку
+   * @returns Список платных моделей с параметрами > 27b
    */
   async getPaidModels(): Promise<ModelsListResponseDto> {
     try {
@@ -372,48 +443,58 @@ export class OpenRouterService {
 
       const allModels = await this.getModels();
 
-      // Если список разрешенных моделей не задан или пуст, возвращаем все модели
-      if (!this.allowedModels || this.allowedModels.length === 0) {
-        this.logger.debug(
-          "OPENROUTER_ALLOWED_MODELS is not configured. Returning all models."
-        );
+      // Фильтруем модели по количеству параметров > 27b
+      let filteredModels = allModels.data.filter((model) => {
+        const params = this.extractParametersFromModel(model);
 
-        // Сортируем по имени для удобства
-        const sortedModels = [...allModels.data].sort((a, b) =>
-          a.name.localeCompare(b.name)
-        );
-
-        return {
-          data: sortedModels,
-        };
-      }
-
-      // Фильтруем модели по списку разрешенных
-      const paidModels = allModels.data.filter((model) => {
-        // Проверяем, есть ли модель в списке разрешенных
-        // Модель может быть указана как полный ID или как префикс
-        return this.allowedModels.some((allowedModel) => {
-          // Точное совпадение
-          if (model.id === allowedModel) {
-            return true;
-          }
-          // Совпадение по префиксу (например, "meta-llama/" совпадет с "meta-llama/llama-3.3-70b-instruct")
-          if (model.id.startsWith(allowedModel)) {
-            return true;
-          }
+        // Если не удалось определить количество параметров, пропускаем модель
+        if (params === null) {
+          this.logger.debug(
+            `Skipping model ${model.id}: unable to determine parameter count`
+          );
           return false;
-        });
+        }
+
+        const meetsMinParams = params > this.MIN_PARAMETERS;
+        if (!meetsMinParams) {
+          this.logger.debug(
+            `Skipping model ${model.id}: ${params / 1_000_000_000}B < ${this.MIN_PARAMETERS / 1_000_000_000}B minimum`
+          );
+        }
+
+        return meetsMinParams;
       });
 
       this.logger.debug(
-        `Found ${paidModels.length} paid models from ${this.allowedModels.length} allowed models`
+        `Found ${filteredModels.length} models with parameters > ${this.MIN_PARAMETERS / 1_000_000_000}B`
       );
 
+      // Если список разрешенных моделей задан, дополнительно фильтруем
+      if (this.allowedModels && this.allowedModels.length > 0) {
+        filteredModels = filteredModels.filter((model) => {
+          return this.allowedModels.some((allowedModel) => {
+            // Точное совпадение
+            if (model.id === allowedModel) {
+              return true;
+            }
+            // Совпадение по префиксу (например, "meta-llama/" совпадет с "meta-llama/llama-3.3-70b-instruct")
+            if (model.id.startsWith(allowedModel)) {
+              return true;
+            }
+            return false;
+          });
+        });
+
+        this.logger.debug(
+          `After OPENROUTER_ALLOWED_MODELS filter: ${filteredModels.length} models`
+        );
+      }
+
       // Сортируем по имени для удобства
-      paidModels.sort((a, b) => a.name.localeCompare(b.name));
+      filteredModels.sort((a, b) => a.name.localeCompare(b.name));
 
       return {
-        data: paidModels,
+        data: filteredModels,
       };
     } catch (error) {
       this.logger.error(

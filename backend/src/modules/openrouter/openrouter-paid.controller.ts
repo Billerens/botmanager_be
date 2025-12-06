@@ -329,15 +329,15 @@ export class OpenRouterPaidController {
 
   /**
    * Получить список платных моделей
-   * Если OPENROUTER_ALLOWED_MODELS не задан или пуст, возвращает все модели OpenRouter
-   * Иначе возвращает только модели из списка разрешенных
+   * Автоматически фильтрует модели с количеством параметров > 27b
+   * Если OPENROUTER_ALLOWED_MODELS задан, дополнительно фильтрует по этому списку
    */
   @Get("models")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: "Get paid models",
+    summary: "Get paid models (>27B parameters)",
     description:
-      "Получает список платных моделей OpenRouter. Если OPENROUTER_ALLOWED_MODELS не задан или пуст, возвращает все доступные модели. Иначе возвращает только модели из списка разрешенных.",
+      "Получает список платных моделей OpenRouter с количеством параметров более 27 миллиардов. Если OPENROUTER_ALLOWED_MODELS задан, дополнительно фильтрует по этому списку.",
   })
   @ApiResponse({
     status: 200,

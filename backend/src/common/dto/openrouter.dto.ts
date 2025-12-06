@@ -639,6 +639,12 @@ export class OpenRouterModelDto {
     description: "Список поддерживаемых провайдеров",
   })
   supported_providers?: string[];
+
+  @ApiPropertyOptional({
+    example: 70000000000,
+    description: "Количество параметров модели",
+  })
+  num_parameters?: number;
 }
 
 /**
