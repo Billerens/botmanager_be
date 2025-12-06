@@ -161,6 +161,10 @@ export class Bot {
   @Column({ type: "json", nullable: true })
   shopButtonSettings: Record<string, any>;
 
+  // Конфигурация макета страницы магазина
+  @Column({ type: "json", nullable: true })
+  shopLayoutConfig: Record<string, any>;
+
   // Поля для системы бронирования
   @Column({ default: false })
   isBookingEnabled: boolean;

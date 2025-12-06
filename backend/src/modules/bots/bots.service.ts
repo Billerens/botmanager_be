@@ -218,6 +218,7 @@ export class BotsService {
       shopCustomStyles?: string;
       shopButtonTypes?: string[];
       shopButtonSettings?: ButtonSettingsDto;
+      shopLayoutConfig?: Record<string, any>;
     },
     userId: string
   ): Promise<Bot> {
@@ -237,6 +238,7 @@ export class BotsService {
       bot.shopCustomStyles = null;
       bot.shopButtonTypes = null;
       bot.shopButtonSettings = null;
+      bot.shopLayoutConfig = null;
     }
 
     const savedBot = await this.botRepository.save(bot);

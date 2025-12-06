@@ -142,6 +142,7 @@ export class BotsController {
       shopCustomStyles?: string;
       shopButtonTypes?: string[];
       shopButtonSettings?: ButtonSettingsDto;
+      shopLayoutConfig?: Record<string, any>;
     },
     @Request() req
   ) {
