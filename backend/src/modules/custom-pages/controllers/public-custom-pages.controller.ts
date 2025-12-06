@@ -9,7 +9,7 @@ import { CustomPagesService } from "../services/custom-pages.service";
 import { PublicCustomPageResponseDto } from "../dto/custom-page-response.dto";
 
 @ApiTags("Публичные кастомные страницы")
-@Controller("public")
+@Controller("public/custom-pages")
 export class PublicCustomPagesController {
   constructor(private readonly customPagesService: CustomPagesService) {}
 
@@ -28,7 +28,7 @@ export class PublicCustomPagesController {
   })
   async getCustomPage(
     @Param("botUsername") botUsername: string,
-    @Param("slug") slug: string,
+    @Param("slug") slug: string
   ): Promise<PublicCustomPageResponseDto> {
     return this.customPagesService.findBySlug(botUsername, slug);
   }
@@ -46,7 +46,9 @@ export class PublicCustomPagesController {
     status: 404,
     description: "Страница не найдена",
   })
-  async getCustomPageById(@Param("id") id: string): Promise<PublicCustomPageResponseDto> {
+  async getCustomPageById(
+    @Param("id") id: string
+  ): Promise<PublicCustomPageResponseDto> {
     // Для публичного доступа по ID используем прямой доступ через сервис
     const response = await this.customPagesService.getPublicPageById(id);
     return response;
