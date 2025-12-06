@@ -29,7 +29,10 @@ import {
   RemoveItemFromCartDto,
 } from "./dto/cart.dto";
 import { PublicAccessGuard } from "../public-auth/guards/public-access.guard";
-import { ValidatePromocodeDto, ApplyPromocodeDto } from "../shop-promocodes/dto/shop-promocode.dto";
+import {
+  ValidatePromocodeDto,
+  ApplyPromocodeDto,
+} from "../shop-promocodes/dto/shop-promocode.dto";
 
 @ApiTags("Публичные эндпоинты - Корзина")
 @Controller("public")
@@ -42,7 +45,10 @@ export class CartController {
    * Получить идентификатор пользователя из request
    * Поддерживает Telegram (telegramUsername) и браузер (publicUserId)
    */
-  private getUserIdentifier(req: any): { telegramUsername?: string; publicUserId?: string } {
+  private getUserIdentifier(req: any): {
+    telegramUsername?: string;
+    publicUserId?: string;
+  } {
     if (req.authType === "telegram" && req.telegramUser?.username) {
       return { telegramUsername: req.telegramUser.username };
     }
@@ -69,13 +75,18 @@ export class CartController {
   })
   async getCart(@Param("botId") botId: string, @Request() req) {
     const userIdentifier = this.getUserIdentifier(req);
-    
-    console.log(`[CART CONTROLLER] getCart called - botId: ${botId}, user:`, userIdentifier);
-    
+
+    console.log(
+      `[CART CONTROLLER] getCart called - botId: ${botId}, user:`,
+      userIdentifier
+    );
+
     const cart = await this.cartService.getCartByUser(botId, userIdentifier);
-    
-    console.log(`[CART CONTROLLER] Cart loaded - cartId: ${cart.id}, appliedPromocodeId: ${cart.appliedPromocodeId || 'null'}`);
-    
+
+    console.log(
+      `[CART CONTROLLER] Cart loaded - cartId: ${cart.id}, appliedPromocodeId: ${cart.appliedPromocodeId || "null"}`
+    );
+
     // Получаем информацию о примененном промокоде
     const promocodeInfo = await this.cartService.getAppliedPromocodeInfo(
       botId,
@@ -213,7 +224,11 @@ export class CartController {
     @Request() req
   ) {
     const userIdentifier = this.getUserIdentifier(req);
-    const cart = await this.cartService.removeItemByUser(botId, userIdentifier, productId);
+    const cart = await this.cartService.removeItemByUser(
+      botId,
+      userIdentifier,
+      productId
+    );
 
     const promocodeInfo = await this.cartService.getAppliedPromocodeInfo(
       botId,
@@ -333,8 +348,11 @@ export class CartController {
   })
   async removePromocode(@Param("botId") botId: string, @Request() req) {
     const userIdentifier = this.getUserIdentifier(req);
-    const cart = await this.cartService.removePromocodeByUser(botId, userIdentifier);
-    
+    const cart = await this.cartService.removePromocodeByUser(
+      botId,
+      userIdentifier
+    );
+
     return {
       ...cart,
       appliedPromocode: null,

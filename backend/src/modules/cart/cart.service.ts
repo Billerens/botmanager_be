@@ -58,9 +58,9 @@ export class CartService {
    */
   async getCartByUser(botId: string, user: CartUserIdentifier): Promise<Cart> {
     const { telegramUsername, publicUserId } = user;
-    
+
     this.logger.log(
-      `[CART SERVICE] getCartByUser called - botId: ${botId}, telegramUsername: ${telegramUsername || 'null'}, publicUserId: ${publicUserId || 'null'}`
+      `[CART SERVICE] getCartByUser called - botId: ${botId}, telegramUsername: ${telegramUsername || "null"}, publicUserId: ${publicUserId || "null"}`
     );
 
     // Проверяем существование бота
@@ -75,7 +75,7 @@ export class CartService {
 
     // Ищем существующую корзину по telegramUsername или publicUserId
     let cart: Cart | null = null;
-    
+
     if (telegramUsername) {
       cart = await this.cartRepository.findOne({
         where: { botId, telegramUsername },
@@ -88,7 +88,7 @@ export class CartService {
 
     if (!cart) {
       this.logger.log(
-        `[CART SERVICE] Creating new cart for botId: ${botId}, telegramUsername: ${telegramUsername || 'null'}, publicUserId: ${publicUserId || 'null'}`
+        `[CART SERVICE] Creating new cart for botId: ${botId}, telegramUsername: ${telegramUsername || "null"}, publicUserId: ${publicUserId || "null"}`
       );
       cart = this.cartRepository.create({
         botId,
@@ -126,7 +126,10 @@ export class CartService {
   /**
    * Валидация примененного промокода
    */
-  private async validateAppliedPromocode(botId: string, cart: Cart): Promise<Cart> {
+  private async validateAppliedPromocode(
+    botId: string,
+    cart: Cart
+  ): Promise<Cart> {
     if (!cart.appliedPromocodeId) {
       return cart;
     }
@@ -134,7 +137,7 @@ export class CartService {
     this.logger.log(
       `[CART SERVICE] Cart has appliedPromocodeId: ${cart.appliedPromocodeId}, validating...`
     );
-    
+
     try {
       const promocode = await this.promocodeRepository.findOne({
         where: { id: cart.appliedPromocodeId, botId },
@@ -177,7 +180,6 @@ export class CartService {
 
     return cart;
   }
-
 
   /**
    * Добавить товар в корзину (универсальный метод)
@@ -254,7 +256,11 @@ export class CartService {
       where: { id: botId },
     });
     if (bot) {
-      await this.sendCartNotification(bot, NotificationType.CART_ITEM_ADDED, savedCart);
+      await this.sendCartNotification(
+        bot,
+        NotificationType.CART_ITEM_ADDED,
+        savedCart
+      );
     }
 
     return savedCart;
@@ -325,7 +331,11 @@ export class CartService {
       where: { id: botId },
     });
     if (bot) {
-      await this.sendCartNotification(bot, NotificationType.CART_UPDATED, savedCart);
+      await this.sendCartNotification(
+        bot,
+        NotificationType.CART_UPDATED,
+        savedCart
+      );
     }
 
     return savedCart;
@@ -350,7 +360,11 @@ export class CartService {
       where: { id: botId },
     });
     if (bot) {
-      await this.sendCartNotification(bot, NotificationType.CART_ITEM_REMOVED, savedCart);
+      await this.sendCartNotification(
+        bot,
+        NotificationType.CART_ITEM_REMOVED,
+        savedCart
+      );
     }
 
     return savedCart;
@@ -359,7 +373,10 @@ export class CartService {
   /**
    * Очистить корзину (универсальный метод)
    */
-  async clearCartByUser(botId: string, user: CartUserIdentifier): Promise<Cart> {
+  async clearCartByUser(
+    botId: string,
+    user: CartUserIdentifier
+  ): Promise<Cart> {
     const cart = await this.getCartByUser(botId, user);
     cart.items = [];
     cart.appliedPromocodeId = null;
@@ -370,7 +387,11 @@ export class CartService {
       where: { id: botId },
     });
     if (bot) {
-      await this.sendCartNotification(bot, NotificationType.CART_CLEARED, savedCart);
+      await this.sendCartNotification(
+        bot,
+        NotificationType.CART_CLEARED,
+        savedCart
+      );
     }
 
     return savedCart;
@@ -975,7 +996,10 @@ export class CartService {
             },
           })
           .catch((error) => {
-            this.logger.error("Ошибка логирования применения промокода:", error);
+            this.logger.error(
+              "Ошибка логирования применения промокода:",
+              error
+            );
           });
       }
     }
