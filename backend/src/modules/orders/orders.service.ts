@@ -310,11 +310,15 @@ export class OrdersService {
       });
 
       if (!product) {
-        throw new BadRequestException(`Товар "${item.name}" больше не доступен`);
+        throw new BadRequestException(
+          `Товар "${item.name}" больше не доступен`
+        );
       }
 
       if (!product.isActive) {
-        throw new BadRequestException(`Товар "${item.name}" больше не доступен`);
+        throw new BadRequestException(
+          `Товар "${item.name}" больше не доступен`
+        );
       }
 
       if (product.stockQuantity < item.quantity) {
@@ -367,7 +371,8 @@ export class OrdersService {
       currency: cart.items[0]?.currency || "RUB",
       status: OrderStatus.PENDING,
       customerData: createOrderDto.customerData,
-      appliedPromocode: appliedPromocodeData,
+      appliedPromocodeId: appliedPromocodeData?.id || null,
+      promocodeDiscount: appliedPromocodeData?.discount || null,
     });
 
     const savedOrder = await this.orderRepository.save(order);
@@ -398,7 +403,6 @@ export class OrdersService {
           botId,
           order: {
             id: savedOrder.id,
-            orderNumber: savedOrder.orderNumber,
             totalPrice: savedOrder.totalPrice,
             currency: savedOrder.currency,
             status: savedOrder.status,
@@ -408,7 +412,10 @@ export class OrdersService {
           },
         })
         .catch((error) => {
-          this.logger.error("Ошибка отправки уведомления о новом заказе:", error);
+          this.logger.error(
+            "Ошибка отправки уведомления о новом заказе:",
+            error
+          );
         });
 
       // Логируем создание заказа
@@ -416,18 +423,18 @@ export class OrdersService {
         .create({
           type: ActivityType.ORDER_CREATED,
           level: ActivityLevel.SUCCESS,
-          message: `Создан заказ #${savedOrder.orderNumber} от пользователя ${userLabel}`,
+          message: `Создан заказ #${savedOrder.id.substring(0, 8)} от пользователя ${userLabel}`,
           userId: bot.ownerId,
           botId,
           metadata: {
             orderId: savedOrder.id,
-            orderNumber: savedOrder.orderNumber,
             totalPrice: savedOrder.totalPrice,
             currency: savedOrder.currency,
             itemsCount: savedOrder.items.length,
             telegramUsername,
             publicUserId,
-            appliedPromocode: appliedPromocodeData,
+            appliedPromocodeId: appliedPromocodeData?.id,
+            promocodeDiscount: appliedPromocodeData?.discount,
           },
         })
         .catch((error) => {
@@ -610,7 +617,10 @@ export class OrdersService {
           },
         })
         .catch((error) => {
-          this.logger.error("Ошибка логирования обновления статуса заказа:", error);
+          this.logger.error(
+            "Ошибка логирования обновления статуса заказа:",
+            error
+          );
         });
     }
 
@@ -725,7 +735,10 @@ export class OrdersService {
           },
         })
         .catch((error) => {
-          this.logger.error("Ошибка логирования обновления данных клиента:", error);
+          this.logger.error(
+            "Ошибка логирования обновления данных клиента:",
+            error
+          );
         });
     }
 

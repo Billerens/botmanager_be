@@ -11,6 +11,7 @@ import { PublicUserGuard } from "./guards/public-user.guard";
 import { PublicAccessGuard } from "./guards/public-access.guard";
 import { TelegramInitDataValidationService } from "../../common/telegram-initdata-validation.service";
 import { BotsModule } from "../bots/bots.module";
+import { MailModule } from "../mail/mail.module";
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { BotsModule } from "../bots/bots.module";
       inject: [ConfigService],
     }),
     forwardRef(() => BotsModule),
+    MailModule,
   ],
   controllers: [PublicAuthController],
   providers: [
@@ -42,4 +44,3 @@ import { BotsModule } from "../bots/bots.module";
   ],
 })
 export class PublicAuthModule {}
-
