@@ -99,6 +99,21 @@ export class PublicShopBotResponseDto {
   browserAccessRequireEmailVerification: boolean;
 
   @ApiProperty({
+    description: "Конфигурация макета магазина",
+    example: {
+      version: 2,
+      pages: [],
+      globalSettings: {
+        defaultPageSlug: "catalog",
+        showBottomNav: true,
+        maxNavItems: 4,
+      },
+    },
+    required: false,
+  })
+  shopLayoutConfig?: Record<string, any>;
+
+  @ApiProperty({
     description: "Список категорий магазина (с иерархией)",
     example: [
       {

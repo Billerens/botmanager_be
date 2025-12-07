@@ -434,6 +434,7 @@ export class BotsService {
       shopButtonTypes: bot.shopButtonTypes,
       shopButtonSettings: bot.shopButtonSettings,
       shopUrl: bot.shopUrl,
+      shopLayoutConfig: bot.shopLayoutConfig,
       categories: mapCategoryTree(categoryTree),
       // Настройки браузерного доступа
       shopBrowserAccessEnabled: bot.shopBrowserAccessEnabled ?? false,
