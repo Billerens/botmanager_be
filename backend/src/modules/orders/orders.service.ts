@@ -492,23 +492,28 @@ export class OrdersService {
     const ordersWithChatId = await Promise.all(
       orders.map(async (order) => {
         // Пытаемся найти chatId по telegramUsername через метаданные сообщений
-        const username = order.telegramUsername.replace("@", "");
-        const userMessage = await this.messageRepository
-          .createQueryBuilder("message")
-          .where("message.botId = :botId", { botId })
-          .andWhere("message.type = :type", { type: "incoming" })
-          .andWhere(
-            "(message.metadata->>'username' = :username OR message.metadata->>'username' = :usernameWithAt)",
-            {
-              username,
-              usernameWithAt: `@${username}`,
-            }
-          )
-          .orderBy("message.createdAt", "DESC")
-          .limit(1)
-          .getOne();
+        // Для PublicUser (браузерных пользователей) telegramUsername может быть null
+        let chatId: string | undefined = undefined;
 
-        const chatId = userMessage?.telegramChatId;
+        if (order.telegramUsername) {
+          const username = order.telegramUsername.replace("@", "");
+          const userMessage = await this.messageRepository
+            .createQueryBuilder("message")
+            .where("message.botId = :botId", { botId })
+            .andWhere("message.type = :type", { type: "incoming" })
+            .andWhere(
+              "(message.metadata->>'username' = :username OR message.metadata->>'username' = :usernameWithAt)",
+              {
+                username,
+                usernameWithAt: `@${username}`,
+              }
+            )
+            .orderBy("message.createdAt", "DESC")
+            .limit(1)
+            .getOne();
+
+          chatId = userMessage?.telegramChatId;
+        }
 
         // Получаем информацию о примененном промокоде, если есть
         let appliedPromocodeCode: string | null = null;

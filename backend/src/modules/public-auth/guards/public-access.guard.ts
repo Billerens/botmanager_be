@@ -103,7 +103,7 @@ export class PublicAccessGuard implements CanActivate {
     // Гостевой доступ может быть разрешен для просмотра каталога
     // но для действий (корзина, заказы) нужна авторизация
     const isReadOnlyEndpoint = this.isReadOnlyEndpoint(request);
-    
+
     if (isReadOnlyEndpoint) {
       // Разрешаем доступ без авторизации для чтения данных
       request.authType = "none";
@@ -276,4 +276,3 @@ export class PublicAccessGuard implements CanActivate {
     );
   }
 }
-
