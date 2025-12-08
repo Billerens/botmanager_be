@@ -450,7 +450,9 @@ export class OrdersService {
    */
   async getOrdersByBotId(
     botId: string,
-    status?: OrderStatus
+    status?: OrderStatus,
+    searchUser?: string,
+    searchProduct?: string
   ): Promise<
     Array<
       Partial<Order> & {
@@ -478,15 +480,39 @@ export class OrdersService {
       throw new NotFoundException("Бот не найден");
     }
 
-    const where: any = { botId };
+    // Строим запрос с фильтрами
+    const queryBuilder = this.orderRepository
+      .createQueryBuilder("order")
+      .where("order.botId = :botId", { botId });
+
+    // Фильтр по статусу
     if (status) {
-      where.status = status;
+      queryBuilder.andWhere("order.status = :status", { status });
     }
 
-    const orders = await this.orderRepository.find({
-      where,
-      order: { createdAt: "DESC" },
-    });
+    // Фильтр по пользователю (telegramUsername или publicUserId)
+    if (searchUser && searchUser.trim()) {
+      const searchUserLower = searchUser.toLowerCase().trim();
+      queryBuilder.andWhere(
+        "(LOWER(order.telegramUsername) LIKE :searchUser OR LOWER(order.publicUserId) LIKE :searchUser)",
+        { searchUser: `%${searchUserLower}%` }
+      );
+    }
+
+    // Сортировка
+    queryBuilder.orderBy("order.createdAt", "DESC");
+
+    let orders = await queryBuilder.getMany();
+
+    // Фильтр по названию товара (выполняем на уровне приложения, т.к. items - JSONB)
+    if (searchProduct && searchProduct.trim()) {
+      const searchProductLower = searchProduct.toLowerCase().trim();
+      orders = orders.filter((order) =>
+        order.items.some((item) =>
+          item.name.toLowerCase().includes(searchProductLower)
+        )
+      );
+    }
 
     // Получаем chatId и информацию о промокодах для каждого заказа
     const ordersWithChatId = await Promise.all(

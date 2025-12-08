@@ -721,7 +721,9 @@ export class CartService {
    */
   async getCartsByBotId(
     botId: string,
-    hideEmpty: boolean = false
+    hideEmpty: boolean = false,
+    searchUser?: string,
+    searchProduct?: string
   ): Promise<
     Array<
       Cart & {
@@ -741,15 +743,38 @@ export class CartService {
       throw new NotFoundException("Бот не найден");
     }
 
-    // Получаем все корзины бота
-    let carts = await this.cartRepository.find({
-      where: { botId },
-      order: { updatedAt: "DESC" },
-    });
+    // Строим запрос с фильтрами
+    const queryBuilder = this.cartRepository
+      .createQueryBuilder("cart")
+      .where("cart.botId = :botId", { botId });
+
+    // Фильтр по пользователю (telegramUsername или publicUserId)
+    if (searchUser && searchUser.trim()) {
+      const searchUserLower = searchUser.toLowerCase().trim();
+      queryBuilder.andWhere(
+        "(LOWER(cart.telegramUsername) LIKE :searchUser OR LOWER(cart.publicUserId) LIKE :searchUser)",
+        { searchUser: `%${searchUserLower}%` }
+      );
+    }
+
+    // Сортировка
+    queryBuilder.orderBy("cart.updatedAt", "DESC");
+
+    let carts = await queryBuilder.getMany();
 
     // Фильтруем пустые корзины, если нужно
     if (hideEmpty) {
       carts = carts.filter((cart) => cart.items && cart.items.length > 0);
+    }
+
+    // Фильтр по названию товара (выполняем на уровне приложения, т.к. items - JSONB)
+    if (searchProduct && searchProduct.trim()) {
+      const searchProductLower = searchProduct.toLowerCase().trim();
+      carts = carts.filter((cart) =>
+        cart.items.some((item) =>
+          item.name.toLowerCase().includes(searchProductLower)
+        )
+      );
     }
 
     // Получаем chatId и информацию о промокодах для каждой корзины

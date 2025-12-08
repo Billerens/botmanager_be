@@ -149,6 +149,18 @@ export class OrdersController {
     enum: OrderStatus,
     description: "Фильтр по статусу заказа",
   })
+  @ApiQuery({
+    name: "searchUser",
+    required: false,
+    type: String,
+    description: "Поиск по имени пользователя (telegramUsername или publicUserId)",
+  })
+  @ApiQuery({
+    name: "searchProduct",
+    required: false,
+    type: String,
+    description: "Поиск по названию товара",
+  })
   @ApiResponse({
     status: 200,
     description: "Список заказов получен",
@@ -160,9 +172,11 @@ export class OrdersController {
   @BotPermission(BotEntity.ORDERS, PermissionAction.READ)
   async getOrdersByBotId(
     @Param("botId") botId: string,
-    @Query("status") status?: OrderStatus
+    @Query("status") status?: OrderStatus,
+    @Query("searchUser") searchUser?: string,
+    @Query("searchProduct") searchProduct?: string
   ) {
-    return this.ordersService.getOrdersByBotId(botId, status);
+    return this.ordersService.getOrdersByBotId(botId, status, searchUser, searchProduct);
   }
 
   @Patch(":orderId/status")

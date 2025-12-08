@@ -228,16 +228,30 @@ export class BotsController {
     type: Boolean,
     description: "Скрывать пустые корзины",
   })
+  @ApiQuery({
+    name: "searchUser",
+    required: false,
+    type: String,
+    description: "Поиск по имени пользователя (telegramUsername или publicUserId)",
+  })
+  @ApiQuery({
+    name: "searchProduct",
+    required: false,
+    type: String,
+    description: "Поиск по названию товара",
+  })
   @BotPermission(BotEntity.CARTS, PermissionAction.READ)
   async getCartsByBotId(
     @Param("id") id: string,
     @Query("hideEmpty") hideEmpty?: string,
+    @Query("searchUser") searchUser?: string,
+    @Query("searchProduct") searchProduct?: string,
     @Request() req?
   ) {
     // Проверяем, что бот принадлежит пользователю
     await this.botsService.findOne(id, req.user.id);
     const shouldHideEmpty = hideEmpty === "true" || hideEmpty === "1";
-    return this.cartService.getCartsByBotId(id, shouldHideEmpty);
+    return this.cartService.getCartsByBotId(id, shouldHideEmpty, searchUser, searchProduct);
   }
 
   @Delete(":id/carts/:cartId")
