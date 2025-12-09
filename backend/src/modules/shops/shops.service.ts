@@ -155,10 +155,17 @@ export class ShopsService {
 
   /**
    * Получить магазин по ID бота
+   * @param botId ID бота
+   * @param userId ID пользователя (опционально, для проверки владельца)
    */
-  async findByBotId(botId: string): Promise<Shop | null> {
+  async findByBotId(botId: string, userId?: string): Promise<Shop | null> {
+    const whereCondition: any = { botId };
+    if (userId) {
+      whereCondition.ownerId = userId;
+    }
+
     return this.shopRepository.findOne({
-      where: { botId },
+      where: whereCondition,
       relations: ["bot"],
     });
   }

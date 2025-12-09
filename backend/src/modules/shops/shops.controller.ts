@@ -98,6 +98,22 @@ export class ShopsController {
     return shops.map((shop) => this.formatShopResponse(shop));
   }
 
+  @Get("by-bot/:botId")
+  @ApiOperation({ summary: "Получить магазин по ID бота" })
+  @ApiResponse({
+    status: 200,
+    description: "Магазин найден",
+    schema: { $ref: getSchemaPath(ShopResponseDto) },
+  })
+  @ApiResponse({ status: 404, description: "Магазин не найден" })
+  async findByBotId(@Param("botId") botId: string, @Request() req) {
+    const shop = await this.shopsService.findByBotId(botId, req.user.id);
+    if (!shop) {
+      return null;
+    }
+    return this.formatShopResponse(shop);
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "Получить магазин по ID" })
   @ApiResponse({
