@@ -20,6 +20,7 @@ import { OrdersModule } from "../orders/orders.module";
 import { ShopPromocodesModule } from "../shop-promocodes/shop-promocodes.module";
 import { TelegramModule } from "../telegram/telegram.module";
 import { PublicAuthModule } from "../public-auth/public-auth.module";
+import { BotsModule } from "../bots/bots.module";
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { PublicAuthModule } from "../public-auth/public-auth.module";
     forwardRef(() => ShopPromocodesModule),
     forwardRef(() => TelegramModule),
     forwardRef(() => PublicAuthModule),
+    forwardRef(() => BotsModule),
   ],
   controllers: [ShopsController, PublicShopsController],
   providers: [ShopsService],
