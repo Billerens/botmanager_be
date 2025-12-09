@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   OneToMany,
+  OneToOne,
   JoinColumn,
 } from "typeorm";
 import { User } from "./user.entity";
@@ -14,7 +15,6 @@ import { Lead } from "./lead.entity";
 import { BotFlow } from "./bot-flow.entity";
 import { ActivityLog } from "./activity-log.entity";
 import { BotCustomData } from "./bot-custom-data.entity";
-import { Product } from "./product.entity";
 import { Specialist } from "./specialist.entity";
 
 export enum BotStatus {
@@ -128,42 +128,11 @@ export class Bot {
   @OneToMany(() => ActivityLog, (log) => log.bot)
   activityLogs: ActivityLog[];
 
-  @OneToMany(() => Product, (product) => product.bot)
-  products: Product[];
-
   @OneToMany(() => Specialist, (specialist) => specialist.bot)
   specialists: Specialist[];
 
   @OneToMany(() => BotCustomData, (customData) => customData.bot)
   customData: BotCustomData[];
-
-  // Поля для магазина
-  @Column({ default: false })
-  isShop: boolean;
-
-  @Column({ nullable: true })
-  shopLogoUrl: string;
-
-  @Column({ type: "text", nullable: true })
-  shopCustomStyles: string;
-
-  @Column({ nullable: true })
-  shopTitle: string;
-
-  @Column({ type: "text", nullable: true })
-  shopDescription: string;
-
-  // Типы кнопок магазина
-  @Column({ type: "json", nullable: true })
-  shopButtonTypes: string[];
-
-  // Настройки для разных типов кнопок
-  @Column({ type: "json", nullable: true })
-  shopButtonSettings: Record<string, any>;
-
-  // Конфигурация макета страницы магазина
-  @Column({ type: "json", nullable: true })
-  shopLayoutConfig: Record<string, any>;
 
   // Поля для системы бронирования
   @Column({ default: false })
@@ -190,15 +159,9 @@ export class Bot {
   @Column({ type: "json", nullable: true })
   bookingSettings: BookingSettings;
 
-  // Настройки браузерного доступа
-  @Column({ default: false })
-  shopBrowserAccessEnabled: boolean;
-
+  // Настройки браузерного доступа для бронирования
   @Column({ default: false })
   bookingBrowserAccessEnabled: boolean;
-
-  @Column({ default: false })
-  browserAccessRequireEmailVerification: boolean;
 
   // Методы
   get isActive(): boolean {
@@ -207,12 +170,6 @@ export class Bot {
 
   get hasError(): boolean {
     return this.status === BotStatus.ERROR;
-  }
-
-  get shopUrl(): string {
-    const frontendUrl =
-      process.env.FRONTEND_URL || "https://botmanagertest.online";
-    return `${frontendUrl}/shop/${this.id}`;
   }
 
   get bookingUrl(): string {

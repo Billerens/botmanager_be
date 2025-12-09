@@ -4,6 +4,7 @@ import axios from "axios";
 import FormData from "form-data";
 import * as fs from "fs";
 import { Bot } from "../../database/entities/bot.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import { CustomPagesBotService } from "../custom-pages/services/custom-pages-bot.service";
 
 export interface TelegramBotInfo {
@@ -142,7 +143,11 @@ export class TelegramService {
     }
   }
 
-  async setBotCommands(token: string, bot: Bot): Promise<boolean> {
+  async setBotCommands(
+    token: string,
+    bot: Bot,
+    shop: Shop | null = null
+  ): Promise<boolean> {
     try {
       const commands = [
         {
@@ -151,19 +156,20 @@ export class TelegramService {
         },
       ];
 
-      // Добавляем команду магазина если он включен и команда настроена
-      if (bot.isShop && bot.shopButtonTypes?.includes("command")) {
-        const commandSettings = bot.shopButtonSettings?.command;
+      // Добавляем команду магазина если он привязан и команда настроена
+      const hasShopCommand = shop && shop.buttonTypes?.includes("command");
+      if (hasShopCommand) {
+        const commandSettings = shop.buttonSettings?.command;
         commands.push({
           command: "shop",
           description: commandSettings?.description || "🛒 Открыть магазин",
         });
         console.log(
-          `Добавлена команда /shop для бота ${bot.id} (isShop=${bot.isShop}, shopButtonTypes=${JSON.stringify(bot.shopButtonTypes)})`
+          `Добавлена команда /shop для бота ${bot.id} (shopId=${shop.id}, buttonTypes=${JSON.stringify(shop.buttonTypes)})`
         );
       } else {
         console.log(
-          `Команда /shop НЕ добавлена для бота ${bot.id}: isShop=${bot.isShop}, shopButtonTypes=${JSON.stringify(bot.shopButtonTypes)}`
+          `Команда /shop НЕ добавлена для бота ${bot.id}: shop=${shop?.id || "null"}, buttonTypes=${JSON.stringify(shop?.buttonTypes)}`
         );
       }
 
@@ -211,12 +217,12 @@ export class TelegramService {
 
       // Определяем, какой Menu Button должен быть активен
       const hasShopMenuButton =
-        bot.isShop && bot.shopButtonTypes?.includes("menu_button");
+        shop && shop.buttonTypes?.includes("menu_button");
       const hasBookingMenuButton =
         bot.isBookingEnabled && bot.bookingButtonTypes?.includes("menu_button");
 
       if (hasShopMenuButton) {
-        await this.setMenuButton(token, bot);
+        await this.setMenuButton(token, shop);
       } else if (hasBookingMenuButton) {
         await this.setBookingMenuButton(token, bot);
       } else {
@@ -237,7 +243,7 @@ export class TelegramService {
   /**
    * Устанавливает Menu Button для магазина
    */
-  private async setMenuButton(token: string, bot: Bot): Promise<void> {
+  private async setMenuButton(token: string, shop: Shop): Promise<void> {
     try {
       // Проверяем, что токен не пустой
       if (!token || token.trim() === "") {
@@ -245,12 +251,11 @@ export class TelegramService {
         return;
       }
 
-      const buttonText =
-        bot.shopButtonSettings?.menu_button?.text || "🛒 Магазин";
+      const buttonText = shop.buttonSettings?.menu_button?.text || "🛒 Магазин";
 
       const shopUrl =
-        bot.shopUrl ||
-        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/shop/${bot.id}`;
+        shop.url ||
+        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/shop/${shop.id}`;
 
       await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {
         menu_button: {

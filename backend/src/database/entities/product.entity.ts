@@ -6,11 +6,13 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from "typeorm";
-import { Bot } from "./bot.entity";
 import { Category } from "./category.entity";
+import { Shop } from "./shop.entity";
 
 @Entity("products")
+@Index(["shopId"])
 export class Product {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -45,13 +47,15 @@ export class Product {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // Связи
-  @ManyToOne(() => Bot, (bot) => bot.products, { onDelete: "CASCADE" })
-  @JoinColumn({ name: "botId" })
-  bot: Bot;
+  // Связь с магазином
+  @ManyToOne(() => Shop, (shop) => shop.products, {
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "shopId" })
+  shop: Shop;
 
   @Column()
-  botId: string;
+  shopId: string;
 
   // Категория товара (товар может принадлежать только одной категории)
   @ManyToOne(() => Category, (category) => category.products, {

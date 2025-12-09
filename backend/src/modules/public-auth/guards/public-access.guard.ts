@@ -11,6 +11,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 
 import { Bot } from "../../../database/entities/bot.entity";
+import { Shop } from "../../../database/entities/shop.entity";
 import { PublicUser } from "../../../database/entities/public-user.entity";
 import { TelegramInitDataValidationService } from "../../../common/telegram-initdata-validation.service";
 import { BotsService } from "../../bots/bots.service";
@@ -28,6 +29,7 @@ export interface PublicAccessRequest extends Request {
   };
   publicUser?: PublicUser;
   bot?: Bot;
+  shop?: Shop;
 }
 
 /**
@@ -36,7 +38,9 @@ export interface PublicAccessRequest extends Request {
  * 1. Telegram initData (для Telegram WebApp)
  * 2. JWT токен (для браузера)
  *
- * Проверяет настройки бота для разрешения браузерного доступа
+ * Поддерживает роуты:
+ * - /public/shops/:id/* - через shopId
+ * - /public/bots/:botId/* - через botId (legacy для Telegram)
  */
 @Injectable()
 export class PublicAccessGuard implements CanActivate {
@@ -45,6 +49,8 @@ export class PublicAccessGuard implements CanActivate {
   constructor(
     @InjectRepository(Bot)
     private botRepository: Repository<Bot>,
+    @InjectRepository(Shop)
+    private shopRepository: Repository<Shop>,
     @InjectRepository(PublicUser)
     private publicUserRepository: Repository<PublicUser>,
     private initDataValidationService: TelegramInitDataValidationService,
@@ -54,35 +60,76 @@ export class PublicAccessGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const botId = request.params?.botId || request.params?.id;
+    const path = request.path || request.url || "";
 
-    if (!botId) {
-      this.logger.warn("botId не найден в параметрах запроса");
-      throw new UnauthorizedException("botId обязателен");
+    // Определяем режим работы: shop или bot
+    const isShopRoute = path.includes("/shops/");
+    const shopId = request.params?.id;
+    const botId = request.params?.botId;
+
+    let shop: Shop | null = null;
+    let bot: Bot | null = null;
+
+    if (isShopRoute && shopId) {
+      // Режим магазина - ищем Shop напрямую
+      shop = await this.shopRepository.findOne({
+        where: { id: shopId },
+      });
+
+      if (!shop) {
+        this.logger.warn(`Магазин с ID ${shopId} не найден`);
+        throw new UnauthorizedException("Магазин не найден");
+      }
+
+      request.shop = shop;
+
+      // Если у магазина есть связанный бот, получаем его для Telegram авторизации
+      if (shop.botId) {
+        bot = await this.botRepository.findOne({
+          where: { id: shop.botId },
+        });
+        if (bot) {
+          request.bot = bot;
+        }
+      }
+    } else if (botId) {
+      // Legacy режим бота - для Telegram Mini App
+      bot = await this.botRepository.findOne({
+        where: { id: botId },
+      });
+
+      if (!bot) {
+        this.logger.warn(`Бот с ID ${botId} не найден`);
+        throw new UnauthorizedException("Бот не найден");
+      }
+
+      request.bot = bot;
+
+      // Ищем связанный магазин
+      shop = await this.shopRepository.findOne({
+        where: { botId: bot.id },
+      });
+
+      if (shop) {
+        request.shop = shop;
+      }
+    } else {
+      this.logger.warn("shopId или botId не найден в параметрах запроса");
+      throw new UnauthorizedException("shopId или botId обязателен");
     }
 
-    // Находим бота
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
+    // 1. Пробуем Telegram initData (только если есть bot)
+    if (bot) {
+      const initData =
+        request.headers["x-telegram-init-data"] ||
+        request.query?.initData ||
+        request.body?.initData;
 
-    if (!bot) {
-      this.logger.warn(`Бот с ID ${botId} не найден`);
-      throw new UnauthorizedException("Бот не найден");
-    }
-
-    request.bot = bot;
-
-    // 1. Пробуем Telegram initData
-    const initData =
-      request.headers["x-telegram-init-data"] ||
-      request.query?.initData ||
-      request.body?.initData;
-
-    if (initData) {
-      const telegramAuth = await this.tryTelegramAuth(initData, bot, request);
-      if (telegramAuth) {
-        return true;
+      if (initData) {
+        const telegramAuth = await this.tryTelegramAuth(initData, bot, request);
+        if (telegramAuth) {
+          return true;
+        }
       }
     }
 
@@ -91,7 +138,7 @@ export class PublicAccessGuard implements CanActivate {
     if (authHeader?.startsWith("Bearer ")) {
       const browserAuth = await this.tryBrowserAuth(
         authHeader.substring(7),
-        bot,
+        shop,
         request
       );
       if (browserAuth) {
@@ -100,17 +147,13 @@ export class PublicAccessGuard implements CanActivate {
     }
 
     // 3. Проверяем, можно ли использовать гостевой доступ
-    // Гостевой доступ может быть разрешен для просмотра каталога
-    // но для действий (корзина, заказы) нужна авторизация
     const isReadOnlyEndpoint = this.isReadOnlyEndpoint(request);
 
     if (isReadOnlyEndpoint) {
-      // Разрешаем доступ без авторизации для чтения данных
       request.authType = "none";
       return true;
     }
 
-    // Для записи требуется авторизация
     throw new UnauthorizedException(
       "Требуется авторизация. Войдите через Telegram или зарегистрируйтесь."
     );
@@ -125,7 +168,6 @@ export class PublicAccessGuard implements CanActivate {
     request: any
   ): Promise<boolean> {
     try {
-      // Расшифровываем токен бота
       let botToken: string;
       try {
         botToken = this.botsService.decryptToken(bot.token);
@@ -134,7 +176,6 @@ export class PublicAccessGuard implements CanActivate {
         return false;
       }
 
-      // Валидируем initData
       const validatedData = this.initDataValidationService.validateInitData(
         initData,
         botToken
@@ -145,7 +186,6 @@ export class PublicAccessGuard implements CanActivate {
         return false;
       }
 
-      // Сохраняем данные в request
       request.authType = "telegram";
       request.telegramUser = validatedData.user;
       request.telegramInitData = validatedData;
@@ -162,36 +202,21 @@ export class PublicAccessGuard implements CanActivate {
    */
   private async tryBrowserAuth(
     token: string,
-    bot: Bot,
+    shop: Shop | null,
     request: any
   ): Promise<boolean> {
     try {
-      // Проверяем, разрешен ли браузерный доступ для этого бота
-      const isShopRoute = this.isShopRoute(request);
-      const isBookingRoute = this.isBookingRoute(request);
-
-      if (isShopRoute && !bot.shopBrowserAccessEnabled) {
+      // Проверяем, разрешен ли браузерный доступ для магазина
+      if (shop && !shop.browserAccessEnabled) {
         this.logger.warn(
-          `Браузерный доступ к магазину отключен для бота ${bot.id}`
+          `Браузерный доступ к магазину отключен для ${shop.id}`
         );
-        throw new ForbiddenException(
-          "Браузерный доступ к магазину отключен для этого бота"
-        );
-      }
-
-      if (isBookingRoute && !bot.bookingBrowserAccessEnabled) {
-        this.logger.warn(
-          `Браузерный доступ к бронированию отключен для бота ${bot.id}`
-        );
-        throw new ForbiddenException(
-          "Браузерный доступ к бронированию отключен для этого бота"
-        );
+        throw new ForbiddenException("Браузерный доступ к магазину отключен");
       }
 
       // Верифицируем JWT токен
       const payload = this.jwtService.verify<PublicUserJwtPayload>(token);
 
-      // Проверяем, что это токен публичного пользователя
       if (payload.type !== "public") {
         return false;
       }
@@ -205,14 +230,6 @@ export class PublicAccessGuard implements CanActivate {
         return false;
       }
 
-      // Проверяем верификацию email если требуется
-      if (bot.browserAccessRequireEmailVerification && !user.isEmailVerified) {
-        throw new ForbiddenException(
-          "Для доступа необходимо подтвердить email"
-        );
-      }
-
-      // Сохраняем данные в request
       request.authType = "browser";
       request.publicUser = user;
 
@@ -233,9 +250,7 @@ export class PublicAccessGuard implements CanActivate {
     const method = request.method?.toUpperCase();
     const path = request.path || request.url || "";
 
-    // GET запросы к каталогу, товарам, услугам - read-only
     if (method === "GET") {
-      // Исключаем корзину и заказы - для них нужна авторизация
       if (
         path.includes("/cart") ||
         path.includes("/orders") ||
@@ -247,32 +262,5 @@ export class PublicAccessGuard implements CanActivate {
     }
 
     return false;
-  }
-
-  /**
-   * Проверка, относится ли запрос к магазину
-   */
-  private isShopRoute(request: any): boolean {
-    const path = request.path || request.url || "";
-    return (
-      path.includes("/shop") ||
-      path.includes("/cart") ||
-      path.includes("/orders") ||
-      path.includes("/products")
-    );
-  }
-
-  /**
-   * Проверка, относится ли запрос к бронированию
-   */
-  private isBookingRoute(request: any): boolean {
-    const path = request.path || request.url || "";
-    return (
-      path.includes("/booking") ||
-      path.includes("/bookings") ||
-      path.includes("/time-slots") ||
-      path.includes("/specialists") ||
-      path.includes("/services")
-    );
   }
 }

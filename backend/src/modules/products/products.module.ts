@@ -4,14 +4,14 @@ import { ProductsService } from "./products.service";
 import { ProductsController } from "./products.controller";
 import { Product } from "../../database/entities/product.entity";
 import { Category } from "../../database/entities/category.entity";
-import { Bot } from "../../database/entities/bot.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import { UploadModule } from "../upload/upload.module";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
 import { BotsModule } from "../bots/bots.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Product, Category, Bot]),
+    TypeOrmModule.forFeature([Product, Category, Shop]),
     UploadModule,
     ActivityLogModule,
     forwardRef(() => BotsModule),

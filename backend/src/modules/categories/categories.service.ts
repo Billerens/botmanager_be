@@ -2,12 +2,13 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, TreeRepository, In } from "typeorm";
+import { Repository, In } from "typeorm";
 import { Category } from "../../database/entities/category.entity";
-import { Bot } from "../../database/entities/bot.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import { Product } from "../../database/entities/product.entity";
 import {
   CreateCategoryDto,
@@ -29,70 +30,95 @@ export class CategoriesService {
   constructor(
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
-    @InjectRepository(Bot)
-    private readonly botRepository: Repository<Bot>,
+    @InjectRepository(Shop)
+    private readonly shopRepository: Repository<Shop>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     private readonly activityLogService: ActivityLogService,
     private readonly notificationService: NotificationService
   ) {}
 
+  // =====================================================
+  // МЕТОДЫ ДЛЯ РАБОТЫ С SHOP
+  // Legacy методы с botId удалены - используйте методы *ByShop или основные методы с shopId
+  // =====================================================
+
+  /**
+   * Валидация владения магазином
+   */
+  private async validateShopOwnership(
+    shopId: string,
+    userId: string
+  ): Promise<Shop> {
+    const shop = await this.shopRepository.findOne({
+      where: { id: shopId },
+    });
+
+    if (!shop) {
+      throw new NotFoundException("Магазин не найден");
+    }
+
+    if (shop.ownerId !== userId) {
+      throw new ForbiddenException("Нет доступа к этому магазину");
+    }
+
+    return shop;
+  }
+
+  /**
+   * Создать категорию для магазина
+   */
   async create(
-    botId: string,
+    shopId: string,
     userId: string,
     createCategoryDto: CreateCategoryDto
   ): Promise<Category> {
-    // Проверяем, что бот принадлежит пользователю
-    await this.validateBotOwnership(botId, userId);
+    await this.validateShopOwnership(shopId, userId);
 
     // Если указана родительская категория, проверяем её
     if (createCategoryDto.parentId) {
       const parentCategory = await this.categoryRepository.findOne({
-        where: { id: createCategoryDto.parentId, botId },
+        where: { id: createCategoryDto.parentId, shopId },
       });
 
       if (!parentCategory) {
         throw new NotFoundException("Родительская категория не найдена");
       }
-
-      // Проверяем, что родительская категория принадлежит тому же боту
-      if (parentCategory.botId !== botId) {
-        throw new BadRequestException(
-          "Родительская категория должна принадлежать тому же боту"
-        );
-      }
     }
 
     const category = this.categoryRepository.create({
       ...createCategoryDto,
-      botId,
+      shopId,
     });
 
     const savedCategory = await this.categoryRepository.save(category);
 
-    // Отправляем уведомление о создании категории
-    this.notificationService.sendToUser(userId, NotificationType.CATEGORY_CREATED, {
-      botId,
-      category: {
-        id: savedCategory.id,
-        name: savedCategory.name,
-      },
-    }).catch((error) => {
-      this.logger.error("Ошибка отправки уведомления о создании категории:", error);
-    });
+    // Уведомления и логирование
+    this.notificationService
+      .sendToUser(userId, NotificationType.CATEGORY_CREATED, {
+        shopId,
+        category: {
+          id: savedCategory.id,
+          name: savedCategory.name,
+        },
+      })
+      .catch((error) => {
+        this.logger.error(
+          "Ошибка отправки уведомления о создании категории:",
+          error
+        );
+      });
 
-    // Логируем создание категории
     this.activityLogService
       .create({
         type: ActivityType.CATEGORY_CREATED,
         level: ActivityLevel.SUCCESS,
         message: `Создана категория "${savedCategory.name}"`,
         userId,
-        botId,
         metadata: {
+          shopId,
           categoryId: savedCategory.id,
           categoryName: savedCategory.name,
-          parentId: savedCategory.parentId,
         },
       })
       .catch((error) => {
@@ -102,36 +128,37 @@ export class CategoriesService {
     return savedCategory;
   }
 
+  /**
+   * Получить все категории магазина
+   */
   async findAll(
-    botId: string,
+    shopId: string,
     userId: string,
-    filters: CategoryFiltersDto
+    filters?: CategoryFiltersDto
   ): Promise<Category[]> {
-    // Проверяем, что бот принадлежит пользователю
-    await this.validateBotOwnership(botId, userId);
+    await this.validateShopOwnership(shopId, userId);
 
     const queryBuilder = this.categoryRepository
       .createQueryBuilder("category")
       .leftJoinAndSelect("category.parent", "parent")
       .leftJoinAndSelect("category.children", "children")
-      .where("category.botId = :botId", { botId })
+      .where("category.shopId = :shopId", { shopId })
       .orderBy("category.sortOrder", "ASC")
       .addOrderBy("category.name", "ASC");
 
-    if (filters.parentId !== undefined) {
+    if (filters?.parentId !== undefined) {
       if (filters.parentId === null) {
-        // Получаем только корневые категории
         queryBuilder.andWhere("category.parentId IS NULL");
       } else {
         queryBuilder.andWhere("category.parentId = :parentId", {
           parentId: filters.parentId,
         });
       }
-    } else if (filters.rootOnly) {
+    } else if (filters?.rootOnly) {
       queryBuilder.andWhere("category.parentId IS NULL");
     }
 
-    if (filters.isActive !== undefined) {
+    if (filters?.isActive !== undefined) {
       queryBuilder.andWhere("category.isActive = :isActive", {
         isActive: filters.isActive,
       });
@@ -140,13 +167,15 @@ export class CategoriesService {
     return await queryBuilder.getMany();
   }
 
-  async findOne(id: string, botId: string, userId: string): Promise<Category> {
-    // Проверяем, что бот принадлежит пользователю
-    await this.validateBotOwnership(botId, userId);
+  /**
+   * Получить категорию по ID
+   */
+  async findOne(id: string, shopId: string, userId: string): Promise<Category> {
+    await this.validateShopOwnership(shopId, userId);
 
     const category = await this.categoryRepository.findOne({
-      where: { id, botId },
-      relations: ["parent", "children"],
+      where: { id, shopId },
+      relations: ["parent", "children", "products"],
     });
 
     if (!category) {
@@ -156,51 +185,59 @@ export class CategoriesService {
     return category;
   }
 
-  async findTree(botId: string, userId: string): Promise<Category[]> {
-    // Проверяем, что бот принадлежит пользователю
-    await this.validateBotOwnership(botId, userId);
+  /**
+   * Получить дерево категорий магазина
+   */
+  async findTree(shopId: string, userId: string): Promise<Category[]> {
+    await this.validateShopOwnership(shopId, userId);
 
-    // Получаем все категории бота с подкатегориями
     const categories = await this.categoryRepository.find({
-      where: { botId, isActive: true },
+      where: { shopId, isActive: true },
       relations: ["parent", "children"],
       order: { sortOrder: "ASC", name: "ASC" },
     });
 
-    // Строим дерево категорий
     return this.buildCategoryTree(categories);
   }
 
+  /**
+   * Обновить категорию
+   */
   async update(
     id: string,
-    botId: string,
+    shopId: string,
     userId: string,
     updateCategoryDto: UpdateCategoryDto
   ): Promise<Category> {
-    const category = await this.findOne(id, botId, userId);
+    await this.validateShopOwnership(shopId, userId);
+    const category = await this.findOne(id, shopId, userId);
 
-    // Если обновляется parentId, проверяем что новая родительская категория существует
+    // Если обновляется родительская категория
     if (updateCategoryDto.parentId !== undefined) {
       if (updateCategoryDto.parentId === null) {
-        // Убираем родительскую категорию (делаем корневой)
         category.parentId = null;
       } else {
-        // Проверяем, что новая родительская категория существует и принадлежит тому же боту
-        const newParent = await this.categoryRepository.findOne({
-          where: { id: updateCategoryDto.parentId, botId },
-        });
-
-        if (!newParent) {
-          throw new NotFoundException("Родительская категория не найдена");
+        if (updateCategoryDto.parentId === id) {
+          throw new BadRequestException(
+            "Категория не может быть родительской для самой себя"
+          );
         }
 
-        // Проверяем, что не создается циклическая зависимость
+        // Проверяем циклическую зависимость
         if (
-          await this.wouldCreateCycle(id, updateCategoryDto.parentId, botId)
+          await this.wouldCreateCycle(id, updateCategoryDto.parentId, shopId)
         ) {
           throw new BadRequestException(
             "Невозможно установить родительскую категорию: будет создана циклическая зависимость"
           );
+        }
+
+        const parentCategory = await this.categoryRepository.findOne({
+          where: { id: updateCategoryDto.parentId, shopId },
+        });
+
+        if (!parentCategory) {
+          throw new NotFoundException("Родительская категория не найдена");
         }
 
         category.parentId = updateCategoryDto.parentId;
@@ -210,26 +247,31 @@ export class CategoriesService {
     Object.assign(category, updateCategoryDto);
     const updatedCategory = await this.categoryRepository.save(category);
 
-    // Отправляем уведомление об обновлении категории
-    this.notificationService.sendToUser(userId, NotificationType.CATEGORY_UPDATED, {
-      botId,
-      category: {
-        id: updatedCategory.id,
-        name: updatedCategory.name,
-      },
-    }).catch((error) => {
-      this.logger.error("Ошибка отправки уведомления об обновлении категории:", error);
-    });
+    // Уведомления и логирование
+    this.notificationService
+      .sendToUser(userId, NotificationType.CATEGORY_UPDATED, {
+        shopId,
+        category: {
+          id: updatedCategory.id,
+          name: updatedCategory.name,
+        },
+        changes: updateCategoryDto,
+      })
+      .catch((error) => {
+        this.logger.error(
+          "Ошибка отправки уведомления об обновлении категории:",
+          error
+        );
+      });
 
-    // Логируем обновление категории
     this.activityLogService
       .create({
         type: ActivityType.CATEGORY_UPDATED,
         level: ActivityLevel.INFO,
         message: `Обновлена категория "${updatedCategory.name}"`,
         userId,
-        botId,
         metadata: {
+          shopId,
           categoryId: updatedCategory.id,
           categoryName: updatedCategory.name,
           changes: updateCategoryDto,
@@ -242,58 +284,59 @@ export class CategoriesService {
     return updatedCategory;
   }
 
-  async remove(id: string, botId: string, userId: string): Promise<void> {
-    const category = await this.findOne(id, botId, userId);
+  /**
+   * Удалить категорию
+   */
+  async remove(id: string, shopId: string, userId: string): Promise<void> {
+    await this.validateShopOwnership(shopId, userId);
+    const category = await this.findOne(id, shopId, userId);
 
     // Проверяем, есть ли подкатегории
-    const childrenCount = await this.categoryRepository.count({
-      where: { parentId: id, botId },
+    const childCount = await this.categoryRepository.count({
+      where: { parentId: id, shopId },
     });
 
-    if (childrenCount > 0) {
+    if (childCount > 0) {
       throw new BadRequestException(
-        "Невозможно удалить категорию: у неё есть подкатегории. Сначала удалите или переместите подкатегории."
+        "Нельзя удалить категорию, у которой есть подкатегории"
       );
     }
 
-    // Проверяем, есть ли товары в этой категории
-    const productsCount = await this.productRepository.count({
-      where: { categoryId: id, botId },
+    // Проверяем, есть ли товары в категории
+    const productCount = await this.productRepository.count({
+      where: { categoryId: id, shopId },
     });
 
-    if (productsCount > 0) {
+    if (productCount > 0) {
       throw new BadRequestException(
-        "Невозможно удалить категорию: в ней есть товары. Сначала переместите или удалите товары."
+        "Нельзя удалить категорию, в которой есть товары"
       );
     }
 
-    const categoryData = {
-      id: category.id,
-      name: category.name,
-    };
-
+    const categoryData = { id: category.id, name: category.name };
     await this.categoryRepository.remove(category);
 
-    // Отправляем уведомление об удалении категории
-    this.notificationService.sendToUser(userId, NotificationType.CATEGORY_DELETED, {
-      botId,
-      category: {
-        id: categoryData.id,
-        name: categoryData.name,
-      },
-    }).catch((error) => {
-      this.logger.error("Ошибка отправки уведомления об удалении категории:", error);
-    });
+    // Уведомления и логирование
+    this.notificationService
+      .sendToUser(userId, NotificationType.CATEGORY_DELETED, {
+        shopId,
+        category: categoryData,
+      })
+      .catch((error) => {
+        this.logger.error(
+          "Ошибка отправки уведомления об удалении категории:",
+          error
+        );
+      });
 
-    // Логируем удаление категории
     this.activityLogService
       .create({
         type: ActivityType.CATEGORY_DELETED,
         level: ActivityLevel.WARNING,
         message: `Удалена категория "${categoryData.name}"`,
         userId,
-        botId,
         metadata: {
+          shopId,
           categoryId: categoryData.id,
           categoryName: categoryData.name,
         },
@@ -304,104 +347,33 @@ export class CategoriesService {
   }
 
   /**
-   * Получить все товары категории, включая товары из подкатегорий
-   */
-  async getCategoryProducts(
-    categoryId: string,
-    botId: string,
-    userId: string,
-    includeSubcategories: boolean = true
-  ): Promise<Product[]> {
-    await this.validateBotOwnership(botId, userId);
-
-    const category = await this.findOne(categoryId, botId, userId);
-
-    if (includeSubcategories) {
-      // Получаем все подкатегории (рекурсивно)
-      const subcategoryIds = await this.getAllSubcategoryIds(categoryId, botId);
-      const allCategoryIds = [categoryId, ...subcategoryIds];
-
-      return await this.productRepository.find({
-        where: { categoryId: In(allCategoryIds), botId },
-        relations: ["category"],
-        order: { createdAt: "DESC" },
-      });
-    } else {
-      // Только товары этой категории
-      return await this.productRepository.find({
-        where: { categoryId, botId },
-        relations: ["category"],
-        order: { createdAt: "DESC" },
-      });
-    }
-  }
-
-  /**
-   * Получить все родительские категории для товара
-   * Если товар в подкатегории, он также относится ко всем родительским категориям
-   */
-  async getProductCategories(
-    productId: string,
-    botId: string
-  ): Promise<Category[]> {
-    const product = await this.productRepository.findOne({
-      where: { id: productId, botId },
-      relations: ["category"],
-    });
-
-    if (!product || !product.category) {
-      return [];
-    }
-
-    const categories: Category[] = [product.category];
-    let currentCategory: Category | null = product.category;
-
-    // Поднимаемся по дереву категорий до корня
-    while (currentCategory?.parentId) {
-      const parent = await this.categoryRepository.findOne({
-        where: { id: currentCategory.parentId, botId },
-        relations: ["parent"],
-      });
-
-      if (parent) {
-        categories.unshift(parent); // Добавляем в начало массива
-        currentCategory = parent;
-      } else {
-        break;
-      }
-    }
-
-    return categories;
-  }
-
-  /**
    * Получить статистику по категории
    */
   async getCategoryStats(
     categoryId: string,
-    botId: string,
+    shopId: string,
     userId: string
   ): Promise<{
     totalProducts: number;
     activeProducts: number;
     subcategoriesCount: number;
   }> {
-    await this.validateBotOwnership(botId, userId);
+    await this.validateShopOwnership(shopId, userId);
 
-    const category = await this.findOne(categoryId, botId, userId);
-    const subcategoryIds = await this.getAllSubcategoryIds(categoryId, botId);
+    await this.findOne(categoryId, shopId, userId);
+    const subcategoryIds = await this.getAllSubcategoryIds(categoryId, shopId);
     const allCategoryIds = [categoryId, ...subcategoryIds];
 
     const [totalProducts, activeProducts, subcategoriesCount] =
       await Promise.all([
         this.productRepository.count({
-          where: { categoryId: In(allCategoryIds), botId },
+          where: { categoryId: In(allCategoryIds), shopId },
         }),
         this.productRepository.count({
-          where: { categoryId: In(allCategoryIds), botId, isActive: true },
+          where: { categoryId: In(allCategoryIds), shopId, isActive: true },
         }),
         this.categoryRepository.count({
-          where: { parentId: categoryId, botId },
+          where: { parentId: categoryId, shopId },
         }),
       ]);
 
@@ -412,27 +384,27 @@ export class CategoriesService {
     };
   }
 
-  // Приватные методы
-
-  private async validateBotOwnership(
-    botId: string,
+  /**
+   * Переключить активность категории
+   */
+  async toggleActive(
+    id: string,
+    shopId: string,
     userId: string
-  ): Promise<void> {
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
-    }
+  ): Promise<Category> {
+    const category = await this.findOne(id, shopId, userId);
+    category.isActive = !category.isActive;
+    return await this.categoryRepository.save(category);
   }
+
+  // Приватные методы
 
   /**
    * Получить все ID подкатегорий (рекурсивно)
    */
   private async getAllSubcategoryIds(
     categoryId: string,
-    botId: string
+    shopId: string
   ): Promise<string[]> {
     const subcategoryIds: string[] = [];
     const queue: string[] = [categoryId];
@@ -440,7 +412,7 @@ export class CategoriesService {
     while (queue.length > 0) {
       const currentId = queue.shift()!;
       const children = await this.categoryRepository.find({
-        where: { parentId: currentId, botId },
+        where: { parentId: currentId, shopId },
         select: ["id"],
       });
 
@@ -459,32 +431,28 @@ export class CategoriesService {
   private async wouldCreateCycle(
     categoryId: string,
     newParentId: string,
-    botId: string
+    shopId: string
   ): Promise<boolean> {
-    // Если новая родительская категория - это сама категория, это цикл
     if (categoryId === newParentId) {
       return true;
     }
 
-    // Проверяем, не является ли категория предком новой родительской категории
     let currentId: string | null = newParentId;
     const visited = new Set<string>();
 
     while (currentId) {
       if (visited.has(currentId)) {
-        // Обнаружен цикл
         return true;
       }
 
       if (currentId === categoryId) {
-        // Категория является предком новой родительской категории
         return true;
       }
 
       visited.add(currentId);
 
       const category = await this.categoryRepository.findOne({
-        where: { id: currentId, botId },
+        where: { id: currentId, shopId },
         select: ["id", "parentId"],
       });
 
@@ -501,13 +469,11 @@ export class CategoriesService {
     const categoryMap = new Map<string, Category & { children: Category[] }>();
     const rootCategories: Category[] = [];
 
-    // Создаем карту категорий
     for (const category of categories) {
       const categoryWithChildren = Object.assign(category, { children: [] });
       categoryMap.set(category.id, categoryWithChildren);
     }
 
-    // Строим дерево
     for (const category of categories) {
       const categoryNode = categoryMap.get(category.id)!;
 

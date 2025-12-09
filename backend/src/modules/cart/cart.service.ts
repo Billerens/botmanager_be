@@ -10,7 +10,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Cart, CartItem } from "../../database/entities/cart.entity";
 import { Product } from "../../database/entities/product.entity";
-import { Bot } from "../../database/entities/bot.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import { Message } from "../../database/entities/message.entity";
 import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
 import { NotificationService } from "../websocket/services/notification.service";
@@ -40,8 +40,8 @@ export class CartService {
     private readonly cartRepository: Repository<Cart>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
-    @InjectRepository(Bot)
-    private readonly botRepository: Repository<Bot>,
+    @InjectRepository(Shop)
+    private readonly shopRepository: Repository<Shop>,
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>,
     @InjectRepository(ShopPromocode)
@@ -52,82 +52,89 @@ export class CartService {
     private readonly activityLogService: ActivityLogService
   ) {}
 
+  // =====================================================
+  // ОСНОВНЫЕ МЕТОДЫ (работают с shopId)
+  // Legacy методы с botId удалены
+  // =====================================================
+
   /**
-   * Получить корзину пользователя для бота (универсальный метод)
-   * Поддерживает Telegram (telegramUsername) и браузер (publicUserId)
+   * Получить корзину пользователя для магазина
    */
-  async getCartByUser(botId: string, user: CartUserIdentifier): Promise<Cart> {
+  async getCart(shopId: string, user: CartUserIdentifier): Promise<Cart> {
     const { telegramUsername, publicUserId } = user;
 
     this.logger.log(
-      `[CART SERVICE] getCartByUser called - botId: ${botId}, telegramUsername: ${telegramUsername || "null"}, publicUserId: ${publicUserId || "null"}`
+      `[CART SERVICE] getCart called - shopId: ${shopId}, telegramUsername: ${telegramUsername || "null"}, publicUserId: ${publicUserId || "null"}`
     );
 
-    // Проверяем существование бота
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
+    // Проверяем существование магазина
+    const shop = await this.shopRepository.findOne({
+      where: { id: shopId },
     });
 
-    if (!bot) {
-      this.logger.warn(`[CART SERVICE] Bot not found - botId: ${botId}`);
-      throw new NotFoundException("Бот не найден");
+    if (!shop) {
+      this.logger.warn(`[CART SERVICE] Shop not found - shopId: ${shopId}`);
+      throw new NotFoundException("Магазин не найден");
     }
 
-    // Ищем существующую корзину по telegramUsername или publicUserId
+    // Ищем существующую корзину
     let cart: Cart | null = null;
 
     if (telegramUsername) {
       cart = await this.cartRepository.findOne({
-        where: { botId, telegramUsername },
+        where: { shopId, telegramUsername },
       });
     } else if (publicUserId) {
       cart = await this.cartRepository.findOne({
-        where: { botId, publicUserId },
+        where: { shopId, publicUserId },
       });
     }
 
     if (!cart) {
-      this.logger.log(
-        `[CART SERVICE] Creating new cart for botId: ${botId}, telegramUsername: ${telegramUsername || "null"}, publicUserId: ${publicUserId || "null"}`
-      );
+      this.logger.log(`[CART SERVICE] Creating new cart for shopId: ${shopId}`);
       cart = this.cartRepository.create({
-        botId,
+        shopId,
         telegramUsername: telegramUsername || null,
         publicUserId: publicUserId || null,
         items: [],
       });
       cart = await this.cartRepository.save(cart);
 
-      // Отправляем уведомление о создании корзины
-      await this.sendCartNotification(bot, NotificationType.CART_CREATED, cart);
+      // Уведомление владельцу
+      if (shop.ownerId) {
+        this.notificationService
+          .sendToUser(shop.ownerId, NotificationType.CART_CREATED, {
+            shopId,
+            cart: {
+              id: cart.id,
+              telegramUsername: cart.telegramUsername,
+              publicUserId: cart.publicUserId,
+            },
+          })
+          .catch((error) => {
+            this.logger.error(
+              "Ошибка отправки уведомления о создании корзины:",
+              error
+            );
+          });
+      }
     } else {
       this.logger.log(
-        `[CART SERVICE] Cart found - cartId: ${cart.id}, items count: ${cart.items?.length || 0}, appliedPromocodeId: ${cart.appliedPromocodeId || "null"}`
+        `[CART SERVICE] Cart found - cartId: ${cart.id}, items count: ${cart.items?.length || 0}`
       );
     }
 
-    // Валидация примененного промокода
-    cart = await this.validateAppliedPromocode(botId, cart);
+    // Валидация промокода
+    cart = await this.validateAppliedPromocode(shopId, cart);
 
-    this.logger.log(
-      `[CART SERVICE] Returning cart - cartId: ${cart.id}, appliedPromocodeId: ${cart.appliedPromocodeId || "null"}`
-    );
     return cart;
-  }
-
-  /**
-   * Получить корзину пользователя для бота (legacy метод для Telegram)
-   * @deprecated Используйте getCartByUser
-   */
-  async getCart(botId: string, telegramUsername: string): Promise<Cart> {
-    return this.getCartByUser(botId, { telegramUsername });
   }
 
   /**
    * Валидация примененного промокода
    */
   private async validateAppliedPromocode(
-    botId: string,
+    shopId: string,
     cart: Cart
   ): Promise<Cart> {
     if (!cart.appliedPromocodeId) {
@@ -135,45 +142,37 @@ export class CartService {
     }
 
     this.logger.log(
-      `[CART SERVICE] Cart has appliedPromocodeId: ${cart.appliedPromocodeId}, validating...`
+      `[CART SERVICE] Validating promocode: ${cart.appliedPromocodeId}`
     );
 
     try {
       const promocode = await this.promocodeRepository.findOne({
-        where: { id: cart.appliedPromocodeId, botId },
+        where: { id: cart.appliedPromocodeId, shopId },
       });
 
       if (promocode) {
-        this.logger.log(
-          `[CART SERVICE] Promocode found in validation - code: ${promocode.code}, isActive: ${promocode.isActive}`
-        );
-
         const validation = await this.shopPromocodesService.validatePromocode(
-          botId,
+          shopId,
           promocode.code,
           cart
         );
 
-        this.logger.log(
-          `[CART SERVICE] Promocode validation - isValid: ${validation.isValid}, discount: ${validation.discount || "null"}`
-        );
-
         if (!validation.isValid) {
           this.logger.warn(
-            `[CART SERVICE] Promocode is invalid, removing from cart - code: ${promocode.code}`
+            `[CART SERVICE] Promocode invalid, removing - code: ${promocode.code}`
           );
           cart.appliedPromocodeId = null;
           cart = await this.cartRepository.save(cart);
         }
       } else {
         this.logger.warn(
-          `[CART SERVICE] Promocode not found with id: ${cart.appliedPromocodeId}, removing from cart`
+          `[CART SERVICE] Promocode not found: ${cart.appliedPromocodeId}`
         );
         cart.appliedPromocodeId = null;
         cart = await this.cartRepository.save(cart);
       }
     } catch (error) {
-      this.logger.error("Ошибка при валидации примененного промокода:", error);
+      this.logger.error("Ошибка при валидации промокода:", error);
       cart.appliedPromocodeId = null;
       cart = await this.cartRepository.save(cart);
     }
@@ -182,227 +181,11 @@ export class CartService {
   }
 
   /**
-   * Добавить товар в корзину (универсальный метод)
-   */
-  async addItemByUser(
-    botId: string,
-    user: CartUserIdentifier,
-    productId: string,
-    quantity: number = 1
-  ): Promise<Cart> {
-    if (quantity <= 0) {
-      throw new BadRequestException("Количество должно быть больше 0");
-    }
-
-    // Проверяем существование продукта
-    const product = await this.productRepository.findOne({
-      where: { id: productId, botId },
-    });
-
-    if (!product) {
-      throw new NotFoundException("Товар не найден");
-    }
-
-    if (!product.isActive) {
-      throw new BadRequestException("Товар неактивен");
-    }
-
-    if (product.stockQuantity < quantity) {
-      throw new BadRequestException(
-        `Недостаточно товара в наличии. Доступно: ${product.stockQuantity}`
-      );
-    }
-
-    // Получаем корзину
-    let cart = await this.getCartByUser(botId, user);
-
-    // Проверяем, есть ли уже этот товар в корзине
-    const existingItemIndex = cart.items.findIndex(
-      (item) => item.productId === productId
-    );
-
-    if (existingItemIndex >= 0) {
-      // Обновляем количество существующего товара
-      const newQuantity = cart.items[existingItemIndex].quantity + quantity;
-
-      if (product.stockQuantity < newQuantity) {
-        throw new BadRequestException(
-          `Недостаточно товара в наличии. Доступно: ${product.stockQuantity}, в корзине: ${cart.items[existingItemIndex].quantity}`
-        );
-      }
-
-      cart.items[existingItemIndex].quantity = newQuantity;
-    } else {
-      // Добавляем новый товар
-      const cartItem: CartItem = {
-        productId: product.id,
-        quantity,
-        price: Number(product.price),
-        currency: product.currency,
-        name: product.name,
-        image:
-          product.images && product.images.length > 0
-            ? product.images[0]
-            : undefined,
-      };
-
-      cart.items.push(cartItem);
-    }
-
-    const savedCart = await this.cartRepository.save(cart);
-
-    // Отправляем уведомление о добавлении товара в корзину
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-    if (bot) {
-      await this.sendCartNotification(
-        bot,
-        NotificationType.CART_ITEM_ADDED,
-        savedCart
-      );
-    }
-
-    return savedCart;
-  }
-
-  /**
-   * Добавить товар в корзину (legacy метод для Telegram)
-   * @deprecated Используйте addItemByUser
+   * Добавить товар в корзину
    */
   async addItem(
-    botId: string,
-    telegramUsername: string,
-    productId: string,
-    quantity: number = 1
-  ): Promise<Cart> {
-    return this.addItemByUser(botId, { telegramUsername }, productId, quantity);
-  }
-
-  /**
-   * Обновить количество товара (универсальный метод)
-   */
-  async updateItemByUser(
-    botId: string,
+    shopId: string,
     user: CartUserIdentifier,
-    productId: string,
-    quantity: number
-  ): Promise<Cart> {
-    if (quantity < 0) {
-      throw new BadRequestException("Количество не может быть отрицательным");
-    }
-
-    if (quantity === 0) {
-      return this.removeItemByUser(botId, user, productId);
-    }
-
-    // Проверяем существование продукта
-    const product = await this.productRepository.findOne({
-      where: { id: productId, botId },
-    });
-
-    if (!product) {
-      throw new NotFoundException("Товар не найден");
-    }
-
-    if (product.stockQuantity < quantity) {
-      throw new BadRequestException(
-        `Недостаточно товара в наличии. Доступно: ${product.stockQuantity}`
-      );
-    }
-
-    const cart = await this.getCartByUser(botId, user);
-
-    // Находим товар в корзине
-    const itemIndex = cart.items.findIndex(
-      (item) => item.productId === productId
-    );
-
-    if (itemIndex === -1) {
-      throw new NotFoundException("Товар не найден в корзине");
-    }
-
-    cart.items[itemIndex].quantity = quantity;
-
-    const savedCart = await this.cartRepository.save(cart);
-
-    // Отправляем уведомление об обновлении корзины
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-    if (bot) {
-      await this.sendCartNotification(
-        bot,
-        NotificationType.CART_UPDATED,
-        savedCart
-      );
-    }
-
-    return savedCart;
-  }
-
-  /**
-   * Удалить товар из корзины (универсальный метод)
-   */
-  async removeItemByUser(
-    botId: string,
-    user: CartUserIdentifier,
-    productId: string
-  ): Promise<Cart> {
-    const cart = await this.getCartByUser(botId, user);
-
-    cart.items = cart.items.filter((item) => item.productId !== productId);
-
-    const savedCart = await this.cartRepository.save(cart);
-
-    // Отправляем уведомление об удалении товара
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-    if (bot) {
-      await this.sendCartNotification(
-        bot,
-        NotificationType.CART_ITEM_REMOVED,
-        savedCart
-      );
-    }
-
-    return savedCart;
-  }
-
-  /**
-   * Очистить корзину (универсальный метод)
-   */
-  async clearCartByUser(
-    botId: string,
-    user: CartUserIdentifier
-  ): Promise<Cart> {
-    const cart = await this.getCartByUser(botId, user);
-    cart.items = [];
-    cart.appliedPromocodeId = null;
-    const savedCart = await this.cartRepository.save(cart);
-
-    // Отправляем уведомление об очистке корзины
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-    if (bot) {
-      await this.sendCartNotification(
-        bot,
-        NotificationType.CART_CLEARED,
-        savedCart
-      );
-    }
-
-    return savedCart;
-  }
-
-  /**
-   * Legacy addItem - оставлен для обратной совместимости
-   */
-  private async addItemLegacy(
-    botId: string,
-    telegramUsername: string,
     productId: string,
     quantity: number = 1
   ): Promise<Cart> {
@@ -410,9 +193,8 @@ export class CartService {
       throw new BadRequestException("Количество должно быть больше 0");
     }
 
-    // Проверяем существование продукта
     const product = await this.productRepository.findOne({
-      where: { id: productId, botId },
+      where: { id: productId, shopId },
     });
 
     if (!product) {
@@ -429,16 +211,13 @@ export class CartService {
       );
     }
 
-    // Получаем корзину
-    let cart = await this.getCart(botId, telegramUsername);
+    let cart = await this.getCart(shopId, user);
 
-    // Проверяем, есть ли уже этот товар в корзине
     const existingItemIndex = cart.items.findIndex(
       (item) => item.productId === productId
     );
 
     if (existingItemIndex >= 0) {
-      // Обновляем количество существующего товара
       const newQuantity = cart.items[existingItemIndex].quantity + quantity;
 
       if (product.stockQuantity < newQuantity) {
@@ -449,7 +228,6 @@ export class CartService {
 
       cart.items[existingItemIndex].quantity = newQuantity;
     } else {
-      // Добавляем новый товар
       const cartItem: CartItem = {
         productId: product.id,
         quantity,
@@ -467,16 +245,25 @@ export class CartService {
 
     const savedCart = await this.cartRepository.save(cart);
 
-    // Отправляем уведомление о добавлении товара в корзину
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-    if (bot) {
-      await this.sendCartNotification(
-        bot,
-        NotificationType.CART_ITEM_ADDED,
-        savedCart
-      );
+    // Уведомление
+    const shop = await this.shopRepository.findOne({ where: { id: shopId } });
+    if (shop?.ownerId) {
+      this.notificationService
+        .sendToUser(shop.ownerId, NotificationType.CART_ITEM_ADDED, {
+          shopId,
+          cart: {
+            id: savedCart.id,
+            items: savedCart.items,
+            totalItems: savedCart.totalItems,
+            totalPrice: savedCart.totalPrice,
+          },
+        })
+        .catch((error) => {
+          this.logger.error(
+            "Ошибка отправки уведомления о добавлении товара:",
+            error
+          );
+        });
     }
 
     return savedCart;
@@ -486,18 +273,21 @@ export class CartService {
    * Обновить количество товара в корзине
    */
   async updateItem(
-    botId: string,
-    telegramUsername: string,
+    shopId: string,
+    user: CartUserIdentifier,
     productId: string,
     quantity: number
   ): Promise<Cart> {
-    if (quantity <= 0) {
-      throw new BadRequestException("Количество должно быть больше 0");
+    if (quantity < 0) {
+      throw new BadRequestException("Количество не может быть отрицательным");
     }
 
-    // Проверяем существование продукта
+    if (quantity === 0) {
+      return this.removeItem(shopId, user, productId);
+    }
+
     const product = await this.productRepository.findOne({
-      where: { id: productId, botId },
+      where: { id: productId, shopId },
     });
 
     if (!product) {
@@ -510,33 +300,37 @@ export class CartService {
       );
     }
 
-    // Получаем корзину
-    const cart = await this.getCart(botId, telegramUsername);
-
-    // Находим товар в корзине
+    const cart = await this.getCart(shopId, user);
     const itemIndex = cart.items.findIndex(
       (item) => item.productId === productId
     );
 
-    if (itemIndex < 0) {
+    if (itemIndex === -1) {
       throw new NotFoundException("Товар не найден в корзине");
     }
 
-    // Обновляем количество
     cart.items[itemIndex].quantity = quantity;
-
     const savedCart = await this.cartRepository.save(cart);
 
-    // Отправляем уведомление об обновлении корзины
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-    if (bot) {
-      await this.sendCartNotification(
-        bot,
-        NotificationType.CART_UPDATED,
-        savedCart
-      );
+    // Уведомление
+    const shop = await this.shopRepository.findOne({ where: { id: shopId } });
+    if (shop?.ownerId) {
+      this.notificationService
+        .sendToUser(shop.ownerId, NotificationType.CART_UPDATED, {
+          shopId,
+          cart: {
+            id: savedCart.id,
+            items: savedCart.items,
+            totalItems: savedCart.totalItems,
+            totalPrice: savedCart.totalPrice,
+          },
+        })
+        .catch((error) => {
+          this.logger.error(
+            "Ошибка отправки уведомления об обновлении:",
+            error
+          );
+        });
     }
 
     return savedCart;
@@ -546,27 +340,30 @@ export class CartService {
    * Удалить товар из корзины
    */
   async removeItem(
-    botId: string,
-    telegramUsername: string,
+    shopId: string,
+    user: CartUserIdentifier,
     productId: string
   ): Promise<Cart> {
-    const cart = await this.getCart(botId, telegramUsername);
-
-    // Удаляем товар из корзины
+    const cart = await this.getCart(shopId, user);
     cart.items = cart.items.filter((item) => item.productId !== productId);
-
     const savedCart = await this.cartRepository.save(cart);
 
-    // Отправляем уведомление об удалении товара из корзины
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-    if (bot) {
-      await this.sendCartNotification(
-        bot,
-        NotificationType.CART_ITEM_REMOVED,
-        savedCart
-      );
+    // Уведомление
+    const shop = await this.shopRepository.findOne({ where: { id: shopId } });
+    if (shop?.ownerId) {
+      this.notificationService
+        .sendToUser(shop.ownerId, NotificationType.CART_ITEM_REMOVED, {
+          shopId,
+          cart: {
+            id: savedCart.id,
+            items: savedCart.items,
+            totalItems: savedCart.totalItems,
+            totalPrice: savedCart.totalPrice,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка отправки уведомления об удалении:", error);
+        });
     }
 
     return savedCart;
@@ -575,152 +372,227 @@ export class CartService {
   /**
    * Очистить корзину
    */
-  async clearCart(botId: string, telegramUsername: string): Promise<Cart> {
-    const cart = await this.getCart(botId, telegramUsername);
+  async clearCart(shopId: string, user: CartUserIdentifier): Promise<Cart> {
+    const cart = await this.getCart(shopId, user);
     cart.items = [];
-    cart.appliedPromocodeId = null; // Удаляем примененный промокод при очистке корзины
+    cart.appliedPromocodeId = null;
     const savedCart = await this.cartRepository.save(cart);
 
-    // Отправляем уведомление об очистке корзины
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-    if (bot) {
-      await this.sendCartNotification(
-        bot,
-        NotificationType.CART_CLEARED,
-        savedCart
-      );
+    // Уведомление
+    const shop = await this.shopRepository.findOne({ where: { id: shopId } });
+    if (shop?.ownerId) {
+      this.notificationService
+        .sendToUser(shop.ownerId, NotificationType.CART_CLEARED, {
+          shopId,
+          cart: { id: savedCart.id },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка отправки уведомления об очистке:", error);
+        });
     }
 
     return savedCart;
   }
 
   /**
-   * Обновить количество товара в корзине (для админа)
+   * Валидировать промокод для корзины
    */
-  async updateCartItemByAdmin(
-    botId: string,
-    cartId: string,
-    productId: string,
-    quantity: number
+  async validatePromocodeForCart(
+    shopId: string,
+    user: CartUserIdentifier,
+    code: string
+  ): Promise<{
+    isValid: boolean;
+    promocode?: any;
+    discount?: number;
+    message?: string;
+  }> {
+    const cart = await this.getCart(shopId, user);
+    return this.shopPromocodesService.validatePromocode(shopId, code, cart);
+  }
+
+  /**
+   * Применить промокод к корзине
+   */
+  async applyPromocode(
+    shopId: string,
+    user: CartUserIdentifier,
+    code: string
   ): Promise<Cart> {
-    if (quantity <= 0) {
-      throw new BadRequestException("Количество должно быть больше 0");
-    }
+    const cart = await this.getCart(shopId, user);
+    const userLabel = user.telegramUsername || user.publicUserId || "unknown";
 
-    // Проверяем существование бота
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
+    const validation = await this.shopPromocodesService.validatePromocode(
+      shopId,
+      code,
+      cart
+    );
 
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
-    }
-
-    // Получаем корзину
-    const cart = await this.cartRepository.findOne({
-      where: { id: cartId, botId },
-    });
-
-    if (!cart) {
-      throw new NotFoundException("Корзина не найдена");
-    }
-
-    // Проверяем существование продукта
-    const product = await this.productRepository.findOne({
-      where: { id: productId, botId },
-    });
-
-    if (!product) {
-      throw new NotFoundException("Товар не найден");
-    }
-
-    if (product.stockQuantity < quantity) {
+    if (!validation.isValid || !validation.promocode) {
       throw new BadRequestException(
-        `Недостаточно товара в наличии. Доступно: ${product.stockQuantity}`
+        validation.message || "Промокод недействителен"
       );
     }
 
-    // Находим товар в корзине
-    const itemIndex = cart.items.findIndex(
-      (item) => item.productId === productId
-    );
-
-    if (itemIndex < 0) {
-      throw new NotFoundException("Товар не найден в корзине");
-    }
-
-    // Обновляем количество
-    cart.items[itemIndex].quantity = quantity;
-
+    cart.appliedPromocodeId = validation.promocode.id;
     const savedCart = await this.cartRepository.save(cart);
 
-    // Отправляем уведомление об обновлении корзины
-    await this.sendCartNotification(
-      bot,
-      NotificationType.CART_UPDATED,
-      savedCart
-    );
+    // Уведомление и логирование
+    const shop = await this.shopRepository.findOne({ where: { id: shopId } });
+    if (shop?.ownerId) {
+      this.notificationService
+        .sendToUser(shop.ownerId, NotificationType.SHOP_PROMOCODE_USED, {
+          shopId,
+          promocode: {
+            id: validation.promocode.id,
+            code: validation.promocode.code,
+            type: validation.promocode.type,
+            value: validation.promocode.value,
+            discount: validation.discount,
+          },
+          cart: {
+            telegramUsername: user.telegramUsername,
+            publicUserId: user.publicUserId,
+            totalPrice: savedCart.totalPrice,
+          },
+        })
+        .catch((error) => {
+          this.logger.error(
+            "Ошибка отправки уведомления об использовании промокода:",
+            error
+          );
+        });
+
+      this.activityLogService
+        .create({
+          type: ActivityType.PROMOCODE_APPLIED,
+          level: ActivityLevel.SUCCESS,
+          message: `Промокод "${validation.promocode.code}" применен к корзине пользователя ${userLabel}`,
+          userId: shop.ownerId,
+          metadata: {
+            shopId,
+            promocodeId: validation.promocode.id,
+            promocodeCode: validation.promocode.code,
+            promocodeType: validation.promocode.type,
+            promocodeValue: validation.promocode.value,
+            discount: validation.discount,
+            telegramUsername: user.telegramUsername,
+            publicUserId: user.publicUserId,
+            cartId: savedCart.id,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка логирования применения промокода:", error);
+        });
+    }
 
     return savedCart;
   }
 
   /**
-   * Удалить товар из корзины (для админа)
+   * Удалить промокод из корзины
    */
-  async removeCartItemByAdmin(
-    botId: string,
-    cartId: string,
-    productId: string
+  async removePromocode(
+    shopId: string,
+    user: CartUserIdentifier
   ): Promise<Cart> {
-    // Проверяем существование бота
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
+    const cart = await this.getCart(shopId, user);
 
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
+    // Получаем данные промокода перед удалением
+    let promocodeData = null;
+    if (cart.appliedPromocodeId) {
+      const promocode = await this.promocodeRepository.findOne({
+        where: { id: cart.appliedPromocodeId, shopId },
+      });
+      if (promocode) {
+        promocodeData = {
+          id: promocode.id,
+          code: promocode.code,
+          type: promocode.type,
+          value: promocode.value,
+        };
+      }
     }
 
-    // Получаем корзину
-    const cart = await this.cartRepository.findOne({
-      where: { id: cartId, botId },
-    });
-
-    if (!cart) {
-      throw new NotFoundException("Корзина не найдена");
-    }
-
-    // Проверяем, есть ли товар в корзине
-    const itemIndex = cart.items.findIndex(
-      (item) => item.productId === productId
-    );
-
-    if (itemIndex < 0) {
-      throw new NotFoundException("Товар не найден в корзине");
-    }
-
-    // Удаляем товар из корзины
-    cart.items = cart.items.filter((item) => item.productId !== productId);
-
+    cart.appliedPromocodeId = null;
     const savedCart = await this.cartRepository.save(cart);
 
-    // Отправляем уведомление об удалении товара из корзины
-    await this.sendCartNotification(
-      bot,
-      NotificationType.CART_ITEM_REMOVED,
-      savedCart
-    );
+    // Уведомление
+    const shop = await this.shopRepository.findOne({ where: { id: shopId } });
+    if (shop?.ownerId && promocodeData) {
+      this.notificationService
+        .sendToUser(shop.ownerId, NotificationType.SHOP_PROMOCODE_UNLINKED, {
+          shopId,
+          promocode: promocodeData,
+          cart: {
+            telegramUsername: user.telegramUsername,
+            publicUserId: user.publicUserId,
+            totalPrice: savedCart.totalPrice,
+          },
+        })
+        .catch((error) => {
+          this.logger.error(
+            "Ошибка отправки уведомления об отвязке промокода:",
+            error
+          );
+        });
+    }
 
     return savedCart;
   }
 
   /**
-   * Получить все корзины бота (для админа)
+   * Получить информацию о примененном промокоде
    */
-  async getCartsByBotId(
-    botId: string,
+  async getAppliedPromocodeInfo(
+    shopId: string,
+    cart: Cart
+  ): Promise<{
+    promocode?: ShopPromocode;
+    discount?: number;
+  } | null> {
+    if (!cart.appliedPromocodeId) {
+      return null;
+    }
+
+    try {
+      const promocode = await this.promocodeRepository.findOne({
+        where: { id: cart.appliedPromocodeId, shopId },
+      });
+
+      if (!promocode) {
+        return null;
+      }
+
+      const validation = await this.shopPromocodesService.validatePromocode(
+        shopId,
+        promocode.code,
+        cart
+      );
+
+      if (!validation.isValid || !validation.discount) {
+        return null;
+      }
+
+      return {
+        promocode,
+        discount: validation.discount,
+      };
+    } catch (error) {
+      this.logger.error("Ошибка при получении информации о промокоде:", error);
+      return null;
+    }
+  }
+
+  // =====================================================
+  // МЕТОДЫ ДЛЯ АДМИНКИ
+  // =====================================================
+
+  /**
+   * Получить все корзины магазина (для админа)
+   */
+  async getCartsByShopId(
+    shopId: string,
     hideEmpty: boolean = false,
     searchUser?: string,
     searchProduct?: string
@@ -734,21 +606,18 @@ export class CartService {
       }
     >
   > {
-    // Проверяем существование бота
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
+    const shop = await this.shopRepository.findOne({
+      where: { id: shopId },
     });
 
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
+    if (!shop) {
+      throw new NotFoundException("Магазин не найден");
     }
 
-    // Строим запрос с фильтрами
     const queryBuilder = this.cartRepository
       .createQueryBuilder("cart")
-      .where("cart.botId = :botId", { botId });
+      .where("cart.shopId = :shopId", { shopId });
 
-    // Фильтр по пользователю (telegramUsername или publicUserId)
     if (searchUser && searchUser.trim()) {
       const searchUserLower = searchUser.toLowerCase().trim();
       queryBuilder.andWhere(
@@ -757,17 +626,14 @@ export class CartService {
       );
     }
 
-    // Сортировка
     queryBuilder.orderBy("cart.updatedAt", "DESC");
 
     let carts = await queryBuilder.getMany();
 
-    // Фильтруем пустые корзины, если нужно
     if (hideEmpty) {
       carts = carts.filter((cart) => cart.items && cart.items.length > 0);
     }
 
-    // Фильтр по названию товара (выполняем на уровне приложения, т.к. items - JSONB)
     if (searchProduct && searchProduct.trim()) {
       const searchProductLower = searchProduct.toLowerCase().trim();
       carts = carts.filter((cart) =>
@@ -777,18 +643,16 @@ export class CartService {
       );
     }
 
-    // Получаем chatId и информацию о промокодах для каждой корзины
+    // Получаем chatId и информацию о промокодах
     const cartsWithChatId = await Promise.all(
       carts.map(async (cart) => {
-        // Пытаемся найти chatId по telegramUsername через метаданные сообщений
-        // Для PublicUser (браузерных пользователей) telegramUsername может быть null
         let chatId: string | undefined = undefined;
 
-        if (cart.telegramUsername) {
+        if (cart.telegramUsername && shop.botId) {
           const username = cart.telegramUsername.replace("@", "");
           const userMessage = await this.messageRepository
             .createQueryBuilder("message")
-            .where("message.botId = :botId", { botId })
+            .where("message.botId = :botId", { botId: shop.botId })
             .andWhere("message.type = :type", { type: "incoming" })
             .andWhere(
               "(message.metadata->>'username' = :username OR message.metadata->>'username' = :usernameWithAt)",
@@ -804,8 +668,7 @@ export class CartService {
           chatId = userMessage?.telegramChatId;
         }
 
-        // Получаем информацию о примененном промокоде
-        const promocodeInfo = await this.getAppliedPromocodeInfo(botId, cart);
+        const promocodeInfo = await this.getAppliedPromocodeInfo(shopId, cart);
 
         return {
           ...cart,
@@ -827,331 +690,185 @@ export class CartService {
   }
 
   /**
-   * Валидировать промокод для корзины (универсальный метод)
+   * Обновить количество товара в корзине (для админа)
    */
-  async validatePromocodeByUser(
-    botId: string,
-    user: CartUserIdentifier,
-    code: string
-  ): Promise<{
-    isValid: boolean;
-    promocode?: any;
-    discount?: number;
-    message?: string;
-  }> {
-    const cart = await this.getCartByUser(botId, user);
-    return this.shopPromocodesService.validatePromocode(botId, code, cart);
-  }
-
-  /**
-   * Валидировать промокод для корзины (legacy)
-   * @deprecated Используйте validatePromocodeByUser
-   */
-  async validatePromocode(
-    botId: string,
-    telegramUsername: string,
-    code: string
-  ): Promise<{
-    isValid: boolean;
-    promocode?: any;
-    discount?: number;
-    message?: string;
-  }> {
-    return this.validatePromocodeByUser(botId, { telegramUsername }, code);
-  }
-
-  /**
-   * Получить информацию о примененном промокоде и скидке
-   */
-  async getAppliedPromocodeInfo(
-    botId: string,
-    cart: Cart
-  ): Promise<{
-    promocode?: ShopPromocode;
-    discount?: number;
-  } | null> {
-    this.logger.log(
-      `[CART SERVICE] getAppliedPromocodeInfo called - botId: ${botId}, cartId: ${cart.id}, appliedPromocodeId: ${cart.appliedPromocodeId || "null"}`
-    );
-
-    if (!cart.appliedPromocodeId) {
-      this.logger.log(
-        `[CART SERVICE] No appliedPromocodeId in cart, returning null`
-      );
-      return null;
-    }
-
-    try {
-      this.logger.log(
-        `[CART SERVICE] Looking for promocode with id: ${cart.appliedPromocodeId}, botId: ${botId}`
-      );
-
-      const promocode = await this.promocodeRepository.findOne({
-        where: { id: cart.appliedPromocodeId, botId },
-      });
-
-      if (!promocode) {
-        this.logger.warn(
-          `[CART SERVICE] Promocode not found with id: ${cart.appliedPromocodeId}, botId: ${botId}`
-        );
-        return null;
-      }
-
-      this.logger.log(
-        `[CART SERVICE] Promocode found - code: ${promocode.code}, type: ${promocode.type}, value: ${promocode.value}, isActive: ${promocode.isActive}`
-      );
-
-      // Валидируем промокод для текущей корзины
-      this.logger.log(
-        `[CART SERVICE] Validating promocode for cart - cart items count: ${cart.items?.length || 0}`
-      );
-
-      const validation = await this.shopPromocodesService.validatePromocode(
-        botId,
-        promocode.code,
-        cart
-      );
-
-      this.logger.log(
-        `[CART SERVICE] Validation result - isValid: ${validation.isValid}, discount: ${validation.discount || "null"}, message: ${validation.message || "null"}`
-      );
-
-      if (!validation.isValid || !validation.discount) {
-        this.logger.warn(
-          `[CART SERVICE] Promocode validation failed - isValid: ${validation.isValid}, discount: ${validation.discount || "null"}`
-        );
-        return null;
-      }
-
-      const result = {
-        promocode,
-        discount: validation.discount,
-      };
-
-      this.logger.log(
-        `[CART SERVICE] Returning promocode info - code: ${result.promocode.code}, discount: ${result.discount}`
-      );
-
-      return result;
-    } catch (error) {
-      this.logger.error(
-        "Ошибка при получении информации о примененном промокоде:",
-        error
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Применить промокод к корзине (универсальный метод)
-   */
-  async applyPromocodeByUser(
-    botId: string,
-    user: CartUserIdentifier,
-    code: string
+  async updateCartItemByAdmin(
+    shopId: string,
+    cartId: string,
+    productId: string,
+    quantity: number
   ): Promise<Cart> {
-    const cart = await this.getCartByUser(botId, user);
-    const userLabel = user.telegramUsername || user.publicUserId || "unknown";
+    if (quantity <= 0) {
+      throw new BadRequestException("Количество должно быть больше 0");
+    }
 
-    // Валидируем промокод
-    const validation = await this.shopPromocodesService.validatePromocode(
-      botId,
-      code,
-      cart
-    );
+    const shop = await this.shopRepository.findOne({
+      where: { id: shopId },
+    });
 
-    if (!validation.isValid || !validation.promocode) {
+    if (!shop) {
+      throw new NotFoundException("Магазин не найден");
+    }
+
+    const cart = await this.cartRepository.findOne({
+      where: { id: cartId, shopId },
+    });
+
+    if (!cart) {
+      throw new NotFoundException("Корзина не найдена");
+    }
+
+    const product = await this.productRepository.findOne({
+      where: { id: productId, shopId },
+    });
+
+    if (!product) {
+      throw new NotFoundException("Товар не найден");
+    }
+
+    if (product.stockQuantity < quantity) {
       throw new BadRequestException(
-        validation.message || "Промокод недействителен"
+        `Недостаточно товара в наличии. Доступно: ${product.stockQuantity}`
       );
     }
 
-    // Применяем промокод
-    cart.appliedPromocodeId = validation.promocode.id;
+    const itemIndex = cart.items.findIndex(
+      (item) => item.productId === productId
+    );
+
+    if (itemIndex < 0) {
+      throw new NotFoundException("Товар не найден в корзине");
+    }
+
+    cart.items[itemIndex].quantity = quantity;
     const savedCart = await this.cartRepository.save(cart);
 
-    // Отправляем уведомление
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-    if (bot) {
-      await this.sendCartNotification(
-        bot,
-        NotificationType.CART_UPDATED,
-        savedCart
-      );
-
-      // Отправляем уведомление об использовании промокода
-      if (bot.ownerId) {
-        this.notificationService
-          .sendToUser(bot.ownerId, NotificationType.SHOP_PROMOCODE_USED, {
-            botId,
-            promocode: {
-              id: validation.promocode.id,
-              code: validation.promocode.code,
-              type: validation.promocode.type,
-              value: validation.promocode.value,
-              discount: validation.discount,
-            },
-            cart: {
-              telegramUsername: user.telegramUsername,
-              publicUserId: user.publicUserId,
-              totalPrice: savedCart.totalPrice,
-            },
-          })
-          .catch((error) => {
-            this.logger.error(
-              "Ошибка отправки уведомления об использовании промокода:",
-              error
-            );
-          });
-
-        // Логируем применение промокода
-        this.activityLogService
-          .create({
-            type: ActivityType.PROMOCODE_APPLIED,
-            level: ActivityLevel.SUCCESS,
-            message: `Промокод "${validation.promocode.code}" применен к корзине пользователя ${userLabel}`,
-            userId: bot.ownerId,
-            botId,
-            metadata: {
-              promocodeId: validation.promocode.id,
-              promocodeCode: validation.promocode.code,
-              promocodeType: validation.promocode.type,
-              promocodeValue: validation.promocode.value,
-              discount: validation.discount,
-              telegramUsername: user.telegramUsername,
-              publicUserId: user.publicUserId,
-              cartId: savedCart.id,
-            },
-          })
-          .catch((error) => {
-            this.logger.error(
-              "Ошибка логирования применения промокода:",
-              error
-            );
-          });
-      }
+    if (shop.ownerId) {
+      this.notificationService
+        .sendToUser(shop.ownerId, NotificationType.CART_UPDATED, {
+          shopId,
+          cart: {
+            id: savedCart.id,
+            items: savedCart.items,
+            totalItems: savedCart.totalItems,
+            totalPrice: savedCart.totalPrice,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка отправки уведомления:", error);
+        });
     }
 
     return savedCart;
   }
 
   /**
-   * Применить промокод к корзине (legacy)
-   * @deprecated Используйте applyPromocodeByUser
+   * Удалить товар из корзины (для админа)
    */
-  async applyPromocode(
-    botId: string,
-    telegramUsername: string,
-    code: string
+  async removeCartItemByAdmin(
+    shopId: string,
+    cartId: string,
+    productId: string
   ): Promise<Cart> {
-    return this.applyPromocodeByUser(botId, { telegramUsername }, code);
+    const shop = await this.shopRepository.findOne({
+      where: { id: shopId },
+    });
+
+    if (!shop) {
+      throw new NotFoundException("Магазин не найден");
+    }
+
+    const cart = await this.cartRepository.findOne({
+      where: { id: cartId, shopId },
+    });
+
+    if (!cart) {
+      throw new NotFoundException("Корзина не найдена");
+    }
+
+    const itemIndex = cart.items.findIndex(
+      (item) => item.productId === productId
+    );
+
+    if (itemIndex < 0) {
+      throw new NotFoundException("Товар не найден в корзине");
+    }
+
+    cart.items = cart.items.filter((item) => item.productId !== productId);
+    const savedCart = await this.cartRepository.save(cart);
+
+    if (shop.ownerId) {
+      this.notificationService
+        .sendToUser(shop.ownerId, NotificationType.CART_ITEM_REMOVED, {
+          shopId,
+          cart: {
+            id: savedCart.id,
+            items: savedCart.items,
+            totalItems: savedCart.totalItems,
+            totalPrice: savedCart.totalPrice,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка отправки уведомления:", error);
+        });
+    }
+
+    return savedCart;
   }
 
-  /**
-   * Удалить промокод из корзины (универсальный метод)
-   */
-  async removePromocodeByUser(
-    botId: string,
+  // =====================================================
+  // ALIAS МЕТОДЫ ДЛЯ СОВМЕСТИМОСТИ С ShopsController
+  // =====================================================
+
+  async getCartByShop(shopId: string, user: CartUserIdentifier): Promise<Cart> {
+    return this.getCart(shopId, user);
+  }
+
+  async addItemByShop(
+    shopId: string,
+    user: CartUserIdentifier,
+    productId: string,
+    quantity: number = 1
+  ): Promise<Cart> {
+    return this.addItem(shopId, user, productId, quantity);
+  }
+
+  async updateItemByShop(
+    shopId: string,
+    user: CartUserIdentifier,
+    productId: string,
+    quantity: number
+  ): Promise<Cart> {
+    return this.updateItem(shopId, user, productId, quantity);
+  }
+
+  async removeItemByShop(
+    shopId: string,
+    user: CartUserIdentifier,
+    productId: string
+  ): Promise<Cart> {
+    return this.removeItem(shopId, user, productId);
+  }
+
+  async clearCartByShop(
+    shopId: string,
     user: CartUserIdentifier
   ): Promise<Cart> {
-    const cart = await this.getCartByUser(botId, user);
-
-    // Получаем данные промокода перед удалением
-    let promocodeData = null;
-    if (cart.appliedPromocodeId) {
-      const promocode = await this.promocodeRepository.findOne({
-        where: { id: cart.appliedPromocodeId, botId },
-      });
-      if (promocode) {
-        promocodeData = {
-          id: promocode.id,
-          code: promocode.code,
-          type: promocode.type,
-          value: promocode.value,
-        };
-      }
-    }
-
-    cart.appliedPromocodeId = null;
-    const savedCart = await this.cartRepository.save(cart);
-
-    // Отправляем уведомление
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-    if (bot) {
-      await this.sendCartNotification(
-        bot,
-        NotificationType.CART_UPDATED,
-        savedCart
-      );
-
-      // Отправляем уведомление об отвязке промокода
-      if (bot.ownerId && promocodeData) {
-        this.notificationService
-          .sendToUser(bot.ownerId, NotificationType.SHOP_PROMOCODE_UNLINKED, {
-            botId,
-            promocode: promocodeData,
-            cart: {
-              telegramUsername: user.telegramUsername,
-              publicUserId: user.publicUserId,
-              totalPrice: savedCart.totalPrice,
-            },
-          })
-          .catch((error) => {
-            this.logger.error(
-              "Ошибка отправки уведомления об отвязке промокода:",
-              error
-            );
-          });
-      }
-    }
-
-    return savedCart;
+    return this.clearCart(shopId, user);
   }
 
-  /**
-   * Удалить промокод из корзины (legacy)
-   * @deprecated Используйте removePromocodeByUser
-   */
-  async removePromocode(
-    botId: string,
-    telegramUsername: string
+  async applyPromocodeByShop(
+    shopId: string,
+    user: CartUserIdentifier,
+    code: string
   ): Promise<Cart> {
-    return this.removePromocodeByUser(botId, { telegramUsername });
+    return this.applyPromocode(shopId, user, code);
   }
 
-  /**
-   * Отправить уведомление о корзине владельцу бота
-   */
-  private async sendCartNotification(
-    bot: Bot,
-    type: NotificationType,
-    cart: Cart
-  ): Promise<void> {
-    if (!bot.ownerId) {
-      return;
-    }
-
-    try {
-      await this.notificationService.sendToUser(bot.ownerId, type, {
-        botId: bot.id,
-        cart: {
-          id: cart.id,
-          telegramUsername: cart.telegramUsername,
-          items: cart.items,
-          totalItems: cart.totalItems,
-          totalPrice: cart.totalPrice,
-          currency: cart.currency,
-        },
-      });
-    } catch (error) {
-      this.logger.error(
-        `Ошибка отправки уведомления о корзине (${type}):`,
-        error
-      );
-    }
+  async removePromocodeByShop(
+    shopId: string,
+    user: CartUserIdentifier
+  ): Promise<Cart> {
+    return this.removePromocode(shopId, user);
   }
 }

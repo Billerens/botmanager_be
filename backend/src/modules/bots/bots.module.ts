@@ -18,6 +18,7 @@ import { Service } from "../../database/entities/service.entity";
 import { Booking } from "../../database/entities/booking.entity";
 import { Cart } from "../../database/entities/cart.entity";
 import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import { TimeSlot } from "../../database/entities/time-slot.entity";
 import { CustomPage } from "../../database/entities/custom-page.entity";
 import { User } from "../../database/entities/user.entity";
@@ -99,6 +100,7 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
       Booking,
       Cart,
       ShopPromocode,
+      Shop,
       TimeSlot,
       CustomPage,
       User,

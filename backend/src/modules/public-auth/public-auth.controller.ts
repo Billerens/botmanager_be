@@ -90,7 +90,10 @@ export class PublicAuthController {
     type: PublicAuthMessageResponseDto,
   })
   async resendVerification(@Body() dto: ResendVerificationEmailDto) {
-    return this.publicAuthService.resendVerificationEmail(dto.botId, dto.email);
+    return this.publicAuthService.resendVerificationEmail(
+      dto.shopId,
+      dto.email
+    );
   }
 
   @Post("forgot-password")
@@ -209,4 +212,3 @@ export class PublicAuthController {
     return this.publicAuthService.linkTelegram(req.publicUser.id, dto);
   }
 }
-

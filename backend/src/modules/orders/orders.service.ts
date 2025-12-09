@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
   Inject,
   forwardRef,
@@ -10,7 +11,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Order, OrderStatus } from "../../database/entities/order.entity";
 import { Cart } from "../../database/entities/cart.entity";
-import { Bot } from "../../database/entities/bot.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import { Product } from "../../database/entities/product.entity";
 import { CreateOrderDto, UpdateOrderStatusDto } from "./dto/order.dto";
 import { NotificationService } from "../websocket/services/notification.service";
@@ -42,8 +43,8 @@ export class OrdersService {
     private readonly orderRepository: Repository<Order>,
     @InjectRepository(Cart)
     private readonly cartRepository: Repository<Cart>,
-    @InjectRepository(Bot)
-    private readonly botRepository: Repository<Bot>,
+    @InjectRepository(Shop)
+    private readonly shopRepository: Repository<Shop>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     @InjectRepository(Message)
@@ -58,27 +59,63 @@ export class OrdersService {
     private readonly activityLogService: ActivityLogService
   ) {}
 
+  // =====================================================
+  // ОСНОВНЫЕ МЕТОДЫ (работают с shopId)
+  // Legacy методы с botId удалены
+  // =====================================================
+
+  /**
+   * Валидация владения магазином
+   */
+  private async validateShopOwnership(
+    shopId: string,
+    userId: string
+  ): Promise<Shop> {
+    const shop = await this.shopRepository.findOne({
+      where: { id: shopId },
+    });
+
+    if (!shop) {
+      throw new NotFoundException("Магазин не найден");
+    }
+
+    if (shop.ownerId !== userId) {
+      throw new ForbiddenException("Нет доступа к этому магазину");
+    }
+
+    return shop;
+  }
+
   /**
    * Создать заказ из корзины
    */
   async createOrder(
-    botId: string,
-    telegramUsername: string,
+    shopId: string,
+    user: OrderUserIdentifier,
     createOrderDto: CreateOrderDto
   ): Promise<Order> {
-    // Проверяем существование бота
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
+    const { telegramUsername, publicUserId } = user;
+
+    // Проверяем существование магазина
+    const shop = await this.shopRepository.findOne({
+      where: { id: shopId },
     });
 
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
+    if (!shop) {
+      throw new NotFoundException("Магазин не найден");
     }
 
     // Получаем корзину пользователя
-    const cart = await this.cartRepository.findOne({
-      where: { botId, telegramUsername },
-    });
+    let cart: Cart | null = null;
+    if (telegramUsername) {
+      cart = await this.cartRepository.findOne({
+        where: { shopId, telegramUsername },
+      });
+    } else if (publicUserId) {
+      cart = await this.cartRepository.findOne({
+        where: { shopId, publicUserId },
+      });
+    }
 
     if (!cart) {
       throw new NotFoundException("Корзина не найдена");
@@ -88,10 +125,10 @@ export class OrdersService {
       throw new BadRequestException("Корзина пуста");
     }
 
-    // Проверяем наличие товаров и их количество
+    // Проверяем наличие товаров
     for (const item of cart.items) {
       const product = await this.productRepository.findOne({
-        where: { id: item.productId, botId },
+        where: { id: item.productId, shopId },
       });
 
       if (!product) {
@@ -104,337 +141,101 @@ export class OrdersService {
 
       if (product.stockQuantity < item.quantity) {
         throw new BadRequestException(
-          `Недостаточно товара "${product.name}" в наличии. Доступно: ${product.stockQuantity}, требуется: ${item.quantity}`
+          `Недостаточно товара "${product.name}" в наличии. Доступно: ${product.stockQuantity}`
         );
       }
     }
 
-    // Получаем информацию о примененном промокоде и рассчитываем итоговую цену
-    let finalPrice = cart.totalPrice;
+    // Рассчитываем скидку промокода, если применен
     let promocodeDiscount = 0;
-    let appliedPromocodeId: string | null = null;
+    let appliedPromocodeId = null;
 
-    if (cart.appliedPromocodeId) {
-      const promocodeInfo = await this.cartService.getAppliedPromocodeInfo(
-        botId,
-        cart
-      );
-
-      if (promocodeInfo && promocodeInfo.discount) {
-        promocodeDiscount = promocodeInfo.discount;
-        finalPrice = cart.totalPrice - promocodeDiscount;
-        appliedPromocodeId = cart.appliedPromocodeId;
-
-        // Обновляем счетчик использований промокода
-        await this.shopPromocodesService.incrementUsageCount(
-          cart.appliedPromocodeId
-        );
-      } else {
-        // Промокод стал недействителен, удаляем его из корзины
-        cart.appliedPromocodeId = null;
-        await this.cartRepository.save(cart);
-      }
-    }
-
-    // Создаем заказ на основе корзины
-    const order = this.orderRepository.create({
-      botId,
-      telegramUsername,
-      items: [...cart.items], // Копируем товары из корзины
-      customerData: createOrderDto.customerData,
-      additionalMessage: createOrderDto.additionalMessage,
-      status: OrderStatus.PENDING,
-      totalPrice: finalPrice, // Итоговая цена с учетом скидки
-      currency: cart.currency,
-      appliedPromocodeId: appliedPromocodeId,
-      promocodeDiscount: promocodeDiscount > 0 ? promocodeDiscount : null,
-    });
-
-    const savedOrder = await this.orderRepository.save(order);
-
-    // Отправляем уведомление владельцу бота
-    await this.sendOrderNotification(
-      bot,
-      NotificationType.ORDER_CREATED,
-      savedOrder
-    );
-
-    // Очищаем корзину после создания заказа
-    cart.items = [];
-    cart.appliedPromocodeId = null; // Удаляем примененный промокод
-    await this.cartRepository.save(cart);
-
-    this.logger.log(
-      `Заказ ${savedOrder.id} создан для пользователя ${telegramUsername} в боте ${botId}`
-    );
-
-    // Логируем создание заказа (userId владельца бота)
-    if (bot.ownerId) {
-      this.activityLogService
-        .create({
-          type: ActivityType.ORDER_CREATED,
-          level: ActivityLevel.SUCCESS,
-          message: `Создан заказ #${savedOrder.id} от пользователя ${telegramUsername}`,
-          userId: bot.ownerId,
-          botId,
-          metadata: {
-            orderId: savedOrder.id,
-            telegramUsername,
-            totalPrice: savedOrder.totalPrice,
-            currency: savedOrder.currency,
-            itemsCount: savedOrder.items.length,
-            appliedPromocodeId: savedOrder.appliedPromocodeId,
-          },
-        })
-        .catch((error) => {
-          this.logger.error("Ошибка логирования создания заказа:", error);
-        });
-    }
-
-    return savedOrder;
-  }
-
-  /**
-   * Получить заказ пользователя
-   */
-  async getOrder(
-    botId: string,
-    orderId: string,
-    telegramUsername: string
-  ): Promise<Order> {
-    const order = await this.orderRepository.findOne({
-      where: { id: orderId, botId, telegramUsername },
-    });
-
-    if (!order) {
-      throw new NotFoundException("Заказ не найден");
-    }
-
-    return order;
-  }
-
-  /**
-   * Получить все заказы пользователя для бота (legacy)
-   * @deprecated Используйте getOrdersByUserIdentifier
-   */
-  async getOrdersByUser(
-    botId: string,
-    telegramUsername: string
-  ): Promise<Order[]> {
-    return this.getOrdersByUserIdentifier(botId, { telegramUsername });
-  }
-
-  /**
-   * Получить все заказы пользователя для бота (универсальный метод)
-   */
-  async getOrdersByUserIdentifier(
-    botId: string,
-    user: OrderUserIdentifier
-  ): Promise<Order[]> {
-    const { telegramUsername, publicUserId } = user;
-
-    let whereClause: any = { botId };
-    if (telegramUsername) {
-      whereClause.telegramUsername = telegramUsername;
-    } else if (publicUserId) {
-      whereClause.publicUserId = publicUserId;
-    }
-
-    const orders = await this.orderRepository.find({
-      where: whereClause,
-      order: { createdAt: "DESC" },
-    });
-
-    return orders;
-  }
-
-  /**
-   * Получить заказ по ID (универсальный метод)
-   */
-  async getOrderByUser(
-    botId: string,
-    orderId: string,
-    user: OrderUserIdentifier
-  ): Promise<Order> {
-    const { telegramUsername, publicUserId } = user;
-
-    let whereClause: any = { id: orderId, botId };
-    if (telegramUsername) {
-      whereClause.telegramUsername = telegramUsername;
-    } else if (publicUserId) {
-      whereClause.publicUserId = publicUserId;
-    }
-
-    const order = await this.orderRepository.findOne({
-      where: whereClause,
-    });
-
-    if (!order) {
-      throw new NotFoundException("Заказ не найден");
-    }
-
-    return order;
-  }
-
-  /**
-   * Создать заказ из корзины (универсальный метод)
-   */
-  async createOrderByUser(
-    botId: string,
-    user: OrderUserIdentifier,
-    createOrderDto: CreateOrderDto
-  ): Promise<Order> {
-    const { telegramUsername, publicUserId } = user;
-    const userLabel = telegramUsername || publicUserId || "unknown";
-
-    // Проверяем существование бота
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
-    }
-
-    // Получаем корзину пользователя
-    const cart = await this.cartService.getCartByUser(botId, user);
-
-    if (!cart || cart.items.length === 0) {
-      throw new BadRequestException("Корзина пуста");
-    }
-
-    // Проверяем доступность всех товаров
-    for (const item of cart.items) {
-      const product = await this.productRepository.findOne({
-        where: { id: item.productId, botId },
-      });
-
-      if (!product) {
-        throw new BadRequestException(
-          `Товар "${item.name}" больше не доступен`
-        );
-      }
-
-      if (!product.isActive) {
-        throw new BadRequestException(
-          `Товар "${item.name}" больше не доступен`
-        );
-      }
-
-      if (product.stockQuantity < item.quantity) {
-        throw new BadRequestException(
-          `Недостаточно товара "${item.name}" в наличии. Доступно: ${product.stockQuantity}`
-        );
-      }
-    }
-
-    // Рассчитываем итоговую сумму
-    let totalPrice = cart.items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
-
-    // Применяем промокод если есть
-    let appliedPromocodeData = null;
     if (cart.appliedPromocodeId) {
       const promocode = await this.promocodeRepository.findOne({
-        where: { id: cart.appliedPromocodeId, botId },
+        where: { id: cart.appliedPromocodeId },
       });
 
       if (promocode) {
         const validation = await this.shopPromocodesService.validatePromocode(
-          botId,
+          shopId,
           promocode.code,
           cart
         );
 
         if (validation.isValid && validation.discount) {
-          totalPrice = Math.max(0, totalPrice - validation.discount);
-          appliedPromocodeData = {
-            id: promocode.id,
-            code: promocode.code,
-            type: promocode.type,
-            value: promocode.value,
-            discount: validation.discount,
-          };
+          promocodeDiscount = validation.discount;
+          appliedPromocodeId = cart.appliedPromocodeId;
+
+          // Увеличиваем счетчик использований промокода
+          await this.shopPromocodesService.incrementUsageCount(
+            cart.appliedPromocodeId
+          );
         }
       }
     }
 
     // Создаем заказ
     const order = this.orderRepository.create({
-      botId,
+      shopId,
       telegramUsername: telegramUsername || null,
       publicUserId: publicUserId || null,
       items: cart.items,
-      totalPrice,
-      currency: cart.items[0]?.currency || "RUB",
+      totalPrice: cart.totalPrice - promocodeDiscount,
+      currency: cart.currency,
       status: OrderStatus.PENDING,
       customerData: createOrderDto.customerData,
-      appliedPromocodeId: appliedPromocodeData?.id || null,
-      promocodeDiscount: appliedPromocodeData?.discount || null,
+      additionalMessage: createOrderDto.additionalMessage,
+      appliedPromocodeId,
+      promocodeDiscount: promocodeDiscount > 0 ? promocodeDiscount : null,
     });
 
     const savedOrder = await this.orderRepository.save(order);
 
-    // Уменьшаем количество товаров на складе
-    for (const item of cart.items) {
-      await this.productRepository.decrement(
-        { id: item.productId },
-        "stockQuantity",
-        item.quantity
-      );
-    }
-
-    // Увеличиваем счетчик использований промокода
-    if (appliedPromocodeData) {
-      await this.shopPromocodesService.incrementUsageCount(
-        appliedPromocodeData.id
-      );
-    }
+    // Списываем товары со склада
+    await this.reduceProductStock(shopId, cart.items);
 
     // Очищаем корзину
-    await this.cartService.clearCartByUser(botId, user);
+    cart.items = [];
+    cart.appliedPromocodeId = null;
+    await this.cartRepository.save(cart);
 
-    // Отправляем уведомление владельцу бота
-    if (bot.ownerId) {
+    // Уведомление владельцу магазина
+    if (shop.ownerId) {
       this.notificationService
-        .sendToUser(bot.ownerId, NotificationType.ORDER_CREATED, {
-          botId,
+        .sendToUser(shop.ownerId, NotificationType.ORDER_CREATED, {
+          shopId,
           order: {
             id: savedOrder.id,
+            telegramUsername: savedOrder.telegramUsername,
+            publicUserId: savedOrder.publicUserId,
+            items: savedOrder.items,
+            customerData: savedOrder.customerData,
+            status: savedOrder.status,
             totalPrice: savedOrder.totalPrice,
             currency: savedOrder.currency,
-            status: savedOrder.status,
-            itemsCount: savedOrder.items.length,
-            telegramUsername,
-            publicUserId,
+            totalItems: savedOrder.totalItems,
+            createdAt: savedOrder.createdAt,
           },
         })
         .catch((error) => {
           this.logger.error(
-            "Ошибка отправки уведомления о новом заказе:",
+            "Ошибка отправки уведомления о создании заказа:",
             error
           );
         });
 
-      // Логируем создание заказа
+      // Логирование
       this.activityLogService
         .create({
           type: ActivityType.ORDER_CREATED,
           level: ActivityLevel.SUCCESS,
-          message: `Создан заказ #${savedOrder.id.substring(0, 8)} от пользователя ${userLabel}`,
-          userId: bot.ownerId,
-          botId,
+          message: `Создан заказ #${savedOrder.id.slice(-6)}`,
+          userId: shop.ownerId,
           metadata: {
+            shopId,
             orderId: savedOrder.id,
             totalPrice: savedOrder.totalPrice,
-            currency: savedOrder.currency,
-            itemsCount: savedOrder.items.length,
-            telegramUsername,
-            publicUserId,
-            appliedPromocodeId: appliedPromocodeData?.id,
-            promocodeDiscount: appliedPromocodeData?.discount,
+            itemsCount: savedOrder.totalItems,
           },
         })
         .catch((error) => {
@@ -446,149 +247,86 @@ export class OrdersService {
   }
 
   /**
-   * Получить все заказы бота (для админа)
+   * Получить заказы магазина (для админа)
    */
-  async getOrdersByBotId(
-    botId: string,
-    status?: OrderStatus,
-    searchUser?: string,
-    searchProduct?: string
-  ): Promise<
-    Array<
-      Partial<Order> & {
-        id: string;
-        botId: string;
-        telegramUsername: string;
-        items: Order["items"];
-        customerData: Order["customerData"];
-        additionalMessage?: string;
-        status: OrderStatus;
-        totalPrice: number;
-        currency: string;
-        createdAt: Date;
-        updatedAt: Date;
-        chatId?: string;
-      }
-    >
-  > {
-    // Проверяем существование бота
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
+  async findAll(
+    shopId: string,
+    userId: string,
+    filters?: {
+      status?: OrderStatus;
+      search?: string;
+      page?: number;
+      limit?: number;
     }
+  ) {
+    await this.validateShopOwnership(shopId, userId);
 
-    // Строим запрос с фильтрами
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 20;
+    const skip = (page - 1) * limit;
+
     const queryBuilder = this.orderRepository
       .createQueryBuilder("order")
-      .where("order.botId = :botId", { botId });
+      .where("order.shopId = :shopId", { shopId })
+      .skip(skip)
+      .take(limit)
+      .orderBy("order.createdAt", "DESC");
 
-    // Фильтр по статусу
-    if (status) {
-      queryBuilder.andWhere("order.status = :status", { status });
+    if (filters?.status) {
+      queryBuilder.andWhere("order.status = :status", {
+        status: filters.status,
+      });
     }
 
-    // Фильтр по пользователю (telegramUsername или publicUserId)
-    if (searchUser && searchUser.trim()) {
-      const searchUserLower = searchUser.toLowerCase().trim();
+    if (filters?.search && filters.search.trim()) {
+      const searchLower = filters.search.toLowerCase().trim();
       queryBuilder.andWhere(
-        "(LOWER(order.telegramUsername) LIKE :searchUser OR LOWER(order.publicUserId) LIKE :searchUser)",
-        { searchUser: `%${searchUserLower}%` }
+        "(LOWER(order.telegramUsername) LIKE :search OR LOWER(order.publicUserId) LIKE :search)",
+        { search: `%${searchLower}%` }
       );
     }
 
-    // Сортировка
-    queryBuilder.orderBy("order.createdAt", "DESC");
+    const [orders, total] = await queryBuilder.getManyAndCount();
 
-    let orders = await queryBuilder.getMany();
-
-    // Фильтр по названию товара (выполняем на уровне приложения, т.к. items - JSONB)
-    if (searchProduct && searchProduct.trim()) {
-      const searchProductLower = searchProduct.toLowerCase().trim();
-      orders = orders.filter((order) =>
-        order.items.some((item) =>
-          item.name.toLowerCase().includes(searchProductLower)
-        )
-      );
-    }
-
-    // Получаем chatId и информацию о промокодах для каждого заказа
-    const ordersWithChatId = await Promise.all(
-      orders.map(async (order) => {
-        // Пытаемся найти chatId по telegramUsername через метаданные сообщений
-        // Для PublicUser (браузерных пользователей) telegramUsername может быть null
-        let chatId: string | undefined = undefined;
-
-        if (order.telegramUsername) {
-          const username = order.telegramUsername.replace("@", "");
-          const userMessage = await this.messageRepository
-            .createQueryBuilder("message")
-            .where("message.botId = :botId", { botId })
-            .andWhere("message.type = :type", { type: "incoming" })
-            .andWhere(
-              "(message.metadata->>'username' = :username OR message.metadata->>'username' = :usernameWithAt)",
-              {
-                username,
-                usernameWithAt: `@${username}`,
-              }
-            )
-            .orderBy("message.createdAt", "DESC")
-            .limit(1)
-            .getOne();
-
-          chatId = userMessage?.telegramChatId;
-        }
-
-        // Получаем информацию о примененном промокоде, если есть
-        let appliedPromocodeCode: string | null = null;
-        if (order.appliedPromocodeId) {
-          const promocode = await this.promocodeRepository.findOne({
-            where: { id: order.appliedPromocodeId, botId },
-            select: ["code"],
-          });
-          if (promocode) {
-            appliedPromocodeCode = promocode.code;
-          }
-        }
-
-        return {
-          ...order,
-          chatId,
-          appliedPromocodeCode,
-        };
-      })
-    );
-
-    return ordersWithChatId;
+    return {
+      orders,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   /**
-   * Обновить статус заказа (для админа)
+   * Получить заказ по ID (для админа)
    */
-  async updateOrderStatus(
-    botId: string,
-    orderId: string,
-    updateStatusDto: UpdateOrderStatusDto
-  ): Promise<Order> {
-    // Проверяем существование бота
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
+  async findOne(id: string, shopId: string, userId: string): Promise<Order> {
+    await this.validateShopOwnership(shopId, userId);
 
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
-    }
-
-    // Получаем заказ
     const order = await this.orderRepository.findOne({
-      where: { id: orderId, botId },
+      where: { id, shopId },
     });
 
     if (!order) {
       throw new NotFoundException("Заказ не найден");
     }
+
+    return order;
+  }
+
+  /**
+   * Обновить статус заказа
+   */
+  async updateStatus(
+    id: string,
+    shopId: string,
+    userId: string,
+    updateDto: UpdateOrderStatusDto
+  ): Promise<Order> {
+    const shop = await this.validateShopOwnership(shopId, userId);
+    const order = await this.findOne(id, shopId, userId);
 
     // Проверяем, можно ли изменить статус
     if (order.status === OrderStatus.CANCELLED) {
@@ -604,104 +342,90 @@ export class OrdersService {
     }
 
     const oldStatus = order.status;
-    order.status = updateStatusDto.status;
-    const savedOrder = await this.orderRepository.save(order);
+    order.status = updateDto.status;
 
-    // Если статус изменился на CONFIRMED, резервируем товары (уменьшаем stockQuantity)
-    if (
-      oldStatus !== OrderStatus.CONFIRMED &&
-      updateStatusDto.status === OrderStatus.CONFIRMED
-    ) {
-      await this.reserveProducts(botId, order.items);
-    }
+    const updatedOrder = await this.orderRepository.save(order);
 
     // Если заказ отменен, возвращаем товары на склад
-    if (updateStatusDto.status === OrderStatus.CANCELLED) {
-      await this.returnProductsToStock(botId, order.items);
+    // Примечание: oldStatus не может быть CANCELLED, так как это уже проверено выше
+    if (updateDto.status === OrderStatus.CANCELLED) {
+      await this.returnProductsToStock(shopId, order.items);
     }
 
-    // Отправляем уведомление владельцу бота
-    await this.sendOrderNotification(
-      bot,
-      NotificationType.ORDER_STATUS_UPDATED,
-      savedOrder
-    );
-
-    this.logger.log(
-      `Статус заказа ${orderId} изменен с ${oldStatus} на ${updateStatusDto.status}`
-    );
-
-    // Логируем обновление статуса заказа (userId владельца бота)
-    if (bot.ownerId) {
-      this.activityLogService
-        .create({
-          type: ActivityType.ORDER_STATUS_CHANGED,
-          level: ActivityLevel.INFO,
-          message: `Статус заказа #${orderId} изменен: ${oldStatus} → ${updateStatusDto.status}`,
-          userId: bot.ownerId,
-          botId,
-          metadata: {
-            orderId,
-            telegramUsername: savedOrder.telegramUsername,
+    // Уведомление
+    if (shop.ownerId) {
+      this.notificationService
+        .sendToUser(shop.ownerId, NotificationType.ORDER_STATUS_UPDATED, {
+          shopId,
+          order: {
+            id: updatedOrder.id,
+            status: updatedOrder.status,
             oldStatus,
-            newStatus: updateStatusDto.status,
           },
         })
         .catch((error) => {
           this.logger.error(
-            "Ошибка логирования обновления статуса заказа:",
+            "Ошибка отправки уведомления об изменении статуса заказа:",
+            error
+          );
+        });
+
+      // Логирование
+      this.activityLogService
+        .create({
+          type: ActivityType.ORDER_UPDATED,
+          level: ActivityLevel.INFO,
+          message: `Статус заказа #${order.id.slice(-6)} изменен: ${oldStatus} → ${updateDto.status}`,
+          userId,
+          metadata: {
+            shopId,
+            orderId: order.id,
+            oldStatus,
+            newStatus: updateDto.status,
+          },
+        })
+        .catch((error) => {
+          this.logger.error(
+            "Ошибка логирования изменения статуса заказа:",
             error
           );
         });
     }
 
-    return savedOrder;
+    return updatedOrder;
   }
 
   /**
-   * Удалить заказ (для админа)
+   * Удалить заказ
    */
-  async deleteOrder(botId: string, orderId: string): Promise<void> {
-    // Проверяем существование бота
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
-    }
-
-    // Получаем заказ
-    const order = await this.orderRepository.findOne({
-      where: { id: orderId, botId },
-    });
-
-    if (!order) {
-      throw new NotFoundException("Заказ не найден");
-    }
+  async remove(id: string, shopId: string, userId: string): Promise<void> {
+    const shop = await this.validateShopOwnership(shopId, userId);
+    const order = await this.findOne(id, shopId, userId);
 
     // Если заказ был подтвержден, возвращаем товары на склад
-    if (order.status === OrderStatus.CONFIRMED) {
-      await this.returnProductsToStock(botId, order.items);
+    if (
+      order.status === OrderStatus.CONFIRMED ||
+      order.status === OrderStatus.PROCESSING ||
+      order.status === OrderStatus.SHIPPED
+    ) {
+      await this.returnProductsToStock(shopId, order.items);
     }
 
-    // Удаляем заказ
     await this.orderRepository.remove(order);
 
-    this.logger.log(`Заказ ${orderId} удален`);
+    this.logger.log(`Заказ ${id} удален`);
 
-    // Логируем удаление заказа (userId владельца бота)
-    if (bot.ownerId) {
+    // Логирование
+    if (shop.ownerId) {
       this.activityLogService
         .create({
           type: ActivityType.ORDER_DELETED,
           level: ActivityLevel.WARNING,
-          message: `Удален заказ #${orderId} от пользователя ${order.telegramUsername}`,
-          userId: bot.ownerId,
-          botId,
+          message: `Удален заказ #${id.slice(-6)}`,
+          userId,
           metadata: {
-            orderId,
-            telegramUsername: order.telegramUsername,
+            shopId,
+            orderId: id,
             orderStatus: order.status,
             totalPrice: order.totalPrice,
           },
@@ -713,56 +437,34 @@ export class OrdersService {
   }
 
   /**
-   * Обновить данные покупателя заказа (для админа)
+   * Обновить данные покупателя заказа
    */
-  async updateOrderCustomerData(
-    botId: string,
-    orderId: string,
+  async updateCustomerData(
+    id: string,
+    shopId: string,
+    userId: string,
     customerData: Order["customerData"]
   ): Promise<Order> {
-    // Проверяем существование бота
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
-
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
-    }
-
-    // Получаем заказ
-    const order = await this.orderRepository.findOne({
-      where: { id: orderId, botId },
-    });
-
-    if (!order) {
-      throw new NotFoundException("Заказ не найден");
-    }
+    const shop = await this.validateShopOwnership(shopId, userId);
+    const order = await this.findOne(id, shopId, userId);
 
     order.customerData = customerData;
     const savedOrder = await this.orderRepository.save(order);
 
-    // Отправляем уведомление владельцу бота
-    await this.sendOrderNotification(
-      bot,
-      NotificationType.ORDER_STATUS_UPDATED,
-      savedOrder
-    );
+    this.logger.log(`Данные покупателя заказа ${id} обновлены`);
 
-    this.logger.log(`Данные покупателя заказа ${orderId} обновлены`);
-
-    // Логируем обновление данных клиента (userId владельца бота)
-    if (bot.ownerId) {
+    // Логирование
+    if (shop.ownerId) {
       this.activityLogService
         .create({
           type: ActivityType.ORDER_UPDATED,
           level: ActivityLevel.INFO,
-          message: `Обновлены данные покупателя заказа #${orderId}`,
-          userId: bot.ownerId,
-          botId,
+          message: `Обновлены данные покупателя заказа #${id.slice(-6)}`,
+          userId,
           metadata: {
-            orderId,
-            telegramUsername: savedOrder.telegramUsername,
-            customerData: customerData,
+            shopId,
+            orderId: id,
+            customerData,
           },
         })
         .catch((error) => {
@@ -776,16 +478,115 @@ export class OrdersService {
     return savedOrder;
   }
 
+  // =====================================================
+  // ПУБЛИЧНЫЕ МЕТОДЫ (для покупателей)
+  // =====================================================
+
   /**
-   * Резервировать товары (уменьшить stockQuantity)
+   * Получить заказы пользователя
    */
-  private async reserveProducts(
-    botId: string,
+  async getUserOrders(
+    shopId: string,
+    user: OrderUserIdentifier,
+    filters?: {
+      status?: OrderStatus;
+      page?: number;
+      limit?: number;
+    }
+  ) {
+    const { telegramUsername, publicUserId } = user;
+
+    // Проверяем существование магазина
+    const shop = await this.shopRepository.findOne({
+      where: { id: shopId },
+    });
+
+    if (!shop) {
+      throw new NotFoundException("Магазин не найден");
+    }
+
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.orderRepository
+      .createQueryBuilder("order")
+      .where("order.shopId = :shopId", { shopId })
+      .skip(skip)
+      .take(limit)
+      .orderBy("order.createdAt", "DESC");
+
+    if (telegramUsername) {
+      queryBuilder.andWhere("order.telegramUsername = :telegramUsername", {
+        telegramUsername,
+      });
+    } else if (publicUserId) {
+      queryBuilder.andWhere("order.publicUserId = :publicUserId", {
+        publicUserId,
+      });
+    }
+
+    if (filters?.status) {
+      queryBuilder.andWhere("order.status = :status", {
+        status: filters.status,
+      });
+    }
+
+    const [orders, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      orders,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Получить заказ по ID (для покупателя)
+   */
+  async getUserOrder(
+    shopId: string,
+    orderId: string,
+    user: OrderUserIdentifier
+  ): Promise<Order> {
+    const { telegramUsername, publicUserId } = user;
+
+    const whereClause: any = { id: orderId, shopId };
+    if (telegramUsername) {
+      whereClause.telegramUsername = telegramUsername;
+    } else if (publicUserId) {
+      whereClause.publicUserId = publicUserId;
+    }
+
+    const order = await this.orderRepository.findOne({
+      where: whereClause,
+    });
+
+    if (!order) {
+      throw new NotFoundException("Заказ не найден");
+    }
+
+    return order;
+  }
+
+  // =====================================================
+  // ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
+  // =====================================================
+
+  /**
+   * Списать товары со склада
+   */
+  private async reduceProductStock(
+    shopId: string,
     items: Order["items"]
   ): Promise<void> {
     for (const item of items) {
       const product = await this.productRepository.findOne({
-        where: { id: item.productId, botId },
+        where: { id: item.productId, shopId },
       });
 
       if (product) {
@@ -799,15 +600,15 @@ export class OrdersService {
   }
 
   /**
-   * Вернуть товары на склад (увеличить stockQuantity)
+   * Вернуть товары на склад
    */
   private async returnProductsToStock(
-    botId: string,
+    shopId: string,
     items: Order["items"]
   ): Promise<void> {
     for (const item of items) {
       const product = await this.productRepository.findOne({
-        where: { id: item.productId, botId },
+        where: { id: item.productId, shopId },
       });
 
       if (product) {
@@ -817,41 +618,56 @@ export class OrdersService {
     }
   }
 
-  /**
-   * Отправить уведомление о заказе владельцу бота
-   */
-  private async sendOrderNotification(
-    bot: Bot,
-    type: NotificationType,
-    order: Order
-  ): Promise<void> {
-    if (!bot.ownerId) {
-      return;
-    }
+  // =====================================================
+  // ALIAS МЕТОДЫ ДЛЯ СОВМЕСТИМОСТИ С ShopsController
+  // =====================================================
 
-    try {
-      await this.notificationService.sendToUser(bot.ownerId, type, {
-        botId: bot.id,
-        order: {
-          id: order.id,
-          telegramUsername: order.telegramUsername,
-          items: order.items,
-          customerData: order.customerData,
-          additionalMessage: order.additionalMessage,
-          status: order.status,
-          totalPrice: order.totalPrice,
-          currency: order.currency,
-          totalItems: order.totalItems,
-          createdAt: order.createdAt,
-          appliedPromocodeId: order.appliedPromocodeId,
-          promocodeDiscount: order.promocodeDiscount,
-        },
-      });
-    } catch (error) {
-      this.logger.error(
-        `Ошибка отправки уведомления о заказе (${type}):`,
-        error
-      );
+  async createOrderByShop(
+    shopId: string,
+    user: OrderUserIdentifier,
+    createOrderDto: CreateOrderDto
+  ): Promise<Order> {
+    return this.createOrder(shopId, user, createOrderDto);
+  }
+
+  async getOrdersByShop(
+    shopId: string,
+    userId: string,
+    filters?: {
+      status?: OrderStatus;
+      page?: number;
+      limit?: number;
     }
+  ) {
+    return this.findAll(shopId, userId, filters);
+  }
+
+  async getOrderByShop(
+    id: string,
+    shopId: string,
+    userId: string
+  ): Promise<Order> {
+    return this.findOne(id, shopId, userId);
+  }
+
+  async updateOrderStatusByShop(
+    id: string,
+    shopId: string,
+    userId: string,
+    updateDto: UpdateOrderStatusDto
+  ): Promise<Order> {
+    return this.updateStatus(id, shopId, userId, updateDto);
+  }
+
+  async getUserOrdersByShop(
+    shopId: string,
+    user: OrderUserIdentifier,
+    filters?: {
+      status?: OrderStatus;
+      page?: number;
+      limit?: number;
+    }
+  ) {
+    return this.getUserOrders(shopId, user, filters);
   }
 }

@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -11,7 +12,7 @@ import {
   ShopPromocodeType,
   ShopPromocodeApplicableTo,
 } from "../../database/entities/shop-promocode.entity";
-import { Bot } from "../../database/entities/bot.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import { Cart } from "../../database/entities/cart.entity";
 import { Product } from "../../database/entities/product.entity";
 import { Category } from "../../database/entities/category.entity";
@@ -35,8 +36,8 @@ export class ShopPromocodesService {
   constructor(
     @InjectRepository(ShopPromocode)
     private readonly promocodeRepository: Repository<ShopPromocode>,
-    @InjectRepository(Bot)
-    private readonly botRepository: Repository<Bot>,
+    @InjectRepository(Shop)
+    private readonly shopRepository: Repository<Shop>,
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
     @InjectRepository(Product)
@@ -45,30 +46,51 @@ export class ShopPromocodesService {
     private readonly activityLogService: ActivityLogService
   ) {}
 
+  // =====================================================
+  // ОСНОВНЫЕ МЕТОДЫ (работают с shopId)
+  // Legacy методы с botId удалены
+  // =====================================================
+
+  /**
+   * Валидация владения магазином
+   */
+  private async validateShopOwnership(
+    shopId: string,
+    userId: string
+  ): Promise<Shop> {
+    const shop = await this.shopRepository.findOne({
+      where: { id: shopId },
+    });
+
+    if (!shop) {
+      throw new NotFoundException("Магазин не найден");
+    }
+
+    if (shop.ownerId !== userId) {
+      throw new ForbiddenException("Нет доступа к этому магазину");
+    }
+
+    return shop;
+  }
+
   /**
    * Создать промокод
    */
   async create(
-    createDto: CreateShopPromocodeDto,
-    userId: string
+    shopId: string,
+    userId: string,
+    createDto: Omit<CreateShopPromocodeDto, "botId">
   ): Promise<ShopPromocode> {
-    // Проверяем, что бот существует (права доступа проверены guard'ом)
-    const bot = await this.botRepository.findOne({
-      where: { id: createDto.botId },
-    });
+    const shop = await this.validateShopOwnership(shopId, userId);
 
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
-    }
-
-    // Проверяем уникальность кода для бота
+    // Проверяем уникальность кода для магазина
     const existingPromocode = await this.promocodeRepository.findOne({
-      where: { botId: createDto.botId, code: createDto.code },
+      where: { shopId, code: createDto.code },
     });
 
     if (existingPromocode) {
       throw new BadRequestException(
-        "Промокод с таким кодом уже существует для этого бота"
+        "Промокод с таким кодом уже существует для этого магазина"
       );
     }
 
@@ -80,7 +102,7 @@ export class ShopPromocodesService {
         );
       }
       const category = await this.categoryRepository.findOne({
-        where: { id: createDto.categoryId, botId: createDto.botId },
+        where: { id: createDto.categoryId, shopId },
       });
       if (!category) {
         throw new NotFoundException("Категория не найдена");
@@ -94,7 +116,7 @@ export class ShopPromocodesService {
         );
       }
       const product = await this.productRepository.findOne({
-        where: { id: createDto.productId, botId: createDto.botId },
+        where: { id: createDto.productId, shopId },
       });
       if (!product) {
         throw new NotFoundException("Продукт не найден");
@@ -112,6 +134,7 @@ export class ShopPromocodesService {
 
     const promocode = this.promocodeRepository.create({
       ...createDto,
+      shopId,
       categoryId:
         createDto.applicableTo === ShopPromocodeApplicableTo.CATEGORY
           ? createDto.categoryId
@@ -125,10 +148,10 @@ export class ShopPromocodesService {
 
     const savedPromocode = await this.promocodeRepository.save(promocode);
 
-    // Отправляем уведомление о создании промокода
+    // Уведомление и логирование
     this.notificationService
       .sendToUser(userId, NotificationType.SHOP_PROMOCODE_CREATED, {
-        botId: createDto.botId,
+        shopId,
         promocode: {
           id: savedPromocode.id,
           code: savedPromocode.code,
@@ -145,15 +168,14 @@ export class ShopPromocodesService {
         );
       });
 
-    // Логируем создание промокода
     this.activityLogService
       .create({
         type: ActivityType.PROMOCODE_CREATED,
         level: ActivityLevel.SUCCESS,
-        message: `Создан промокод "${savedPromocode.code}"`,
+        message: `Создан промокод "${savedPromocode.code}" в магазине`,
         userId,
-        botId: createDto.botId,
         metadata: {
+          shopId,
           promocodeId: savedPromocode.id,
           promocodeCode: savedPromocode.code,
           promocodeType: savedPromocode.type,
@@ -169,16 +191,16 @@ export class ShopPromocodesService {
   }
 
   /**
-   * Получить все промокоды бота
+   * Получить все промокоды магазина
    */
   async findAll(
-    botId: string,
+    shopId: string,
     userId: string,
     filters?: ShopPromocodeFiltersDto
   ): Promise<ShopPromocode[]> {
-    await this.validateBotOwnership(botId, userId);
+    await this.validateShopOwnership(shopId, userId);
 
-    const where: any = { botId };
+    const where: any = { shopId };
 
     if (filters?.type) {
       where.type = filters.type;
@@ -202,7 +224,6 @@ export class ShopPromocodesService {
       order: { createdAt: "DESC" },
     });
 
-    // Фильтрация по isAvailable (вычисляемое поле) на уровне приложения
     if (filters?.isAvailable !== undefined) {
       return promocodes.filter(
         (promocode) => promocode.isAvailable === filters.isAvailable
@@ -217,13 +238,13 @@ export class ShopPromocodesService {
    */
   async findOne(
     id: string,
-    botId: string,
+    shopId: string,
     userId: string
   ): Promise<ShopPromocode> {
-    await this.validateBotOwnership(botId, userId);
+    await this.validateShopOwnership(shopId, userId);
 
     const promocode = await this.promocodeRepository.findOne({
-      where: { id, botId },
+      where: { id, shopId },
       relations: ["category", "product"],
     });
 
@@ -239,21 +260,22 @@ export class ShopPromocodesService {
    */
   async update(
     id: string,
-    botId: string,
+    shopId: string,
     userId: string,
     updateDto: UpdateShopPromocodeDto
   ): Promise<ShopPromocode> {
-    const promocode = await this.findOne(id, botId, userId);
+    const shop = await this.validateShopOwnership(shopId, userId);
+    const promocode = await this.findOne(id, shopId, userId);
 
     // Проверяем уникальность кода, если он изменяется
     if (updateDto.code && updateDto.code !== promocode.code) {
       const existingPromocode = await this.promocodeRepository.findOne({
-        where: { botId, code: updateDto.code },
+        where: { shopId, code: updateDto.code },
       });
 
       if (existingPromocode) {
         throw new BadRequestException(
-          "Промокод с таким кодом уже существует для этого бота"
+          "Промокод с таким кодом уже существует для этого магазина"
         );
       }
     }
@@ -275,7 +297,7 @@ export class ShopPromocodesService {
         );
       }
       const category = await this.categoryRepository.findOne({
-        where: { id: categoryId, botId },
+        where: { id: categoryId, shopId },
       });
       if (!category) {
         throw new NotFoundException("Категория не найдена");
@@ -293,7 +315,7 @@ export class ShopPromocodesService {
         );
       }
       const product = await this.productRepository.findOne({
-        where: { id: productId, botId },
+        where: { id: productId, shopId },
       });
       if (!product) {
         throw new NotFoundException("Продукт не найден");
@@ -331,10 +353,10 @@ export class ShopPromocodesService {
 
     const updatedPromocode = await this.promocodeRepository.save(promocode);
 
-    // Отправляем уведомление об обновлении промокода
+    // Уведомление и логирование
     this.notificationService
       .sendToUser(userId, NotificationType.SHOP_PROMOCODE_UPDATED, {
-        botId,
+        shopId,
         promocode: {
           id: updatedPromocode.id,
           code: updatedPromocode.code,
@@ -352,15 +374,14 @@ export class ShopPromocodesService {
         );
       });
 
-    // Логируем обновление промокода
     this.activityLogService
       .create({
         type: ActivityType.PROMOCODE_UPDATED,
         level: ActivityLevel.INFO,
         message: `Обновлен промокод "${updatedPromocode.code}"`,
         userId,
-        botId,
         metadata: {
+          shopId,
           promocodeId: updatedPromocode.id,
           promocodeCode: updatedPromocode.code,
           changes: updateDto,
@@ -376,8 +397,9 @@ export class ShopPromocodesService {
   /**
    * Удалить промокод
    */
-  async remove(id: string, botId: string, userId: string): Promise<void> {
-    const promocode = await this.findOne(id, botId, userId);
+  async remove(id: string, shopId: string, userId: string): Promise<void> {
+    await this.validateShopOwnership(shopId, userId);
+    const promocode = await this.findOne(id, shopId, userId);
 
     const promocodeData = {
       id: promocode.id,
@@ -386,10 +408,10 @@ export class ShopPromocodesService {
 
     await this.promocodeRepository.remove(promocode);
 
-    // Отправляем уведомление об удалении промокода
+    // Уведомление и логирование
     this.notificationService
       .sendToUser(userId, NotificationType.SHOP_PROMOCODE_DELETED, {
-        botId,
+        shopId,
         promocode: promocodeData,
       })
       .catch((error) => {
@@ -399,15 +421,14 @@ export class ShopPromocodesService {
         );
       });
 
-    // Логируем удаление промокода
     this.activityLogService
       .create({
         type: ActivityType.PROMOCODE_DELETED,
         level: ActivityLevel.WARNING,
         message: `Удален промокод "${promocodeData.code}"`,
         userId,
-        botId,
         metadata: {
+          shopId,
           promocodeId: promocodeData.id,
           promocodeCode: promocodeData.code,
         },
@@ -421,7 +442,7 @@ export class ShopPromocodesService {
    * Валидировать промокод для корзины
    */
   async validatePromocode(
-    botId: string,
+    shopId: string,
     code: string,
     cart: Cart
   ): Promise<{
@@ -430,26 +451,32 @@ export class ShopPromocodesService {
     discount?: number;
     message?: string;
   }> {
-    this.logger.log(`[PROMOCODE SERVICE] validatePromocode called - botId: ${botId}, code: ${code}, cartId: ${cart.id}, cart items count: ${cart.items?.length || 0}`);
-    
+    this.logger.log(
+      `[PROMOCODE SERVICE] validatePromocode called - shopId: ${shopId}, code: ${code}`
+    );
+
     const promocode = await this.promocodeRepository.findOne({
-      where: { botId, code },
+      where: { shopId, code },
       relations: ["category", "product"],
     });
 
     if (!promocode) {
-      this.logger.warn(`[PROMOCODE SERVICE] Promocode not found - botId: ${botId}, code: ${code}`);
+      this.logger.warn(
+        `[PROMOCODE SERVICE] Promocode not found - shopId: ${shopId}, code: ${code}`
+      );
       return {
         isValid: false,
         message: "Промокод не найден",
       };
     }
 
-    this.logger.log(`[PROMOCODE SERVICE] Promocode found - id: ${promocode.id}, type: ${promocode.type}, value: ${promocode.value}, applicableTo: ${promocode.applicableTo}, isActive: ${promocode.isActive}, isAvailable: ${promocode.isAvailable}`);
+    this.logger.log(
+      `[PROMOCODE SERVICE] Promocode found - id: ${promocode.id}, type: ${promocode.type}, value: ${promocode.value}`
+    );
 
     // Проверяем доступность промокода
     if (!promocode.isAvailable) {
-      this.logger.warn(`[PROMOCODE SERVICE] Promocode is not available - id: ${promocode.id}, code: ${promocode.code}`);
+      this.logger.warn(`[PROMOCODE SERVICE] Promocode is not available`);
       return {
         isValid: false,
         message: "Промокод неактивен или истек срок действия",
@@ -458,14 +485,11 @@ export class ShopPromocodesService {
 
     // Проверяем применимость к корзине
     if (promocode.applicableTo === ShopPromocodeApplicableTo.CART) {
-      this.logger.log(`[PROMOCODE SERVICE] Promocode applicable to CART - cart totalPrice: ${cart.totalPrice}`);
-      // Промокод применим ко всей корзине
       const discount = this.calculateDiscount(
         promocode,
         cart.totalPrice,
         cart.items
       );
-      this.logger.log(`[PROMOCODE SERVICE] Calculated discount for CART: ${discount}`);
       return {
         isValid: true,
         promocode,
@@ -475,38 +499,18 @@ export class ShopPromocodesService {
       promocode.applicableTo === ShopPromocodeApplicableTo.CATEGORY &&
       promocode.categoryId
     ) {
-      // Промокод применим к категории - проверяем, есть ли товары этой категории в корзине
       // Загружаем все продукты из корзины
       const productIds = cart.items.map((item) => item.productId);
       const products = await this.productRepository.find({
-        where: { id: In(productIds), botId },
+        where: { id: In(productIds), shopId },
         relations: ["category"],
       });
 
-      // Получаем все подкатегории для категории промокода
-      const getAllSubcategoryIds = async (
-        categoryId: string
-      ): Promise<string[]> => {
-        const subcategoryIds: string[] = [];
-        const queue: string[] = [categoryId];
-
-        while (queue.length > 0) {
-          const currentId = queue.shift()!;
-          const children = await this.categoryRepository.find({
-            where: { parentId: currentId, botId },
-            select: ["id"],
-          });
-
-          for (const child of children) {
-            subcategoryIds.push(child.id);
-            queue.push(child.id);
-          }
-        }
-
-        return subcategoryIds;
-      };
-
-      const subcategoryIds = await getAllSubcategoryIds(promocode.categoryId);
+      // Получаем все подкатегории
+      const subcategoryIds = await this.getAllSubcategoryIds(
+        promocode.categoryId,
+        shopId
+      );
       const allCategoryIds = [promocode.categoryId, ...subcategoryIds];
 
       // Фильтруем товары, которые принадлежат категории или её подкатегориям
@@ -528,13 +532,11 @@ export class ShopPromocodesService {
         (sum, item) => sum + item.price * item.quantity,
         0
       );
-      this.logger.log(`[PROMOCODE SERVICE] Category items found: ${categoryItems.length}, categoryTotal: ${categoryTotal}`);
       const discount = this.calculateDiscount(
         promocode,
         categoryTotal,
         categoryItems
       );
-      this.logger.log(`[PROMOCODE SERVICE] Calculated discount for CATEGORY: ${discount}`);
       return {
         isValid: true,
         promocode,
@@ -544,7 +546,6 @@ export class ShopPromocodesService {
       promocode.applicableTo === ShopPromocodeApplicableTo.PRODUCT &&
       promocode.productId
     ) {
-      // Промокод применим к продукту - проверяем, есть ли этот товар в корзине
       const productItem = cart.items.find(
         (item) => item.productId === promocode.productId
       );
@@ -557,11 +558,9 @@ export class ShopPromocodesService {
       }
 
       const productTotal = productItem.price * productItem.quantity;
-      this.logger.log(`[PROMOCODE SERVICE] Product item found - productTotal: ${productTotal}`);
       const discount = this.calculateDiscount(promocode, productTotal, [
         productItem,
       ]);
-      this.logger.log(`[PROMOCODE SERVICE] Calculated discount for PRODUCT: ${discount}`);
       return {
         isValid: true,
         promocode,
@@ -569,7 +568,6 @@ export class ShopPromocodesService {
       };
     }
 
-    this.logger.warn(`[PROMOCODE SERVICE] Promocode not applicable to cart - applicableTo: ${promocode.applicableTo}`);
     return {
       isValid: false,
       message: "Промокод не применим к данной корзине",
@@ -584,20 +582,46 @@ export class ShopPromocodesService {
     totalPrice: number,
     items: any[]
   ): number {
-    this.logger.log(`[PROMOCODE SERVICE] calculateDiscount - type: ${promocode.type}, value: ${promocode.value}, totalPrice: ${totalPrice}, items count: ${items.length}`);
-    
+    this.logger.log(
+      `[PROMOCODE SERVICE] calculateDiscount - type: ${promocode.type}, value: ${promocode.value}, totalPrice: ${totalPrice}`
+    );
+
     let discount: number;
     if (promocode.type === ShopPromocodeType.FIXED) {
       // Фиксированная скидка - не может превышать сумму товаров
       discount = Math.min(Number(promocode.value), totalPrice);
-      this.logger.log(`[PROMOCODE SERVICE] Fixed discount calculated: ${discount} (min of ${promocode.value} and ${totalPrice})`);
     } else {
       // Процентная скидка
       discount = (totalPrice * Number(promocode.value)) / 100;
-      this.logger.log(`[PROMOCODE SERVICE] Percentage discount calculated: ${discount} (${promocode.value}% of ${totalPrice})`);
     }
-    
+
     return discount;
+  }
+
+  /**
+   * Получить все подкатегории для категории
+   */
+  private async getAllSubcategoryIds(
+    categoryId: string,
+    shopId: string
+  ): Promise<string[]> {
+    const subcategoryIds: string[] = [];
+    const queue: string[] = [categoryId];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      const children = await this.categoryRepository.find({
+        where: { parentId: currentId, shopId },
+        select: ["id"],
+      });
+
+      for (const child of children) {
+        subcategoryIds.push(child.id);
+        queue.push(child.id);
+      }
+    }
+
+    return subcategoryIds;
   }
 
   /**
@@ -614,19 +638,61 @@ export class ShopPromocodesService {
     }
   }
 
-  /**
-   * Проверить владение ботом
-   */
-  private async validateBotOwnership(
-    botId: string,
+  // =====================================================
+  // ALIAS МЕТОДЫ ДЛЯ СОВМЕСТИМОСТИ С ShopsController
+  // =====================================================
+
+  async createByShop(
+    shopId: string,
+    userId: string,
+    createDto: Omit<CreateShopPromocodeDto, "botId">
+  ): Promise<ShopPromocode> {
+    return this.create(shopId, userId, createDto);
+  }
+
+  async findAllByShop(
+    shopId: string,
+    userId: string,
+    filters?: ShopPromocodeFiltersDto
+  ): Promise<ShopPromocode[]> {
+    return this.findAll(shopId, userId, filters);
+  }
+
+  async findOneByShop(
+    id: string,
+    shopId: string,
+    userId: string
+  ): Promise<ShopPromocode> {
+    return this.findOne(id, shopId, userId);
+  }
+
+  async updateByShop(
+    id: string,
+    shopId: string,
+    userId: string,
+    updateDto: UpdateShopPromocodeDto
+  ): Promise<ShopPromocode> {
+    return this.update(id, shopId, userId, updateDto);
+  }
+
+  async removeByShop(
+    id: string,
+    shopId: string,
     userId: string
   ): Promise<void> {
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
-    });
+    return this.remove(id, shopId, userId);
+  }
 
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
-    }
+  async validatePromocodeByShop(
+    shopId: string,
+    code: string,
+    cart: Cart
+  ): Promise<{
+    isValid: boolean;
+    promocode?: ShopPromocode;
+    discount?: number;
+    message?: string;
+  }> {
+    return this.validatePromocode(shopId, code, cart);
   }
 }

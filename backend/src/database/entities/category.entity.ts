@@ -7,12 +7,13 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
-  ManyToMany,
+  Index,
 } from "typeorm";
-import { Bot } from "./bot.entity";
 import { Product } from "./product.entity";
+import { Shop } from "./shop.entity";
 
 @Entity("categories")
+@Index(["shopId"])
 export class Category {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -53,13 +54,15 @@ export class Category {
   @OneToMany(() => Category, (category) => category.parent)
   children: Category[];
 
-  // Связь с ботом (категории привязаны к конкретному боту)
-  @ManyToOne(() => Bot, { onDelete: "CASCADE" })
-  @JoinColumn({ name: "botId" })
-  bot: Bot;
+  // Связь с магазином
+  @ManyToOne(() => Shop, (shop) => shop.categories, { 
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "shopId" })
+  shop: Shop;
 
   @Column()
-  botId: string;
+  shopId: string;
 
   // Товары, которые напрямую принадлежат этой категории
   @OneToMany(() => Product, (product) => product.category)

@@ -5,10 +5,10 @@ import {
   Logger,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Like, Between, In } from "typeorm";
+import { Repository } from "typeorm";
 import { Product } from "../../database/entities/product.entity";
-import { Bot } from "../../database/entities/bot.entity";
 import { Category } from "../../database/entities/category.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import {
   CreateProductDto,
   UpdateProductDto,
@@ -38,27 +38,34 @@ export class ProductsService {
   constructor(
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
-    @InjectRepository(Bot)
-    private readonly botRepository: Repository<Bot>,
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
+    @InjectRepository(Shop)
+    private readonly shopRepository: Repository<Shop>,
     private readonly uploadService: UploadService,
     private readonly notificationService: NotificationService,
     private readonly activityLogService: ActivityLogService
   ) {}
 
+  // =====================================================
+  // МЕТОДЫ ДЛЯ РАБОТЫ С SHOP
+  // Legacy методы с botId удалены - используйте методы *ByShop
+  // =====================================================
+
+  /**
+   * Создать продукт для магазина
+   */
   async create(
-    botId: string,
+    shopId: string,
     userId: string,
     createProductDto: CreateProductDto
   ): Promise<Product> {
-    // Проверяем, что бот принадлежит пользователю
-    await this.validateBotOwnership(botId, userId);
+    const shop = await this.validateShopOwnership(shopId, userId);
 
     // Если указана категория, проверяем её
     if (createProductDto.categoryId) {
       const category = await this.categoryRepository.findOne({
-        where: { id: createProductDto.categoryId, botId },
+        where: { id: createProductDto.categoryId, shopId },
       });
 
       if (!category) {
@@ -67,20 +74,20 @@ export class ProductsService {
     }
 
     this.logger.log(
-      `Creating product with ${createProductDto.images?.length || 0} images`
+      `Creating product for shop ${shopId} with ${createProductDto.images?.length || 0} images`
     );
 
     const product = this.productRepository.create({
       ...createProductDto,
-      botId,
+      shopId,
     });
 
     const savedProduct = await this.productRepository.save(product);
 
-    // Отправляем уведомление о создании продукта
+    // Уведомления и логирование
     this.notificationService
       .sendToUser(userId, NotificationType.PRODUCT_CREATED, {
-        botId,
+        shopId,
         product: {
           id: savedProduct.id,
           name: savedProduct.name,
@@ -95,27 +102,14 @@ export class ProductsService {
         );
       });
 
-    // Отправляем уведомление об обновлении статистики продуктов
-    this.notificationService
-      .sendToUser(userId, NotificationType.PRODUCT_STATS_UPDATED, {
-        botId,
-      })
-      .catch((error) => {
-        this.logger.error(
-          "Ошибка отправки уведомления об обновлении статистики продуктов:",
-          error
-        );
-      });
-
-    // Логируем создание продукта
     this.activityLogService
       .create({
         type: ActivityType.PRODUCT_CREATED,
         level: ActivityLevel.SUCCESS,
-        message: `Создан товар "${savedProduct.name}"`,
+        message: `Создан товар "${savedProduct.name}" в магазине`,
         userId,
-        botId,
         metadata: {
+          shopId,
           productId: savedProduct.id,
           productName: savedProduct.name,
           productPrice: savedProduct.price,
@@ -129,11 +123,12 @@ export class ProductsService {
     return savedProduct;
   }
 
-  async findAll(botId: string, userId: string, filters: ProductFiltersDto) {
-    // Проверяем, что бот принадлежит пользователю
-    await this.validateBotOwnership(botId, userId);
+  /**
+   * Получить все продукты магазина
+   */
+  async findAll(shopId: string, userId: string, filters: ProductFiltersDto) {
+    await this.validateShopOwnership(shopId, userId);
 
-    // Устанавливаем значения по умолчанию если они не переданы
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const { search, isActive, inStock } = filters;
@@ -142,7 +137,7 @@ export class ProductsService {
     const queryBuilder = this.productRepository
       .createQueryBuilder("product")
       .leftJoinAndSelect("product.category", "category")
-      .where("product.botId = :botId", { botId })
+      .where("product.shopId = :shopId", { shopId })
       .skip(skip)
       .take(limit)
       .orderBy("product.createdAt", "DESC");
@@ -165,27 +160,16 @@ export class ProductsService {
       }
     }
 
-    // Фильтр по категории (включая подкатегории)
     if (filters.categoryId) {
-      const category = await this.categoryRepository.findOne({
-        where: { id: filters.categoryId, botId },
+      const subcategoryIds = await this.getAllSubcategoryIds(
+        filters.categoryId,
+        shopId
+      );
+      const allCategoryIds = [filters.categoryId, ...subcategoryIds];
+
+      queryBuilder.andWhere("product.categoryId IN (:...categoryIds)", {
+        categoryIds: allCategoryIds,
       });
-
-      if (category) {
-        // Получаем все подкатегории
-        const subcategoryIds = await this.getAllSubcategoryIds(
-          filters.categoryId,
-          botId
-        );
-        const allCategoryIds = [filters.categoryId, ...subcategoryIds];
-
-        queryBuilder.andWhere("product.categoryId IN (:...categoryIds)", {
-          categoryIds: allCategoryIds,
-        });
-      } else {
-        // Если категория не найдена, возвращаем пустой результат
-        queryBuilder.andWhere("1 = 0");
-      }
     }
 
     const [products, total] = await queryBuilder.getManyAndCount();
@@ -201,12 +185,14 @@ export class ProductsService {
     };
   }
 
-  async findOne(id: string, botId: string, userId: string): Promise<Product> {
-    // Проверяем, что бот принадлежит пользователю
-    await this.validateBotOwnership(botId, userId);
+  /**
+   * Получить продукт по ID
+   */
+  async findOne(id: string, shopId: string, userId: string): Promise<Product> {
+    await this.validateShopOwnership(shopId, userId);
 
     const product = await this.productRepository.findOne({
-      where: { id, botId },
+      where: { id, shopId },
       relations: ["category"],
     });
 
@@ -217,22 +203,24 @@ export class ProductsService {
     return product;
   }
 
+  /**
+   * Обновить продукт
+   */
   async update(
     id: string,
-    botId: string,
+    shopId: string,
     userId: string,
     updateProductDto: UpdateProductDto
   ): Promise<Product> {
-    const product = await this.findOne(id, botId, userId);
+    await this.validateShopOwnership(shopId, userId);
+    const product = await this.findOne(id, shopId, userId);
 
-    // Если обновляется категория, проверяем её
     if (updateProductDto.categoryId !== undefined) {
       if (updateProductDto.categoryId === null) {
-        // Убираем категорию
         product.categoryId = null;
       } else {
         const category = await this.categoryRepository.findOne({
-          where: { id: updateProductDto.categoryId, botId },
+          where: { id: updateProductDto.categoryId, shopId },
         });
 
         if (!category) {
@@ -243,11 +231,6 @@ export class ProductsService {
       }
     }
 
-    this.logger.log(
-      `Updating product ${id} with ${updateProductDto.images?.length || 0} images`
-    );
-
-    // Если обновляются изображения, удаляем старые из S3
     if (updateProductDto.images && product.images) {
       try {
         await this.uploadService.deleteProductImages(product.images);
@@ -262,10 +245,9 @@ export class ProductsService {
     Object.assign(product, updateProductDto);
     const updatedProduct = await this.productRepository.save(product);
 
-    // Отправляем уведомление об обновлении продукта
     this.notificationService
       .sendToUser(userId, NotificationType.PRODUCT_UPDATED, {
-        botId,
+        shopId,
         product: {
           id: updatedProduct.id,
           name: updatedProduct.name,
@@ -281,27 +263,14 @@ export class ProductsService {
         );
       });
 
-    // Отправляем уведомление об обновлении статистики продуктов
-    this.notificationService
-      .sendToUser(userId, NotificationType.PRODUCT_STATS_UPDATED, {
-        botId,
-      })
-      .catch((error) => {
-        this.logger.error(
-          "Ошибка отправки уведомления об обновлении статистики продуктов:",
-          error
-        );
-      });
-
-    // Логируем обновление продукта
     this.activityLogService
       .create({
         type: ActivityType.PRODUCT_UPDATED,
         level: ActivityLevel.INFO,
         message: `Обновлен товар "${updatedProduct.name}"`,
         userId,
-        botId,
         metadata: {
+          shopId,
           productId: updatedProduct.id,
           productName: updatedProduct.name,
           changes: updateProductDto,
@@ -314,10 +283,13 @@ export class ProductsService {
     return updatedProduct;
   }
 
-  async remove(id: string, botId: string, userId: string): Promise<void> {
-    const product = await this.findOne(id, botId, userId);
+  /**
+   * Удалить продукт
+   */
+  async remove(id: string, shopId: string, userId: string): Promise<void> {
+    await this.validateShopOwnership(shopId, userId);
+    const product = await this.findOne(id, shopId, userId);
 
-    // Удаляем изображения из S3 перед удалением продукта
     if (product.images && product.images.length > 0) {
       try {
         await this.uploadService.deleteProductImages(product.images);
@@ -329,17 +301,12 @@ export class ProductsService {
       }
     }
 
-    const productData = {
-      id: product.id,
-      name: product.name,
-    };
-
+    const productData = { id: product.id, name: product.name };
     await this.productRepository.remove(product);
 
-    // Отправляем уведомление об удалении продукта
     this.notificationService
       .sendToUser(userId, NotificationType.PRODUCT_DELETED, {
-        botId,
+        shopId,
         product: productData,
       })
       .catch((error) => {
@@ -349,27 +316,14 @@ export class ProductsService {
         );
       });
 
-    // Отправляем уведомление об обновлении статистики продуктов
-    this.notificationService
-      .sendToUser(userId, NotificationType.PRODUCT_STATS_UPDATED, {
-        botId,
-      })
-      .catch((error) => {
-        this.logger.error(
-          "Ошибка отправки уведомления об обновлении статистики продуктов:",
-          error
-        );
-      });
-
-    // Логируем удаление продукта
     this.activityLogService
       .create({
         type: ActivityType.PRODUCT_DELETED,
         level: ActivityLevel.WARNING,
         message: `Удален товар "${productData.name}"`,
         userId,
-        botId,
         metadata: {
+          shopId,
           productId: productData.id,
           productName: productData.name,
         },
@@ -379,12 +333,11 @@ export class ProductsService {
       });
   }
 
-  async getBotProductStats(
-    botId: string,
-    userId: string
-  ): Promise<ProductStats> {
-    // Проверяем, что бот принадлежит пользователю
-    await this.validateBotOwnership(botId, userId);
+  /**
+   * Получить статистику продуктов магазина
+   */
+  async getProductStats(shopId: string, userId: string): Promise<ProductStats> {
+    await this.validateShopOwnership(shopId, userId);
 
     const [
       totalProducts,
@@ -393,14 +346,14 @@ export class ProductsService {
       outOfStockProducts,
       totalValueResult,
     ] = await Promise.all([
-      this.productRepository.count({ where: { botId } }),
-      this.productRepository.count({ where: { botId, isActive: true } }),
-      this.productRepository.count({ where: { botId, isActive: false } }),
-      this.productRepository.count({ where: { botId, stockQuantity: 0 } }),
+      this.productRepository.count({ where: { shopId } }),
+      this.productRepository.count({ where: { shopId, isActive: true } }),
+      this.productRepository.count({ where: { shopId, isActive: false } }),
+      this.productRepository.count({ where: { shopId, stockQuantity: 0 } }),
       this.productRepository
         .createQueryBuilder("product")
         .select("SUM(product.price * product.stockQuantity)", "totalValue")
-        .where("product.botId = :botId", { botId })
+        .where("product.shopId = :shopId", { shopId })
         .getRawOne(),
     ]);
 
@@ -413,28 +366,30 @@ export class ProductsService {
     };
   }
 
+  /**
+   * Обновить сток продукта
+   */
   async updateStock(
     id: string,
-    botId: string,
+    shopId: string,
     userId: string,
     quantity: number
   ): Promise<Product> {
-    const product = await this.findOne(id, botId, userId);
+    await this.validateShopOwnership(shopId, userId);
+    const product = await this.findOne(id, shopId, userId);
     const oldStock = product.stockQuantity;
 
     product.stockQuantity = quantity;
     const updatedProduct = await this.productRepository.save(product);
 
-    // Проверяем, стал ли запас низким (меньше 5 единиц)
     const lowStockThreshold = 5;
     if (
       updatedProduct.stockQuantity <= lowStockThreshold &&
       oldStock > lowStockThreshold
     ) {
-      // Отправляем уведомление о низком запасе
       this.notificationService
         .sendToUser(userId, NotificationType.PRODUCT_STOCK_LOW, {
-          botId,
+          shopId,
           product: {
             id: updatedProduct.id,
             name: updatedProduct.name,
@@ -449,15 +404,14 @@ export class ProductsService {
         });
     }
 
-    // Логируем изменение стока
     this.activityLogService
       .create({
         type: ActivityType.PRODUCT_STOCK_UPDATED,
         level: ActivityLevel.INFO,
         message: `Изменен сток товара "${updatedProduct.name}": ${oldStock} → ${quantity}`,
         userId,
-        botId,
         metadata: {
+          shopId,
           productId: updatedProduct.id,
           productName: updatedProduct.name,
           oldStock,
@@ -471,28 +425,39 @@ export class ProductsService {
     return updatedProduct;
   }
 
+  /**
+   * Переключить активность продукта
+   */
   async toggleActive(
     id: string,
-    botId: string,
+    shopId: string,
     userId: string
   ): Promise<Product> {
-    const product = await this.findOne(id, botId, userId);
-
+    const product = await this.findOne(id, shopId, userId);
     product.isActive = !product.isActive;
     return await this.productRepository.save(product);
   }
 
-  private async validateBotOwnership(
-    botId: string,
+  /**
+   * Валидация владения магазином
+   */
+  private async validateShopOwnership(
+    shopId: string,
     userId: string
-  ): Promise<void> {
-    const bot = await this.botRepository.findOne({
-      where: { id: botId },
+  ): Promise<Shop> {
+    const shop = await this.shopRepository.findOne({
+      where: { id: shopId },
     });
 
-    if (!bot) {
-      throw new NotFoundException("Бот не найден");
+    if (!shop) {
+      throw new NotFoundException("Магазин не найден");
     }
+
+    if (shop.ownerId !== userId) {
+      throw new ForbiddenException("Нет доступа к этому магазину");
+    }
+
+    return shop;
   }
 
   /**
@@ -500,7 +465,7 @@ export class ProductsService {
    */
   private async getAllSubcategoryIds(
     categoryId: string,
-    botId: string
+    shopId: string
   ): Promise<string[]> {
     const subcategoryIds: string[] = [];
     const queue: string[] = [categoryId];
@@ -508,7 +473,7 @@ export class ProductsService {
     while (queue.length > 0) {
       const currentId = queue.shift()!;
       const children = await this.categoryRepository.find({
-        where: { parentId: currentId, botId },
+        where: { parentId: currentId, shopId },
         select: ["id"],
       });
 

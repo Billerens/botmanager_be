@@ -5,15 +5,11 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { Order } from "../../database/entities/order.entity";
 import { Cart } from "../../database/entities/cart.entity";
 import { Product } from "../../database/entities/product.entity";
-import { Bot } from "../../database/entities/bot.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import { Message } from "../../database/entities/message.entity";
 import { PublicUser } from "../../database/entities/public-user.entity";
 import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
 import { OrdersService } from "./orders.service";
-import { PublicOrdersController, OrdersController } from "./orders.controller";
-import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
-import { PublicAccessGuard } from "../public-auth/guards/public-access.guard";
-import { TelegramInitDataValidationService } from "../../common/telegram-initdata-validation.service";
 import { BotsModule } from "../bots/bots.module";
 import { WebSocketModule } from "../websocket/websocket.module";
 import { ShopPromocodesModule } from "../shop-promocodes/shop-promocodes.module";
@@ -26,7 +22,7 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
       Order,
       Cart,
       Product,
-      Bot,
+      Shop,
       Message,
       ShopPromocode,
       PublicUser,
@@ -45,14 +41,8 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
     forwardRef(() => CartModule),
     ActivityLogModule,
   ],
-  controllers: [PublicOrdersController, OrdersController],
-  providers: [
-    OrdersService,
-    TelegramInitDataGuard,
-    PublicAccessGuard,
-    TelegramInitDataValidationService,
-  ],
+  controllers: [],
+  providers: [OrdersService],
   exports: [OrdersService],
 })
 export class OrdersModule {}
-

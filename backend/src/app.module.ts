@@ -38,6 +38,7 @@ import { CustomPagesModule } from "./modules/custom-pages/custom-pages.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { PublicAuthModule } from "./modules/public-auth/public-auth.module";
 import { MailModule } from "./modules/mail/mail.module";
+import { ShopsModule } from "./modules/shops/shops.module";
 
 @Module({
   imports: [
@@ -105,6 +106,7 @@ import { MailModule } from "./modules/mail/mail.module";
     PaymentsModule, // Платежные системы
     PublicAuthModule, // Авторизация публичных пользователей (браузер)
     MailModule, // Email сервис
+    ShopsModule, // Магазины (независимые от ботов)
   ],
 })
 export class AppModule {}

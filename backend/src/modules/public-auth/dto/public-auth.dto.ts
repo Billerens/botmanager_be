@@ -11,11 +11,11 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 export class RegisterPublicUserDto {
   @ApiProperty({
-    description: "ID бота (магазина)",
+    description: "ID магазина",
     example: "550e8400-e29b-41d4-a716-446655440000",
   })
-  @IsUUID("4", { message: "Некорректный формат botId" })
-  botId: string;
+  @IsUUID("4", { message: "Некорректный формат shopId" })
+  shopId: string;
 
   @ApiProperty({
     description: "Email пользователя",
@@ -64,11 +64,11 @@ export class RegisterPublicUserDto {
 
 export class LoginPublicUserDto {
   @ApiProperty({
-    description: "ID бота (магазина)",
+    description: "ID магазина",
     example: "550e8400-e29b-41d4-a716-446655440000",
   })
-  @IsUUID("4", { message: "Некорректный формат botId" })
-  botId: string;
+  @IsUUID("4", { message: "Некорректный формат shopId" })
+  shopId: string;
 
   @ApiProperty({
     description: "Email пользователя",
@@ -87,11 +87,11 @@ export class LoginPublicUserDto {
 
 export class VerifyEmailDto {
   @ApiProperty({
-    description: "ID бота (магазина)",
+    description: "ID магазина",
     example: "550e8400-e29b-41d4-a716-446655440000",
   })
-  @IsUUID("4", { message: "Некорректный формат botId" })
-  botId: string;
+  @IsUUID("4", { message: "Некорректный формат shopId" })
+  shopId: string;
 
   @ApiProperty({
     description: "Email пользователя",
@@ -112,11 +112,11 @@ export class VerifyEmailDto {
 
 export class ResendVerificationEmailDto {
   @ApiProperty({
-    description: "ID бота (магазина)",
+    description: "ID магазина",
     example: "550e8400-e29b-41d4-a716-446655440000",
   })
-  @IsUUID("4", { message: "Некорректный формат botId" })
-  botId: string;
+  @IsUUID("4", { message: "Некорректный формат shopId" })
+  shopId: string;
 
   @ApiProperty({
     description: "Email пользователя",
@@ -128,11 +128,11 @@ export class ResendVerificationEmailDto {
 
 export class ForgotPasswordDto {
   @ApiProperty({
-    description: "ID бота (магазина)",
+    description: "ID магазина",
     example: "550e8400-e29b-41d4-a716-446655440000",
   })
-  @IsUUID("4", { message: "Некорректный формат botId" })
-  botId: string;
+  @IsUUID("4", { message: "Некорректный формат shopId" })
+  shopId: string;
 
   @ApiProperty({
     description: "Email пользователя",
@@ -144,11 +144,11 @@ export class ForgotPasswordDto {
 
 export class ResetPasswordDto {
   @ApiProperty({
-    description: "ID бота (магазина)",
+    description: "ID магазина",
     example: "550e8400-e29b-41d4-a716-446655440000",
   })
-  @IsUUID("4", { message: "Некорректный формат botId" })
-  botId: string;
+  @IsUUID("4", { message: "Некорректный формат shopId" })
+  shopId: string;
 
   @ApiProperty({
     description: "Токен сброса пароля",

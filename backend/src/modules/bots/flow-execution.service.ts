@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { BotFlow, FlowStatus } from "../../database/entities/bot-flow.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import {
   BotFlowNode,
   NodeType,
@@ -88,6 +89,8 @@ export class FlowExecutionService implements OnModuleInit {
     private readonly botFlowRepository: Repository<BotFlow>,
     @InjectRepository(BotFlowNode)
     private readonly botFlowNodeRepository: Repository<BotFlowNode>,
+    @InjectRepository(Shop)
+    private readonly shopRepository: Repository<Shop>,
     private readonly telegramService: TelegramService,
     private readonly botsService: BotsService,
     private readonly sessionStorageService: SessionStorageService,
@@ -214,10 +217,7 @@ export class FlowExecutionService implements OnModuleInit {
       "ai_single",
       this.aiSingleNodeHandler
     );
-    this.nodeHandlerService.registerHandler(
-      "ai_chat",
-      this.aiChatNodeHandler
-    );
+    this.nodeHandlerService.registerHandler("ai_chat", this.aiChatNodeHandler);
 
     // Устанавливаем callback для всех обработчиков
     const handlers = [
@@ -369,22 +369,25 @@ export class FlowExecutionService implements OnModuleInit {
           }
         } else if (message.text === "/shop") {
           // Проверяем условия для команды /shop
+          // Shop теперь отдельная сущность - ищем магазин, привязанный к боту
+          const shop = await this.shopRepository.findOne({
+            where: { botId: bot.id },
+          });
+
           this.logger.log(
-            `Получена команда "/shop". Проверка условий: isShop=${bot.isShop}, shopButtonTypes=${JSON.stringify(bot.shopButtonTypes)}`
+            `Получена команда "/shop". Shop привязан: ${!!shop}, buttonTypes=${JSON.stringify(shop?.buttonTypes)}`
           );
 
-          if (!bot.isShop) {
+          if (!shop) {
+            this.logger.warn(`У бота ${bot.id} нет привязанного магазина`);
+          } else if (!shop.buttonTypes?.includes("command")) {
             this.logger.warn(
-              `Бот ${bot.id} не является магазином (isShop=false)`
-            );
-          } else if (!bot.shopButtonTypes?.includes("command")) {
-            this.logger.warn(
-              `В настройках бота ${bot.id} не включена команда /shop. shopButtonTypes=${JSON.stringify(bot.shopButtonTypes)}`
+              `В настройках магазина ${shop.id} не включена команда /shop. buttonTypes=${JSON.stringify(shop.buttonTypes)}`
             );
           } else {
             // Все условия выполнены - открываем магазин
-            this.logger.log(`Команда "/shop" - открываем магазин`);
-            await this.handleShopCommand(bot, message);
+            this.logger.log(`Команда "/shop" - открываем магазин ${shop.id}`);
+            await this.handleShopCommand(bot, shop, message);
             return; // Не обрабатываем через flow
           }
         } else if (message.text === "/booking") {
@@ -980,21 +983,25 @@ export class FlowExecutionService implements OnModuleInit {
   /**
    * Обрабатывает команду /shop для открытия магазина
    */
-  private async handleShopCommand(bot: any, message: any): Promise<void> {
+  private async handleShopCommand(
+    bot: any,
+    shop: Shop,
+    message: any
+  ): Promise<void> {
     try {
       const shopUrl =
-        bot.shopUrl ||
-        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/shop/${bot.id}`;
+        shop.url ||
+        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/shop/${shop.id}`;
 
       // Расшифровываем токен бота
       const decryptedToken = this.botsService.decryptToken(bot.token);
 
-      // Получаем настройки команды
-      const commandSettings = bot.shopButtonSettings?.command;
+      // Получаем настройки команды из Shop entity
+      const commandSettings = shop.buttonSettings?.command;
       const buttonText = commandSettings?.text || "🛒 Открыть магазин";
       const messageText =
         commandSettings?.messageText ||
-        bot.shopDescription ||
+        shop.description ||
         "Добро пожаловать в наш магазин! Нажмите кнопку ниже, чтобы открыть магазин.";
 
       // Отправляем сообщение с кнопкой для открытия магазина
@@ -1019,7 +1026,7 @@ export class FlowExecutionService implements OnModuleInit {
       );
 
       this.logger.log(
-        `Отправлено сообщение с магазином для пользователя ${message.from.id}`
+        `Отправлено сообщение с магазином ${shop.id} для пользователя ${message.from.id}`
       );
     } catch (error) {
       this.logger.error(`Ошибка при обработке команды /shop: ${error.message}`);

@@ -7,7 +7,6 @@ import {
   Patch,
   Param,
   Delete,
-  Query,
   UseGuards,
   Request,
   NotFoundException,
@@ -18,7 +17,6 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiExcludeEndpoint,
-  ApiQuery,
   getSchemaPath,
 } from "@nestjs/swagger";
 
@@ -28,7 +26,6 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
 import { CreateBotDto, UpdateBotDto } from "./dto/bot.dto";
 import { BotResponseDto, BotStatsResponseDto } from "./dto/bot-response.dto";
 import { ButtonSettingsDto } from "./dto/command-button-settings.dto";
-import { CartService } from "../cart/cart.service";
 import { BotPermissionsService } from "./bot-permissions.service";
 import { BotInvitationsService } from "./bot-invitations.service";
 import {
@@ -53,7 +50,6 @@ import {
 export class BotsController {
   constructor(
     private readonly botsService: BotsService,
-    private readonly cartService: CartService,
     private readonly botPermissionsService: BotPermissionsService,
     private readonly botInvitationsService: BotInvitationsService
   ) {}
@@ -126,28 +122,8 @@ export class BotsController {
     return this.botsService.deactivate(id, req.user.id);
   }
 
-  @Patch(":id/shop-settings")
-  @ApiOperation({ summary: "Обновить настройки магазина бота" })
-  @ApiResponse({ status: 200, description: "Настройки магазина обновлены" })
-  @ApiResponse({ status: 404, description: "Бот не найден" })
-  @BotPermission(BotEntity.SHOP_SETTINGS, PermissionAction.UPDATE)
-  async updateShopSettings(
-    @Param("id") id: string,
-    @Body()
-    shopSettings: {
-      isShop?: boolean;
-      shopLogoUrl?: string;
-      shopTitle?: string;
-      shopDescription?: string;
-      shopCustomStyles?: string;
-      shopButtonTypes?: string[];
-      shopButtonSettings?: ButtonSettingsDto;
-      shopLayoutConfig?: Record<string, any>;
-    },
-    @Request() req
-  ) {
-    return this.botsService.updateShopSettings(id, shopSettings, req.user.id);
-  }
+  // Эндпоинт shop-settings удалён - используйте ShopsController
+  // PATCH /shops/:shopId для обновления настроек магазина
 
   @Patch(":id/booking-settings")
   @ApiOperation({ summary: "Обновить настройки бронирования бота" })
@@ -213,128 +189,6 @@ export class BotsController {
   @ApiResponse({ status: 404, description: "Бот не найден" })
   async remove(@Param("id") id: string, @Request() req) {
     return this.botsService.remove(id, req.user.id);
-  }
-
-  @Get(":id/carts")
-  @ApiOperation({ summary: "Получить все корзины бота" })
-  @ApiResponse({
-    status: 200,
-    description: "Список корзин получен",
-  })
-  @ApiResponse({ status: 404, description: "Бот не найден" })
-  @ApiQuery({
-    name: "hideEmpty",
-    required: false,
-    type: Boolean,
-    description: "Скрывать пустые корзины",
-  })
-  @ApiQuery({
-    name: "searchUser",
-    required: false,
-    type: String,
-    description: "Поиск по имени пользователя (telegramUsername или publicUserId)",
-  })
-  @ApiQuery({
-    name: "searchProduct",
-    required: false,
-    type: String,
-    description: "Поиск по названию товара",
-  })
-  @BotPermission(BotEntity.CARTS, PermissionAction.READ)
-  async getCartsByBotId(
-    @Param("id") id: string,
-    @Query("hideEmpty") hideEmpty?: string,
-    @Query("searchUser") searchUser?: string,
-    @Query("searchProduct") searchProduct?: string,
-    @Request() req?
-  ) {
-    // Проверяем, что бот принадлежит пользователю
-    await this.botsService.findOne(id, req.user.id);
-    const shouldHideEmpty = hideEmpty === "true" || hideEmpty === "1";
-    return this.cartService.getCartsByBotId(id, shouldHideEmpty, searchUser, searchProduct);
-  }
-
-  @Delete(":id/carts/:cartId")
-  @ApiOperation({ summary: "Очистить корзину (админ)" })
-  @ApiResponse({
-    status: 200,
-    description: "Корзина очищена",
-  })
-  @ApiResponse({ status: 404, description: "Бот или корзина не найдены" })
-  @BotPermission(BotEntity.CARTS, PermissionAction.DELETE)
-  async clearCartByAdmin(
-    @Param("id") id: string,
-    @Param("cartId") cartId: string,
-    @Request() req
-  ) {
-    // Проверяем, что бот принадлежит пользователю
-    await this.botsService.findOne(id, req.user.id);
-
-    // Получаем корзину
-    const carts = await this.cartService.getCartsByBotId(id, false);
-    const cart = carts.find((c) => c.id === cartId);
-
-    if (!cart) {
-      throw new NotFoundException("Корзина не найдена");
-    }
-
-    return this.cartService.clearCart(id, cart.telegramUsername);
-  }
-
-  @Patch(":id/carts/:cartId/items/:productId")
-  @ApiOperation({ summary: "Обновить количество товара в корзине (админ)" })
-  @ApiResponse({
-    status: 200,
-    description: "Количество товара обновлено",
-  })
-  @ApiResponse({
-    status: 400,
-    description: "Неверные данные или недостаточно товара",
-  })
-  @ApiResponse({
-    status: 404,
-    description: "Бот, корзина или товар не найдены",
-  })
-  @BotPermission(BotEntity.CARTS, PermissionAction.UPDATE)
-  async updateCartItemByAdmin(
-    @Param("id") id: string,
-    @Param("cartId") cartId: string,
-    @Param("productId") productId: string,
-    @Body() body: { quantity: number },
-    @Request() req
-  ) {
-    // Проверяем, что бот принадлежит пользователю
-    await this.botsService.findOne(id, req.user.id);
-
-    return this.cartService.updateCartItemByAdmin(
-      id,
-      cartId,
-      productId,
-      body.quantity
-    );
-  }
-
-  @Delete(":id/carts/:cartId/items/:productId")
-  @ApiOperation({ summary: "Удалить товар из корзины (админ)" })
-  @ApiResponse({
-    status: 200,
-    description: "Товар удален из корзины",
-  })
-  @ApiResponse({
-    status: 404,
-    description: "Бот, корзина или товар не найдены",
-  })
-  @BotPermission(BotEntity.CARTS, PermissionAction.DELETE)
-  async removeCartItemByAdmin(
-    @Param("id") id: string,
-    @Param("cartId") cartId: string,
-    @Param("productId") productId: string,
-    @Request() req
-  ) {
-    // Проверяем, что бот принадлежит пользователю
-    await this.botsService.findOne(id, req.user.id);
-
-    return this.cartService.removeCartItemByAdmin(id, cartId, productId);
   }
 
   // ========== Эндпоинты для управления пользователями бота ==========

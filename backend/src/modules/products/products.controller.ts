@@ -104,7 +104,8 @@ export class ProductsController {
     },
   })
   getStats(@Param("botId") botId: string, @Request() req: any) {
-    return this.productsService.getBotProductStats(botId, req.user.id);
+    // botId теперь интерпретируется как shopId
+    return this.productsService.getProductStats(botId, req.user.id);
   }
 
   @Get(":id")

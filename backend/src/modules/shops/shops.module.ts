@@ -1,0 +1,56 @@
+import { Module, forwardRef } from "@nestjs/common";
+import { TypeOrmModule } from "@nestjs/typeorm";
+import { JwtModule } from "@nestjs/jwt";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { ShopsService } from "./shops.service";
+import { ShopsController } from "./shops.controller";
+import { PublicShopsController } from "./public-shops.controller";
+import { Shop } from "../../database/entities/shop.entity";
+import { Bot } from "../../database/entities/bot.entity";
+import { Product } from "../../database/entities/product.entity";
+import { Category } from "../../database/entities/category.entity";
+import { Order } from "../../database/entities/order.entity";
+import { Cart } from "../../database/entities/cart.entity";
+import { PublicUser } from "../../database/entities/public-user.entity";
+import { ActivityLogModule } from "../activity-log/activity-log.module";
+import { ProductsModule } from "../products/products.module";
+import { CategoriesModule } from "../categories/categories.module";
+import { CartModule } from "../cart/cart.module";
+import { OrdersModule } from "../orders/orders.module";
+import { ShopPromocodesModule } from "../shop-promocodes/shop-promocodes.module";
+import { PublicAccessGuard } from "../public-auth/guards/public-access.guard";
+import { TelegramModule } from "../telegram/telegram.module";
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([
+      Shop,
+      Bot,
+      Product,
+      Category,
+      Order,
+      Cart,
+      PublicUser,
+    ]),
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>("JWT_SECRET"),
+        signOptions: { expiresIn: "7d" },
+      }),
+      inject: [ConfigService],
+    }),
+    ActivityLogModule,
+    forwardRef(() => ProductsModule),
+    forwardRef(() => CategoriesModule),
+    forwardRef(() => CartModule),
+    forwardRef(() => OrdersModule),
+    forwardRef(() => ShopPromocodesModule),
+    forwardRef(() => TelegramModule),
+  ],
+  controllers: [ShopsController, PublicShopsController],
+  providers: [ShopsService, PublicAccessGuard],
+  exports: [ShopsService],
+})
+export class ShopsModule {}
+

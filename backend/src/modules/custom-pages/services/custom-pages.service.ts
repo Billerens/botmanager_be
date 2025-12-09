@@ -16,6 +16,7 @@ import {
   CustomPageType,
 } from "../../../database/entities/custom-page.entity";
 import { Bot } from "../../../database/entities/bot.entity";
+import { Shop } from "../../../database/entities/shop.entity";
 import {
   CreateCustomPageDto,
   UpdateCustomPageDto,
@@ -38,6 +39,8 @@ export class CustomPagesService {
     private readonly customPageRepository: Repository<CustomPage>,
     @InjectRepository(Bot)
     private readonly botRepository: Repository<Bot>,
+    @InjectRepository(Shop)
+    private readonly shopRepository: Repository<Shop>,
     private readonly uploadService: UploadService,
     @Inject(forwardRef(() => TelegramService))
     private readonly telegramService: TelegramService,
@@ -439,10 +442,16 @@ export class CustomPagesService {
         return;
       }
 
+      // Получаем привязанный магазин
+      const shop = await this.shopRepository.findOne({
+        where: { botId },
+      });
+
       const decryptedToken = this.decryptToken(bot.token);
       const success = await this.telegramService.setBotCommands(
         decryptedToken,
-        bot
+        bot,
+        shop
       );
       if (success) {
         console.log(

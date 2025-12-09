@@ -98,6 +98,14 @@ export enum ActivityType {
 
   EXPORT_CSV = "export_csv",
   API_CALL = "api_call",
+
+  // Shop (магазин как отдельная сущность)
+  SHOP_CREATED = "shop_created",
+  SHOP_UPDATED = "shop_updated",
+  SHOP_DELETED = "shop_deleted",
+  SHOP_SETTINGS_UPDATED = "shop_settings_updated",
+  SHOP_BOT_LINKED = "shop_bot_linked",
+  SHOP_BOT_UNLINKED = "shop_bot_unlinked",
 }
 
 export enum ActivityLevel {

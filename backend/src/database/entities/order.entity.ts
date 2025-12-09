@@ -8,9 +8,9 @@ import {
   JoinColumn,
   Index,
 } from "typeorm";
-import { Bot } from "./bot.entity";
 import { CartItem } from "./cart.entity";
 import { PublicUser } from "./public-user.entity";
+import { Shop } from "./shop.entity";
 
 export enum OrderStatus {
   PENDING = "pending", // Ожидает обработки
@@ -34,15 +34,16 @@ export interface OrderCustomerData {
 }
 
 @Entity("orders")
-@Index(["botId", "telegramUsername"])
-@Index(["botId", "publicUserId"])
-@Index(["botId", "status"])
+@Index(["shopId", "telegramUsername"])
+@Index(["shopId", "publicUserId"])
+@Index(["shopId", "status"])
 export class Order {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
+  // Связь с магазином
   @Column()
-  botId: string;
+  shopId: string;
 
   @Column({ nullable: true })
   telegramUsername: string;
@@ -84,10 +85,12 @@ export class Order {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // Связи
-  @ManyToOne(() => Bot, { onDelete: "CASCADE" })
-  @JoinColumn({ name: "botId" })
-  bot: Bot;
+  // Связь с магазином
+  @ManyToOne(() => Shop, (shop) => shop.orders, {
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "shopId" })
+  shop: Shop;
 
   @ManyToOne(() => PublicUser, { nullable: true, onDelete: "SET NULL" })
   @JoinColumn({ name: "publicUserId" })

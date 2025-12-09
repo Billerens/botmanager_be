@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 
 import { PublicUser } from "../../database/entities/public-user.entity";
 import { Bot } from "../../database/entities/bot.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import { PublicAuthService } from "./public-auth.service";
 import { PublicAuthController } from "./public-auth.controller";
 import { PublicUserGuard } from "./guards/public-user.guard";
@@ -15,7 +16,7 @@ import { MailModule } from "../mail/mail.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PublicUser, Bot]),
+    TypeOrmModule.forFeature([PublicUser, Bot, Shop]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

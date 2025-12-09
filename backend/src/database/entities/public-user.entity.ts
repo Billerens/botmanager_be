@@ -9,12 +9,12 @@ import {
   Index,
 } from "typeorm";
 import { Exclude } from "class-transformer";
-import { Bot } from "./bot.entity";
+import { Shop } from "./shop.entity";
 
 @Entity("public_users")
-@Index(["email", "botId"], { unique: true }) // Email уникален только в рамках одного бота
-@Index(["botId"])
-@Index(["botId", "telegramId"]) // Для поиска по telegramId в рамках бота
+@Index(["email", "shopId"], { unique: true }) // Email уникален только в рамках одного магазина
+@Index(["shopId"])
+@Index(["shopId", "telegramId"]) // Для поиска по telegramId в рамках магазина
 export class PublicUser {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -22,13 +22,15 @@ export class PublicUser {
   @Column()
   email: string;
 
-  // Связь с ботом (магазином)
-  @ManyToOne(() => Bot, { onDelete: "CASCADE" })
-  @JoinColumn({ name: "botId" })
-  bot: Bot;
+  // Связь с магазином
+  @ManyToOne(() => Shop, (shop) => shop.publicUsers, {
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "shopId" })
+  shop: Shop;
 
   @Column()
-  botId: string;
+  shopId: string;
 
   @Column()
   @Exclude()

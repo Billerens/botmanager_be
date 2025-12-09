@@ -8,9 +8,9 @@ import {
   JoinColumn,
   Index,
 } from "typeorm";
-import { Bot } from "./bot.entity";
 import { Category } from "./category.entity";
 import { Product } from "./product.entity";
+import { Shop } from "./shop.entity";
 
 export enum ShopPromocodeType {
   FIXED = "fixed", // Фиксированная скидка
@@ -30,13 +30,14 @@ export enum ShopPromocodeUsageLimit {
 }
 
 @Entity("shop_promocodes")
-@Index(["botId", "code"], { unique: true })
+@Index(["shopId", "code"], { unique: true })
 export class ShopPromocode {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
+  // Связь с магазином
   @Column()
-  botId: string;
+  shopId: string;
 
   @Column({ length: 100 })
   code: string; // Код промокода
@@ -92,10 +93,12 @@ export class ShopPromocode {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // Связи
-  @ManyToOne(() => Bot, { onDelete: "CASCADE" })
-  @JoinColumn({ name: "botId" })
-  bot: Bot;
+  // Связь с магазином
+  @ManyToOne(() => Shop, (shop) => shop.promocodes, { 
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "shopId" })
+  shop: Shop;
 
   @ManyToOne(() => Category, { nullable: true, onDelete: "CASCADE" })
   @JoinColumn({ name: "categoryId" })

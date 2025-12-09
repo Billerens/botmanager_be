@@ -14,6 +14,7 @@ import { Bot, BotStatus } from "../../database/entities/bot.entity";
 import { User } from "../../database/entities/user.entity";
 import { Category } from "../../database/entities/category.entity";
 import { Product } from "../../database/entities/product.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import { CreateBotDto, UpdateBotDto } from "./dto/bot.dto";
 import { ButtonSettingsDto } from "./dto/command-button-settings.dto";
 import { TelegramService } from "../telegram/telegram.service";
@@ -35,6 +36,8 @@ export class BotsService {
     private categoryRepository: Repository<Category>,
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
+    @InjectRepository(Shop)
+    private shopRepository: Repository<Shop>,
     @Inject(forwardRef(() => TelegramService))
     private telegramService: TelegramService,
     private notificationService: NotificationService,
@@ -208,69 +211,7 @@ export class BotsService {
     return updatedBot;
   }
 
-  async updateShopSettings(
-    id: string,
-    shopSettings: {
-      isShop?: boolean;
-      shopLogoUrl?: string;
-      shopTitle?: string;
-      shopDescription?: string;
-      shopCustomStyles?: string;
-      shopButtonTypes?: string[];
-      shopButtonSettings?: ButtonSettingsDto;
-      shopLayoutConfig?: Record<string, any>;
-    },
-    userId: string
-  ): Promise<Bot> {
-    const bot = await this.findOne(id, userId);
-
-    // Валидация Menu Button конфликта
-    this.validateMenuButtonConflict(bot, shopSettings.shopButtonTypes, "shop");
-
-    // Обновляем настройки магазина
-    Object.assign(bot, shopSettings);
-
-    // Если магазин отключается, очищаем связанные поля
-    if (shopSettings.isShop === false) {
-      bot.shopLogoUrl = null;
-      bot.shopTitle = null;
-      bot.shopDescription = null;
-      bot.shopCustomStyles = null;
-      bot.shopButtonTypes = null;
-      bot.shopButtonSettings = null;
-      bot.shopLayoutConfig = null;
-    }
-
-    const savedBot = await this.botRepository.save(bot);
-
-    // Обновляем команды бота в Telegram
-    try {
-      const token = this.decryptToken(bot.token);
-      await this.telegramService.setBotCommands(token, savedBot);
-    } catch (error) {
-      console.error("Ошибка обновления команд бота:", error.message);
-    }
-
-    // Логируем изменение настроек магазина
-    this.activityLogService
-      .create({
-        type: ActivityType.BOT_UPDATED,
-        level: ActivityLevel.INFO,
-        message: `Обновлены настройки магазина для бота "${savedBot.name}"`,
-        userId,
-        botId: savedBot.id,
-        metadata: {
-          botName: savedBot.name,
-          action: "shop_settings_update",
-          changes: shopSettings,
-        },
-      })
-      .catch((error) => {
-        console.error("Ошибка логирования изменения настроек магазина:", error);
-      });
-
-    return savedBot;
-  }
+  // updateShopSettings удалён - используйте ShopsService.update()
 
   async updateBookingSettings(
     id: string,
@@ -313,7 +254,11 @@ export class BotsService {
     // Обновляем команды бота в Telegram
     try {
       const token = this.decryptToken(bot.token);
-      await this.telegramService.setBotCommands(token, savedBot);
+      // Получаем привязанный магазин для обновления команд
+      const shop = await this.shopRepository.findOne({
+        where: { botId: savedBot.id },
+      });
+      await this.telegramService.setBotCommands(token, savedBot, shop);
     } catch (error) {
       console.error("Ошибка обновления команд бота:", error.message);
     }
@@ -370,214 +315,12 @@ export class BotsService {
       specialists: bot.specialists?.filter((s) => s.isActive) || [],
       // Настройки браузерного доступа
       bookingBrowserAccessEnabled: bot.bookingBrowserAccessEnabled ?? false,
-      browserAccessRequireEmailVerification:
-        bot.browserAccessRequireEmailVerification ?? false,
-    };
-  }
-  async getPublicBotForShop(botId: string): Promise<any> {
-    const bot = await this.botRepository.findOne({
-      where: {
-        id: botId,
-        status: BotStatus.ACTIVE,
-        isShop: true,
-      },
-    });
-
-    if (!bot) {
-      throw new NotFoundException("Бот не найден или магазин не активен");
-    }
-
-    // Загружаем активные категории для магазина с учетом иерархии
-    const categories = await this.categoryRepository.find({
-      where: {
-        botId,
-        isActive: true,
-      },
-      relations: ["parent", "children"],
-      order: {
-        sortOrder: "ASC",
-        name: "ASC",
-      },
-    });
-
-    // Строим дерево категорий
-    const categoryTree = this.buildCategoryTree(categories);
-
-    // Функция для рекурсивного преобразования дерева в нужный формат
-    const mapCategoryTree = (cats: Category[]): any[] => {
-      return cats.map((cat) => {
-        const categoryData: any = {
-          id: cat.id,
-          name: cat.name,
-          description: cat.description,
-          imageUrl: cat.imageUrl,
-          isActive: cat.isActive,
-        };
-        // Добавляем children только если они есть
-        if (cat.children && cat.children.length > 0) {
-          categoryData.children = mapCategoryTree(cat.children);
-        }
-        return categoryData;
-      });
-    };
-
-    // Возвращаем только публичные данные, необходимые для магазина
-    return {
-      id: bot.id,
-      name: bot.name,
-      username: bot.username,
-      description: bot.description,
-      shopTitle: bot.shopTitle,
-      shopDescription: bot.shopDescription,
-      shopLogoUrl: bot.shopLogoUrl,
-      shopCustomStyles: bot.shopCustomStyles,
-      shopButtonTypes: bot.shopButtonTypes,
-      shopButtonSettings: bot.shopButtonSettings,
-      shopUrl: bot.shopUrl,
-      shopLayoutConfig: bot.shopLayoutConfig,
-      categories: mapCategoryTree(categoryTree),
-      // Настройки браузерного доступа
-      shopBrowserAccessEnabled: bot.shopBrowserAccessEnabled ?? false,
-      browserAccessRequireEmailVerification:
-        bot.browserAccessRequireEmailVerification ?? false,
     };
   }
 
-  async getPublicShopProducts(
-    botId: string,
-    page: number = 1,
-    limit: number = 20,
-    categoryId?: string,
-    inStock?: boolean,
-    search?: string,
-    sortBy?: "name-asc" | "name-desc" | "price-asc" | "price-desc"
-  ): Promise<any> {
-    // Проверяем, что бот существует и активен
-    const bot = await this.botRepository.findOne({
-      where: {
-        id: botId,
-        status: BotStatus.ACTIVE,
-        isShop: true,
-      },
-    });
-
-    if (!bot) {
-      throw new NotFoundException("Бот не найден или магазин не активен");
-    }
-
-    const skip = (page - 1) * limit;
-    const queryBuilder = this.productRepository
-      .createQueryBuilder("product")
-      .leftJoinAndSelect("product.category", "category")
-      .where("product.botId = :botId", { botId })
-      .andWhere("product.isActive = :isActive", { isActive: true })
-      .skip(skip)
-      .take(limit);
-
-    // Поиск по названию
-    if (search) {
-      queryBuilder.andWhere("product.name ILIKE :search", {
-        search: `%${search}%`,
-      });
-    }
-
-    // Фильтр по наличию
-    if (inStock !== undefined) {
-      if (inStock) {
-        queryBuilder.andWhere("product.stockQuantity > 0");
-      } else {
-        queryBuilder.andWhere("product.stockQuantity = 0");
-      }
-    }
-
-    // Фильтр по категории (включая подкатегории)
-    if (categoryId) {
-      const category = await this.categoryRepository.findOne({
-        where: { id: categoryId, botId },
-      });
-
-      if (category) {
-        // Получаем все подкатегории
-        const subcategoryIds = await this.getAllSubcategoryIds(
-          categoryId,
-          botId
-        );
-        const allCategoryIds = [categoryId, ...subcategoryIds];
-
-        queryBuilder.andWhere("product.categoryId IN (:...categoryIds)", {
-          categoryIds: allCategoryIds,
-        });
-      } else {
-        // Если категория не найдена, возвращаем пустой результат
-        queryBuilder.andWhere("1 = 0");
-      }
-    }
-
-    // Сортировка
-    if (sortBy) {
-      switch (sortBy) {
-        case "name-asc":
-          queryBuilder.orderBy("product.name", "ASC");
-          break;
-        case "name-desc":
-          queryBuilder.orderBy("product.name", "DESC");
-          break;
-        case "price-asc":
-          queryBuilder.orderBy("product.price", "ASC");
-          break;
-        case "price-desc":
-          queryBuilder.orderBy("product.price", "DESC");
-          break;
-      }
-    } else {
-      queryBuilder.orderBy("product.createdAt", "DESC");
-    }
-
-    const [products, total] = await queryBuilder.getManyAndCount();
-
-    return {
-      products: products.map((product) => ({
-        id: product.id,
-        name: product.name,
-        description: product.description,
-        price: product.price,
-        currency: product.currency,
-        stockQuantity: product.stockQuantity,
-        images: product.images || [],
-        isActive: product.isActive,
-        parameters: product.parameters,
-        categoryId: product.categoryId,
-      })),
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  private async getAllSubcategoryIds(
-    categoryId: string,
-    botId: string
-  ): Promise<string[]> {
-    const subcategoryIds: string[] = [];
-    const queue: string[] = [categoryId];
-
-    while (queue.length > 0) {
-      const currentCategoryId = queue.shift()!;
-      const children = await this.categoryRepository.find({
-        where: { parentId: currentCategoryId, botId },
-      });
-
-      for (const child of children) {
-        subcategoryIds.push(child.id);
-        queue.push(child.id);
-      }
-    }
-
-    return subcategoryIds;
-  }
+  // Legacy shop методы удалены - используйте ShopsService
+  // getPublicBotForShop -> ShopsService.getPublicData
+  // getPublicShopProducts -> ShopsService.getPublicProducts
 
   async remove(id: string, userId: string): Promise<void> {
     const bot = await this.findOne(id, userId);
@@ -869,56 +612,11 @@ export class BotsService {
     }
 
     // Проверяем конфликт в зависимости от модуля
-    if (module === "shop") {
-      // Если пытаемся включить menu_button для магазина, проверяем бронирование
-      if (
-        bot.isBookingEnabled &&
-        bot.bookingButtonTypes?.includes("menu_button")
-      ) {
-        throw new BadRequestException(
-          "Menu Button уже включен для системы бронирования. В Telegram боте может быть только одна Menu Button. Сначала отключите Menu Button в настройках бронирования."
-        );
-      }
-    } else if (module === "booking") {
-      // Если пытаемся включить menu_button для бронирования, проверяем магазин
-      if (bot.isShop && bot.shopButtonTypes?.includes("menu_button")) {
-        throw new BadRequestException(
-          "Menu Button уже включен для магазина. В Telegram боте может быть только одна Menu Button. Сначала отключите Menu Button в настройках магазина."
-        );
-      }
+    // Shop теперь отдельная сущность - проверка конфликта с магазином
+    // выполняется в ShopsService при привязке к боту
+    if (module === "booking") {
+      // Проверку для booking оставляем как есть
+      // Конфликт с Shop проверяется при привязке магазина к боту через ShopsService
     }
-  }
-
-  /**
-   * Строит дерево категорий из плоского списка
-   */
-  private buildCategoryTree(categories: Category[]): Category[] {
-    const categoryMap = new Map<string, Category & { children: Category[] }>();
-    const rootCategories: Category[] = [];
-
-    // Создаем карту категорий
-    for (const category of categories) {
-      const categoryWithChildren = Object.assign(category, { children: [] });
-      categoryMap.set(category.id, categoryWithChildren);
-    }
-
-    // Строим дерево
-    for (const category of categories) {
-      const categoryNode = categoryMap.get(category.id)!;
-
-      if (category.parentId) {
-        const parent = categoryMap.get(category.parentId);
-        if (parent) {
-          if (!parent.children) {
-            parent.children = [];
-          }
-          parent.children.push(categoryNode);
-        }
-      } else {
-        rootCategories.push(categoryNode);
-      }
-    }
-
-    return rootCategories;
   }
 }

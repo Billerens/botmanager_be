@@ -96,6 +96,28 @@ export class CategoryFiltersDto {
   @IsBoolean()
   rootOnly?: boolean;
 
+  @ApiPropertyOptional({ description: "Только корневые категории (альтернативный параметр)" })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === "true") return true;
+    if (value === "false") return false;
+    if (value === true || value === false) return value;
+    return undefined;
+  })
+  @IsBoolean()
+  onlyRoot?: boolean;
+
+  @ApiPropertyOptional({ description: "Включить дерево категорий" })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === "true") return true;
+    if (value === "false") return false;
+    if (value === true || value === false) return value;
+    return undefined;
+  })
+  @IsBoolean()
+  includeTree?: boolean;
+
   @ApiPropertyOptional({ description: "Фильтр по активности" })
   @IsOptional()
   @Transform(({ value }) => {

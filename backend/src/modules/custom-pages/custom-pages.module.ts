@@ -3,6 +3,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { CustomPage } from "../../database/entities/custom-page.entity";
 import { Bot } from "../../database/entities/bot.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import { CustomPagesService } from "./services/custom-pages.service";
 import { CustomPagesController } from "./controllers/custom-pages.controller";
 import { PublicCustomPagesController } from "./controllers/public-custom-pages.controller";
@@ -13,7 +14,7 @@ import { BotsModule } from "../bots/bots.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CustomPage, Bot]),
+    TypeOrmModule.forFeature([CustomPage, Bot, Shop]),
     UploadModule,
     forwardRef(() => TelegramModule),
     forwardRef(() => BotsModule),

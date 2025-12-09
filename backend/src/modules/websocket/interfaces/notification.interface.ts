@@ -42,7 +42,9 @@ export enum NotificationType {
   // Заказы
   ORDER_CREATED = "order.created",
   ORDER_STATUS_UPDATED = "order.status_updated",
+  ORDER_STATUS_CHANGED = "order.status_changed",
   ORDER_CANCELLED = "order.cancelled",
+  ORDER_UPDATED = "order.updated",
 
   // Промокоды
   SHOP_PROMOCODE_CREATED = "shop_promocode.created",

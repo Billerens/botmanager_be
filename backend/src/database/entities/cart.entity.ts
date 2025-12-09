@@ -9,8 +9,8 @@ import {
   Index,
 } from "typeorm";
 import { Expose } from "class-transformer";
-import { Bot } from "./bot.entity";
 import { PublicUser } from "./public-user.entity";
+import { Shop } from "./shop.entity";
 
 export interface CartItem {
   productId: string;
@@ -22,14 +22,15 @@ export interface CartItem {
 }
 
 @Entity("carts")
-@Index(["botId", "telegramUsername"])
-@Index(["botId", "publicUserId"])
+@Index(["shopId", "telegramUsername"])
+@Index(["shopId", "publicUserId"])
 export class Cart {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
+  // Связь с магазином
   @Column()
-  botId: string;
+  shopId: string;
 
   @Column({ nullable: true })
   telegramUsername: string;
@@ -49,10 +50,12 @@ export class Cart {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // Связи
-  @ManyToOne(() => Bot, { onDelete: "CASCADE" })
-  @JoinColumn({ name: "botId" })
-  bot: Bot;
+  // Связь с магазином
+  @ManyToOne(() => Shop, (shop) => shop.carts, { 
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "shopId" })
+  shop: Shop;
 
   @ManyToOne(() => PublicUser, { nullable: true, onDelete: "CASCADE" })
   @JoinColumn({ name: "publicUserId" })
