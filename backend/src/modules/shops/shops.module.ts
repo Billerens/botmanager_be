@@ -18,8 +18,8 @@ import { CategoriesModule } from "../categories/categories.module";
 import { CartModule } from "../cart/cart.module";
 import { OrdersModule } from "../orders/orders.module";
 import { ShopPromocodesModule } from "../shop-promocodes/shop-promocodes.module";
-import { PublicAccessGuard } from "../public-auth/guards/public-access.guard";
 import { TelegramModule } from "../telegram/telegram.module";
+import { PublicAuthModule } from "../public-auth/public-auth.module";
 
 @Module({
   imports: [
@@ -47,9 +47,10 @@ import { TelegramModule } from "../telegram/telegram.module";
     forwardRef(() => OrdersModule),
     forwardRef(() => ShopPromocodesModule),
     forwardRef(() => TelegramModule),
+    forwardRef(() => PublicAuthModule),
   ],
   controllers: [ShopsController, PublicShopsController],
-  providers: [ShopsService, PublicAccessGuard],
+  providers: [ShopsService],
   exports: [ShopsService],
 })
 export class ShopsModule {}

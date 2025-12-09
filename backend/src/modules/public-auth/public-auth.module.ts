@@ -41,6 +41,7 @@ import { MailModule } from "../mail/mail.module";
     PublicAuthService,
     PublicUserGuard,
     PublicAccessGuard,
+    TelegramInitDataValidationService,
     TypeOrmModule,
   ],
 })
