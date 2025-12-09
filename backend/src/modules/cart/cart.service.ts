@@ -816,6 +816,44 @@ export class CartService {
     return savedCart;
   }
 
+  /**
+   * Очистить корзину (для админа)
+   */
+  async clearCartByAdmin(shopId: string, cartId: string): Promise<Cart> {
+    const shop = await this.shopRepository.findOne({
+      where: { id: shopId },
+    });
+
+    if (!shop) {
+      throw new NotFoundException("Магазин не найден");
+    }
+
+    const cart = await this.cartRepository.findOne({
+      where: { id: cartId, shopId },
+    });
+
+    if (!cart) {
+      throw new NotFoundException("Корзина не найдена");
+    }
+
+    cart.items = [];
+    cart.appliedPromocodeId = null;
+    const savedCart = await this.cartRepository.save(cart);
+
+    if (shop.ownerId) {
+      this.notificationService
+        .sendToUser(shop.ownerId, NotificationType.CART_CLEARED, {
+          shopId,
+          cart: { id: savedCart.id },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка отправки уведомления об очистке:", error);
+        });
+    }
+
+    return savedCart;
+  }
+
   // =====================================================
   // ALIAS МЕТОДЫ ДЛЯ СОВМЕСТИМОСТИ С ShopsController
   // =====================================================

@@ -25,6 +25,7 @@ import { ProductsService } from "../products/products.service";
 import { CategoriesService } from "../categories/categories.service";
 import { OrdersService } from "../orders/orders.service";
 import { ShopPromocodesService } from "../shop-promocodes/shop-promocodes.service";
+import { CartService } from "../cart/cart.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import {
   CreateShopDto,
@@ -65,7 +66,8 @@ export class ShopsController {
     private readonly productsService: ProductsService,
     private readonly categoriesService: CategoriesService,
     private readonly ordersService: OrdersService,
-    private readonly promoCodesService: ShopPromocodesService
+    private readonly promoCodesService: ShopPromocodesService,
+    private readonly cartService: CartService
   ) {}
 
   @Post()
@@ -451,6 +453,70 @@ export class ShopsController {
       req.user.id,
       updateDto
     );
+  }
+
+  // =====================================================
+  // CARTS MANAGEMENT
+  // =====================================================
+
+  @Get(":id/carts")
+  @ApiOperation({ summary: "Получить корзины магазина" })
+  @ApiQuery({ name: "hideEmpty", required: false, type: Boolean })
+  @ApiQuery({ name: "search", required: false })
+  @ApiResponse({ status: 200, description: "Корзины получены" })
+  async getCarts(
+    @Param("id") id: string,
+    @Request() req,
+    @Query("hideEmpty") hideEmpty?: string,
+    @Query("search") search?: string
+  ) {
+    // Проверяем права доступа к магазину
+    await this.shopsService.findOne(id, req.user.id);
+    return this.cartService.getCartsByShopId(
+      id,
+      hideEmpty === "true",
+      search,
+      search
+    );
+  }
+
+  @Delete(":id/carts/:cartId/clear")
+  @ApiOperation({ summary: "Очистить корзину" })
+  @ApiResponse({ status: 200, description: "Корзина очищена" })
+  async clearCart(
+    @Param("id") id: string,
+    @Param("cartId") cartId: string,
+    @Request() req
+  ) {
+    await this.shopsService.findOne(id, req.user.id);
+    return this.cartService.clearCartByAdmin(id, cartId);
+  }
+
+  @Patch(":id/carts/:cartId/items/:productId")
+  @ApiOperation({ summary: "Обновить количество товара в корзине" })
+  @ApiResponse({ status: 200, description: "Товар обновлен" })
+  async updateCartItem(
+    @Param("id") id: string,
+    @Param("cartId") cartId: string,
+    @Param("productId") productId: string,
+    @Request() req,
+    @Body("quantity") quantity: number
+  ) {
+    await this.shopsService.findOne(id, req.user.id);
+    return this.cartService.updateCartItemByAdmin(id, cartId, productId, quantity);
+  }
+
+  @Delete(":id/carts/:cartId/items/:productId")
+  @ApiOperation({ summary: "Удалить товар из корзины" })
+  @ApiResponse({ status: 200, description: "Товар удален" })
+  async removeCartItem(
+    @Param("id") id: string,
+    @Param("cartId") cartId: string,
+    @Param("productId") productId: string,
+    @Request() req
+  ) {
+    await this.shopsService.findOne(id, req.user.id);
+    return this.cartService.removeCartItemByAdmin(id, cartId, productId);
   }
 
   // =====================================================
