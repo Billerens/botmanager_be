@@ -27,6 +27,7 @@ import { BotUserPermission } from "./entities/bot-user-permission.entity";
 import { BotInvitation } from "./entities/bot-invitation.entity";
 import { GroupSession } from "./entities/group-session.entity";
 import { PublicUser } from "./entities/public-user.entity";
+import { Shop } from "./entities/shop.entity";
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { PublicUser } from "./entities/public-user.entity";
           BotInvitation,
           GroupSession,
           PublicUser,
+          Shop,
         ],
         synchronize: configService.get("NODE_ENV") === "development",
         logging: false,
@@ -101,6 +103,7 @@ import { PublicUser } from "./entities/public-user.entity";
       BotInvitation,
       GroupSession,
       PublicUser,
+      Shop,
     ]),
   ],
   exports: [TypeOrmModule],

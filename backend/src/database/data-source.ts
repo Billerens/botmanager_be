@@ -25,6 +25,7 @@ import { BotUserPermission } from "./entities/bot-user-permission.entity";
 import { BotInvitation } from "./entities/bot-invitation.entity";
 import { GroupSession } from "./entities/group-session.entity";
 import { PublicUser } from "./entities/public-user.entity";
+import { Shop } from "./entities/shop.entity";
 
 // Загружаем переменные окружения
 config();
@@ -64,6 +65,7 @@ export const AppDataSource = new DataSource({
     BotInvitation,
     GroupSession,
     PublicUser,
+    Shop,
   ],
   migrations: ["src/database/migrations/*.ts"],
   subscribers: ["src/database/subscribers/*.ts"],
