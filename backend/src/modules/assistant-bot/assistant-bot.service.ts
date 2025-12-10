@@ -1,9 +1,16 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Inject,
+  forwardRef,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import axios from "axios";
 import { AuthService } from "../auth/auth.service";
+import { AdminTelegramService } from "../admin/services/admin-telegram.service";
 
 import { User } from "../../database/entities/user.entity";
 
@@ -47,7 +54,9 @@ export class AssistantBotService implements OnModuleInit {
     private configService: ConfigService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    private authService: AuthService
+    private authService: AuthService,
+    @Inject(forwardRef(() => AdminTelegramService))
+    private adminTelegramService: AdminTelegramService
   ) {
     this.botToken = this.configService.get<string>("app.telegramBotToken");
     this.telegramApiUrl = this.configService.get<string>(
@@ -111,12 +120,24 @@ export class AssistantBotService implements OnModuleInit {
 
     this.logger.log(`📨 Сообщение от ${telegramId}: ${text}`);
 
-    // Обрабатываем команду /start
+    // Обрабатываем команды
     if (text === "/start") {
       this.logger.log(`🚀 Команда /start от пользователя ${telegramId}`);
       await this.handleStartCommand(telegramId, from, chat);
+    } else if (text.startsWith("/admin_")) {
+      // Админ-команды
+      this.logger.log(`🔐 Админ-команда от ${telegramId}: ${text}`);
+      await this.handleAdminCommand(text, telegramId, chat.id, from);
     } else {
       this.logger.log(`ℹ️ Неизвестная команда: ${text}`);
+      // Показываем справку по доступным командам
+      if (this.adminTelegramService.canManageAdmins(telegramId)) {
+        await this.sendMessage(
+          chat.id,
+          `Доступные команды:\n• /start - Начать работу\n• /admin_help - Справка по управлению админами`,
+          { parse_mode: "Markdown" }
+        );
+      }
     }
   }
 
@@ -382,5 +403,42 @@ export class AssistantBotService implements OnModuleInit {
    */
   getBotToken(): string {
     return this.botToken;
+  }
+
+  /**
+   * Обработка админ-команд
+   */
+  private async handleAdminCommand(
+    text: string,
+    telegramId: string,
+    chatId: number,
+    from: TelegramUpdate["message"]["from"]
+  ): Promise<void> {
+    try {
+      // Парсим команду и аргументы
+      const parts = text.trim().split(/\s+/);
+      const command = parts[0].toLowerCase();
+      const args = parts.slice(1);
+
+      const response = await this.adminTelegramService.handleCommand({
+        command,
+        args,
+        telegramId,
+        chatId,
+        firstName: from.first_name,
+        lastName: from.last_name,
+        username: from.username,
+      });
+
+      await this.sendMessage(chatId, response, { parse_mode: "Markdown" });
+    } catch (error) {
+      this.logger.error(
+        `Ошибка обработки админ-команды от ${telegramId}:`,
+        error
+      );
+      await this.sendMessage(chatId, `❌ Ошибка: ${error.message}`, {
+        parse_mode: "Markdown",
+      });
+    }
   }
 }

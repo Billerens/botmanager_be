@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { JwtModule } from "@nestjs/jwt";
 import { ConfigModule, ConfigService } from "@nestjs/config";
@@ -19,6 +19,7 @@ import { Lead } from "../../database/entities/lead.entity";
 import { AdminAuthService } from "./services/admin-auth.service";
 import { AdminActionLogService } from "./services/admin-action-log.service";
 import { PasswordRotationService } from "./services/password-rotation.service";
+import { AdminTelegramService } from "./services/admin-telegram.service";
 
 // Controllers
 import { AdminAuthController } from "./controllers/admin-auth.controller";
@@ -84,12 +85,12 @@ import { TelegramValidationService } from "../../common/telegram-validation.serv
     AdminAuthService,
     AdminActionLogService,
     PasswordRotationService,
+    AdminTelegramService,
     AdminJwtStrategy,
     AdminJwtGuard,
     AdminRolesGuard,
     TelegramValidationService,
   ],
-  exports: [AdminAuthService, AdminActionLogService],
+  exports: [AdminAuthService, AdminActionLogService, AdminTelegramService],
 })
 export class AdminModule {}
-
