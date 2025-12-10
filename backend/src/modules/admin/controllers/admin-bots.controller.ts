@@ -10,10 +10,10 @@ import {
   Req,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Like, FindOptionsWhere } from "typeorm";
+import { Repository, Like } from "typeorm";
 import { Request } from "express";
 
-import { Bot } from "../../../database/entities/bot.entity";
+import { Bot, BotStatus } from "../../../database/entities/bot.entity";
 import { BotFlow } from "../../../database/entities/bot-flow.entity";
 import { Admin } from "../../../database/entities/admin.entity";
 import { AdminJwtGuard } from "../guards/admin-jwt.guard";
@@ -45,30 +45,34 @@ export class AdminBotsController {
     @Query("page") page = 1,
     @Query("limit") limit = 50,
     @Query("search") search?: string,
-    @Query("isActive") isActive?: string,
+    @Query("status") status?: string,
     @Query("ownerId") ownerId?: string
   ) {
-    const where: FindOptionsWhere<Bot> = {};
+    const queryBuilder = this.botRepository
+      .createQueryBuilder("bot")
+      .leftJoinAndSelect("bot.owner", "owner")
+      .leftJoinAndSelect("bot.flows", "flows");
 
     if (search) {
-      where.name = Like(`%${search}%`);
+      queryBuilder.andWhere("bot.name ILIKE :search", {
+        search: `%${search}%`,
+      });
     }
 
-    if (isActive !== undefined) {
-      where.isActive = isActive === "true";
+    if (status) {
+      queryBuilder.andWhere("bot.status = :status", { status });
     }
 
     if (ownerId) {
-      where.ownerId = ownerId;
+      queryBuilder.andWhere("bot.ownerId = :ownerId", { ownerId });
     }
 
-    const [items, total] = await this.botRepository.findAndCount({
-      where,
-      relations: ["owner", "flows"],
-      order: { createdAt: "DESC" },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    queryBuilder
+      .orderBy("bot.createdAt", "DESC")
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [items, total] = await queryBuilder.getManyAndCount();
 
     await this.actionLogService.logAction(
       req.user,
@@ -114,7 +118,7 @@ export class AdminBotsController {
       throw new Error("Бот не найден");
     }
 
-    const previousData = { name: bot.name, isActive: bot.isActive };
+    const previousData = { name: bot.name, status: bot.status };
 
     // Запрещаем менять критичные поля
     delete updateData.id;
@@ -230,11 +234,8 @@ export class AdminBotsController {
   @Get("stats/summary")
   async getStats() {
     const total = await this.botRepository.count();
-    const active = await this.botRepository.count({ where: { isActive: true } });
-
-    // Боты с включенным магазином
-    const withShop = await this.botRepository.count({
-      where: { isShopEnabled: true },
+    const active = await this.botRepository.count({
+      where: { status: BotStatus.ACTIVE },
     });
 
     // Боты с включенным бронированием
@@ -246,9 +247,7 @@ export class AdminBotsController {
       total,
       active,
       inactive: total - active,
-      withShop,
       withBooking,
     };
   }
 }
-

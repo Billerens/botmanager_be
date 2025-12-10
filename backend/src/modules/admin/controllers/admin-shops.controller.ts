@@ -10,7 +10,7 @@ import {
   Req,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Like, FindOptionsWhere } from "typeorm";
+import { Repository, Like } from "typeorm";
 import { Request } from "express";
 
 import { Shop } from "../../../database/entities/shop.entity";
@@ -42,30 +42,39 @@ export class AdminShopsController {
     @Query("page") page = 1,
     @Query("limit") limit = 50,
     @Query("search") search?: string,
-    @Query("isActive") isActive?: string,
-    @Query("ownerId") ownerId?: string
+    @Query("ownerId") ownerId?: string,
+    @Query("hasBot") hasBot?: string
   ) {
-    const where: FindOptionsWhere<Shop> = {};
+    const queryBuilder = this.shopRepository
+      .createQueryBuilder("shop")
+      .leftJoinAndSelect("shop.owner", "owner")
+      .leftJoinAndSelect("shop.bot", "bot");
 
     if (search) {
-      where.name = Like(`%${search}%`);
-    }
-
-    if (isActive !== undefined) {
-      where.isActive = isActive === "true";
+      queryBuilder.andWhere(
+        "(shop.name ILIKE :search OR shop.title ILIKE :search)",
+        { search: `%${search}%` }
+      );
     }
 
     if (ownerId) {
-      where.ownerId = ownerId;
+      queryBuilder.andWhere("shop.ownerId = :ownerId", { ownerId });
     }
 
-    const [items, total] = await this.shopRepository.findAndCount({
-      where,
-      relations: ["owner", "bot"],
-      order: { createdAt: "DESC" },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    if (hasBot !== undefined) {
+      if (hasBot === "true") {
+        queryBuilder.andWhere("shop.botId IS NOT NULL");
+      } else {
+        queryBuilder.andWhere("shop.botId IS NULL");
+      }
+    }
+
+    queryBuilder
+      .orderBy("shop.createdAt", "DESC")
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [items, total] = await queryBuilder.getManyAndCount();
 
     await this.actionLogService.logAction(
       req.user,
@@ -111,7 +120,7 @@ export class AdminShopsController {
       throw new Error("Магазин не найден");
     }
 
-    const previousData = { name: shop.name, isActive: shop.isActive };
+    const previousData = { name: shop.name, title: shop.title };
 
     // Запрещаем менять критичные поля
     delete updateData.id;
@@ -170,13 +179,23 @@ export class AdminShopsController {
   @Get("stats/summary")
   async getStats() {
     const total = await this.shopRepository.count();
-    const active = await this.shopRepository.count({ where: { isActive: true } });
+
+    // Магазины привязанные к боту
+    const withBot = await this.shopRepository
+      .createQueryBuilder("shop")
+      .where("shop.botId IS NOT NULL")
+      .getCount();
+
+    // Магазины с браузерным доступом
+    const withBrowserAccess = await this.shopRepository.count({
+      where: { browserAccessEnabled: true },
+    });
 
     return {
       total,
-      active,
-      inactive: total - active,
+      withBot,
+      withoutBot: total - withBot,
+      withBrowserAccess,
     };
   }
 }
-

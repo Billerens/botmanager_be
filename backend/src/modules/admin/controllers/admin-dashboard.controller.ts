@@ -1,15 +1,10 @@
-import {
-  Controller,
-  Get,
-  UseGuards,
-  Req,
-} from "@nestjs/common";
+import { Controller, Get, UseGuards, Req } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, MoreThanOrEqual } from "typeorm";
 import { Request } from "express";
 
 import { User } from "../../../database/entities/user.entity";
-import { Bot } from "../../../database/entities/bot.entity";
+import { Bot, BotStatus } from "../../../database/entities/bot.entity";
 import { Shop } from "../../../database/entities/shop.entity";
 import { Order } from "../../../database/entities/order.entity";
 import { Lead } from "../../../database/entities/lead.entity";
@@ -50,7 +45,7 @@ export class AdminDashboardController {
       totalBots,
       activeBots,
       totalShops,
-      activeShops,
+      shopsWithBot,
       totalOrders,
       todayOrders,
       totalLeads,
@@ -58,9 +53,12 @@ export class AdminDashboardController {
       this.userRepository.count(),
       this.userRepository.count({ where: { isActive: true } }),
       this.botRepository.count(),
-      this.botRepository.count({ where: { isActive: true } }),
+      this.botRepository.count({ where: { status: BotStatus.ACTIVE } }),
       this.shopRepository.count(),
-      this.shopRepository.count({ where: { isActive: true } }),
+      this.shopRepository
+        .createQueryBuilder("shop")
+        .where("shop.botId IS NOT NULL")
+        .getCount(),
       this.orderRepository.count(),
       this.orderRepository.count({
         where: { createdAt: MoreThanOrEqual(today) },
@@ -99,8 +97,8 @@ export class AdminDashboardController {
       },
       shops: {
         total: totalShops,
-        active: activeShops,
-        inactive: totalShops - activeShops,
+        withBot: shopsWithBot,
+        withoutBot: totalShops - shopsWithBot,
       },
       orders: {
         total: totalOrders,
@@ -174,4 +172,3 @@ export class AdminDashboardController {
     return data;
   }
 }
-
