@@ -14,10 +14,35 @@ import {
 import { FlowContext } from "./base-node-handler.interface";
 import { BaseNodeHandler } from "./base-node-handler";
 
+interface KeyboardButton {
+  text: string;
+  callbackData?: string;
+  url?: string;
+  webApp?: string;
+}
+
 @Injectable()
 export class KeyboardNodeHandler extends BaseNodeHandler {
   canHandle(nodeType: string): boolean {
     return nodeType === "keyboard";
+  }
+
+  // Нормализация кнопок - поддержка старого (плоского) и нового (двумерного) формата
+  private normalizeButtons(buttons: any): KeyboardButton[][] {
+    if (!buttons || !Array.isArray(buttons)) return [];
+
+    // Проверяем, является ли это уже двумерным массивом
+    if (buttons.length > 0 && Array.isArray(buttons[0])) {
+      return buttons as KeyboardButton[][];
+    }
+
+    // Конвертируем плоский массив - каждая кнопка в отдельном ряду (старый формат)
+    return (buttons as KeyboardButton[]).map((btn) => [btn]);
+  }
+
+  // Получить плоский список кнопок из двумерного массива
+  private flattenButtons(buttonRows: KeyboardButton[][]): KeyboardButton[] {
+    return buttonRows.flat();
   }
 
   async execute(context: FlowContext): Promise<void> {
@@ -94,32 +119,16 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     const isInline = currentNode.data?.isInline || false;
     const parseMode = currentNode.data?.parseMode;
 
+    // Нормализуем кнопки (поддержка обоих форматов)
+    const buttonRows = this.normalizeButtons(buttons);
+    const flatButtons = this.flattenButtons(buttonRows);
+
+    this.logger.log(
+      `Кнопок рядов: ${buttonRows.length}, всего кнопок: ${flatButtons.length}`
+    );
+
     // Валидация кнопок
-    if (!Array.isArray(buttons)) {
-      this.logger.error("Кнопки должны быть массивом");
-      throw new Error("Invalid buttons format: expected array");
-    }
-
-    // Фильтруем валидные кнопки
-    const validButtons = buttons.filter((button) => {
-      if (!button || typeof button !== "object") {
-        this.logger.warn(
-          "Пропускаем невалидную кнопку:",
-          JSON.stringify(button)
-        );
-        return false;
-      }
-      if (!button.text || typeof button.text !== "string") {
-        this.logger.warn(
-          "Пропускаем кнопку без текста:",
-          JSON.stringify(button)
-        );
-        return false;
-      }
-      return true;
-    });
-
-    if (validButtons.length === 0) {
+    if (flatButtons.length === 0) {
       this.logger.warn(
         "Нет валидных кнопок, отправляем сообщение без клавиатуры"
       );
@@ -128,57 +137,67 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     // Подставляем переменные в текст сообщения
     const messageText = this.substituteVariables(rawMessageText, context);
 
-    // Подставляем переменные в текст кнопок
-    const processedButtons = validButtons.map((button) => ({
-      ...button,
-      text: this.substituteVariables(button.text, context),
-      callbackData: button.callbackData
-        ? this.substituteVariables(button.callbackData, context)
-        : undefined,
-      url: button.url
-        ? this.substituteVariables(button.url, context)
-        : undefined,
-      webApp: button.webApp
-        ? this.substituteVariables(button.webApp, context)
-        : undefined,
-    }));
+    // Подставляем переменные в текст кнопок (сохраняем структуру рядов)
+    const processedButtonRows = buttonRows
+      .map((row) =>
+        row
+          .filter((button) => button && button.text)
+          .map((button) => ({
+            ...button,
+            text: this.substituteVariables(button.text, context),
+            callbackData: button.callbackData
+              ? this.substituteVariables(button.callbackData, context)
+              : undefined,
+            url: button.url
+              ? this.substituteVariables(button.url, context)
+              : undefined,
+            webApp: button.webApp
+              ? this.substituteVariables(button.webApp, context)
+              : undefined,
+          }))
+      )
+      .filter((row) => row.length > 0); // Убираем пустые ряды
 
-    this.logger.log("Keyboard buttons:", JSON.stringify(processedButtons));
+    const processedFlatButtons = this.flattenButtons(processedButtonRows);
+
+    this.logger.log("Keyboard buttons:", JSON.stringify(processedButtonRows));
     this.logger.log("Is inline:", String(isInline));
     this.logger.log("Parse mode:", parseMode || "не указан");
     this.logger.log(`Исходный текст: "${rawMessageText}"`);
     this.logger.log(`Обработанный текст: "${messageText}"`);
 
-    // Создаем клавиатуру
+    // Создаем клавиатуру напрямую из двумерного массива
     let telegramKeyboard;
-    if (processedButtons.length > 0) {
+    if (processedFlatButtons.length > 0) {
       if (isInline) {
         telegramKeyboard = {
-          inline_keyboard: processedButtons.map((button) => {
-            const buttonData: any = {
-              text: button.text,
-            };
+          inline_keyboard: processedButtonRows.map((row) =>
+            row.map((button) => {
+              const buttonData: any = {
+                text: button.text,
+              };
 
-            if (button.callbackData) {
-              buttonData.callback_data = button.callbackData;
-            } else if (button.url) {
-              buttonData.url = button.url;
-            } else if (button.webApp) {
-              buttonData.web_app = { url: button.webApp };
-            } else {
-              buttonData.callback_data = button.text;
-            }
+              if (button.callbackData) {
+                buttonData.callback_data = button.callbackData;
+              } else if (button.url) {
+                buttonData.url = button.url;
+              } else if (button.webApp) {
+                buttonData.web_app = { url: button.webApp };
+              } else {
+                buttonData.callback_data = button.text;
+              }
 
-            return [buttonData];
-          }),
+              return buttonData;
+            })
+          ),
         };
       } else {
         telegramKeyboard = {
-          keyboard: processedButtons.map((button) => [
-            {
+          keyboard: processedButtonRows.map((row) =>
+            row.map((button) => ({
               text: button.text,
-            },
-          ]),
+            }))
+          ),
           resize_keyboard: true,
           one_time_keyboard: true,
         };
@@ -188,7 +207,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     // Отправляем сообщение с клавиатурой (если есть) и сохраняем в БД
     const messageOptions: any = {};
 
-    if (processedButtons.length > 0) {
+    if (processedFlatButtons.length > 0) {
       messageOptions.reply_markup = telegramKeyboard;
     }
 
@@ -219,26 +238,13 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
             telegramResponse.message_id.toString();
 
           // Сохраняем сообщение в БД
-          // Обрабатываем keyboard: расплющиваем двумерный массив в одномерный
           let processedKeyboard = null;
           if (messageOptions.reply_markup) {
-            const buttonsArray =
-              messageOptions.reply_markup.inline_keyboard ||
-              messageOptions.reply_markup.keyboard ||
-              [];
-            // Расплющиваем двумерный массив (массив массивов кнопок) в одномерный
-            const flatButtons =
-              Array.isArray(buttonsArray) &&
-              buttonsArray.length > 0 &&
-              Array.isArray(buttonsArray[0])
-                ? buttonsArray.flat()
-                : buttonsArray;
-
             processedKeyboard = {
               type: messageOptions.reply_markup.inline_keyboard
                 ? "inline"
                 : "reply",
-              buttons: flatButtons,
+              buttons: processedFlatButtons,
             };
           }
 
@@ -274,10 +280,10 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       const pressedButtonData = message.callback_query.data;
       this.logger.log(`Нажата кнопка с данными: ${pressedButtonData}`);
       this.logger.log(
-        `Доступные кнопки: ${JSON.stringify(processedButtons.map((b) => ({ text: b.text, callbackData: b.callbackData })))}`
+        `Доступные кнопки: ${JSON.stringify(processedFlatButtons.map((b) => ({ text: b.text, callbackData: b.callbackData })))}`
       );
 
-      const buttonIndex = processedButtons.findIndex(
+      const buttonIndex = processedFlatButtons.findIndex(
         (button) => button.callbackData === pressedButtonData
       );
 
@@ -331,7 +337,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
         );
 
         // Находим индекс кнопки по тексту
-        const buttonIndex = processedButtons.findIndex(
+        const buttonIndex = processedFlatButtons.findIndex(
           (button) => button.text.trim() === pressedButtonText
         );
 
@@ -384,26 +390,13 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
           telegramResponse.message_id.toString();
 
         // Сохраняем сообщение в БД
-        // Обрабатываем keyboard: расплющиваем двумерный массив в одномерный
         let processedKeyboard = null;
         if (messageOptions.reply_markup) {
-          const buttonsArray =
-            messageOptions.reply_markup.inline_keyboard ||
-            messageOptions.reply_markup.keyboard ||
-            [];
-          // Расплющиваем двумерный массив (массив массивов кнопок) в одномерный
-          const flatButtons =
-            Array.isArray(buttonsArray) &&
-            buttonsArray.length > 0 &&
-            Array.isArray(buttonsArray[0])
-              ? buttonsArray.flat()
-              : buttonsArray;
-
           processedKeyboard = {
             type: messageOptions.reply_markup.inline_keyboard
               ? "inline"
               : "reply",
-            buttons: flatButtons,
+            buttons: processedFlatButtons,
           };
         }
 
