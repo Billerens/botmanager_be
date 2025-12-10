@@ -277,7 +277,23 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
           );
         }
 
-        this.logger.log(`Keyboard узел завершен, ожидаем выбор пользователя`);
+        // Проверяем, есть ли хотя бы одна кнопка с callbackData
+        const hasCallbackButtons = processedFlatButtons.some(
+          (btn) => btn.callbackData || (!btn.url && !btn.webApp)
+        );
+
+        if (!hasCallbackButtons && processedFlatButtons.length > 0) {
+          this.logger.log(
+            `Все кнопки URL/webApp без callback - автоматически переходим к следующему узлу`
+          );
+          await this.moveToNextNodeByOutput(
+            context,
+            currentNode.nodeId,
+            "button-0"
+          );
+        } else {
+          this.logger.log(`Keyboard узел завершен, ожидаем выбор пользователя`);
+        }
         return;
       }
 
@@ -429,8 +445,27 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
         );
       }
 
-      // НЕ переходим к следующему узлу - ждем callback запрос
-      this.logger.log(`Keyboard узел завершен, ожидаем выбор пользователя`);
+      // Проверяем, есть ли хотя бы одна кнопка с callbackData
+      // Если все кнопки - URL или webApp, они не генерируют callback,
+      // поэтому нужно автоматически перейти к следующему узлу
+      const hasCallbackButtons = processedFlatButtons.some(
+        (btn) => btn.callbackData || (!btn.url && !btn.webApp)
+      );
+
+      if (!hasCallbackButtons && processedFlatButtons.length > 0) {
+        this.logger.log(
+          `Все кнопки URL/webApp без callback - автоматически переходим к следующему узлу`
+        );
+        // Переходим к первому выходу или default
+        await this.moveToNextNodeByOutput(
+          context,
+          currentNode.nodeId,
+          "button-0"
+        );
+      } else {
+        // НЕ переходим к следующему узлу - ждем callback запрос
+        this.logger.log(`Keyboard узел завершен, ожидаем выбор пользователя`);
+      }
     }
   }
 }
