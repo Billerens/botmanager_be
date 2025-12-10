@@ -39,6 +39,7 @@ import { PaymentsModule } from "./modules/payments/payments.module";
 import { PublicAuthModule } from "./modules/public-auth/public-auth.module";
 import { MailModule } from "./modules/mail/mail.module";
 import { ShopsModule } from "./modules/shops/shops.module";
+import { AdminModule } from "./modules/admin/admin.module";
 
 @Module({
   imports: [
@@ -107,6 +108,7 @@ import { ShopsModule } from "./modules/shops/shops.module";
     PublicAuthModule, // Авторизация публичных пользователей (браузер)
     MailModule, // Email сервис
     ShopsModule, // Магазины (независимые от ботов)
+    AdminModule, // Админ-панель для техподдержки
   ],
 })
 export class AppModule {}

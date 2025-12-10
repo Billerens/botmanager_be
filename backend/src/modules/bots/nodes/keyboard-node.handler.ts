@@ -112,9 +112,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
     // Получаем текст сообщения из правильного поля
     const rawMessageText =
-      currentNode.data?.messageText ||
-      currentNode.data?.text ||
-      "Выберите опцию:";
+      currentNode.data?.messageText || currentNode.data?.text;
     const buttons = currentNode.data?.buttons || [];
     const isInline = currentNode.data?.isInline || false;
     const parseMode = currentNode.data?.parseMode;
@@ -225,6 +223,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
         // Отправляем сообщение и сохраняем message_id
         const decryptedToken = this.botsService.decryptToken(bot.token);
+
         const telegramResponse = await this.telegramService.sendMessage(
           decryptedToken,
           message.chat.id,

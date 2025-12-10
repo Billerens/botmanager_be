@@ -59,6 +59,43 @@ export class TelegramValidationService {
     }
   }
 
+  async sendMessage(
+    telegramId: string,
+    message: string,
+    options?: { parse_mode?: "HTML" | "Markdown" | "MarkdownV2" }
+  ): Promise<boolean> {
+    if (!this.botToken) {
+      this.logger.error(
+        "Не удалось отправить сообщение: TELEGRAM_BOT_TOKEN не установлен"
+      );
+      return false;
+    }
+
+    try {
+      const response = await axios.post(
+        `https://api.telegram.org/bot${this.botToken}/sendMessage`,
+        {
+          chat_id: telegramId,
+          text: message,
+          parse_mode: options?.parse_mode || "HTML",
+        }
+      );
+
+      if (response.data.ok) {
+        this.logger.log(`Сообщение отправлено в Telegram для ID: ${telegramId}`);
+        return true;
+      } else {
+        this.logger.error(
+          `Ошибка отправки в Telegram: ${response.data.description}`
+        );
+        return false;
+      }
+    } catch (error) {
+      this.logger.error(`Ошибка отправки сообщения в Telegram:`, error.message);
+      return false;
+    }
+  }
+
   async sendWelcomeMessage(
     telegramId: string,
     firstName?: string
