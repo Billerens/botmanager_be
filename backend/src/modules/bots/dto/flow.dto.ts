@@ -51,8 +51,8 @@ export class KeyboardButtonDto {
   url?: string;
 
   @IsOptional()
-  @IsObject()
-  webApp?: any;
+  @IsString()
+  webApp?: string;
 }
 
 export class TransformDto {
