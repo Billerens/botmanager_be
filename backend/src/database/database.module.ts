@@ -28,6 +28,8 @@ import { BotInvitation } from "./entities/bot-invitation.entity";
 import { GroupSession } from "./entities/group-session.entity";
 import { PublicUser } from "./entities/public-user.entity";
 import { Shop } from "./entities/shop.entity";
+import { Admin } from "./entities/admin.entity";
+import { AdminActionLog } from "./entities/admin-action-log.entity";
 
 @Module({
   imports: [
@@ -67,6 +69,8 @@ import { Shop } from "./entities/shop.entity";
           GroupSession,
           PublicUser,
           Shop,
+          Admin,
+          AdminActionLog,
         ],
         synchronize: configService.get("NODE_ENV") === "development",
         logging: false,
@@ -104,6 +108,8 @@ import { Shop } from "./entities/shop.entity";
       GroupSession,
       PublicUser,
       Shop,
+      Admin,
+      AdminActionLog,
     ]),
   ],
   exports: [TypeOrmModule],

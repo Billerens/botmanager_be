@@ -91,6 +91,11 @@ import { TelegramValidationService } from "../../common/telegram-validation.serv
     AdminRolesGuard,
     TelegramValidationService,
   ],
-  exports: [AdminAuthService, AdminActionLogService, AdminTelegramService],
+  exports: [
+    AdminAuthService,
+    AdminActionLogService,
+    AdminTelegramService,
+    TypeOrmModule, // Экспортируем для доступа к репозиториям в других модулях
+  ],
 })
 export class AdminModule {}

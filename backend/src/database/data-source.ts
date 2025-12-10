@@ -26,6 +26,8 @@ import { BotInvitation } from "./entities/bot-invitation.entity";
 import { GroupSession } from "./entities/group-session.entity";
 import { PublicUser } from "./entities/public-user.entity";
 import { Shop } from "./entities/shop.entity";
+import { Admin } from "./entities/admin.entity";
+import { AdminActionLog } from "./entities/admin-action-log.entity";
 
 // Загружаем переменные окружения
 config();
@@ -66,6 +68,8 @@ export const AppDataSource = new DataSource({
     GroupSession,
     PublicUser,
     Shop,
+    Admin,
+    AdminActionLog,
   ],
   migrations: ["src/database/migrations/*.ts"],
   subscribers: ["src/database/subscribers/*.ts"],
