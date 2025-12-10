@@ -159,6 +159,132 @@ export abstract class BaseNodeHandler implements INodeHandler {
   }
 
   /**
+   * Отправляет фото через Telegram API и сохраняет его в базу данных
+   */
+  protected async sendAndSavePhoto(
+    bot: any,
+    chatId: string,
+    photoUrl: string,
+    options: {
+      caption?: string;
+      parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
+      reply_markup?: any;
+      reply_to_message_id?: number;
+    } = {}
+  ): Promise<void> {
+    const decryptedToken = this.botsService.decryptToken(bot.token);
+
+    // Отправляем фото через Telegram API
+    const telegramResponse = await this.telegramService.sendPhoto(
+      decryptedToken,
+      chatId,
+      photoUrl,
+      options
+    );
+
+    if (telegramResponse) {
+      // Сохраняем исходящее сообщение в базу данных
+      // Обрабатываем keyboard: расплющиваем двумерный массив в одномерный
+      let processedKeyboard = null;
+      if (options.reply_markup) {
+        const buttonsArray =
+          options.reply_markup.inline_keyboard ||
+          options.reply_markup.keyboard ||
+          [];
+        // Расплющиваем двумерный массив (массив массивов кнопок) в одномерный
+        const flatButtons =
+          Array.isArray(buttonsArray) &&
+          buttonsArray.length > 0 &&
+          Array.isArray(buttonsArray[0])
+            ? buttonsArray.flat()
+            : buttonsArray;
+
+        processedKeyboard = {
+          type: options.reply_markup.inline_keyboard ? "inline" : "reply",
+          buttons: flatButtons,
+        };
+      }
+
+      // Получаем информацию о фото из ответа
+      const photoArray = telegramResponse.photo || [];
+      const largestPhoto = photoArray[photoArray.length - 1] || {};
+
+      await this.messagesService.create({
+        botId: bot.id,
+        telegramMessageId: telegramResponse.message_id,
+        telegramChatId: chatId,
+        telegramUserId: bot.id,
+        type: MessageType.OUTGOING,
+        contentType: MessageContentType.PHOTO,
+        text: options.caption || null,
+        media: {
+          fileId: largestPhoto.file_id || "",
+          fileUniqueId: largestPhoto.file_unique_id || "",
+          width: largestPhoto.width || 0,
+          height: largestPhoto.height || 0,
+          fileSize: largestPhoto.file_size || 0,
+        },
+        keyboard: processedKeyboard,
+        metadata: {
+          firstName: bot.name || "Bot",
+          lastName: "",
+          username: bot.username,
+          isBot: true,
+          replyToMessageId: options.reply_to_message_id,
+        },
+        isProcessed: true,
+        processedAt: new Date(),
+      });
+
+      this.logger.log(
+        `Исходящее фото отправлено и сохранено для чата ${chatId}`
+      );
+
+      // Логируем отправку фото
+      if (bot.ownerId) {
+        this.activityLogService
+          .create({
+            type: ActivityType.MESSAGE_SENT,
+            level: ActivityLevel.SUCCESS,
+            message: `Фото отправлено в чат ${chatId}`,
+            userId: bot.ownerId,
+            botId: bot.id,
+            metadata: {
+              chatId,
+              telegramMessageId: telegramResponse.message_id,
+              hasCaption: !!options.caption,
+              hasKeyboard: !!processedKeyboard,
+            },
+          })
+          .catch((error) => {
+            this.logger.error("Ошибка логирования отправки фото:", error);
+          });
+      }
+    } else {
+      this.logger.error(`Ошибка отправки фото в чат ${chatId}`);
+
+      // Логируем ошибку отправки фото
+      if (bot.ownerId) {
+        this.activityLogService
+          .create({
+            type: ActivityType.MESSAGE_FAILED,
+            level: ActivityLevel.ERROR,
+            message: `Ошибка отправки фото в чат ${chatId}`,
+            userId: bot.ownerId,
+            botId: bot.id,
+            metadata: {
+              chatId,
+              errorMessage: "Не удалось отправить фото через Telegram API",
+            },
+          })
+          .catch((error) => {
+            this.logger.error("Ошибка логирования ошибки отправки:", error);
+          });
+      }
+    }
+  }
+
+  /**
    * Отправляет документ через Telegram API и сохраняет его в базу данных
    */
   protected async sendAndSaveDocument(
@@ -734,8 +860,14 @@ export abstract class BaseNodeHandler implements INodeHandler {
   /**
    * Обрабатывает ошибку выполнения узла
    */
-  protected async handleNodeError(context: FlowContext, error: any): Promise<void> {
-    this.logger.error(`Ошибка выполнения узла ${context.currentNode?.nodeId}:`, error);
+  protected async handleNodeError(
+    context: FlowContext,
+    error: any
+  ): Promise<void> {
+    this.logger.error(
+      `Ошибка выполнения узла ${context.currentNode?.nodeId}:`,
+      error
+    );
 
     // Отправляем сообщение об ошибке пользователю, если возможно
     try {

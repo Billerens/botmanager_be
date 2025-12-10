@@ -19,8 +19,9 @@ export class MessageNodeHandler extends BaseNodeHandler {
   async execute(context: FlowContext): Promise<void> {
     const { currentNode, bot, message } = context;
 
-    const rawMessageText = currentNode.data?.text || "Привет!";
+    const rawMessageText = currentNode.data?.text || "";
     const parseMode = currentNode.data?.parseMode || "HTML";
+    const imageUrl = currentNode.data?.image;
 
     // Подставляем переменные в текст сообщения
     const messageText = this.substituteVariables(rawMessageText, context);
@@ -30,11 +31,28 @@ export class MessageNodeHandler extends BaseNodeHandler {
     this.logger.log(`Пользователь: ${context.session.userId}`);
     this.logger.log(`Исходный текст: "${rawMessageText}"`);
     this.logger.log(`Обработанный текст: "${messageText}"`);
+    this.logger.log(`Изображение: ${imageUrl || "отсутствует"}`);
 
-    // Отправляем сообщение и сохраняем в БД
-    await this.sendAndSaveMessage(bot, message.chat.id, messageText, {
-      parse_mode: parseMode,
-    });
+    // Если есть изображение - отправляем фото с caption
+    if (imageUrl) {
+      this.logger.log(`Отправляем фото с URL: ${imageUrl}`);
+      await this.sendAndSavePhoto(bot, message.chat.id, imageUrl, {
+        caption: messageText || undefined,
+        parse_mode: messageText ? parseMode : undefined,
+      });
+    }
+    // Если нет изображения, но есть текст - отправляем текстовое сообщение
+    else if (messageText) {
+      await this.sendAndSaveMessage(bot, message.chat.id, messageText, {
+        parse_mode: parseMode,
+      });
+    }
+    // Если нет ни текста, ни изображения - логируем предупреждение
+    else {
+      this.logger.warn(
+        `Message узел ${currentNode.nodeId} не содержит ни текста, ни изображения`
+      );
+    }
 
     // Переходим к следующему узлу
     await this.moveToNextNode(context, currentNode.nodeId);

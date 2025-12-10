@@ -112,6 +112,7 @@ export class BotFlowNode {
     // Для MESSAGE нод
     messageType?: MessageNodeType;
     text?: string;
+    image?: string; // URL изображения для message узла
     media?: {
       fileId?: string;
       fileName?: string;
