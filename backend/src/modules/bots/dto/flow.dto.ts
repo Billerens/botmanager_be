@@ -95,6 +95,10 @@ export class FlowNodeDataDto {
 
   @IsOptional()
   @IsString()
+  image?: string; // URL изображения для message узла
+
+  @IsOptional()
+  @IsString()
   messageText?: string;
 
   @IsOptional()
