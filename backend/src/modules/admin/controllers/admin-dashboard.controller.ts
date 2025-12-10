@@ -68,17 +68,17 @@ export class AdminDashboardController {
 
     // Выручка за сегодня
     const todayRevenue = await this.orderRepository
-      .createQueryBuilder("order")
-      .select("SUM(order.totalAmount)", "total")
-      .where("order.createdAt >= :today", { today })
-      .andWhere("order.status != :status", { status: "cancelled" })
+      .createQueryBuilder("ord")
+      .select("SUM(ord.totalAmount)", "total")
+      .where("ord.createdAt >= :today", { today })
+      .andWhere("ord.status != :status", { status: "cancelled" })
       .getRawOne();
 
     // Выручка за всё время
     const totalRevenue = await this.orderRepository
-      .createQueryBuilder("order")
-      .select("SUM(order.totalAmount)", "total")
-      .where("order.status != :status", { status: "cancelled" })
+      .createQueryBuilder("ord")
+      .select("SUM(ord.totalAmount)", "total")
+      .where("ord.status != :status", { status: "cancelled" })
       .getRawOne();
 
     // Недавняя активность админов
@@ -140,13 +140,13 @@ export class AdminDashboardController {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const data = await this.orderRepository
-      .createQueryBuilder("order")
-      .select("DATE(order.createdAt)", "date")
+      .createQueryBuilder("ord")
+      .select("DATE(ord.createdAt)", "date")
       .addSelect("COUNT(*)", "count")
-      .addSelect("SUM(order.totalAmount)", "revenue")
-      .where("order.createdAt >= :date", { date: thirtyDaysAgo })
-      .groupBy("DATE(order.createdAt)")
-      .orderBy("DATE(order.createdAt)", "ASC")
+      .addSelect("SUM(ord.totalAmount)", "revenue")
+      .where("ord.createdAt >= :date", { date: thirtyDaysAgo })
+      .groupBy("DATE(ord.createdAt)")
+      .orderBy("DATE(ord.createdAt)", "ASC")
       .getRawMany();
 
     return data;
@@ -159,14 +159,14 @@ export class AdminDashboardController {
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
     const data = await this.orderRepository
-      .createQueryBuilder("order")
-      .select("TO_CHAR(order.createdAt, 'YYYY-MM')", "month")
-      .addSelect("SUM(order.totalAmount)", "revenue")
+      .createQueryBuilder("ord")
+      .select("TO_CHAR(ord.createdAt, 'YYYY-MM')", "month")
+      .addSelect("SUM(ord.totalAmount)", "revenue")
       .addSelect("COUNT(*)", "orders")
-      .where("order.createdAt >= :date", { date: oneYearAgo })
-      .andWhere("order.status != :status", { status: "cancelled" })
-      .groupBy("TO_CHAR(order.createdAt, 'YYYY-MM')")
-      .orderBy("TO_CHAR(order.createdAt, 'YYYY-MM')", "ASC")
+      .where("ord.createdAt >= :date", { date: oneYearAgo })
+      .andWhere("ord.status != :status", { status: "cancelled" })
+      .groupBy("TO_CHAR(ord.createdAt, 'YYYY-MM')")
+      .orderBy("TO_CHAR(ord.createdAt, 'YYYY-MM')", "ASC")
       .getRawMany();
 
     return data;

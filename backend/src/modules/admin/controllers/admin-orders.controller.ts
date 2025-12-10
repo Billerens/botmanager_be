@@ -166,10 +166,10 @@ export class AdminOrdersController {
     @Query("startDate") startDate?: string,
     @Query("endDate") endDate?: string
   ) {
-    const queryBuilder = this.orderRepository.createQueryBuilder("order");
+    const queryBuilder = this.orderRepository.createQueryBuilder("ord");
 
     if (startDate && endDate) {
-      queryBuilder.where("order.createdAt BETWEEN :start AND :end", {
+      queryBuilder.where("ord.createdAt BETWEEN :start AND :end", {
         start: new Date(startDate),
         end: new Date(endDate),
       });
@@ -179,18 +179,18 @@ export class AdminOrdersController {
 
     // Группировка по статусам
     const byStatus = await this.orderRepository
-      .createQueryBuilder("order")
-      .select("order.status", "status")
+      .createQueryBuilder("ord")
+      .select("ord.status", "status")
       .addSelect("COUNT(*)", "count")
-      .addSelect("SUM(order.totalAmount)", "totalAmount")
-      .groupBy("order.status")
+      .addSelect("SUM(ord.totalAmount)", "totalAmount")
+      .groupBy("ord.status")
       .getRawMany();
 
     // Сумма всех заказов
     const totalRevenue = await this.orderRepository
-      .createQueryBuilder("order")
-      .select("SUM(order.totalAmount)", "total")
-      .where("order.status != :status", { status: "cancelled" })
+      .createQueryBuilder("ord")
+      .select("SUM(ord.totalAmount)", "total")
+      .where("ord.status != :status", { status: "cancelled" })
       .getRawOne();
 
     return {
