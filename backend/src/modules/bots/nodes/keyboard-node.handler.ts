@@ -116,6 +116,10 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     const buttons = currentNode.data?.buttons || [];
     const isInline = currentNode.data?.isInline || false;
     const parseMode = currentNode.data?.parseMode;
+    // Опции для Reply Keyboard
+    const oneTimeKeyboard = currentNode.data?.oneTimeKeyboard ?? true; // По умолчанию скрывать после нажатия
+    const isPersistent = currentNode.data?.isPersistent ?? false; // По умолчанию не постоянная
+    const resizeKeyboard = currentNode.data?.resizeKeyboard ?? true; // По умолчанию автоматический размер
 
     // Нормализуем кнопки (поддержка обоих форматов)
     const buttonRows = this.normalizeButtons(buttons);
@@ -190,14 +194,16 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
           ),
         };
       } else {
+        // Reply Keyboard с настраиваемыми параметрами
         telegramKeyboard = {
           keyboard: processedButtonRows.map((row) =>
             row.map((button) => ({
               text: button.text,
             }))
           ),
-          resize_keyboard: true,
-          one_time_keyboard: true,
+          resize_keyboard: resizeKeyboard,
+          one_time_keyboard: oneTimeKeyboard,
+          is_persistent: isPersistent, // Telegram Bot API 6.7+: клавиатура всегда отображается
         };
       }
     }

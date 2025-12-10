@@ -110,6 +110,16 @@ export class FlowNodeDataDto {
   @IsOptional()
   isInline?: boolean;
 
+  // Опции для Reply Keyboard (isInline = false)
+  @IsOptional()
+  oneTimeKeyboard?: boolean; // Скрывать после нажатия (по умолчанию true)
+
+  @IsOptional()
+  isPersistent?: boolean; // Постоянная клавиатура (Telegram Bot API 6.7+)
+
+  @IsOptional()
+  resizeKeyboard?: boolean; // Автоматический размер (по умолчанию true)
+
   @IsOptional()
   @IsObject()
   condition?: {

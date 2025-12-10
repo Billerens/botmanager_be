@@ -127,6 +127,10 @@ export class BotFlowNode {
       webApp?: string;
     }>;
     isInline?: boolean;
+    // Опции для Reply Keyboard (isInline = false)
+    oneTimeKeyboard?: boolean; // Скрывать после нажатия (по умолчанию true)
+    isPersistent?: boolean; // Постоянная клавиатура (Telegram Bot API 6.7+)
+    resizeKeyboard?: boolean; // Автоматический размер (по умолчанию true)
     parseMode?: "HTML" | "Markdown" | "MarkdownV2";
 
     // Для CONDITION нод
