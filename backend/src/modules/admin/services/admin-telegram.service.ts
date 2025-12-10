@@ -129,31 +129,31 @@ export class AdminTelegramService {
 
 *Доступные команды:*
 
-📋 */admin\\_list* - Список всех администраторов
+📋 */admin_list* - Список всех администраторов
 
-➕ */admin\\_create* _username firstName lastName telegramId [role]_
+➕ */admin_create* _username firstName lastName telegramId [role]_
 Создать нового администратора
 • role: superadmin, support, viewer (по умолчанию: support)
 
-🔍 */admin\\_info* _username или telegramId_
+🔍 */admin_info* _username или telegramId_
 Информация об администраторе
 
-🔄 */admin\\_rotate* _username или telegramId_
+🔄 */admin_rotate* _username или telegramId_
 Принудительная ротация пароля
 
-🚫 */admin\\_block* _username или telegramId_
+🚫 */admin_block* _username или telegramId_
 Заблокировать администратора
 
-✅ */admin\\_unblock* _username или telegramId_
+✅ */admin_unblock* _username или telegramId_
 Разблокировать администратора
 
-👑 */admin\\_setrole* _username role_
+👑 */admin_setrole* _username role_
 Изменить роль (superadmin/support/viewer)
 
-❌ */admin\\_delete* _username или telegramId_
+❌ */admin_delete* _username или telegramId_
 Удалить администратора
 
-🔑 */admin\\_mypassword*
+🔑 */admin_mypassword*
 Запросить свой пароль (если вы получатель)
 
 _Пример создания:_
