@@ -150,6 +150,9 @@ export class ShopsService {
       throw new ForbiddenException("Нет доступа к этому магазину");
     }
 
+    // Логируем buttonTypes для отладки
+    this.logger.log(`Loaded shop ${id} with buttonTypes:`, shop.buttonTypes);
+
     return shop;
   }
 
@@ -229,8 +232,41 @@ export class ShopsService {
   ): Promise<Shop> {
     const shop = await this.findOne(id, userId);
 
+    this.logger.log(`Updating shop settings for shop ${id}:`, {
+      buttonTypes: settings.buttonTypes,
+      buttonSettings: settings.buttonSettings,
+      hasBot: !!shop.bot,
+    });
+
     Object.assign(shop, settings);
     const updatedShop = await this.shopRepository.save(shop);
+
+    this.logger.log(`Shop saved with buttonTypes:`, updatedShop.buttonTypes);
+
+    // Обновляем команды бота в Telegram если магазин привязан к боту
+    // и изменялись настройки buttonTypes или buttonSettings
+    if (
+      updatedShop.bot &&
+      (settings.buttonTypes !== undefined ||
+        settings.buttonSettings !== undefined)
+    ) {
+      try {
+        const token = this.decryptToken(updatedShop.bot.token);
+        await this.telegramService.setBotCommands(
+          token,
+          updatedShop.bot,
+          updatedShop
+        );
+        this.logger.log(
+          `Bot commands updated after shop settings change for shop ${updatedShop.id}`
+        );
+      } catch (error) {
+        this.logger.error(
+          "Ошибка обновления команд бота после изменения настроек:",
+          error.message
+        );
+      }
+    }
 
     // Логируем обновление настроек
     this.activityLogService
@@ -592,4 +628,3 @@ export class ShopsService {
     return subcategoryIds;
   }
 }
-

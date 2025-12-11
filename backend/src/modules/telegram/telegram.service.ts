@@ -169,7 +169,7 @@ export class TelegramService {
         );
       } else {
         console.log(
-          `Команда /shop НЕ добавлена для бота ${bot.id}: shop=${shop?.id || "null"}, buttonTypes=${JSON.stringify(shop?.buttonTypes)}`
+          `Команда /shop НЕ добавлена для бота ${bot.id}: shop=${shop?.id || "null"}, buttonTypes=${JSON.stringify(shop?.buttonTypes)}, hasShopCommand=${hasShopCommand}`
         );
       }
 
@@ -210,6 +210,7 @@ export class TelegramService {
         `${this.baseUrl}${token}/setMyCommands`,
         {
           commands: commands,
+          scope: { type: "default" },
         }
       );
 
@@ -221,12 +222,22 @@ export class TelegramService {
       const hasBookingMenuButton =
         bot.isBookingEnabled && bot.bookingButtonTypes?.includes("menu_button");
 
+      console.log(`Menu button logic for bot ${bot.id}:`, {
+        hasShopMenuButton,
+        hasBookingMenuButton,
+        shopButtonTypes: shop?.buttonTypes,
+        botBookingButtonTypes: bot.bookingButtonTypes,
+      });
+
       if (hasShopMenuButton) {
+        console.log(`Setting shop menu button for bot ${bot.id}`);
         await this.setMenuButton(token, shop);
       } else if (hasBookingMenuButton) {
+        console.log(`Setting booking menu button for bot ${bot.id}`);
         await this.setBookingMenuButton(token, bot);
       } else {
         // Если ни один Menu Button не включен, очищаем его
+        console.log(`Clearing menu button for bot ${bot.id}`);
         await this.clearMenuButton(token);
       }
 
@@ -329,7 +340,9 @@ export class TelegramService {
       }
 
       // Для очистки Menu Button нужно передать пустой объект или не передавать menu_button вообще
-      await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {});
+      await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {
+        menu_button: null,
+      });
 
       console.log("Menu button cleared successfully");
     } catch (error) {
