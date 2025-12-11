@@ -60,14 +60,14 @@ export class ShopsService {
    */
   private decryptToken(encryptedToken: string): string {
     const algorithm = "aes-256-cbc";
-    const key = process.env.ENCRYPTION_KEY || "default-key-32-chars-long!!!!!";
+    const keyString =
+      process.env.ENCRYPTION_KEY || "your-32-character-secret-key-here";
+    // Убеждаемся, что ключ имеет правильную длину (32 байта для AES-256)
+    const key = crypto.scryptSync(keyString, "salt", 32);
+
     const [ivHex, encrypted] = encryptedToken.split(":");
     const iv = Buffer.from(ivHex, "hex");
-    const decipher = crypto.createDecipheriv(
-      algorithm,
-      Buffer.from(key.padEnd(32).slice(0, 32)),
-      iv
-    );
+    const decipher = crypto.createDecipheriv(algorithm, key, iv);
     let decrypted = decipher.update(encrypted, "hex", "utf8");
     decrypted += decipher.final("utf8");
     return decrypted;
@@ -150,8 +150,6 @@ export class ShopsService {
       throw new ForbiddenException("Нет доступа к этому магазину");
     }
 
-    // Логируем buttonTypes для отладки
-    this.logger.log(`Loaded shop ${id} with buttonTypes:`, shop.buttonTypes);
 
     return shop;
   }
@@ -232,16 +230,10 @@ export class ShopsService {
   ): Promise<Shop> {
     const shop = await this.findOne(id, userId);
 
-    this.logger.log(`Updating shop settings for shop ${id}:`, {
-      buttonTypes: settings.buttonTypes,
-      buttonSettings: settings.buttonSettings,
-      hasBot: !!shop.bot,
-    });
 
     Object.assign(shop, settings);
     const updatedShop = await this.shopRepository.save(shop);
 
-    this.logger.log(`Shop saved with buttonTypes:`, updatedShop.buttonTypes);
 
     // Обновляем команды бота в Telegram если магазин привязан к боту
     // и изменялись настройки buttonTypes или buttonSettings
@@ -252,19 +244,26 @@ export class ShopsService {
     ) {
       try {
         const token = this.decryptToken(updatedShop.bot.token);
-        await this.telegramService.setBotCommands(
+        const success = await this.telegramService.setBotCommands(
           token,
           updatedShop.bot,
           updatedShop
         );
-        this.logger.log(
-          `Bot commands updated after shop settings change for shop ${updatedShop.id}`
-        );
+        if (success) {
+          this.logger.log(
+            `Bot commands updated after shop settings change for shop ${updatedShop.id}`
+          );
+        } else {
+          this.logger.error(
+            `Failed to update bot commands for shop ${updatedShop.id}`
+          );
+        }
       } catch (error) {
         this.logger.error(
           "Ошибка обновления команд бота после изменения настроек:",
           error.message
         );
+        // Не выбрасываем ошибку, чтобы не блокировать сохранение настроек
       }
     }
 
