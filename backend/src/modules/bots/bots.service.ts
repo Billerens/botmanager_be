@@ -338,6 +338,14 @@ export class BotsService {
       console.error("Ошибка удаления webhook:", error);
     }
 
+    // Отвязываем activity_logs от бота перед удалением
+    // Это необходимо для обхода foreign key constraint
+    try {
+      await this.activityLogService.unlinkFromBot(bot.id);
+    } catch (error) {
+      console.error("Ошибка отвязки activity_logs от бота:", error);
+    }
+
     await this.botRepository.remove(bot);
 
     // Отправляем уведомление об удалении бота

@@ -168,4 +168,19 @@ export class ActivityLogService {
 
     return result.affected || 0;
   }
+
+  /**
+   * Отвязывает все activity_logs от указанного бота
+   * Устанавливает botId в null для обхода foreign key constraint при удалении бота
+   */
+  async unlinkFromBot(botId: string): Promise<number> {
+    const result = await this.activityLogRepository
+      .createQueryBuilder()
+      .update(ActivityLog)
+      .set({ botId: null })
+      .where("botId = :botId", { botId })
+      .execute();
+
+    return result.affected || 0;
+  }
 }
