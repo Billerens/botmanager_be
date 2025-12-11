@@ -253,11 +253,24 @@ async function bootstrap() {
 
   // Безопасность
   app.use(helmet());
-  app.use(compression());
+  // SSE нельзя сжимать, иначе чанки буферизуются и стрим рвётся по таймауту
+  app.use(
+    compression({
+      filter: (req, res) => {
+        if (
+          req.headers.accept?.includes("text/event-stream") ||
+          req.originalUrl?.includes("/langchain-openrouter/chat/stream")
+        ) {
+          return false;
+        }
+        return compression.filter(req, res);
+      },
+    })
+  );
 
   // Настройка body parser с увеличенным лимитом для больших HTML файлов
-  app.use(bodyParser.json({ limit: '10mb' }));
-  app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
+  app.use(bodyParser.json({ limit: "10mb" }));
+  app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
 
   // Middleware для парсинга JSON, даже если Content-Type не установлен
   // Это помогает, когда клиент забывает установить Content-Type: application/json
