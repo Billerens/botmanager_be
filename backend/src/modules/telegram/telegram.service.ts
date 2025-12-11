@@ -329,10 +329,8 @@ export class TelegramService {
         return;
       }
 
-      // Для очистки Menu Button нужно передать пустой объект или не передавать menu_button вообще
-      await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {
-        menu_button: null,
-      });
+      // Для очистки Menu Button передаем запрос без тела
+      await axios.post(`${this.baseUrl}${token}/setChatMenuButton`);
 
       console.log("Menu button cleared successfully");
     } catch (error) {
