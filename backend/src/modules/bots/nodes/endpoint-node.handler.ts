@@ -126,11 +126,9 @@ export class EndpointNodeHandler extends BaseNodeHandler {
         `⏳ Ожидание данных...\n\nОтправьте POST запрос на эндпоинт:\n<code>${endpointUrl}</code>\n\nВаш User ID: <code>${session.userId}</code>`;
 
       try {
-        // Расшифровываем токен бота
-        const decryptedToken = this.botsService.decryptToken(context.bot.token);
-
-        await this.telegramService.sendMessage(
-          decryptedToken,
+        // Отправляем сообщение с поддержкой длинных текстов
+        await this.sendAndSaveMessage(
+          context.bot,
           context.message.chat.id.toString(),
           waitingMessage,
           { parse_mode: "HTML" }

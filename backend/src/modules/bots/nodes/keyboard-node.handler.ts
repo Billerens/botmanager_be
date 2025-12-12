@@ -63,45 +63,95 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       });
     } else {
       const decryptedToken = this.botsService.decryptToken(bot.token);
-      const telegramResponse = await this.telegramService.sendMessage(
-        decryptedToken,
-        chatId,
-        messageText,
-        messageOptions
-      );
 
-      if (telegramResponse) {
-        // Сохраняем сообщение в БД вручную, так как sendMessage не сохраняет автоматически
-        const processedKeyboard = messageOptions.reply_markup
-          ? {
-              type: messageOptions.reply_markup.inline_keyboard
-                ? ("inline" as const)
-                : ("reply" as const),
-              buttons: processedFlatButtons,
-            }
-          : null;
+      // Проверяем длину сообщения и выбираем подходящий метод отправки
+      if (messageText.length > 4096) {
+        // Для длинных сообщений используем sendLongMessage напрямую
+        this.logger.log(
+          `Сообщение длинное (${messageText.length} символов), используем sendLongMessage`
+        );
+        const messageResults = await this.telegramService.sendLongMessage(
+          decryptedToken,
+          chatId,
+          messageText,
+          messageOptions
+        );
 
-        await this.messagesService.create({
-          botId: bot.id,
-          telegramMessageId: telegramResponse.message_id,
-          telegramChatId: chatId,
-          telegramUserId: bot.id,
-          type: MessageType.OUTGOING,
-          contentType: MessageContentType.TEXT,
-          text: messageText,
-          keyboard: processedKeyboard,
-          metadata: {
-            firstName: bot.name || "Bot",
-            lastName: "",
-            username: bot.username,
-            isBot: true,
-          },
-          isProcessed: true,
-          processedAt: new Date(),
-        });
+        if (messageResults.length > 0) {
+          // Сохраняем первое сообщение в БД (клавиатура будет на последнем автоматически)
+          const firstMessage = messageResults[0];
+          const processedKeyboard = messageOptions.reply_markup
+            ? {
+                type: messageOptions.reply_markup.inline_keyboard
+                  ? ("inline" as const)
+                  : ("reply" as const),
+                buttons: processedFlatButtons,
+              }
+            : null;
+
+          await this.messagesService.create({
+            botId: bot.id,
+            telegramMessageId: firstMessage.message_id,
+            telegramChatId: chatId,
+            telegramUserId: bot.id,
+            type: MessageType.OUTGOING,
+            contentType: MessageContentType.TEXT,
+            text: messageText,
+            keyboard: processedKeyboard,
+            metadata: {
+              firstName: bot.name || "Bot",
+              lastName: "",
+              username: bot.username,
+              isBot: true,
+            },
+            isProcessed: true,
+            processedAt: new Date(),
+          });
+        }
+
+        return messageResults.length > 0 ? messageResults[0] : null;
+      } else {
+        // Для обычных сообщений используем обычный sendMessage с последующим сохранением
+        const telegramResponse = await this.telegramService.sendMessage(
+          decryptedToken,
+          chatId,
+          messageText,
+          messageOptions
+        );
+
+        if (telegramResponse) {
+          // Сохраняем сообщение в БД
+          const processedKeyboard = messageOptions.reply_markup
+            ? {
+                type: messageOptions.reply_markup.inline_keyboard
+                  ? ("inline" as const)
+                  : ("reply" as const),
+                buttons: processedFlatButtons,
+              }
+            : null;
+
+          await this.messagesService.create({
+            botId: bot.id,
+            telegramMessageId: telegramResponse.message_id,
+            telegramChatId: chatId,
+            telegramUserId: bot.id,
+            type: MessageType.OUTGOING,
+            contentType: MessageContentType.TEXT,
+            text: messageText,
+            keyboard: processedKeyboard,
+            metadata: {
+              firstName: bot.name || "Bot",
+              lastName: "",
+              username: bot.username,
+              isBot: true,
+            },
+            isProcessed: true,
+            processedAt: new Date(),
+          });
+        }
+
+        return telegramResponse;
       }
-
-      return telegramResponse;
     }
   }
 

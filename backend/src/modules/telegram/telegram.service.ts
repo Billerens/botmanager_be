@@ -382,25 +382,7 @@ export class TelegramService {
       // Проверяем, является ли ошибка "text is too long"
       if (error.response?.data?.description?.includes("text is too long")) {
         console.log("Текст слишком длинный, используем sendLongMessage");
-        // Используем sendLongMessage для автоматического разбития и возвращаем первое сообщение
-        const results = await this.sendLongMessage(
-          token,
-          chatId,
-          text,
-          options
-        );
-        return results.length > 0 ? results[0] : null;
-      }
-
-      // Проверяем, является ли ошибка связана с парсингом HTML entities
-      if (
-        error.response?.data?.description?.includes("can't parse entities") ||
-        error.response?.data?.description?.includes("Unsupported start tag")
-      ) {
-        console.log(
-          "HTML содержит неподдерживаемые теги, отправляем как обычный текст"
-        );
-        // Отправляем без parse_mode
+        // Для длинных сообщений отключаем parse_mode, так как разбитые части могут содержать невалидную разметку
         const plainOptions = { ...options };
         delete plainOptions.parse_mode;
 
@@ -411,6 +393,22 @@ export class TelegramService {
           plainOptions
         );
         return results.length > 0 ? results[0] : null;
+      }
+
+      // Проверяем, является ли ошибка связана с парсингом (HTML/Markdown)
+      if (
+        error.response?.data?.description?.includes("can't parse entities") ||
+        error.response?.data?.description?.includes("Unsupported start tag") ||
+        error.response?.data?.description?.includes("Bad Request: can't parse")
+      ) {
+        console.log(
+          "Parse mode содержит неподдерживаемые конструкции, отправляем как обычный текст"
+        );
+        // Отправляем без parse_mode
+        const plainOptions = { ...options };
+        delete plainOptions.parse_mode;
+
+        return await this.sendMessage(token, chatId, text, plainOptions);
       }
 
       console.error("Ошибка отправки сообщения:", {
@@ -467,17 +465,23 @@ export class TelegramService {
     console.log(`Текст разбит на ${parts.length} частей для отправки`);
 
     // Отправляем каждую часть как отдельное сообщение
+    // Для разбитых сообщений отключаем parse_mode, так как части могут содержать невалидную разметку
+    const plainOptions = {
+      disable_web_page_preview: options.disable_web_page_preview,
+    };
+
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       const isLastPart = i === parts.length - 1;
 
       // Reply markup и reply_to_message_id применяем только к последнему сообщению
       const partOptions = isLastPart
-        ? options
-        : {
-            parse_mode: options.parse_mode,
-            disable_web_page_preview: options.disable_web_page_preview,
-          };
+        ? {
+            ...plainOptions,
+            reply_markup: options.reply_markup,
+            reply_to_message_id: options.reply_to_message_id,
+          }
+        : plainOptions;
 
       const result = await this.sendMessage(token, chatId, part, partOptions);
       if (result) {
