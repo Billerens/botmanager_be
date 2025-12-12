@@ -19,7 +19,8 @@ export class GroupLeaveNodeHandler extends BaseNodeHandler {
   constructor(
     private readonly groupSessionService: GroupSessionService,
     @InjectRepository(BotFlow) botFlowRepository: Repository<BotFlow>,
-    @InjectRepository(BotFlowNode) botFlowNodeRepository: Repository<BotFlowNode>,
+    @InjectRepository(BotFlowNode)
+    botFlowNodeRepository: Repository<BotFlowNode>,
     telegramService: TelegramService,
     botsService: BotsService,
     logger: CustomLoggerService,
@@ -27,7 +28,15 @@ export class GroupLeaveNodeHandler extends BaseNodeHandler {
     activityLogService: ActivityLogService,
     @InjectQueue("group-actions") private readonly groupActionsQueue: Queue
   ) {
-    super(botFlowRepository, botFlowNodeRepository, telegramService, botsService, logger, messagesService, activityLogService);
+    super(
+      botFlowRepository,
+      botFlowNodeRepository,
+      telegramService,
+      botsService,
+      logger,
+      messagesService,
+      activityLogService
+    );
   }
 
   canHandle(nodeType: string): boolean {
@@ -95,12 +104,7 @@ export class GroupLeaveNodeHandler extends BaseNodeHandler {
       );
 
       // Отправляем подтверждение пользователю
-      const decryptedToken = this.botsService.decryptToken(bot.token);
-      await this.telegramService.sendMessage(
-        decryptedToken,
-        session.chatId,
-        "Вы покинули группу."
-      );
+      await this.sendAndSaveMessage(bot, session.chatId, "Вы покинули группу.");
 
       // Проверяем, нужно ли архивировать пустую группу
       const cleanupIfEmpty = groupLeave?.cleanupIfEmpty !== false; // по умолчанию true
@@ -121,4 +125,3 @@ export class GroupLeaveNodeHandler extends BaseNodeHandler {
     }
   }
 }
-

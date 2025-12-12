@@ -17,14 +17,23 @@ export class GroupJoinNodeHandler extends BaseNodeHandler {
   constructor(
     private readonly groupSessionService: GroupSessionService,
     @InjectRepository(BotFlow) botFlowRepository: Repository<BotFlow>,
-    @InjectRepository(BotFlowNode) botFlowNodeRepository: Repository<BotFlowNode>,
+    @InjectRepository(BotFlowNode)
+    botFlowNodeRepository: Repository<BotFlowNode>,
     telegramService: TelegramService,
     botsService: BotsService,
     logger: CustomLoggerService,
     messagesService: MessagesService,
     activityLogService: ActivityLogService
   ) {
-    super(botFlowRepository, botFlowNodeRepository, telegramService, botsService, logger, messagesService, activityLogService);
+    super(
+      botFlowRepository,
+      botFlowNodeRepository,
+      telegramService,
+      botsService,
+      logger,
+      messagesService,
+      activityLogService
+    );
   }
 
   canHandle(nodeType: string): boolean {
@@ -80,12 +89,12 @@ export class GroupJoinNodeHandler extends BaseNodeHandler {
         const onFullAction = groupJoin.onFullAction || "reject";
 
         if (onFullAction === "reject") {
-        await this.sendMessage(
-          context,
-          "К сожалению, группа уже полна. Попробуйте позже."
-        );
-        await this.moveToNextNode(context, context.currentNode.nodeId);
-        return;
+          await this.sendMessage(
+            context,
+            "К сожалению, группа уже полна. Попробуйте позже."
+          );
+          await this.moveToNextNode(context, context.currentNode.nodeId);
+          return;
         } else if (onFullAction === "create_new") {
           // Создаем новую группу автоматически
           this.logger.log("Создаем новую группу т.к. текущая полна");
@@ -143,16 +152,9 @@ export class GroupJoinNodeHandler extends BaseNodeHandler {
     }
   }
 
-  private async sendMessage(
-    context: FlowContext,
-    text: string
-  ): Promise<void> {
-    const decryptedToken = this.botsService.decryptToken(context.bot.token);
-    await this.telegramService.sendMessage(
-      decryptedToken,
-      context.session.chatId,
-      text
-    );
+  private async sendMessage(context: FlowContext, text: string): Promise<void> {
+    // Используем sendAndSaveMessage для автоматической обработки длинных сообщений
+    await this.sendAndSaveMessage(context.bot, context.session.chatId, text);
   }
 
   private resolveVariable(
@@ -168,4 +170,3 @@ export class GroupJoinNodeHandler extends BaseNodeHandler {
     return source;
   }
 }
-
