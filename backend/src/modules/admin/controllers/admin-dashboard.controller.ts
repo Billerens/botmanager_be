@@ -69,7 +69,7 @@ export class AdminDashboardController {
     // Выручка за сегодня
     const todayRevenue = await this.orderRepository
       .createQueryBuilder("ord")
-      .select("SUM(ord.totalAmount)", "total")
+      .select("SUM(ord.totalPrice)", "total")
       .where("ord.createdAt >= :today", { today })
       .andWhere("ord.status != :status", { status: "cancelled" })
       .getRawOne();
@@ -77,7 +77,7 @@ export class AdminDashboardController {
     // Выручка за всё время
     const totalRevenue = await this.orderRepository
       .createQueryBuilder("ord")
-      .select("SUM(ord.totalAmount)", "total")
+      .select("SUM(ord.totalPrice)", "total")
       .where("ord.status != :status", { status: "cancelled" })
       .getRawOne();
 
@@ -143,7 +143,7 @@ export class AdminDashboardController {
       .createQueryBuilder("ord")
       .select("DATE(ord.createdAt)", "date")
       .addSelect("COUNT(*)", "count")
-      .addSelect("SUM(ord.totalAmount)", "revenue")
+      .addSelect("SUM(ord.totalPrice)", "revenue")
       .where("ord.createdAt >= :date", { date: thirtyDaysAgo })
       .groupBy("DATE(ord.createdAt)")
       .orderBy("DATE(ord.createdAt)", "ASC")
@@ -161,7 +161,7 @@ export class AdminDashboardController {
     const data = await this.orderRepository
       .createQueryBuilder("ord")
       .select("TO_CHAR(ord.createdAt, 'YYYY-MM')", "month")
-      .addSelect("SUM(ord.totalAmount)", "revenue")
+      .addSelect("SUM(ord.totalPrice)", "revenue")
       .addSelect("COUNT(*)", "orders")
       .where("ord.createdAt >= :date", { date: oneYearAgo })
       .andWhere("ord.status != :status", { status: "cancelled" })
