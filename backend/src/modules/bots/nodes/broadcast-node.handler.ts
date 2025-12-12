@@ -244,10 +244,11 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
               }
             );
           }
-          // Если нет изображения, но есть текст - отправляем текстовое сообщение с поддержкой длинных текстов
+          // Если нет изображения, но есть текст - отправляем текстовое сообщение
           else if (processedText) {
-            // Используем sendLongMessage для автоматической разбивки длинных сообщений
-            const messageResults = await this.telegramService.sendLongMessage(
+            // sendMessage автоматически использует sendLongMessage при необходимости
+            // и отключает parse_mode для длинных сообщений
+            result = await this.telegramService.sendMessage(
               decryptedToken,
               chatId,
               processedText,
@@ -256,7 +257,6 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
                 reply_markup: replyMarkup,
               }
             );
-            result = messageResults.length > 0 ? messageResults[0] : null;
           }
 
           if (result) {
