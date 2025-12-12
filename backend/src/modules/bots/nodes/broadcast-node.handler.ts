@@ -232,6 +232,7 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
             this.logger.log(
               `Отправляем фото пользователю ${chatId} с URL: ${broadcast.image}`
             );
+            // Для изображений с caption не используем sendLongMessage - Telegram ограничивает caption 1024 символами
             result = await this.telegramService.sendPhoto(
               decryptedToken,
               chatId,
@@ -243,9 +244,10 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
               }
             );
           }
-          // Если нет изображения, но есть текст - отправляем текстовое сообщение
+          // Если нет изображения, но есть текст - отправляем текстовое сообщение с поддержкой длинных текстов
           else if (processedText) {
-            result = await this.telegramService.sendMessage(
+            // Используем sendLongMessage для автоматической разбивки длинных сообщений
+            const messageResults = await this.telegramService.sendLongMessage(
               decryptedToken,
               chatId,
               processedText,
@@ -254,6 +256,7 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
                 reply_markup: replyMarkup,
               }
             );
+            result = messageResults.length > 0 ? messageResults[0] : null;
           }
 
           if (result) {
