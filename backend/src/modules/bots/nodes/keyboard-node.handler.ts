@@ -45,6 +45,66 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     return buttonRows.flat();
   }
 
+  // Вспомогательная функция для отправки сообщения с клавиатурой (с поддержкой изображений)
+  private async sendMessageWithKeyboard(
+    bot: any,
+    chatId: string,
+    messageText: string,
+    imageUrl: string | undefined,
+    messageOptions: any,
+    processedFlatButtons: KeyboardButton[]
+  ): Promise<any> {
+    if (imageUrl) {
+      this.logger.log(`Отправляем фото с клавиатурой: ${imageUrl}`);
+      return await this.sendAndSavePhoto(bot, chatId, imageUrl, {
+        caption: messageText || undefined,
+        parse_mode: messageText ? messageOptions.parse_mode : undefined,
+        reply_markup: messageOptions.reply_markup,
+      });
+    } else {
+      const decryptedToken = this.botsService.decryptToken(bot.token);
+      const telegramResponse = await this.telegramService.sendMessage(
+        decryptedToken,
+        chatId,
+        messageText,
+        messageOptions
+      );
+
+      if (telegramResponse) {
+        // Сохраняем сообщение в БД вручную, так как sendMessage не сохраняет автоматически
+        const processedKeyboard = messageOptions.reply_markup
+          ? {
+              type: messageOptions.reply_markup.inline_keyboard
+                ? ("inline" as const)
+                : ("reply" as const),
+              buttons: processedFlatButtons,
+            }
+          : null;
+
+        await this.messagesService.create({
+          botId: bot.id,
+          telegramMessageId: telegramResponse.message_id,
+          telegramChatId: chatId,
+          telegramUserId: bot.id,
+          type: MessageType.OUTGOING,
+          contentType: MessageContentType.TEXT,
+          text: messageText,
+          keyboard: processedKeyboard,
+          metadata: {
+            firstName: bot.name || "Bot",
+            lastName: "",
+            username: bot.username,
+            isBot: true,
+          },
+          isProcessed: true,
+          processedAt: new Date(),
+        });
+      }
+
+      return telegramResponse;
+    }
+  }
+
   async execute(context: FlowContext): Promise<void> {
     const { currentNode, bot, message, session } = context;
 
@@ -113,6 +173,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     // Получаем текст сообщения из правильного поля
     const rawMessageText =
       currentNode.data?.messageText || currentNode.data?.text;
+    const imageUrl = currentNode.data?.image;
     const buttons = currentNode.data?.buttons || [];
     const isInline = currentNode.data?.isInline || false;
     const parseMode = currentNode.data?.parseMode;
@@ -120,6 +181,8 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     const oneTimeKeyboard = currentNode.data?.oneTimeKeyboard ?? true; // По умолчанию скрывать после нажатия
     const isPersistent = currentNode.data?.isPersistent ?? false; // По умолчанию не постоянная
     const resizeKeyboard = currentNode.data?.resizeKeyboard ?? true; // По умолчанию автоматический размер
+
+    this.logger.log(`Изображение: ${imageUrl || "отсутствует"}`);
 
     // Нормализуем кнопки (поддержка обоих форматов)
     const buttonRows = this.normalizeButtons(buttons);
@@ -228,49 +291,19 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
         );
 
         // Отправляем сообщение и сохраняем message_id
-        const decryptedToken = this.botsService.decryptToken(bot.token);
-
-        const telegramResponse = await this.telegramService.sendMessage(
-          decryptedToken,
+        const telegramResponse = await this.sendMessageWithKeyboard(
+          bot,
           message.chat.id,
           messageText,
-          messageOptions
+          imageUrl,
+          messageOptions,
+          processedFlatButtons
         );
 
         if (telegramResponse?.message_id) {
           // Сохраняем message_id отправленного сообщения для текущей ноды
           session.variables[`keyboard_${currentNode.nodeId}_sent_message_id`] =
             telegramResponse.message_id.toString();
-
-          // Сохраняем сообщение в БД
-          let processedKeyboard = null;
-          if (messageOptions.reply_markup) {
-            processedKeyboard = {
-              type: messageOptions.reply_markup.inline_keyboard
-                ? "inline"
-                : "reply",
-              buttons: processedFlatButtons,
-            };
-          }
-
-          await this.messagesService.create({
-            botId: bot.id,
-            telegramMessageId: telegramResponse.message_id,
-            telegramChatId: message.chat.id,
-            telegramUserId: bot.id,
-            type: MessageType.OUTGOING,
-            contentType: MessageContentType.TEXT,
-            text: messageText,
-            keyboard: processedKeyboard,
-            metadata: {
-              firstName: bot.name || "Bot",
-              lastName: "",
-              username: bot.username,
-              isBot: true,
-            },
-            isProcessed: true,
-            processedAt: new Date(),
-          });
 
           this.logger.log(
             `Сообщение отправлено, message_id сохранен: ${telegramResponse.message_id}`
@@ -397,48 +430,19 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       this.logger.log(`Отправляем клавиатуру и ждем выбора пользователя`);
 
       // Отправляем сообщение и сохраняем message_id
-      const decryptedToken = this.botsService.decryptToken(bot.token);
-      const telegramResponse = await this.telegramService.sendMessage(
-        decryptedToken,
+      const telegramResponse = await this.sendMessageWithKeyboard(
+        bot,
         message.chat.id,
         messageText,
-        messageOptions
+        imageUrl,
+        messageOptions,
+        processedFlatButtons
       );
 
       if (telegramResponse?.message_id) {
         // Сохраняем message_id отправленного сообщения для текущей ноды
         session.variables[`keyboard_${currentNode.nodeId}_sent_message_id`] =
           telegramResponse.message_id.toString();
-
-        // Сохраняем сообщение в БД
-        let processedKeyboard = null;
-        if (messageOptions.reply_markup) {
-          processedKeyboard = {
-            type: messageOptions.reply_markup.inline_keyboard
-              ? "inline"
-              : "reply",
-            buttons: processedFlatButtons,
-          };
-        }
-
-        await this.messagesService.create({
-          botId: bot.id,
-          telegramMessageId: telegramResponse.message_id,
-          telegramChatId: message.chat.id,
-          telegramUserId: bot.id,
-          type: MessageType.OUTGOING,
-          contentType: MessageContentType.TEXT,
-          text: messageText,
-          keyboard: processedKeyboard,
-          metadata: {
-            firstName: bot.name || "Bot",
-            lastName: "",
-            username: bot.username,
-            isBot: true,
-          },
-          isProcessed: true,
-          processedAt: new Date(),
-        });
 
         this.logger.log(
           `Сообщение отправлено, message_id сохранен: ${telegramResponse.message_id}`
