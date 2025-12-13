@@ -1,10 +1,5 @@
 import { Controller, Get, Param } from "@nestjs/common";
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  getSchemaPath,
-} from "@nestjs/swagger";
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger";
 import { CustomPagesService } from "../services/custom-pages.service";
 import { PublicCustomPageResponseDto } from "../dto/custom-page-response.dto";
 
@@ -13,44 +8,38 @@ import { PublicCustomPageResponseDto } from "../dto/custom-page-response.dto";
 export class PublicCustomPagesController {
   constructor(private readonly customPagesService: CustomPagesService) {}
 
-  @Get(":botUsername/:slug")
-  @ApiOperation({ summary: "Получить публичную кастомную страницу" })
+  @Get(":identifier")
+  @ApiOperation({
+    summary: "Получить публичную страницу по ID или slug",
+    description:
+      "Автоматически определяет тип идентификатора: если это UUID — ищет по ID, иначе — по slug",
+  })
+  @ApiParam({
+    name: "identifier",
+    description: "ID (UUID) или slug страницы",
+    examples: {
+      uuid: {
+        summary: "По ID",
+        value: "123e4567-e89b-12d3-a456-426614174000",
+      },
+      slug: {
+        summary: "По slug",
+        value: "contacts",
+      },
+    },
+  })
   @ApiResponse({
     status: 200,
     description: "Страница найдена",
-    schema: {
-      $ref: getSchemaPath(PublicCustomPageResponseDto),
-    },
+    type: PublicCustomPageResponseDto,
   })
   @ApiResponse({
     status: 404,
     description: "Страница не найдена",
   })
-  async getCustomPage(
-    @Param("botUsername") botUsername: string,
-    @Param("slug") slug: string
+  async getPublicPage(
+    @Param("identifier") identifier: string
   ): Promise<PublicCustomPageResponseDto> {
-    return this.customPagesService.findBySlug(botUsername, slug);
-  }
-
-  @Get("pages/:id")
-  @ApiOperation({ summary: "Получить публичную кастомную страницу по ID" })
-  @ApiResponse({
-    status: 200,
-    description: "Страница найдена",
-    schema: {
-      $ref: getSchemaPath(PublicCustomPageResponseDto),
-    },
-  })
-  @ApiResponse({
-    status: 404,
-    description: "Страница не найдена",
-  })
-  async getCustomPageById(
-    @Param("id") id: string
-  ): Promise<PublicCustomPageResponseDto> {
-    // Для публичного доступа по ID используем прямой доступ через сервис
-    const response = await this.customPagesService.getPublicPageById(id);
-    return response;
+    return this.customPagesService.getPublicPage(identifier);
   }
 }
