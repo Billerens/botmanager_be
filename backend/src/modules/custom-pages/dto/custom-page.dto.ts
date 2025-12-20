@@ -7,6 +7,7 @@ import {
   MaxLength,
   Matches,
   ValidateIf,
+  IsUUID,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
@@ -26,17 +27,19 @@ export class CreateCustomPageDto {
   })
   title: string;
 
-  @ApiProperty({
-    description: "URL-friendly идентификатор страницы (slug)",
+  @ApiPropertyOptional({
+    description:
+      "URL-friendly идентификатор страницы (slug). Если не указан, доступ только по ID",
     example: "contacts",
   })
+  @IsOptional()
   @IsString()
-  @MinLength(1, { message: "Slug обязателен" })
+  @MinLength(1, { message: "Slug не может быть пустым" })
   @MaxLength(100, { message: "Slug не должен превышать 100 символов" })
   @Matches(/^[a-z0-9-]+$/, {
     message: "Slug может содержать только строчные буквы, цифры и дефисы",
   })
-  slug: string;
+  slug?: string;
 
   @ApiPropertyOptional({
     description: "Описание страницы",
@@ -113,6 +116,22 @@ export class CreateCustomPageDto {
   @IsOptional()
   @IsBoolean()
   showInMenu?: boolean;
+
+  @ApiPropertyOptional({
+    description: "ID бота для привязки (опционально)",
+    example: "123e4567-e89b-12d3-a456-426614174000",
+  })
+  @IsOptional()
+  @IsUUID("4", { message: "ID бота должен быть валидным UUID" })
+  botId?: string;
+
+  @ApiPropertyOptional({
+    description: "ID магазина для привязки (опционально)",
+    example: "123e4567-e89b-12d3-a456-426614174000",
+  })
+  @IsOptional()
+  @IsUUID("4", { message: "ID магазина должен быть валидным UUID" })
+  shopId?: string;
 }
 
 export class UpdateCustomPageDto {
@@ -129,17 +148,19 @@ export class UpdateCustomPageDto {
   title?: string;
 
   @ApiPropertyOptional({
-    description: "URL-friendly идентификатор страницы (slug)",
+    description:
+      "URL-friendly идентификатор страницы (slug). Передать null для удаления",
     example: "updated-contacts",
   })
   @IsOptional()
+  @ValidateIf((o) => o.slug !== null)
   @IsString()
-  @MinLength(1, { message: "Slug обязателен" })
+  @MinLength(1, { message: "Slug не может быть пустым" })
   @MaxLength(100, { message: "Slug не должен превышать 100 символов" })
   @Matches(/^[a-z0-9-]+$/, {
     message: "Slug может содержать только строчные буквы, цифры и дефисы",
   })
-  slug?: string;
+  slug?: string | null;
 
   @ApiPropertyOptional({
     description: "Описание страницы",
@@ -211,4 +232,22 @@ export class UpdateCustomPageDto {
   @IsOptional()
   @IsBoolean()
   showInMenu?: boolean;
+
+  @ApiPropertyOptional({
+    description: "ID бота для привязки. Передать null для отвязки",
+    example: "123e4567-e89b-12d3-a456-426614174000",
+  })
+  @IsOptional()
+  @ValidateIf((o) => o.botId !== null)
+  @IsUUID("4", { message: "ID бота должен быть валидным UUID" })
+  botId?: string | null;
+
+  @ApiPropertyOptional({
+    description: "ID магазина для привязки. Передать null для отвязки",
+    example: "123e4567-e89b-12d3-a456-426614174000",
+  })
+  @IsOptional()
+  @ValidateIf((o) => o.shopId !== null)
+  @IsUUID("4", { message: "ID магазина должен быть валидным UUID" })
+  shopId?: string | null;
 }

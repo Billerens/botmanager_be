@@ -1,14 +1,27 @@
 import { Injectable } from "@nestjs/common";
-import { CustomPagesService } from "./custom-pages.service";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import {
+  CustomPage,
+  CustomPageStatus,
+} from "../../../database/entities/custom-page.entity";
 
+/**
+ * Сервис для работы с кастомными страницами в контексте бота.
+ * Используется для генерации команд и кнопок в Telegram.
+ * Не требует проверки прав доступа (внутренний сервис).
+ */
 @Injectable()
 export class CustomPagesBotService {
-  constructor(private readonly customPagesService: CustomPagesService) {}
+  constructor(
+    @InjectRepository(CustomPage)
+    private readonly customPageRepository: Repository<CustomPage>
+  ) {}
 
   /**
-   * Обрабатывает команду /page {command} и возвращает URL страницы
+   * Обрабатывает команду и возвращает URL страницы
    * @param botId ID бота
-   * @param command Команда после /page
+   * @param command Команда (например, "contacts")
    * @returns URL страницы или null если страница не найдена
    */
   async getPageUrlByCommand(
@@ -16,13 +29,16 @@ export class CustomPagesBotService {
     command: string
   ): Promise<string | null> {
     try {
-      const page = await this.customPagesService.findByBotCommand(
-        botId,
-        command
-      );
+      const page = await this.customPageRepository.findOne({
+        where: {
+          botId,
+          botCommand: command,
+          status: CustomPageStatus.ACTIVE,
+        },
+      });
+
       return page ? page.url : null;
     } catch (error) {
-      // Если страница не найдена, возвращаем null
       return null;
     }
   }
@@ -36,13 +52,17 @@ export class CustomPagesBotService {
     botId: string
   ): Promise<Array<{ text: string; url: string }>> {
     try {
-      const pages = await this.customPagesService.findAll(botId);
-      return pages
-        .filter((page) => page.status === "active")
-        .map((page) => ({
-          text: page.title,
-          url: page.url,
-        }));
+      const pages = await this.customPageRepository.find({
+        where: {
+          botId,
+          status: CustomPageStatus.ACTIVE,
+        },
+      });
+
+      return pages.map((page) => ({
+        text: page.title,
+        url: page.url,
+      }));
     } catch (error) {
       return [];
     }
@@ -60,26 +80,47 @@ export class CustomPagesBotService {
   }
 
   /**
-   * Генерирует список команд для бота
+   * Генерирует список команд для меню бота в Telegram
    * @param botId ID бота
-   * @returns Массив команд для меню бота
+   * @returns Массив команд для setMyCommands API
    */
   async generateBotCommands(
     botId: string
   ): Promise<Array<{ command: string; description: string }>> {
     try {
-      const pages = await this.customPagesService.findAll(botId);
+      const pages = await this.customPageRepository.find({
+        where: {
+          botId,
+          status: CustomPageStatus.ACTIVE,
+        },
+      });
+
       return pages
-        .filter(
-          (page) =>
-            page.status === "active" && page.botCommand && page.showInMenu
-        )
+        .filter((page) => page.botCommand && page.showInMenu)
         .map((page) => ({
-          command: page.botCommand!.substring(1), // Убираем / для Telegram API
+          // Убираем / если команда начинается с неё
+          command: page.botCommand!.startsWith("/")
+            ? page.botCommand!.substring(1)
+            : page.botCommand!,
           description: `📄 ${page.title}`,
         }));
     } catch (error) {
       return [];
     }
+  }
+
+  /**
+   * Получает все активные страницы бота
+   * @param botId ID бота
+   * @returns Список страниц
+   */
+  async getActivePagesForBot(botId: string): Promise<CustomPage[]> {
+    return this.customPageRepository.find({
+      where: {
+        botId,
+        status: CustomPageStatus.ACTIVE,
+      },
+      order: { createdAt: "DESC" },
+    });
   }
 }
