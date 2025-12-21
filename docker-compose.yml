@@ -1,5 +1,12 @@
 version: "3.8"
 
+# ===========================================================================
+# ПРИМЕЧАНИЕ: Caddy Proxy - отдельный сервис в репозитории botmanager_proxy
+# Для локального тестирования кастомных доменов:
+#   cd ../botmanager_proxy && docker build -t botmanager-proxy-dev -f Dockerfile.dev .
+#   docker run -d -p 3080:3080 -p 3443:3443 -p 2019:2019 botmanager-proxy-dev
+# ===========================================================================
+
 services:
   # PostgreSQL база данных для разработки
   postgres-dev:

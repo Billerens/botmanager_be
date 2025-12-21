@@ -40,6 +40,7 @@ import { PublicAuthModule } from "./modules/public-auth/public-auth.module";
 import { MailModule } from "./modules/mail/mail.module";
 import { ShopsModule } from "./modules/shops/shops.module";
 import { AdminModule } from "./modules/admin/admin.module";
+import { CustomDomainsModule } from "./modules/custom-domains/custom-domains.module";
 
 @Module({
   imports: [
@@ -109,6 +110,7 @@ import { AdminModule } from "./modules/admin/admin.module";
     MailModule, // Email сервис
     ShopsModule, // Магазины (независимые от ботов)
     AdminModule, // Админ-панель для техподдержки
+    CustomDomainsModule, // Кастомные домены пользователей
   ],
 })
 export class AppModule {}
