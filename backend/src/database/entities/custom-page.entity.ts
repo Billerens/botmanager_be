@@ -7,7 +7,9 @@ import {
   ManyToOne,
   JoinColumn,
 } from "typeorm";
+import { User } from "./user.entity";
 import { Bot } from "./bot.entity";
+import { Shop } from "./shop.entity";
 
 export enum CustomPageStatus {
   ACTIVE = "active",
@@ -26,6 +28,17 @@ export interface CustomPageAsset {
   mimeType: string; // MIME тип файла
 }
 
+/**
+ * Кастомная страница - независимая сущность, принадлежащая пользователю.
+ *
+ * Может быть опционально привязана к:
+ * - Bot (N:1) - для отображения команд в меню бота
+ * - Shop (N:1) - для ассоциации с магазином
+ *
+ * Логика привязки:
+ * - При привязке к боту, у которого есть магазин → страница привязывается и к магазину
+ * - При привязке к магазину, у которого есть бот → страница привязывается и к боту
+ */
 @Entity("custom_pages")
 export class CustomPage {
   @PrimaryGeneratedColumn("uuid")
@@ -34,8 +47,8 @@ export class CustomPage {
   @Column()
   title: string;
 
-  @Column({ unique: true })
-  slug: string; // URL-friendly идентификатор
+  @Column({ nullable: true, unique: true })
+  slug: string | null; // URL-friendly идентификатор (опционально, глобально уникален)
 
   @Column({ type: "text", nullable: true })
   description: string;
@@ -75,29 +88,62 @@ export class CustomPage {
   @Column({ default: true })
   showInMenu: boolean; // Отображать команду в меню бота (если false - команда работает, но не видна в меню)
 
-  // Связь с ботом
-  @ManyToOne(() => Bot, { onDelete: "CASCADE" })
-  @JoinColumn({ name: "botId" })
-  bot: Bot;
+  // ============================================================
+  // Связь с владельцем (обязательная)
+  // ============================================================
+  @ManyToOne(() => User, { onDelete: "CASCADE" })
+  @JoinColumn({ name: "ownerId" })
+  owner: User;
 
   @Column()
-  botId: string;
+  ownerId: string;
 
+  // ============================================================
+  // Связь с ботом (опциональная)
+  // ============================================================
+  @ManyToOne(() => Bot, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "botId" })
+  bot?: Bot;
+
+  @Column({ nullable: true })
+  botId?: string;
+
+  // ============================================================
+  // Связь с магазином (опциональная)
+  // ============================================================
+  @ManyToOne(() => Shop, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "shopId" })
+  shop?: Shop;
+
+  @Column({ nullable: true })
+  shopId?: string;
+
+  // ============================================================
+  // Временные метки
+  // ============================================================
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // Геттер для URL
+  // ============================================================
+  // Геттеры
+  // ============================================================
+
+  /**
+   * URL страницы - по slug (если есть) или по ID
+   */
   get url(): string {
     const frontendUrl =
       process.env.FRONTEND_URL || "https://botmanagertest.online";
-    const botUsername = (this.bot as Bot)?.username || "unknown";
-    return `${frontendUrl}/pages/${botUsername}/${this.slug}`;
+    const identifier = this.slug || this.id;
+    return `${frontendUrl}/pages/${identifier}`;
   }
 
-  // Геттер для URL статических файлов
+  /**
+   * URL статических файлов (для static режима)
+   */
   get staticUrl(): string | null {
     if (this.pageType !== CustomPageType.STATIC || !this.staticPath) {
       return null;
@@ -105,5 +151,19 @@ export class CustomPage {
     const s3Endpoint = process.env.AWS_S3_ENDPOINT;
     const bucket = process.env.AWS_S3_BUCKET || "botmanager-products";
     return `${s3Endpoint}/${bucket}/${this.staticPath}`;
+  }
+
+  /**
+   * Проверка, привязана ли страница к боту
+   */
+  get hasBot(): boolean {
+    return !!this.botId;
+  }
+
+  /**
+   * Проверка, привязана ли страница к магазину
+   */
+  get hasShop(): boolean {
+    return !!this.shopId;
   }
 }

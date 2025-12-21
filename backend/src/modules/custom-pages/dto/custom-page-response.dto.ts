@@ -18,11 +18,11 @@ export class CustomPageResponseDto {
   })
   title: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: "URL-friendly идентификатор страницы (slug)",
     example: "contacts",
   })
-  slug: string;
+  slug?: string | null;
 
   @ApiPropertyOptional({
     description: "Описание страницы",
@@ -104,18 +104,54 @@ export class CustomPageResponseDto {
   })
   showInMenu: boolean;
 
+  // ============================================================
+  // Владелец
+  // ============================================================
   @ApiProperty({
-    description: "ID бота",
+    description: "ID владельца страницы",
     example: "123e4567-e89b-12d3-a456-426614174000",
   })
-  botId: string;
+  ownerId: string;
 
-  @ApiProperty({
-    description: "Username бота",
+  // ============================================================
+  // Привязка к боту (опционально)
+  // ============================================================
+  @ApiPropertyOptional({
+    description: "ID бота (если привязан)",
+    example: "123e4567-e89b-12d3-a456-426614174000",
+  })
+  botId?: string;
+
+  @ApiPropertyOptional({
+    description: "Username бота (если привязан)",
     example: "my_restaurant_bot",
   })
-  botUsername: string;
+  botUsername?: string;
 
+  @ApiPropertyOptional({
+    description: "Название бота (если привязан)",
+    example: "Мой ресторан",
+  })
+  botName?: string;
+
+  // ============================================================
+  // Привязка к магазину (опционально)
+  // ============================================================
+  @ApiPropertyOptional({
+    description: "ID магазина (если привязан)",
+    example: "123e4567-e89b-12d3-a456-426614174000",
+  })
+  shopId?: string;
+
+  @ApiPropertyOptional({
+    description: "Название магазина (если привязан)",
+    example: "Магазин электроники",
+  })
+  shopName?: string;
+
+  // ============================================================
+  // Временные метки
+  // ============================================================
   @ApiProperty({
     description: "Дата создания",
     example: "2024-01-01T00:00:00.000Z",
@@ -129,8 +165,8 @@ export class CustomPageResponseDto {
   updatedAt: Date;
 
   @ApiProperty({
-    description: "Полный URL страницы",
-    example: "https://botmanagertest.online/my_restaurant_bot/contacts",
+    description: "Полный URL страницы (по slug или ID)",
+    example: "https://botmanagertest.online/pages/contacts",
   })
   url: string;
 }
@@ -148,11 +184,11 @@ export class PublicCustomPageResponseDto {
   })
   title: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: "URL-friendly идентификатор страницы (slug)",
     example: "contacts",
   })
-  slug: string;
+  slug?: string | null;
 
   @ApiPropertyOptional({
     description: "Описание страницы",
@@ -185,17 +221,23 @@ export class PublicCustomPageResponseDto {
   })
   entryPoint: string;
 
-  @ApiProperty({
-    description: "ID бота",
+  @ApiPropertyOptional({
+    description: "ID бота (если привязан)",
     example: "123e4567-e89b-12d3-a456-426614174000",
   })
-  botId: string;
+  botId?: string;
 
-  @ApiProperty({
-    description: "Username бота",
+  @ApiPropertyOptional({
+    description: "Username бота (если привязан)",
     example: "my_restaurant_bot",
   })
-  botUsername: string;
+  botUsername?: string;
+
+  @ApiPropertyOptional({
+    description: "ID магазина (если привязан)",
+    example: "123e4567-e89b-12d3-a456-426614174000",
+  })
+  shopId?: string;
 
   @ApiProperty({
     description: "Дата создания",
@@ -211,7 +253,7 @@ export class PublicCustomPageResponseDto {
 
   @ApiProperty({
     description: "Полный URL страницы",
-    example: "https://botmanagertest.online/my_restaurant_bot/contacts",
+    example: "https://botmanagertest.online/pages/contacts",
   })
   url: string;
 

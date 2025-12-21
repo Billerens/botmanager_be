@@ -20,15 +20,9 @@ import {
   ApiBearerAuth,
   ApiConsumes,
   ApiBody,
-  getSchemaPath,
+  ApiParam,
 } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
-import { BotPermissionGuard } from "../../bots/guards/bot-permission.guard";
-import { BotPermission } from "../../bots/decorators/bot-permission.decorator";
-import {
-  BotEntity,
-  PermissionAction,
-} from "../../../database/entities/bot-user-permission.entity";
 import { CustomPagesService } from "../services/custom-pages.service";
 import {
   CreateCustomPageDto,
@@ -37,133 +31,134 @@ import {
 import { CustomPageResponseDto } from "../dto/custom-page-response.dto";
 
 @ApiTags("Кастомные страницы")
-@Controller("bots/:botId/custom-pages")
-@UseGuards(JwtAuthGuard, BotPermissionGuard)
+@Controller("custom-pages")
+@UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class CustomPagesController {
   constructor(private readonly customPagesService: CustomPagesService) {}
 
+  // ============================================================
+  // CRUD операции
+  // ============================================================
+
   @Post()
-  @ApiOperation({ summary: "Создать кастомную страницу для бота" })
+  @ApiOperation({ summary: "Создать кастомную страницу" })
   @ApiResponse({
     status: 201,
     description: "Страница создана",
-    schema: {
-      $ref: getSchemaPath(CustomPageResponseDto),
-    },
+    type: CustomPageResponseDto,
   })
-  @ApiResponse({
-    status: 404,
-    description: "Бот не найден",
-  })
-  @BotPermission(BotEntity.CUSTOM_PAGES, PermissionAction.CREATE)
+  @ApiResponse({ status: 400, description: "Некорректные данные" })
   @ApiResponse({
     status: 409,
     description: "Slug или команда уже используются",
   })
   async create(
-    @Param("botId") botId: string,
     @Request() req: any,
-    @Body() createCustomPageDto: CreateCustomPageDto
+    @Body() createDto: CreateCustomPageDto
   ): Promise<CustomPageResponseDto> {
-    return this.customPagesService.create(
-      botId,
-      req.user.id,
-      createCustomPageDto
-    );
+    return this.customPagesService.create(req.user.id, createDto);
   }
 
   @Get()
-  @ApiOperation({ summary: "Получить все кастомные страницы бота" })
+  @ApiOperation({ summary: "Получить все страницы пользователя" })
   @ApiResponse({
     status: 200,
-    description: "Список страниц получен",
-    schema: {
-      type: "array",
-      items: { $ref: getSchemaPath(CustomPageResponseDto) },
-    },
+    description: "Список страниц",
+    type: [CustomPageResponseDto],
   })
-  @BotPermission(BotEntity.CUSTOM_PAGES, PermissionAction.READ)
-  async findAll(
-    @Param("botId") botId: string
+  async findAll(@Request() req: any): Promise<CustomPageResponseDto[]> {
+    return this.customPagesService.findAllByOwner(req.user.id);
+  }
+
+  @Get("by-bot/:botId")
+  @ApiOperation({ summary: "Получить страницы по боту" })
+  @ApiParam({ name: "botId", description: "ID бота" })
+  @ApiResponse({
+    status: 200,
+    description: "Список страниц бота",
+    type: [CustomPageResponseDto],
+  })
+  @ApiResponse({ status: 403, description: "Нет прав доступа" })
+  @ApiResponse({ status: 404, description: "Бот не найден" })
+  async findByBot(
+    @Param("botId") botId: string,
+    @Request() req: any
   ): Promise<CustomPageResponseDto[]> {
-    return this.customPagesService.findAll(botId);
+    return this.customPagesService.findAllByBot(botId, req.user.id);
+  }
+
+  @Get("by-shop/:shopId")
+  @ApiOperation({ summary: "Получить страницы по магазину" })
+  @ApiParam({ name: "shopId", description: "ID магазина" })
+  @ApiResponse({
+    status: 200,
+    description: "Список страниц магазина",
+    type: [CustomPageResponseDto],
+  })
+  @ApiResponse({ status: 403, description: "Нет прав доступа" })
+  @ApiResponse({ status: 404, description: "Магазин не найден" })
+  async findByShop(
+    @Param("shopId") shopId: string,
+    @Request() req: any
+  ): Promise<CustomPageResponseDto[]> {
+    return this.customPagesService.findAllByShop(shopId, req.user.id);
   }
 
   @Get(":id")
-  @ApiOperation({ summary: "Получить кастомную страницу по ID" })
+  @ApiOperation({ summary: "Получить страницу по ID" })
+  @ApiParam({ name: "id", description: "ID страницы" })
   @ApiResponse({
     status: 200,
     description: "Страница найдена",
-    schema: {
-      $ref: getSchemaPath(CustomPageResponseDto),
-    },
+    type: CustomPageResponseDto,
   })
-  @ApiResponse({
-    status: 404,
-    description: "Страница не найдена",
-  })
-  @BotPermission(BotEntity.CUSTOM_PAGES, PermissionAction.READ)
+  @ApiResponse({ status: 403, description: "Нет прав доступа" })
+  @ApiResponse({ status: 404, description: "Страница не найдена" })
   async findOne(
-    @Param("botId") botId: string,
-    @Param("id") id: string
+    @Param("id") id: string,
+    @Request() req: any
   ): Promise<CustomPageResponseDto> {
-    return this.customPagesService.findOne(botId, id);
+    return this.customPagesService.findOne(id, req.user.id);
   }
 
   @Patch(":id")
-  @ApiOperation({ summary: "Обновить кастомную страницу" })
+  @ApiOperation({ summary: "Обновить страницу" })
+  @ApiParam({ name: "id", description: "ID страницы" })
   @ApiResponse({
     status: 200,
     description: "Страница обновлена",
-    schema: {
-      $ref: getSchemaPath(CustomPageResponseDto),
-    },
+    type: CustomPageResponseDto,
   })
-  @BotPermission(BotEntity.CUSTOM_PAGES, PermissionAction.UPDATE)
-  @ApiResponse({
-    status: 404,
-    description: "Страница не найдена",
-  })
+  @ApiResponse({ status: 403, description: "Нет прав доступа" })
+  @ApiResponse({ status: 404, description: "Страница не найдена" })
   @ApiResponse({
     status: 409,
     description: "Slug или команда уже используются",
   })
   async update(
-    @Param("botId") botId: string,
     @Param("id") id: string,
     @Request() req: any,
-    @Body() updateCustomPageDto: UpdateCustomPageDto
+    @Body() updateDto: UpdateCustomPageDto
   ): Promise<CustomPageResponseDto> {
-    return this.customPagesService.update(
-      botId,
-      id,
-      req.user.id,
-      updateCustomPageDto
-    );
+    return this.customPagesService.update(id, req.user.id, updateDto);
   }
 
   @Delete(":id")
-  @ApiOperation({ summary: "Удалить кастомную страницу" })
-  @ApiResponse({
-    status: 200,
-    description: "Страница удалена",
-  })
-  @BotPermission(BotEntity.CUSTOM_PAGES, PermissionAction.DELETE)
-  @ApiResponse({
-    status: 404,
-    description: "Страница не найдена",
-  })
-  async remove(
-    @Param("botId") botId: string,
-    @Param("id") id: string,
-    @Request() req: any
-  ): Promise<void> {
-    return this.customPagesService.remove(botId, id, req.user.id);
+  @ApiOperation({ summary: "Удалить страницу" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiResponse({ status: 200, description: "Страница удалена" })
+  @ApiResponse({ status: 403, description: "Нет прав доступа" })
+  @ApiResponse({ status: 404, description: "Страница не найдена" })
+  async remove(@Param("id") id: string, @Request() req: any): Promise<void> {
+    return this.customPagesService.remove(id, req.user.id);
   }
 
+  // ============================================================
+  // Загрузка бандла
+  // ============================================================
+
   @Post(":id/upload-bundle")
-  @BotPermission(BotEntity.CUSTOM_PAGES, PermissionAction.UPDATE)
   @UseInterceptors(
     FileInterceptor("file", {
       limits: {
@@ -185,9 +180,8 @@ export class CustomPagesController {
       },
     })
   )
-  @ApiOperation({
-    summary: "Загрузить ZIP-архив с бандлом для static страницы",
-  })
+  @ApiOperation({ summary: "Загрузить ZIP-архив для static страницы" })
+  @ApiParam({ name: "id", description: "ID страницы" })
   @ApiConsumes("multipart/form-data")
   @ApiBody({
     schema: {
@@ -196,7 +190,7 @@ export class CustomPagesController {
         file: {
           type: "string",
           format: "binary",
-          description: "ZIP-архив с бандлом (index.html, CSS, JS, изображения)",
+          description: "ZIP-архив с бандлом",
         },
       },
       required: ["file"],
@@ -205,27 +199,98 @@ export class CustomPagesController {
   @ApiResponse({
     status: 200,
     description: "Бандл загружен",
-    schema: {
-      $ref: getSchemaPath(CustomPageResponseDto),
-    },
+    type: CustomPageResponseDto,
   })
-  @ApiResponse({
-    status: 400,
-    description: "Неверный формат файла",
-  })
-  @ApiResponse({
-    status: 404,
-    description: "Страница не найдена",
-  })
+  @ApiResponse({ status: 400, description: "Неверный формат файла" })
+  @ApiResponse({ status: 403, description: "Нет прав доступа" })
+  @ApiResponse({ status: 404, description: "Страница не найдена" })
   async uploadBundle(
-    @Param("botId") botId: string,
     @Param("id") id: string,
+    @Request() req: any,
     @UploadedFile() file: Express.Multer.File
   ): Promise<CustomPageResponseDto> {
     if (!file) {
       throw new BadRequestException("Файл не был загружен");
     }
 
-    return this.customPagesService.uploadBundle(botId, id, file.buffer);
+    return this.customPagesService.uploadBundle(id, req.user.id, file.buffer);
+  }
+
+  // ============================================================
+  // Привязка/отвязка
+  // ============================================================
+
+  @Post(":id/assign-bot/:botId")
+  @ApiOperation({ summary: "Привязать страницу к боту" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiParam({ name: "botId", description: "ID бота" })
+  @ApiResponse({
+    status: 200,
+    description: "Страница привязана к боту",
+    type: CustomPageResponseDto,
+  })
+  @ApiResponse({ status: 403, description: "Нет прав доступа" })
+  @ApiResponse({ status: 404, description: "Страница или бот не найден" })
+  @ApiResponse({ status: 409, description: "Команда уже используется" })
+  async assignToBot(
+    @Param("id") pageId: string,
+    @Param("botId") botId: string,
+    @Request() req: any
+  ): Promise<CustomPageResponseDto> {
+    return this.customPagesService.assignToBot(pageId, botId, req.user.id);
+  }
+
+  @Post(":id/assign-shop/:shopId")
+  @ApiOperation({ summary: "Привязать страницу к магазину" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiParam({ name: "shopId", description: "ID магазина" })
+  @ApiResponse({
+    status: 200,
+    description: "Страница привязана к магазину",
+    type: CustomPageResponseDto,
+  })
+  @ApiResponse({ status: 403, description: "Нет прав доступа" })
+  @ApiResponse({ status: 404, description: "Страница или магазин не найден" })
+  @ApiResponse({ status: 409, description: "Команда уже используется" })
+  async assignToShop(
+    @Param("id") pageId: string,
+    @Param("shopId") shopId: string,
+    @Request() req: any
+  ): Promise<CustomPageResponseDto> {
+    return this.customPagesService.assignToShop(pageId, shopId, req.user.id);
+  }
+
+  @Delete(":id/unassign-bot")
+  @ApiOperation({ summary: "Отвязать страницу от бота" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiResponse({
+    status: 200,
+    description: "Страница отвязана от бота",
+    type: CustomPageResponseDto,
+  })
+  @ApiResponse({ status: 403, description: "Нет прав доступа" })
+  @ApiResponse({ status: 404, description: "Страница не найдена" })
+  async unassignFromBot(
+    @Param("id") pageId: string,
+    @Request() req: any
+  ): Promise<CustomPageResponseDto> {
+    return this.customPagesService.unassignFromBot(pageId, req.user.id);
+  }
+
+  @Delete(":id/unassign-shop")
+  @ApiOperation({ summary: "Отвязать страницу от магазина" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiResponse({
+    status: 200,
+    description: "Страница отвязана от магазина",
+    type: CustomPageResponseDto,
+  })
+  @ApiResponse({ status: 403, description: "Нет прав доступа" })
+  @ApiResponse({ status: 404, description: "Страница не найдена" })
+  async unassignFromShop(
+    @Param("id") pageId: string,
+    @Request() req: any
+  ): Promise<CustomPageResponseDto> {
+    return this.customPagesService.unassignFromShop(pageId, req.user.id);
   }
 }
