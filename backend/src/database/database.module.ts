@@ -30,6 +30,7 @@ import { PublicUser } from "./entities/public-user.entity";
 import { Shop } from "./entities/shop.entity";
 import { Admin } from "./entities/admin.entity";
 import { AdminActionLog } from "./entities/admin-action-log.entity";
+import { CustomDomain } from "./entities/custom-domain.entity";
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { AdminActionLog } from "./entities/admin-action-log.entity";
           Shop,
           Admin,
           AdminActionLog,
+          CustomDomain,
         ],
         synchronize: configService.get("NODE_ENV") === "development",
         logging: false,
@@ -110,6 +112,7 @@ import { AdminActionLog } from "./entities/admin-action-log.entity";
       Shop,
       Admin,
       AdminActionLog,
+      CustomDomain,
     ]),
   ],
   exports: [TypeOrmModule],
