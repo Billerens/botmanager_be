@@ -55,9 +55,11 @@ export class TimewebDnsService implements OnModuleInit {
   /** IP адрес Frontend сервера */
   private readonly frontendIp: string;
 
+  private readonly apiUrl: string;
+
   constructor(private readonly configService: ConfigService) {
     const apiToken = this.configService.get<string>("TIMEWEB_API_TOKEN");
-    const apiUrl =
+    this.apiUrl =
       this.configService.get<string>("TIMEWEB_API_URL") ||
       "https://api.timeweb.cloud/api/v1";
 
@@ -66,25 +68,31 @@ export class TimewebDnsService implements OnModuleInit {
     this.frontendIp = this.configService.get<string>("FRONTEND_IP") || "";
 
     this.client = axios.create({
-      baseURL: apiUrl,
+      baseURL: this.apiUrl,
       timeout: 30000,
       headers: {
         Authorization: `Bearer ${apiToken}`,
         "Content-Type": "application/json",
       },
     });
+
+    this.logger.log(
+      `Timeweb DNS configured: apiUrl=${this.apiUrl}, baseDomain=${this.baseDomain}, frontendIp=${this.frontendIp || "NOT SET"}`
+    );
   }
 
   async onModuleInit() {
     // Проверяем доступность API при старте
     try {
-      await this.getRecords();
+      const records = await this.getRecords();
       this.logger.log(
-        `Timeweb DNS API available for domain ${this.baseDomain}`
+        `Timeweb DNS API available for domain ${this.baseDomain}. Found ${records.length} existing records.`
       );
     } catch (error) {
+      const status = error.response?.status;
+      const responseData = error.response?.data;
       this.logger.warn(
-        `Timeweb DNS API not available: ${error.message}. Subdomain management will not work.`
+        `Timeweb DNS API not available: status=${status}, message=${error.message}, response=${JSON.stringify(responseData)}. Subdomain management will not work.`
       );
     }
   }
@@ -128,14 +136,20 @@ export class TimewebDnsService implements OnModuleInit {
         return existing.id;
       }
 
+      const requestUrl = `/domains/${this.baseDomain}/dns-records`;
+      const requestBody = {
+        type: "A",
+        subdomain: subdomain,
+        value: this.frontendIp,
+      };
+
+      this.logger.log(
+        `Creating DNS record: POST ${this.apiUrl}${requestUrl} body=${JSON.stringify(requestBody)}`
+      );
+
       const response = await this.client.post<TimewebCreateResponse>(
-        `/domains/${this.baseDomain}/dns-records`,
-        {
-          type: "A",
-          subdomain: subdomain,
-          value: this.frontendIp,
-          ttl: 600, // 10 минут - быстрее распространение
-        }
+        requestUrl,
+        requestBody
       );
 
       const recordId = response.data.dns_record?.id;
@@ -145,8 +159,10 @@ export class TimewebDnsService implements OnModuleInit {
 
       return recordId;
     } catch (error) {
+      const status = error.response?.status;
+      const responseData = error.response?.data;
       this.logger.error(
-        `Failed to create DNS record for ${subdomain}: ${error.message}`
+        `Failed to create DNS record for ${subdomain}: status=${status}, message=${error.message}, response=${JSON.stringify(responseData)}`
       );
       return null;
     }
@@ -253,4 +269,3 @@ export class TimewebDnsService implements OnModuleInit {
     }
   }
 }
-
