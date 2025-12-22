@@ -12,10 +12,6 @@ export class UpdateSubdomainStatusEnum1700000000039
 {
   name = "UpdateSubdomainStatusEnum1700000000039";
 
-  // ВАЖНО: Отключаем транзакцию для этой миграции,
-  // чтобы новые значения enum были закоммичены до использования в следующей миграции
-  public transaction = false as const;
-
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Добавляем новые значения в shops_subdomainstatus_enum
     await queryRunner.query(`

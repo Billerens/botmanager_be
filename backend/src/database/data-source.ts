@@ -42,6 +42,9 @@ export const AppDataSource = new DataSource({
   database: process.env.DATABASE_NAME || "botmanager_dev",
   synchronize: process.env.NODE_ENV === "development", // Только для разработки
   logging: false,
+  // Каждая миграция выполняется в отдельной транзакции
+  // Это необходимо для PostgreSQL enum: новые значения не доступны в той же транзакции
+  migrationsTransactionMode: "each",
   entities: [
     User,
     Bot,
