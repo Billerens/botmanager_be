@@ -100,7 +100,7 @@ export class SubdomainService {
         this.logger.error(`Failed to create DNS record for ${fullDomain}`);
         return {
           success: false,
-          status: SubdomainStatus.DNS_ERROR,
+          status: SubdomainStatus.ERROR,
           fullDomain,
           error: "Не удалось создать DNS запись. Попробуйте позже.",
         };
@@ -123,7 +123,7 @@ export class SubdomainService {
       );
       return {
         success: false,
-        status: SubdomainStatus.DNS_ERROR,
+        status: SubdomainStatus.ERROR,
         fullDomain,
         error: `Ошибка регистрации: ${error.message}`,
       };
@@ -179,17 +179,17 @@ export class SubdomainService {
     const subdomain = this.timewebDns.getSubdomain(slug, type);
     const fullDomain = this.timewebDns.getFullDomain(slug, type);
 
-    // Проверяем существование DNS записи
+    // Проверяем существование DNS записи в Timeweb
     const dnsExists = await this.timewebDns.recordExists(subdomain);
     if (!dnsExists) {
-      return SubdomainStatus.DNS_ERROR;
+      return SubdomainStatus.ERROR;
     }
 
-    // Проверяем доступность по HTTPS (значит SSL готов)
+    // Проверяем доступность по HTTPS (DNS распространился + Timeweb выдал SSL)
     const isAccessible = await this.checkHttpsAccessible(fullDomain);
     if (!isAccessible) {
-      // DNS есть, но HTTPS недоступен - ждём SSL от Timeweb
-      return SubdomainStatus.SSL_ISSUING;
+      // DNS есть, но домен ещё недоступен - ждём propagation и SSL от Timeweb
+      return SubdomainStatus.ACTIVATING;
     }
 
     return SubdomainStatus.ACTIVE;
@@ -222,8 +222,8 @@ export class SubdomainService {
         return true;
       }
 
-      if (status === SubdomainStatus.DNS_ERROR) {
-        this.logger.error(`DNS error for ${fullDomain}, aborting wait`);
+      if (status === SubdomainStatus.ERROR) {
+        this.logger.error(`Error for ${fullDomain}, aborting wait`);
         return false;
       }
 

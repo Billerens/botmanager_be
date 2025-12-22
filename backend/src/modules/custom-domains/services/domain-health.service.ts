@@ -15,7 +15,7 @@ export class DomainHealthService {
     @InjectRepository(CustomDomain)
     private readonly domainsRepo: Repository<CustomDomain>,
     private readonly dnsValidator: DnsValidatorService,
-    private readonly caddyService: CaddyService,
+    private readonly caddyService: CaddyService
   ) {}
 
   /**
@@ -38,10 +38,7 @@ export class DomainHealthService {
       try {
         await this.checkDomainHealth(domain);
       } catch (error) {
-        this.logger.error(
-          `Failed to check health for ${domain.domain}`,
-          error,
-        );
+        this.logger.error(`Failed to check health for ${domain.domain}`, error);
       }
     }
 
@@ -65,7 +62,7 @@ export class DomainHealthService {
 
     // 2. Проверяем SSL
     const sslInfo = await this.dnsValidator.getSslCertificateInfo(
-      domain.domain,
+      domain.domain
     );
 
     if (sslInfo) {
@@ -93,12 +90,12 @@ export class DomainHealthService {
    */
   private async handleDnsFailure(
     domain: CustomDomain,
-    errorMessage: string,
+    errorMessage: string
   ): Promise<void> {
     domain.consecutiveFailures++;
 
     this.logger.warn(
-      `DNS check failed for ${domain.domain}: ${errorMessage} (failure #${domain.consecutiveFailures})`,
+      `DNS check failed for ${domain.domain}: ${errorMessage} (failure #${domain.consecutiveFailures})`
     );
 
     if (domain.consecutiveFailures >= 3) {
@@ -128,7 +125,7 @@ export class DomainHealthService {
    */
   private async handleSslStatus(
     domain: CustomDomain,
-    daysUntilExpiry: number,
+    daysUntilExpiry: number
   ): Promise<void> {
     if (daysUntilExpiry <= 0) {
       // SSL истёк
@@ -141,28 +138,24 @@ export class DomainHealthService {
       });
 
       this.logger.error(`SSL expired for ${domain.domain}`);
-
-      // Пробуем обновить
-      await this.caddyService.forceRenewCertificate(domain.domain);
+      // SSL управляется Timeweb автоматически
     } else if (daysUntilExpiry <= 7) {
       // Критично - SSL истекает через 7 дней или меньше
       domain.status = DomainStatus.SSL_EXPIRING;
 
       if (!domain.notificationsSent.includes("ssl_critical")) {
         this.logger.warn(
-          `SSL for ${domain.domain} expires in ${daysUntilExpiry} days (critical)`,
+          `SSL for ${domain.domain} expires in ${daysUntilExpiry} days (critical)`
         );
         domain.notificationsSent.push("ssl_critical");
         // TODO: Отправить критическое уведомление пользователю
       }
-
-      // Пробуем принудительно обновить
-      await this.caddyService.forceRenewCertificate(domain.domain);
+      // SSL управляется Timeweb автоматически
     } else if (daysUntilExpiry <= 14) {
       // Предупреждение - SSL истекает через 14 дней
       if (!domain.notificationsSent.includes("ssl_warning_14d")) {
         this.logger.log(
-          `SSL for ${domain.domain} expires in ${daysUntilExpiry} days`,
+          `SSL for ${domain.domain} expires in ${daysUntilExpiry} days`
         );
 
         domain.warnings.push({
@@ -176,7 +169,7 @@ export class DomainHealthService {
     } else if (daysUntilExpiry <= 30) {
       // Информационно - Caddy должен обновить автоматически
       this.logger.debug(
-        `SSL for ${domain.domain} expires in ${daysUntilExpiry} days (normal renewal window)`,
+        `SSL for ${domain.domain} expires in ${daysUntilExpiry} days (normal renewal window)`
       );
     }
   }
@@ -186,7 +179,7 @@ export class DomainHealthService {
    */
   private async suspendDomain(
     domain: CustomDomain,
-    reason: string,
+    reason: string
   ): Promise<void> {
     this.logger.warn(`Suspending domain ${domain.domain}: ${reason}`);
 
@@ -237,7 +230,7 @@ export class DomainHealthService {
         this.domainsRepo.count({
           where: { status: DomainStatus.SSL_EXPIRING },
         }),
-      ],
+      ]
     );
 
     return {
@@ -249,4 +242,3 @@ export class DomainHealthService {
     };
   }
 }
-

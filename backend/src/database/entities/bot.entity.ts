@@ -242,7 +242,7 @@ export class Bot {
       !!this.slug &&
       (this.subdomainStatus === SubdomainStatus.PENDING ||
         this.subdomainStatus === SubdomainStatus.DNS_CREATING ||
-        this.subdomainStatus === SubdomainStatus.SSL_ISSUING)
+        this.subdomainStatus === SubdomainStatus.ACTIVATING)
     );
   }
 

@@ -878,7 +878,7 @@ export class BotsService {
       this.logger.error(
         `Error registering subdomain for bot ${bot.id}: ${error.message}`
       );
-      bot.subdomainStatus = SubdomainStatus.DNS_ERROR;
+      bot.subdomainStatus = SubdomainStatus.ERROR;
       bot.subdomainError = error.message;
       await this.botRepository.save(bot);
     }
@@ -903,9 +903,9 @@ export class BotsService {
           `Subdomain activated for bot ${bot.id}: ${bot.subdomainUrl}`
         );
       } else {
-        bot.subdomainStatus = SubdomainStatus.SSL_ISSUING;
+        bot.subdomainStatus = SubdomainStatus.ACTIVATING;
         this.logger.warn(
-          `SSL not ready for bot ${bot.id} subdomain, but route is active`
+          `Subdomain not ready for bot ${bot.id}, waiting for DNS propagation and SSL`
         );
       }
 
@@ -937,7 +937,7 @@ export class BotsService {
     if (
       bot.subdomainStatus === SubdomainStatus.PENDING ||
       bot.subdomainStatus === SubdomainStatus.DNS_CREATING ||
-      bot.subdomainStatus === SubdomainStatus.SSL_ISSUING
+      bot.subdomainStatus === SubdomainStatus.ACTIVATING
     ) {
       estimatedWaitMessage =
         "Субдомен активируется. Время ожидания может варьироваться от 30 секунд до нескольких минут.";

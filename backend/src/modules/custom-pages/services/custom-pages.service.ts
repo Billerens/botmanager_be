@@ -1190,7 +1190,7 @@ export class CustomPagesService {
       this.logger.error(
         `Error registering subdomain for page ${page.id}: ${error.message}`
       );
-      page.subdomainStatus = SubdomainStatus.DNS_ERROR;
+      page.subdomainStatus = SubdomainStatus.ERROR;
       page.subdomainError = error.message;
       await this.customPageRepository.save(page);
     }
@@ -1215,9 +1215,9 @@ export class CustomPagesService {
           `Subdomain activated for page ${page.id}: ${page.subdomainUrl}`
         );
       } else {
-        page.subdomainStatus = SubdomainStatus.SSL_ISSUING;
+        page.subdomainStatus = SubdomainStatus.ACTIVATING;
         this.logger.warn(
-          `SSL not ready for page ${page.id} subdomain, but route is active`
+          `Subdomain not ready for page ${page.id}, waiting for DNS propagation and SSL`
         );
       }
 
@@ -1255,7 +1255,7 @@ export class CustomPagesService {
     if (
       page.subdomainStatus === SubdomainStatus.PENDING ||
       page.subdomainStatus === SubdomainStatus.DNS_CREATING ||
-      page.subdomainStatus === SubdomainStatus.SSL_ISSUING
+      page.subdomainStatus === SubdomainStatus.ACTIVATING
     ) {
       estimatedWaitMessage =
         "Субдомен активируется. Время ожидания может варьироваться от 30 секунд до нескольких минут.";

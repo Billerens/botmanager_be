@@ -560,7 +560,7 @@ export class BotsController {
   // =====================================================
 
   @Get(":botId/subdomain/check/:slug")
-  @BotPermission(BotEntity.BOT, PermissionAction.READ)
+  @BotPermission(BotEntity.BOT_SETTINGS, PermissionAction.READ)
   @ApiOperation({ summary: "Проверить доступность slug для бронирования" })
   @ApiResponse({
     status: 200,
@@ -582,7 +582,7 @@ export class BotsController {
   }
 
   @Put(":botId/subdomain")
-  @BotPermission(BotEntity.BOT, PermissionAction.UPDATE)
+  @BotPermission(BotEntity.BOT_SETTINGS, PermissionAction.UPDATE)
   @ApiOperation({
     summary: "Установить или обновить slug бота (субдомен бронирования)",
   })
@@ -612,7 +612,7 @@ export class BotsController {
   }
 
   @Get(":botId/subdomain/status")
-  @BotPermission(BotEntity.BOT, PermissionAction.READ)
+  @BotPermission(BotEntity.BOT_SETTINGS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить статус субдомена бронирования" })
   @ApiResponse({
     status: 200,
@@ -634,7 +634,7 @@ export class BotsController {
   }
 
   @Post(":botId/subdomain/retry")
-  @BotPermission(BotEntity.BOT, PermissionAction.UPDATE)
+  @BotPermission(BotEntity.BOT_SETTINGS, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Повторить активацию субдомена бронирования" })
   @ApiResponse({
     status: 200,
@@ -658,7 +658,7 @@ export class BotsController {
   }
 
   @Delete(":botId/subdomain")
-  @BotPermission(BotEntity.BOT, PermissionAction.UPDATE)
+  @BotPermission(BotEntity.BOT_SETTINGS, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Удалить субдомен бронирования" })
   @ApiResponse({
     status: 200,

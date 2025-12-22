@@ -466,7 +466,7 @@ export class ShopsService {
       this.logger.error(
         `Error registering subdomain for shop ${shop.id}: ${error.message}`
       );
-      shop.subdomainStatus = SubdomainStatus.DNS_ERROR;
+      shop.subdomainStatus = SubdomainStatus.ERROR;
       shop.subdomainError = error.message;
       await this.shopRepository.save(shop);
     }
@@ -491,11 +491,10 @@ export class ShopsService {
           `Subdomain activated for shop ${shop.id}: ${shop.subdomainUrl}`
         );
       } else {
-        // SSL мог не успеть выпуститься, но это не критично
-        // Caddy продолжит попытки автоматически
-        shop.subdomainStatus = SubdomainStatus.SSL_ISSUING;
+        // Домен ещё не доступен, ждём DNS propagation + SSL от Timeweb
+        shop.subdomainStatus = SubdomainStatus.ACTIVATING;
         this.logger.warn(
-          `SSL not ready for shop ${shop.id} subdomain, but route is active`
+          `Subdomain not ready for shop ${shop.id}, waiting for DNS propagation and SSL`
         );
       }
 
@@ -527,10 +526,10 @@ export class ShopsService {
     if (
       shop.subdomainStatus === SubdomainStatus.PENDING ||
       shop.subdomainStatus === SubdomainStatus.DNS_CREATING ||
-      shop.subdomainStatus === SubdomainStatus.SSL_ISSUING
+      shop.subdomainStatus === SubdomainStatus.ACTIVATING
     ) {
       estimatedWaitMessage =
-        "Субдомен активируется. Время ожидания может варьироваться от 30 секунд до нескольких минут.";
+        "Субдомен активируется. Время ожидания может варьироваться от 1 до 5 минут.";
     }
 
     return {
@@ -553,10 +552,7 @@ export class ShopsService {
       throw new BadRequestException("У магазина не установлен slug");
     }
 
-    if (
-      shop.subdomainStatus !== SubdomainStatus.DNS_ERROR &&
-      shop.subdomainStatus !== SubdomainStatus.SSL_ERROR
-    ) {
+    if (shop.subdomainStatus !== SubdomainStatus.ERROR) {
       throw new BadRequestException("Повтор возможен только после ошибки");
     }
 

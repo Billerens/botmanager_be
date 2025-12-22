@@ -97,25 +97,27 @@ export enum DomainWarningCode {
 /**
  * Статусы субдомена платформы (для бесплатных субдоменов)
  * Используется для: *.shops.domain, *.booking.domain, *.pages.domain
+ *
+ * Архитектура:
+ * - Backend создаёт A-записи в Timeweb DNS
+ * - Timeweb автоматически выдаёт SSL сертификаты
+ * - Frontend определяет по hostname что показывать
  */
 export enum SubdomainStatus {
   /** Ожидает регистрации */
   PENDING = "pending",
 
-  /** Создаётся DNS запись */
+  /** Создаётся DNS запись в Timeweb */
   DNS_CREATING = "dns_creating",
 
-  /** DNS создан, ожидаем SSL */
-  SSL_ISSUING = "ssl_issuing",
+  /** DNS создан, ждём распространение и SSL от Timeweb */
+  ACTIVATING = "activating",
 
   /** Активен и работает */
   ACTIVE = "active",
 
-  /** Ошибка при создании DNS */
-  DNS_ERROR = "dns_error",
-
-  /** Ошибка при получении SSL */
-  SSL_ERROR = "ssl_error",
+  /** Ошибка (DNS не создан или домен недоступен) */
+  ERROR = "error",
 
   /** Удаляется */
   REMOVING = "removing",

@@ -332,7 +332,7 @@ export class CustomPagesController {
   // ============================================================
 
   @Get(":id/subdomain/check/:slug")
-  @ApiOperation({ summary: "Проверить доступность slug для страницы" })
+  @ApiOperation({ summary: "Проверить доступность slug для страницы (в контексте субдомена)" })
   @ApiParam({ name: "id", description: "ID страницы" })
   @ApiParam({ name: "slug", description: "Проверяемый slug" })
   @ApiResponse({
@@ -347,7 +347,7 @@ export class CustomPagesController {
       },
     },
   })
-  async checkSlugAvailability(
+  async checkSubdomainSlugAvailability(
     @Param("id") pageId: string,
     @Param("slug") slug: string
   ) {
