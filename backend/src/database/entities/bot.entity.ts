@@ -74,6 +74,10 @@ export class Bot {
   @Column({ unique: true })
   username: string; // @botname
 
+  // Уникальный slug для публичных субдоменов: {slug}.booking.botmanagertest.online
+  @Column({ nullable: true, unique: true })
+  slug?: string;
+
   @Column({
     type: "enum",
     enum: BotStatus,

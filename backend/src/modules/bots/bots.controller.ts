@@ -10,6 +10,7 @@ import {
   UseGuards,
   Request,
   NotFoundException,
+  Query,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -17,6 +18,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiExcludeEndpoint,
+  ApiQuery,
   getSchemaPath,
 } from "@nestjs/swagger";
 
@@ -84,6 +86,36 @@ export class BotsController {
     return this.botsService.findAll(req.user.id);
   }
 
+  @Get("check-slug/:slug")
+  @ApiOperation({
+    summary: "Проверить доступность slug для бота (бронирование)",
+    description:
+      "Проверяет, свободен ли указанный slug. Можно указать excludeId для исключения текущего бота при редактировании.",
+  })
+  @ApiQuery({
+    name: "excludeId",
+    required: false,
+    description: "ID бота для исключения из проверки",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Результат проверки",
+    schema: {
+      type: "object",
+      properties: {
+        available: { type: "boolean", description: "Slug доступен" },
+        slug: { type: "string", description: "Нормализованный slug" },
+        message: { type: "string", description: "Сообщение" },
+      },
+    },
+  })
+  async checkSlug(
+    @Param("slug") slug: string,
+    @Query("excludeId") excludeId?: string
+  ) {
+    return this.botsService.checkSlugAvailability(slug, excludeId);
+  }
+
   @Get(":id/stats")
   @ApiOperation({ summary: "Получить статистику бота" })
   @ApiResponse({
@@ -134,6 +166,7 @@ export class BotsController {
     @Param("id") id: string,
     @Body()
     bookingSettings: {
+      slug?: string;
       isBookingEnabled?: boolean;
       bookingTitle?: string;
       bookingDescription?: string;

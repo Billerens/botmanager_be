@@ -32,6 +32,10 @@ export class Shop {
   @Column()
   name: string; // Название магазина в системе управления
 
+  // Уникальный slug для публичных субдоменов: {slug}.shops.botmanagertest.online
+  @Column({ nullable: true, unique: true })
+  slug?: string;
+
   // Владелец магазина
   @ManyToOne(() => User, { onDelete: "CASCADE" })
   @JoinColumn({ name: "ownerId" })

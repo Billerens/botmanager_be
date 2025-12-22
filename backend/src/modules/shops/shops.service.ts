@@ -150,7 +150,6 @@ export class ShopsService {
       throw new ForbiddenException("Нет доступа к этому магазину");
     }
 
-
     return shop;
   }
 
@@ -185,6 +184,87 @@ export class ShopsService {
     }
 
     return shop;
+  }
+
+  /**
+   * Получить магазин по slug для публичного доступа
+   * Используется для публичных субдоменов: {slug}.shops.botmanagertest.online
+   */
+  async findOneBySlug(slug: string): Promise<Shop> {
+    const normalizedSlug = slug.toLowerCase().trim();
+
+    const shop = await this.shopRepository.findOne({
+      where: { slug: normalizedSlug },
+      relations: ["bot"],
+    });
+
+    if (!shop) {
+      throw new NotFoundException(`Магазин с slug "${slug}" не найден`);
+    }
+
+    return shop;
+  }
+
+  /**
+   * Проверить доступность slug для магазина
+   * @param slug - проверяемый slug
+   * @param excludeId - ID магазина для исключения (при редактировании)
+   */
+  async checkSlugAvailability(
+    slug: string,
+    excludeId?: string
+  ): Promise<{ available: boolean; slug: string; message?: string }> {
+    // Нормализуем slug
+    const normalizedSlug = this.normalizeSlug(slug);
+
+    // Валидация формата slug
+    if (!this.isValidSlug(normalizedSlug)) {
+      return {
+        available: false,
+        slug: normalizedSlug,
+        message:
+          "Slug может содержать только латинские буквы, цифры и дефисы (2-50 символов)",
+      };
+    }
+
+    // Проверяем только в таблице shops
+    // (slug уникален в рамках типа: my-shop.shops.* и my-shop.booking.* - разные URL)
+    const shopExists = await this.shopRepository.findOne({
+      where: excludeId
+        ? { slug: normalizedSlug, id: Not(excludeId) }
+        : { slug: normalizedSlug },
+      select: ["id"],
+    });
+
+    const isAvailable = !shopExists;
+
+    return {
+      available: isAvailable,
+      slug: normalizedSlug,
+      message: isAvailable ? "Slug доступен" : "Этот slug уже занят",
+    };
+  }
+
+  /**
+   * Нормализация slug
+   */
+  private normalizeSlug(slug: string): string {
+    return slug
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9-]/g, "-") // Заменяем недопустимые символы на дефис
+      .replace(/-+/g, "-") // Убираем множественные дефисы
+      .replace(/^-|-$/g, ""); // Убираем дефисы в начале и конце
+  }
+
+  /**
+   * Валидация формата slug
+   */
+  private isValidSlug(slug: string): boolean {
+    // 2-50 символов, только a-z, 0-9, -
+    // Не может начинаться/заканчиваться дефисом
+    const slugRegex = /^[a-z0-9][a-z0-9-]{0,48}[a-z0-9]$|^[a-z0-9]{1,2}$/;
+    return slugRegex.test(slug);
   }
 
   /**
@@ -230,10 +310,8 @@ export class ShopsService {
   ): Promise<Shop> {
     const shop = await this.findOne(id, userId);
 
-
     Object.assign(shop, settings);
     const updatedShop = await this.shopRepository.save(shop);
-
 
     // Обновляем команды бота в Telegram если магазин привязан к боту
     // и изменялись настройки buttonTypes или buttonSettings
@@ -484,10 +562,31 @@ export class ShopsService {
     categories: Category[];
   }> {
     const shop = await this.findOnePublic(shopId);
+    return this.getPublicDataForShop(shop);
+  }
 
+  /**
+   * Получить публичные данные магазина по slug
+   * Используется для публичных субдоменов: {slug}.shops.botmanagertest.online
+   */
+  async getPublicDataBySlug(slug: string): Promise<{
+    shop: Shop;
+    categories: Category[];
+  }> {
+    const shop = await this.findOneBySlug(slug);
+    return this.getPublicDataForShop(shop);
+  }
+
+  /**
+   * Внутренний метод для получения публичных данных магазина
+   */
+  private async getPublicDataForShop(shop: Shop): Promise<{
+    shop: Shop;
+    categories: Category[];
+  }> {
     // Получаем категории магазина (только активные, с иерархией)
     const categories = await this.categoryRepository.find({
-      where: { shopId, isActive: true, parentId: IsNull() },
+      where: { shopId: shop.id, isActive: true, parentId: IsNull() },
       relations: ["children"],
       order: { sortOrder: "ASC", name: "ASC" },
     });

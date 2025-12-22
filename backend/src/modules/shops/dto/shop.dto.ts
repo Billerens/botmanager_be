@@ -7,6 +7,8 @@ import {
   IsArray,
   IsUUID,
   MaxLength,
+  MinLength,
+  Matches,
 } from "class-validator";
 
 /**
@@ -118,6 +120,21 @@ export class LinkBotDto {
  * DTO для обновления настроек магазина (полная версия)
  */
 export class UpdateShopSettingsDto {
+  @ApiPropertyOptional({
+    description:
+      "Уникальный slug для публичного субдомена: {slug}.shops.botmanagertest.online",
+    example: "my-shop",
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(50)
+  @Matches(/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]{1,2}$/, {
+    message:
+      "Slug может содержать только латинские буквы (a-z), цифры и дефисы",
+  })
+  slug?: string;
+
   @ApiPropertyOptional({
     description: "URL логотипа магазина",
   })

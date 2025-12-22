@@ -11,6 +11,7 @@ import {
   UploadedFile,
   BadRequestException,
   Request,
+  Query,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import {
@@ -21,6 +22,7 @@ import {
   ApiConsumes,
   ApiBody,
   ApiParam,
+  ApiQuery,
 } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
 import { CustomPagesService } from "../services/custom-pages.service";
@@ -58,6 +60,37 @@ export class CustomPagesController {
     @Body() createDto: CreateCustomPageDto
   ): Promise<CustomPageResponseDto> {
     return this.customPagesService.create(req.user.id, createDto);
+  }
+
+  @Get("check-slug/:slug")
+  @ApiOperation({
+    summary: "Проверить доступность slug для страницы",
+    description:
+      "Проверяет, свободен ли указанный slug. Можно указать excludeId для исключения текущей страницы при редактировании.",
+  })
+  @ApiParam({ name: "slug", description: "Slug для проверки" })
+  @ApiQuery({
+    name: "excludeId",
+    required: false,
+    description: "ID страницы для исключения из проверки",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Результат проверки",
+    schema: {
+      type: "object",
+      properties: {
+        available: { type: "boolean" },
+        slug: { type: "string" },
+        message: { type: "string" },
+      },
+    },
+  })
+  async checkSlugAvailability(
+    @Param("slug") slug: string,
+    @Query("excludeId") excludeId?: string
+  ) {
+    return this.customPagesService.checkSlugAvailability(slug, excludeId);
   }
 
   @Get()

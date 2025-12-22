@@ -34,10 +34,7 @@ import {
   LinkBotDto,
   ShopFiltersDto,
 } from "./dto/shop.dto";
-import {
-  ShopResponseDto,
-  ShopStatsResponseDto,
-} from "./dto/shop-response.dto";
+import { ShopResponseDto, ShopStatsResponseDto } from "./dto/shop-response.dto";
 import {
   CreateProductDto,
   UpdateProductDto,
@@ -93,8 +90,17 @@ export class ShopsController {
       items: { $ref: getSchemaPath(ShopResponseDto) },
     },
   })
-  @ApiQuery({ name: "search", required: false, description: "Поиск по названию" })
-  @ApiQuery({ name: "hasBot", required: false, type: Boolean, description: "Фильтр по наличию бота" })
+  @ApiQuery({
+    name: "search",
+    required: false,
+    description: "Поиск по названию",
+  })
+  @ApiQuery({
+    name: "hasBot",
+    required: false,
+    type: Boolean,
+    description: "Фильтр по наличию бота",
+  })
   async findAll(@Request() req, @Query() filters: ShopFiltersDto) {
     const shops = await this.shopsService.findAll(req.user.id, filters);
     return shops.map((shop) => this.formatShopResponse(shop));
@@ -114,6 +120,36 @@ export class ShopsController {
       return null;
     }
     return this.formatShopResponse(shop);
+  }
+
+  @Get("check-slug/:slug")
+  @ApiOperation({
+    summary: "Проверить доступность slug для магазина",
+    description:
+      "Проверяет, свободен ли указанный slug. Можно указать excludeId для исключения текущего магазина при редактировании.",
+  })
+  @ApiQuery({
+    name: "excludeId",
+    required: false,
+    description: "ID магазина для исключения из проверки",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Результат проверки",
+    schema: {
+      type: "object",
+      properties: {
+        available: { type: "boolean", description: "Slug доступен" },
+        slug: { type: "string", description: "Нормализованный slug" },
+        message: { type: "string", description: "Сообщение" },
+      },
+    },
+  })
+  async checkSlug(
+    @Param("slug") slug: string,
+    @Query("excludeId") excludeId?: string
+  ) {
+    return this.shopsService.checkSlugAvailability(slug, excludeId);
   }
 
   @Get(":id")
@@ -184,7 +220,10 @@ export class ShopsController {
     schema: { $ref: getSchemaPath(ShopResponseDto) },
   })
   @ApiResponse({ status: 404, description: "Магазин или бот не найден" })
-  @ApiResponse({ status: 409, description: "Бот уже привязан к другому магазину" })
+  @ApiResponse({
+    status: 409,
+    description: "Бот уже привязан к другому магазину",
+  })
   async linkBot(
     @Param("id") id: string,
     @Body() linkBotDto: LinkBotDto,
@@ -503,7 +542,12 @@ export class ShopsController {
     @Body("quantity") quantity: number
   ) {
     await this.shopsService.findOne(id, req.user.id);
-    return this.cartService.updateCartItemByAdmin(id, cartId, productId, quantity);
+    return this.cartService.updateCartItemByAdmin(
+      id,
+      cartId,
+      productId,
+      quantity
+    );
   }
 
   @Delete(":id/carts/:cartId/items/:productId")
@@ -585,4 +629,3 @@ export class ShopsController {
     return { message: "Промокод удален" };
   }
 }
-

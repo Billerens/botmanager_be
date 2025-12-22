@@ -769,6 +769,62 @@ export class CustomPagesService {
   }
 
   // ============================================================
+  // Проверка доступности slug
+  // ============================================================
+
+  /**
+   * Проверить доступность slug для custom-page
+   * @param slug - проверяемый slug
+   * @param excludeId - ID страницы для исключения (при редактировании)
+   */
+  async checkSlugAvailability(
+    slug: string,
+    excludeId?: string
+  ): Promise<{ available: boolean; slug: string; message?: string }> {
+    // Нормализуем slug
+    const normalizedSlug = slug.toLowerCase().trim().replace(/\s+/g, "-");
+
+    // Валидация формата slug
+    const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+    if (!slugRegex.test(normalizedSlug) || normalizedSlug.length < 2 || normalizedSlug.length > 50) {
+      return {
+        available: false,
+        slug: normalizedSlug,
+        message: "Slug может содержать только латинские буквы, цифры и дефисы (2-50 символов)",
+      };
+    }
+
+    // Проверяем только в таблице custom_pages
+    // (slug уникален в рамках типа: my-page.pages.* не конфликтует с my-page.shops.*)
+    const whereCondition: any = { slug: normalizedSlug };
+    if (excludeId) {
+      whereCondition.id = IsNull(); // Временно, заменим на Not
+    }
+
+    let existingPage: CustomPage | null;
+    if (excludeId) {
+      existingPage = await this.customPageRepository
+        .createQueryBuilder("page")
+        .where("page.slug = :slug", { slug: normalizedSlug })
+        .andWhere("page.id != :excludeId", { excludeId })
+        .getOne();
+    } else {
+      existingPage = await this.customPageRepository.findOne({
+        where: { slug: normalizedSlug },
+        select: ["id"],
+      });
+    }
+
+    const isAvailable = !existingPage;
+
+    return {
+      available: isAvailable,
+      slug: normalizedSlug,
+      message: isAvailable ? "Slug доступен" : "Этот slug уже занят",
+    };
+  }
+
+  // ============================================================
   // Публичные методы
   // ============================================================
 

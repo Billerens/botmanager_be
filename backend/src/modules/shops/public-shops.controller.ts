@@ -61,6 +61,58 @@ export class PublicShopsController {
     return {};
   }
 
+  @Get("by-slug/:slug")
+  @ApiOperation({
+    summary: "Получить магазин по slug",
+    description:
+      "Используется для публичных субдоменов: {slug}.shops.botmanagertest.online",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Данные магазина получены",
+    schema: { $ref: getSchemaPath(PublicShopResponseDto) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Магазин не найден",
+  })
+  async getShopBySlug(
+    @Param("slug") slug: string
+  ): Promise<PublicShopResponseDto> {
+    const { shop, categories } =
+      await this.shopsService.getPublicDataBySlug(slug);
+
+    return {
+      id: shop.id,
+      name: shop.name,
+      title: shop.title,
+      description: shop.description,
+      logoUrl: shop.logoUrl,
+      customStyles: shop.customStyles,
+      buttonTypes: shop.buttonTypes,
+      buttonSettings: shop.buttonSettings,
+      layoutConfig: shop.layoutConfig,
+      browserAccessEnabled: shop.browserAccessEnabled,
+      url: shop.url,
+      categories: categories.map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        description: cat.description,
+        imageUrl: cat.imageUrl,
+        isActive: cat.isActive,
+        children: cat.children?.map((child) => ({
+          id: child.id,
+          name: child.name,
+          description: child.description,
+          imageUrl: child.imageUrl,
+          isActive: child.isActive,
+          children: [],
+        })),
+      })),
+      botUsername: shop.bot?.username,
+    };
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "Получить данные магазина для публичного доступа" })
   @ApiResponse({
@@ -168,8 +220,7 @@ export class PublicShopsController {
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
-    const inStockBool =
-      inStock !== undefined ? inStock === "true" : undefined;
+    const inStockBool = inStock !== undefined ? inStock === "true" : undefined;
 
     return this.shopsService.getPublicProducts(
       id,
@@ -207,7 +258,12 @@ export class PublicShopsController {
     @Body() body: { productId: string; quantity?: number }
   ) {
     const user = this.getUserIdentifier(req);
-    return this.cartService.addItemByShop(id, user, body.productId, body.quantity || 1);
+    return this.cartService.addItemByShop(
+      id,
+      user,
+      body.productId,
+      body.quantity || 1
+    );
   }
 
   @Put(":id/cart/items/:productId")
@@ -222,7 +278,12 @@ export class PublicShopsController {
     @Body() body: { quantity: number }
   ) {
     const user = this.getUserIdentifier(req);
-    return this.cartService.updateItemByShop(id, user, productId, body.quantity);
+    return this.cartService.updateItemByShop(
+      id,
+      user,
+      productId,
+      body.quantity
+    );
   }
 
   @Delete(":id/cart/items/:productId")
@@ -311,4 +372,3 @@ export class PublicShopsController {
     });
   }
 }
-

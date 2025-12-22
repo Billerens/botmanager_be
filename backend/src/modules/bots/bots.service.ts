@@ -7,7 +7,7 @@ import {
   forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Repository, Not } from "typeorm";
 import * as crypto from "crypto";
 
 import { Bot, BotStatus } from "../../database/entities/bot.entity";
@@ -216,6 +216,7 @@ export class BotsService {
   async updateBookingSettings(
     id: string,
     bookingSettings: {
+      slug?: string;
       isBookingEnabled?: boolean;
       bookingTitle?: string;
       bookingDescription?: string;
@@ -304,6 +305,36 @@ export class BotsService {
       return null;
     }
 
+    return this.formatPublicBotForBooking(bot);
+  }
+
+  /**
+   * Получить данные бота для бронирования по slug
+   * Используется для публичных субдоменов: {slug}.booking.botmanagertest.online
+   */
+  async getPublicBotForBookingBySlug(slug: string): Promise<any> {
+    const normalizedSlug = slug.toLowerCase().trim();
+    
+    const bot = await this.botRepository.findOne({
+      where: {
+        slug: normalizedSlug,
+        status: BotStatus.ACTIVE,
+        isBookingEnabled: true,
+      },
+      relations: ["specialists", "specialists.services"],
+    });
+
+    if (!bot) {
+      return null;
+    }
+
+    return this.formatPublicBotForBooking(bot);
+  }
+
+  /**
+   * Форматирование данных бота для публичного бронирования
+   */
+  private formatPublicBotForBooking(bot: Bot): any {
     return {
       id: bot.id,
       name: bot.name,
@@ -316,6 +347,66 @@ export class BotsService {
       // Настройки браузерного доступа
       bookingBrowserAccessEnabled: bot.bookingBrowserAccessEnabled ?? false,
     };
+  }
+
+  /**
+   * Проверить доступность slug для бота
+   * @param slug - проверяемый slug
+   * @param excludeId - ID бота для исключения (при редактировании)
+   */
+  async checkSlugAvailability(
+    slug: string,
+    excludeId?: string
+  ): Promise<{ available: boolean; slug: string; message?: string }> {
+    // Нормализуем slug
+    const normalizedSlug = this.normalizeSlug(slug);
+
+    // Валидация формата slug
+    if (!this.isValidSlug(normalizedSlug)) {
+      return {
+        available: false,
+        slug: normalizedSlug,
+        message:
+          "Slug может содержать только латинские буквы, цифры и дефисы (2-50 символов)",
+      };
+    }
+
+    // Проверяем только в таблице bots
+    // (slug уникален в рамках типа: my-shop.shops.* и my-shop.booking.* - разные URL)
+    const botExists = await this.botRepository.findOne({
+      where: excludeId
+        ? { slug: normalizedSlug, id: Not(excludeId) }
+        : { slug: normalizedSlug },
+      select: ["id"],
+    });
+
+    const isAvailable = !botExists;
+
+    return {
+      available: isAvailable,
+      slug: normalizedSlug,
+      message: isAvailable ? "Slug доступен" : "Этот slug уже занят",
+    };
+  }
+
+  /**
+   * Нормализация slug
+   */
+  private normalizeSlug(slug: string): string {
+    return slug
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+  }
+
+  /**
+   * Валидация формата slug
+   */
+  private isValidSlug(slug: string): boolean {
+    const slugRegex = /^[a-z0-9][a-z0-9-]{0,48}[a-z0-9]$|^[a-z0-9]{1,2}$/;
+    return slugRegex.test(slug);
   }
 
   // Legacy shop методы удалены - используйте ShopsService
