@@ -1,8 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { TimewebDnsService } from "./timeweb-dns.service";
-import { CaddyService } from "./caddy.service";
-import { SubdomainStatus, SubdomainType, DomainTargetType } from "../enums/domain-status.enum";
+import { SubdomainStatus, SubdomainType } from "../enums/domain-status.enum";
 
 /**
  * Результат регистрации субдомена
@@ -12,7 +11,7 @@ export interface SubdomainRegistrationResult {
   status: SubdomainStatus;
   fullDomain: string;
   error?: string;
-  /** Примерное время ожидания SSL в секундах */
+  /** Примерное время ожидания активации (DNS + SSL) в секундах */
   estimatedWaitTime?: number;
 }
 
@@ -24,7 +23,7 @@ export interface RegisterSubdomainConfig {
   slug: string;
   /** Тип субдомена */
   type: SubdomainType;
-  /** ID целевой сущности */
+  /** ID целевой сущности (для логирования) */
   targetId: string;
 }
 
@@ -32,32 +31,32 @@ export interface RegisterSubdomainConfig {
  * Сервис управления субдоменами платформы
  *
  * Отвечает за:
- * - Создание DNS записей в Timeweb
- * - Добавление маршрутов в Caddy
- * - Удаление субдоменов (DNS + маршруты)
+ * - Создание A-записей в Timeweb DNS
+ * - Удаление A-записей при удалении субдомена
+ *
+ * Архитектура:
+ * - Backend создаёт/удаляет DNS записи через Timeweb API
+ * - Timeweb Load Balancer автоматически выдаёт SSL сертификаты
+ * - Caddy роутит трафик по wildcard правилам (настроены статически)
  *
  * Flow регистрации:
- * 1. Создаём A-запись в Timeweb DNS
- * 2. Добавляем маршрут в Caddy
- * 3. Caddy автоматически получает SSL через DNS-01 challenge
+ * 1. Backend создаёт A-запись в Timeweb DNS → IP сервера
+ * 2. Timeweb LB обнаруживает новый домен и выдаёт SSL
+ * 3. Caddy роутит запросы по wildcard правилам
  */
 @Injectable()
 export class SubdomainService {
   private readonly logger = new Logger(SubdomainService.name);
 
-  /** Максимальное время ожидания SSL в секундах */
-  private readonly SSL_MAX_WAIT_TIME = 120;
-
-  /** Интервал проверки SSL в миллисекундах */
-  private readonly SSL_CHECK_INTERVAL = 5000;
+  /** Примерное время активации субдомена (DNS propagation + SSL) в секундах */
+  private readonly ESTIMATED_ACTIVATION_TIME = 300; // 5 минут
 
   /** Базовый домен */
   private readonly baseDomain: string;
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly timewebDns: TimewebDnsService,
-    private readonly caddyService: CaddyService
+    private readonly timewebDns: TimewebDnsService
   ) {
     this.baseDomain =
       this.configService.get<string>("BASE_DOMAIN") || "botmanagertest.online";
@@ -65,6 +64,9 @@ export class SubdomainService {
 
   /**
    * Зарегистрировать новый субдомен платформы
+   *
+   * Создаёт A-запись в Timeweb DNS. SSL сертификат выдаётся
+   * автоматически Timeweb Load Balancer.
    *
    * @param config - Конфигурация субдомена
    * @returns Результат регистрации
@@ -85,11 +87,14 @@ export class SubdomainService {
     const subdomain = this.timewebDns.getSubdomain(config.slug, config.type);
     const fullDomain = this.timewebDns.getFullDomain(config.slug, config.type);
 
-    this.logger.log(`Registering subdomain: ${fullDomain}`);
+    this.logger.log(
+      `Registering subdomain: ${fullDomain} for ${config.type} ${config.targetId}`
+    );
 
     try {
-      // Шаг 1: Создаём DNS запись
-      const dnsRecordId = await this.timewebDns.createSubdomainRecord(subdomain);
+      // Создаём A-запись в Timeweb DNS
+      const dnsRecordId =
+        await this.timewebDns.createSubdomainRecord(subdomain);
 
       if (!dnsRecordId) {
         this.logger.error(`Failed to create DNS record for ${fullDomain}`);
@@ -101,34 +106,16 @@ export class SubdomainService {
         };
       }
 
-      this.logger.log(`DNS record created for ${fullDomain}, adding Caddy route...`);
-
-      // Шаг 2: Добавляем маршрут в Caddy
-      const routeAdded = await this.caddyService.addRoute({
-        domain: fullDomain,
-        targetType: this.mapSubdomainTypeToDomainTarget(config.type),
-        targetId: config.targetId,
-      });
-
-      if (!routeAdded) {
-        this.logger.error(`Failed to add Caddy route for ${fullDomain}`);
-        // Откатываем DNS запись
-        await this.timewebDns.deleteSubdomainRecord(subdomain);
-        return {
-          success: false,
-          status: SubdomainStatus.SSL_ERROR,
-          fullDomain,
-          error: "Не удалось настроить маршрутизацию. Попробуйте позже.",
-        };
-      }
-
-      this.logger.log(`Subdomain ${fullDomain} registered successfully`);
+      this.logger.log(
+        `DNS record created for ${fullDomain} (ID: ${dnsRecordId}). ` +
+          `Waiting for DNS propagation and SSL certificate...`
+      );
 
       return {
         success: true,
-        status: SubdomainStatus.SSL_ISSUING,
+        status: SubdomainStatus.DNS_CREATING,
         fullDomain,
-        estimatedWaitTime: this.SSL_MAX_WAIT_TIME,
+        estimatedWaitTime: this.ESTIMATED_ACTIVATION_TIME,
       };
     } catch (error) {
       this.logger.error(
@@ -146,7 +133,7 @@ export class SubdomainService {
   /**
    * Удалить субдомен платформы
    *
-   * Удаляет маршрут из Caddy и DNS запись из Timeweb
+   * Удаляет A-запись из Timeweb DNS.
    *
    * @param slug - Slug сущности
    * @param type - Тип субдомена
@@ -158,73 +145,50 @@ export class SubdomainService {
 
     this.logger.log(`Removing subdomain: ${fullDomain}`);
 
-    let success = true;
-
-    // Шаг 1: Удаляем маршрут из Caddy
     try {
-      const routeRemoved = await this.caddyService.removeRoute(fullDomain);
-      if (!routeRemoved) {
-        this.logger.warn(`Failed to remove Caddy route for ${fullDomain}`);
-        success = false;
-      }
-    } catch (error) {
-      this.logger.error(
-        `Error removing Caddy route for ${fullDomain}: ${error.message}`
-      );
-      success = false;
-    }
+      const deleted = await this.timewebDns.deleteSubdomainRecord(subdomain);
 
-    // Шаг 2: Удаляем DNS запись из Timeweb
-    try {
-      const dnsDeleted = await this.timewebDns.deleteSubdomainRecord(subdomain);
-      if (!dnsDeleted) {
+      if (deleted) {
+        this.logger.log(`Subdomain ${fullDomain} removed successfully`);
+      } else {
         this.logger.warn(`Failed to delete DNS record for ${fullDomain}`);
-        success = false;
       }
+
+      return deleted;
     } catch (error) {
       this.logger.error(
-        `Error deleting DNS record for ${fullDomain}: ${error.message}`
+        `Error removing subdomain ${fullDomain}: ${error.message}`
       );
-      success = false;
+      return false;
     }
-
-    if (success) {
-      this.logger.log(`Subdomain ${fullDomain} removed successfully`);
-    } else {
-      this.logger.warn(
-        `Subdomain ${fullDomain} removal completed with warnings`
-      );
-    }
-
-    return success;
   }
 
   /**
    * Проверить статус субдомена
    *
+   * Проверяет существование DNS записи и доступность по HTTPS.
+   *
    * @param slug - Slug сущности
    * @param type - Тип субдомена
    * @returns Текущий статус субдомена
    */
-  async checkStatus(slug: string, type: SubdomainType): Promise<SubdomainStatus> {
+  async checkStatus(
+    slug: string,
+    type: SubdomainType
+  ): Promise<SubdomainStatus> {
     const subdomain = this.timewebDns.getSubdomain(slug, type);
     const fullDomain = this.timewebDns.getFullDomain(slug, type);
 
-    // Проверяем DNS
+    // Проверяем существование DNS записи
     const dnsExists = await this.timewebDns.recordExists(subdomain);
     if (!dnsExists) {
       return SubdomainStatus.DNS_ERROR;
     }
 
-    // Проверяем маршрут в Caddy
-    const routeExists = await this.caddyService.routeExists(fullDomain);
-    if (!routeExists) {
-      return SubdomainStatus.SSL_ISSUING;
-    }
-
-    // Проверяем SSL (простая проверка через HTTPS запрос)
-    const sslReady = await this.checkSslReady(fullDomain);
-    if (!sslReady) {
+    // Проверяем доступность по HTTPS (значит SSL готов)
+    const isAccessible = await this.checkHttpsAccessible(fullDomain);
+    if (!isAccessible) {
+      // DNS есть, но HTTPS недоступен - ждём SSL от Timeweb
       return SubdomainStatus.SSL_ISSUING;
     }
 
@@ -232,20 +196,21 @@ export class SubdomainService {
   }
 
   /**
-   * Дождаться активации субдомена (SSL готов)
+   * Дождаться активации субдомена
    *
    * @param slug - Slug сущности
    * @param type - Тип субдомена
-   * @param timeoutMs - Таймаут в миллисекундах (по умолчанию 120 сек)
+   * @param timeoutMs - Таймаут в миллисекундах (по умолчанию 5 минут)
    * @returns true если субдомен активен
    */
   async waitForActivation(
     slug: string,
     type: SubdomainType,
-    timeoutMs: number = this.SSL_MAX_WAIT_TIME * 1000
+    timeoutMs: number = this.ESTIMATED_ACTIVATION_TIME * 1000
   ): Promise<boolean> {
     const fullDomain = this.timewebDns.getFullDomain(slug, type);
     const startTime = Date.now();
+    const checkInterval = 10000; // 10 секунд
 
     this.logger.log(`Waiting for subdomain activation: ${fullDomain}`);
 
@@ -262,39 +227,11 @@ export class SubdomainService {
         return false;
       }
 
-      await this.delay(this.SSL_CHECK_INTERVAL);
+      await this.delay(checkInterval);
     }
 
-    this.logger.warn(
-      `Timeout waiting for subdomain ${fullDomain} activation`
-    );
+    this.logger.warn(`Timeout waiting for subdomain ${fullDomain} activation`);
     return false;
-  }
-
-  /**
-   * Переименовать субдомен (изменение slug)
-   *
-   * @param oldSlug - Старый slug
-   * @param newSlug - Новый slug
-   * @param type - Тип субдомена
-   * @param targetId - ID целевой сущности
-   * @returns Результат переименования
-   */
-  async rename(
-    oldSlug: string,
-    newSlug: string,
-    type: SubdomainType,
-    targetId: string
-  ): Promise<SubdomainRegistrationResult> {
-    // Удаляем старый субдомен
-    await this.remove(oldSlug, type);
-
-    // Создаём новый
-    return this.register({
-      slug: newSlug,
-      type,
-      targetId,
-    });
   }
 
   /**
@@ -305,40 +242,26 @@ export class SubdomainService {
   }
 
   /**
-   * Проверка доступности SSL
+   * Проверка доступности HTTPS
    */
-  private async checkSslReady(domain: string): Promise<boolean> {
-    const https = await import("https");
-    const axios = (await import("axios")).default;
-
+  private async checkHttpsAccessible(domain: string): Promise<boolean> {
     try {
-      await axios.get(`https://${domain}`, {
-        timeout: 5000,
+      const https = await import("https");
+      const axios = (await import("axios")).default;
+
+      const response = await axios.get(`https://${domain}/health`, {
+        timeout: 10000,
         httpsAgent: new https.Agent({
           rejectUnauthorized: true, // Проверяем валидность SSL
         }),
-        validateStatus: () => true, // Любой статус OK
+        validateStatus: () => true, // Любой HTTP статус OK
       });
+
+      // Если получили ответ без SSL ошибки - субдомен активен
       return true;
     } catch (error) {
-      // SSL ещё не готов или ошибка сертификата
+      // SSL ещё не готов или другая ошибка
       return false;
-    }
-  }
-
-  /**
-   * Преобразование типа субдомена в тип цели для Caddy
-   */
-  private mapSubdomainTypeToDomainTarget(type: SubdomainType): DomainTargetType {
-    switch (type) {
-      case SubdomainType.SHOP:
-        return DomainTargetType.SHOP;
-      case SubdomainType.BOOKING:
-        return DomainTargetType.BOOKING;
-      case SubdomainType.PAGE:
-        return DomainTargetType.CUSTOM_PAGE;
-      default:
-        return DomainTargetType.SHOP;
     }
   }
 
@@ -346,4 +269,3 @@ export class SubdomainService {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
-
