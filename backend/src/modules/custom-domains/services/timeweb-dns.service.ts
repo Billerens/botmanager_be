@@ -162,7 +162,7 @@ export class TimewebDnsService implements OnModuleInit {
 
       const response = await this.client.post<TimewebCreateResponse>(
         requestUrl,
-        requestBody
+        JSON.stringify(requestBody)
       );
 
       const recordId = response.data.dns_record?.id;
