@@ -30,6 +30,11 @@ import { UploadService } from "../../upload/upload.service";
 import { TelegramService } from "../../telegram/telegram.service";
 import { NotificationService } from "../../websocket/services/notification.service";
 import { NotificationType } from "../../websocket/interfaces/notification.interface";
+import { SubdomainService } from "../../custom-domains/services/subdomain.service";
+import {
+  SubdomainStatus,
+  SubdomainType,
+} from "../../custom-domains/enums/domain-status.enum";
 
 @Injectable()
 export class CustomPagesService {
@@ -45,7 +50,9 @@ export class CustomPagesService {
     private readonly uploadService: UploadService,
     @Inject(forwardRef(() => TelegramService))
     private readonly telegramService: TelegramService,
-    private readonly notificationService: NotificationService
+    private readonly notificationService: NotificationService,
+    @Inject(forwardRef(() => SubdomainService))
+    private readonly subdomainService: SubdomainService
   ) {}
 
   // ============================================================
@@ -1052,5 +1059,253 @@ export class CustomPagesService {
       url: page.url,
       isWebAppOnly: page.isWebAppOnly,
     };
+  }
+
+  // ============================================================
+  // МЕТОДЫ УПРАВЛЕНИЯ СУБДОМЕНАМИ
+  // ============================================================
+
+  /**
+   * Обновить slug страницы (субдомен)
+   */
+  async updateSlug(
+    pageId: string,
+    newSlug: string | null,
+    userId: string
+  ): Promise<CustomPageResponseDto> {
+    const page = await this.customPageRepository.findOne({
+      where: { id: pageId, ownerId: userId },
+      relations: ["bot", "shop"],
+    });
+
+    if (!page) {
+      throw new NotFoundException("Страница не найдена");
+    }
+
+    const oldSlug = page.slug;
+
+    // Если slug не изменился - ничего не делаем
+    if (oldSlug === newSlug) {
+      return this.toResponseDto(page);
+    }
+
+    // Если устанавливаем новый slug
+    if (newSlug) {
+      // Проверяем доступность
+      const availability = await this.checkSlugAvailability(newSlug, pageId);
+      if (!availability.available) {
+        throw new BadRequestException(availability.message);
+      }
+
+      // Если был старый slug - удаляем старый субдомен
+      if (oldSlug) {
+        this.logger.log(
+          `Removing old subdomain for page ${pageId}: ${oldSlug}.pages`
+        );
+        await this.subdomainService.remove(oldSlug, SubdomainType.PAGE);
+      }
+
+      // Регистрируем новый субдомен
+      this.logger.log(
+        `Registering new subdomain for page ${pageId}: ${newSlug}.pages`
+      );
+
+      page.slug = availability.slug;
+      page.subdomainStatus = SubdomainStatus.PENDING;
+      page.subdomainError = null;
+      page.subdomainActivatedAt = null;
+      page.subdomainUrl = null;
+
+      await this.customPageRepository.save(page);
+
+      // Регистрируем субдомен (асинхронно)
+      this.registerSubdomainAsync(page);
+    }
+    // Если удаляем slug
+    else if (oldSlug) {
+      this.logger.log(`Removing subdomain for page ${pageId}: ${oldSlug}.pages`);
+
+      page.slug = null;
+      page.subdomainStatus = SubdomainStatus.REMOVING;
+      page.subdomainError = null;
+
+      await this.customPageRepository.save(page);
+
+      // Удаляем субдомен
+      const removed = await this.subdomainService.remove(
+        oldSlug,
+        SubdomainType.PAGE
+      );
+
+      page.subdomainStatus = null;
+      page.subdomainUrl = null;
+      page.subdomainActivatedAt = null;
+
+      if (!removed) {
+        this.logger.warn(`Failed to fully remove subdomain for page ${pageId}`);
+      }
+
+      await this.customPageRepository.save(page);
+    }
+
+    // Возвращаем обновлённую страницу
+    const updatedPage = await this.customPageRepository.findOne({
+      where: { id: pageId },
+      relations: ["bot", "shop"],
+    });
+
+    return this.toResponseDto(updatedPage);
+  }
+
+  /**
+   * Асинхронная регистрация субдомена
+   */
+  private async registerSubdomainAsync(page: CustomPage): Promise<void> {
+    try {
+      page.subdomainStatus = SubdomainStatus.DNS_CREATING;
+      await this.customPageRepository.save(page);
+
+      const result = await this.subdomainService.register({
+        slug: page.slug,
+        type: SubdomainType.PAGE,
+        targetId: page.id,
+      });
+
+      if (result.success) {
+        page.subdomainStatus = result.status;
+        page.subdomainUrl = result.fullDomain;
+
+        // Ждём активации SSL (в фоне)
+        this.waitForSubdomainActivation(page);
+      } else {
+        page.subdomainStatus = result.status;
+        page.subdomainError = result.error;
+        this.logger.error(
+          `Failed to register subdomain for page ${page.id}: ${result.error}`
+        );
+      }
+
+      await this.customPageRepository.save(page);
+    } catch (error) {
+      this.logger.error(
+        `Error registering subdomain for page ${page.id}: ${error.message}`
+      );
+      page.subdomainStatus = SubdomainStatus.DNS_ERROR;
+      page.subdomainError = error.message;
+      await this.customPageRepository.save(page);
+    }
+  }
+
+  /**
+   * Ожидание активации субдомена (SSL)
+   */
+  private async waitForSubdomainActivation(page: CustomPage): Promise<void> {
+    try {
+      const activated = await this.subdomainService.waitForActivation(
+        page.slug,
+        SubdomainType.PAGE,
+        120000 // 2 минуты
+      );
+
+      if (activated) {
+        page.subdomainStatus = SubdomainStatus.ACTIVE;
+        page.subdomainActivatedAt = new Date();
+        page.subdomainError = null;
+        this.logger.log(
+          `Subdomain activated for page ${page.id}: ${page.subdomainUrl}`
+        );
+      } else {
+        page.subdomainStatus = SubdomainStatus.SSL_ISSUING;
+        this.logger.warn(
+          `SSL not ready for page ${page.id} subdomain, but route is active`
+        );
+      }
+
+      await this.customPageRepository.save(page);
+    } catch (error) {
+      this.logger.error(
+        `Error waiting for subdomain activation for page ${page.id}: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Получить статус субдомена страницы
+   */
+  async getSubdomainStatus(
+    pageId: string,
+    userId: string
+  ): Promise<{
+    slug: string | null;
+    status: SubdomainStatus | null;
+    url: string | null;
+    error: string | null;
+    activatedAt: Date | null;
+    estimatedWaitMessage: string | null;
+  }> {
+    const page = await this.customPageRepository.findOne({
+      where: { id: pageId, ownerId: userId },
+    });
+
+    if (!page) {
+      throw new NotFoundException("Страница не найдена");
+    }
+
+    let estimatedWaitMessage: string | null = null;
+    if (
+      page.subdomainStatus === SubdomainStatus.PENDING ||
+      page.subdomainStatus === SubdomainStatus.DNS_CREATING ||
+      page.subdomainStatus === SubdomainStatus.SSL_ISSUING
+    ) {
+      estimatedWaitMessage =
+        "Субдомен активируется. Время ожидания может варьироваться от 30 секунд до нескольких минут.";
+    }
+
+    return {
+      slug: page.slug || null,
+      status: page.subdomainStatus || null,
+      url: page.subdomainUrl
+        ? `https://${page.subdomainUrl}`
+        : null,
+      error: page.subdomainError || null,
+      activatedAt: page.subdomainActivatedAt || null,
+      estimatedWaitMessage,
+    };
+  }
+
+  /**
+   * Повторить активацию субдомена
+   */
+  async retrySubdomainActivation(
+    pageId: string,
+    userId: string
+  ): Promise<CustomPageResponseDto> {
+    const page = await this.customPageRepository.findOne({
+      where: { id: pageId, ownerId: userId },
+      relations: ["bot", "shop"],
+    });
+
+    if (!page) {
+      throw new NotFoundException("Страница не найдена");
+    }
+
+    if (!page.slug) {
+      throw new BadRequestException("У страницы не установлен slug");
+    }
+
+    if (page.subdomainStatus === SubdomainStatus.ACTIVE) {
+      throw new BadRequestException("Субдомен уже активен");
+    }
+
+    this.logger.log(`Retrying subdomain activation for page ${pageId}`);
+
+    page.subdomainStatus = SubdomainStatus.PENDING;
+    page.subdomainError = null;
+    await this.customPageRepository.save(page);
+
+    // Запускаем регистрацию заново
+    this.registerSubdomainAsync(page);
+
+    return this.toResponseDto(page);
   }
 }

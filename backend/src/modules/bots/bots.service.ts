@@ -5,9 +5,10 @@ import {
   ForbiddenException,
   Inject,
   forwardRef,
+  Logger,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Not } from "typeorm";
+import { Repository, Not, In } from "typeorm";
 import * as crypto from "crypto";
 
 import { Bot, BotStatus } from "../../database/entities/bot.entity";
@@ -25,10 +26,16 @@ import {
   ActivityType,
   ActivityLevel,
 } from "../../database/entities/activity-log.entity";
-import { In } from "typeorm";
+import { SubdomainService } from "../custom-domains/services/subdomain.service";
+import {
+  SubdomainStatus,
+  SubdomainType,
+} from "../custom-domains/enums/domain-status.enum";
 
 @Injectable()
 export class BotsService {
+  private readonly logger = new Logger(BotsService.name);
+
   constructor(
     @InjectRepository(Bot)
     private botRepository: Repository<Bot>,
@@ -41,7 +48,9 @@ export class BotsService {
     @Inject(forwardRef(() => TelegramService))
     private telegramService: TelegramService,
     private notificationService: NotificationService,
-    private activityLogService: ActivityLogService
+    private activityLogService: ActivityLogService,
+    @Inject(forwardRef(() => SubdomainService))
+    private readonly subdomainService: SubdomainService
   ) {}
 
   async create(createBotDto: CreateBotDto, userId: string): Promise<Bot> {
@@ -314,7 +323,7 @@ export class BotsService {
    */
   async getPublicBotForBookingBySlug(slug: string): Promise<any> {
     const normalizedSlug = slug.toLowerCase().trim();
-    
+
     const bot = await this.botRepository.findOne({
       where: {
         slug: normalizedSlug,
@@ -717,5 +726,256 @@ export class BotsService {
       // Проверку для booking оставляем как есть
       // Конфликт с Shop проверяется при привязке магазина к боту через ShopsService
     }
+  }
+
+  // =====================================================
+  // МЕТОДЫ УПРАВЛЕНИЯ СУБДОМЕНАМИ (BOOKING)
+  // =====================================================
+
+  /**
+   * Обновить slug бота (субдомен для бронирования)
+   */
+  async updateSlug(
+    botId: string,
+    newSlug: string | null,
+    userId: string
+  ): Promise<Bot> {
+    const bot = await this.findOne(botId, userId);
+    const oldSlug = bot.slug;
+
+    // Если slug не изменился - ничего не делаем
+    if (oldSlug === newSlug) {
+      return bot;
+    }
+
+    // Если устанавливаем новый slug
+    if (newSlug) {
+      // Проверяем доступность
+      const availability = await this.checkSlugAvailability(newSlug, botId);
+      if (!availability.available) {
+        throw new BadRequestException(availability.message);
+      }
+
+      // Если был старый slug - удаляем старый субдомен
+      if (oldSlug) {
+        this.logger.log(
+          `Removing old subdomain for bot ${botId}: ${oldSlug}.booking`
+        );
+        await this.subdomainService.remove(oldSlug, SubdomainType.BOOKING);
+      }
+
+      // Регистрируем новый субдомен
+      this.logger.log(
+        `Registering new subdomain for bot ${botId}: ${newSlug}.booking`
+      );
+
+      bot.slug = availability.slug;
+      bot.subdomainStatus = SubdomainStatus.PENDING;
+      bot.subdomainError = null;
+      bot.subdomainActivatedAt = null;
+      bot.subdomainUrl = null;
+
+      await this.botRepository.save(bot);
+
+      // Регистрируем субдомен (асинхронно)
+      this.registerSubdomainAsync(bot);
+
+      // Логируем
+      this.activityLogService
+        .create({
+          type: ActivityType.BOT_UPDATED,
+          level: ActivityLevel.INFO,
+          message: `Установлен slug "${availability.slug}" для бронирования бота "${bot.name}"`,
+          userId,
+          metadata: {
+            botId,
+            oldSlug,
+            newSlug: availability.slug,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка логирования изменения slug:", error);
+        });
+    }
+    // Если удаляем slug
+    else if (oldSlug) {
+      this.logger.log(
+        `Removing subdomain for bot ${botId}: ${oldSlug}.booking`
+      );
+
+      bot.slug = null;
+      bot.subdomainStatus = SubdomainStatus.REMOVING;
+      bot.subdomainError = null;
+
+      await this.botRepository.save(bot);
+
+      // Удаляем субдомен
+      const removed = await this.subdomainService.remove(
+        oldSlug,
+        SubdomainType.BOOKING
+      );
+
+      bot.subdomainStatus = null;
+      bot.subdomainUrl = null;
+      bot.subdomainActivatedAt = null;
+
+      if (!removed) {
+        this.logger.warn(`Failed to fully remove subdomain for bot ${botId}`);
+      }
+
+      await this.botRepository.save(bot);
+
+      // Логируем
+      this.activityLogService
+        .create({
+          type: ActivityType.BOT_UPDATED,
+          level: ActivityLevel.INFO,
+          message: `Удалён slug "${oldSlug}" бронирования бота "${bot.name}"`,
+          userId,
+          metadata: {
+            botId,
+            removedSlug: oldSlug,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка логирования удаления slug:", error);
+        });
+    }
+
+    return this.botRepository.findOne({ where: { id: botId } });
+  }
+
+  /**
+   * Асинхронная регистрация субдомена
+   */
+  private async registerSubdomainAsync(bot: Bot): Promise<void> {
+    try {
+      bot.subdomainStatus = SubdomainStatus.DNS_CREATING;
+      await this.botRepository.save(bot);
+
+      const result = await this.subdomainService.register({
+        slug: bot.slug,
+        type: SubdomainType.BOOKING,
+        targetId: bot.id,
+      });
+
+      if (result.success) {
+        bot.subdomainStatus = result.status;
+        bot.subdomainUrl = result.fullDomain;
+
+        // Ждём активации SSL (в фоне)
+        this.waitForSubdomainActivation(bot);
+      } else {
+        bot.subdomainStatus = result.status;
+        bot.subdomainError = result.error;
+        this.logger.error(
+          `Failed to register subdomain for bot ${bot.id}: ${result.error}`
+        );
+      }
+
+      await this.botRepository.save(bot);
+    } catch (error) {
+      this.logger.error(
+        `Error registering subdomain for bot ${bot.id}: ${error.message}`
+      );
+      bot.subdomainStatus = SubdomainStatus.DNS_ERROR;
+      bot.subdomainError = error.message;
+      await this.botRepository.save(bot);
+    }
+  }
+
+  /**
+   * Ожидание активации субдомена (SSL)
+   */
+  private async waitForSubdomainActivation(bot: Bot): Promise<void> {
+    try {
+      const activated = await this.subdomainService.waitForActivation(
+        bot.slug,
+        SubdomainType.BOOKING,
+        120000 // 2 минуты
+      );
+
+      if (activated) {
+        bot.subdomainStatus = SubdomainStatus.ACTIVE;
+        bot.subdomainActivatedAt = new Date();
+        bot.subdomainError = null;
+        this.logger.log(
+          `Subdomain activated for bot ${bot.id}: ${bot.subdomainUrl}`
+        );
+      } else {
+        bot.subdomainStatus = SubdomainStatus.SSL_ISSUING;
+        this.logger.warn(
+          `SSL not ready for bot ${bot.id} subdomain, but route is active`
+        );
+      }
+
+      await this.botRepository.save(bot);
+    } catch (error) {
+      this.logger.error(
+        `Error waiting for subdomain activation for bot ${bot.id}: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Получить статус субдомена бота
+   */
+  async getSubdomainStatus(
+    botId: string,
+    userId: string
+  ): Promise<{
+    slug: string | null;
+    status: SubdomainStatus | null;
+    url: string | null;
+    error: string | null;
+    activatedAt: Date | null;
+    estimatedWaitMessage: string | null;
+  }> {
+    const bot = await this.findOne(botId, userId);
+
+    let estimatedWaitMessage: string | null = null;
+    if (
+      bot.subdomainStatus === SubdomainStatus.PENDING ||
+      bot.subdomainStatus === SubdomainStatus.DNS_CREATING ||
+      bot.subdomainStatus === SubdomainStatus.SSL_ISSUING
+    ) {
+      estimatedWaitMessage =
+        "Субдомен активируется. Время ожидания может варьироваться от 30 секунд до нескольких минут.";
+    }
+
+    return {
+      slug: bot.slug || null,
+      status: bot.subdomainStatus || null,
+      url: bot.subdomainUrl ? `https://${bot.subdomainUrl}` : null,
+      error: bot.subdomainError || null,
+      activatedAt: bot.subdomainActivatedAt || null,
+      estimatedWaitMessage,
+    };
+  }
+
+  /**
+   * Повторить активацию субдомена
+   */
+  async retrySubdomainActivation(botId: string, userId: string): Promise<Bot> {
+    const bot = await this.findOne(botId, userId);
+
+    if (!bot.slug) {
+      throw new BadRequestException("У бота не установлен slug");
+    }
+
+    if (bot.subdomainStatus === SubdomainStatus.ACTIVE) {
+      throw new BadRequestException("Субдомен уже активен");
+    }
+
+    this.logger.log(`Retrying subdomain activation for bot ${botId}`);
+
+    bot.subdomainStatus = SubdomainStatus.PENDING;
+    bot.subdomainError = null;
+    await this.botRepository.save(bot);
+
+    // Запускаем регистрацию заново
+    this.registerSubdomainAsync(bot);
+
+    return bot;
   }
 }

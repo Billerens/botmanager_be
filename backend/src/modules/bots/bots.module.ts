@@ -40,6 +40,7 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
 import { WebSocketModule } from "../websocket/websocket.module";
 import { CustomPagesModule } from "../custom-pages/custom-pages.module";
 import { AssistantBotModule } from "../assistant-bot/assistant-bot.module";
+import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
 import { LangChainOpenRouterModule } from "../langchain-openrouter/langchain-openrouter.module";
 import { CustomLoggerService } from "../../common/logger.service";
 import {
@@ -120,6 +121,7 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
     CustomPagesModule,
     AssistantBotModule,
     LangChainOpenRouterModule,
+    forwardRef(() => CustomDomainsModule),
   ],
   providers: [
     BotsService,

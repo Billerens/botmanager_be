@@ -11,6 +11,8 @@ import { CustomPagesBotService } from "./services/custom-pages-bot.service";
 import { UploadModule } from "../upload/upload.module";
 import { TelegramModule } from "../telegram/telegram.module";
 import { BotsModule } from "../bots/bots.module";
+import { WebSocketModule } from "../websocket/websocket.module";
+import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { BotsModule } from "../bots/bots.module";
     UploadModule,
     forwardRef(() => TelegramModule),
     forwardRef(() => BotsModule),
+    WebSocketModule,
+    forwardRef(() => CustomDomainsModule),
   ],
   providers: [CustomPagesService, CustomPagesBotService],
   controllers: [CustomPagesController, PublicCustomPagesController],

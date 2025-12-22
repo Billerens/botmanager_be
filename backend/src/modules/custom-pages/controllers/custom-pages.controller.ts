@@ -326,4 +326,118 @@ export class CustomPagesController {
   ): Promise<CustomPageResponseDto> {
     return this.customPagesService.unassignFromShop(pageId, req.user.id);
   }
+
+  // ============================================================
+  // УПРАВЛЕНИЕ СУБДОМЕНАМИ
+  // ============================================================
+
+  @Get(":id/subdomain/check/:slug")
+  @ApiOperation({ summary: "Проверить доступность slug для страницы" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiParam({ name: "slug", description: "Проверяемый slug" })
+  @ApiResponse({
+    status: 200,
+    description: "Результат проверки доступности slug",
+    schema: {
+      type: "object",
+      properties: {
+        available: { type: "boolean" },
+        slug: { type: "string" },
+        message: { type: "string" },
+      },
+    },
+  })
+  async checkSlugAvailability(
+    @Param("id") pageId: string,
+    @Param("slug") slug: string
+  ) {
+    return this.customPagesService.checkSlugAvailability(slug, pageId);
+  }
+
+  @Patch(":id/subdomain")
+  @ApiOperation({
+    summary: "Установить или обновить slug страницы (субдомен)",
+  })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: {
+        slug: { type: "string", nullable: true, description: "Новый slug или null для удаления" },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Slug обновлен, субдомен в процессе активации",
+    type: CustomPageResponseDto,
+  })
+  @ApiResponse({ status: 400, description: "Неверный slug или конфликт" })
+  @ApiResponse({ status: 404, description: "Страница не найдена" })
+  async updatePageSubdomain(
+    @Param("id") pageId: string,
+    @Body() body: { slug: string | null },
+    @Request() req: any
+  ): Promise<CustomPageResponseDto> {
+    return this.customPagesService.updateSlug(pageId, body.slug, req.user.id);
+  }
+
+  @Get(":id/subdomain/status")
+  @ApiOperation({ summary: "Получить статус субдомена страницы" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiResponse({
+    status: 200,
+    description: "Статус субдомена",
+    schema: {
+      type: "object",
+      properties: {
+        slug: { type: "string", nullable: true },
+        status: { type: "string", nullable: true },
+        url: { type: "string", nullable: true },
+        error: { type: "string", nullable: true },
+        activatedAt: { type: "string", format: "date-time", nullable: true },
+        estimatedWaitMessage: { type: "string", nullable: true },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: "Страница не найдена" })
+  async getSubdomainStatus(
+    @Param("id") pageId: string,
+    @Request() req: any
+  ) {
+    return this.customPagesService.getSubdomainStatus(pageId, req.user.id);
+  }
+
+  @Post(":id/subdomain/retry")
+  @ApiOperation({ summary: "Повторить активацию субдомена страницы" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiResponse({
+    status: 200,
+    description: "Активация субдомена перезапущена",
+    type: CustomPageResponseDto,
+  })
+  @ApiResponse({ status: 400, description: "Субдомен уже активен или нет slug" })
+  @ApiResponse({ status: 404, description: "Страница не найдена" })
+  async retrySubdomainActivation(
+    @Param("id") pageId: string,
+    @Request() req: any
+  ): Promise<CustomPageResponseDto> {
+    return this.customPagesService.retrySubdomainActivation(pageId, req.user.id);
+  }
+
+  @Delete(":id/subdomain")
+  @ApiOperation({ summary: "Удалить субдомен страницы" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiResponse({
+    status: 200,
+    description: "Субдомен удалён",
+    type: CustomPageResponseDto,
+  })
+  @ApiResponse({ status: 404, description: "Страница не найдена" })
+  async removeSubdomain(
+    @Param("id") pageId: string,
+    @Request() req: any
+  ): Promise<CustomPageResponseDto> {
+    return this.customPagesService.updateSlug(pageId, null, req.user.id);
+  }
 }

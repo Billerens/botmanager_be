@@ -554,4 +554,124 @@ export class BotsController {
         : undefined,
     }));
   }
+
+  // =====================================================
+  // УПРАВЛЕНИЕ СУБДОМЕНАМИ (BOOKING)
+  // =====================================================
+
+  @Get(":botId/subdomain/check/:slug")
+  @BotPermission(BotEntity.BOT, PermissionAction.READ)
+  @ApiOperation({ summary: "Проверить доступность slug для бронирования" })
+  @ApiResponse({
+    status: 200,
+    description: "Результат проверки доступности slug",
+    schema: {
+      type: "object",
+      properties: {
+        available: { type: "boolean" },
+        slug: { type: "string" },
+        message: { type: "string" },
+      },
+    },
+  })
+  async checkSlugAvailability(
+    @Param("botId") botId: string,
+    @Param("slug") slug: string
+  ) {
+    return this.botsService.checkSlugAvailability(slug, botId);
+  }
+
+  @Put(":botId/subdomain")
+  @BotPermission(BotEntity.BOT, PermissionAction.UPDATE)
+  @ApiOperation({
+    summary: "Установить или обновить slug бота (субдомен бронирования)",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Slug обновлен, субдомен в процессе активации",
+  })
+  @ApiResponse({ status: 400, description: "Неверный slug или конфликт" })
+  async updateBotSubdomain(
+    @Param("botId") botId: string,
+    @Body() body: { slug: string | null },
+    @Request() req
+  ) {
+    const bot = await this.botsService.updateSlug(botId, body.slug, req.user.id);
+    return {
+      id: bot.id,
+      slug: bot.slug,
+      subdomainStatus: bot.subdomainStatus,
+      subdomainUrl: bot.subdomainUrl
+        ? `https://${bot.subdomainUrl}`
+        : null,
+      subdomainError: bot.subdomainError,
+      message: bot.slug
+        ? "Субдомен в процессе активации. Время ожидания может варьироваться от 30 секунд до нескольких минут."
+        : "Субдомен удалён",
+    };
+  }
+
+  @Get(":botId/subdomain/status")
+  @BotPermission(BotEntity.BOT, PermissionAction.READ)
+  @ApiOperation({ summary: "Получить статус субдомена бронирования" })
+  @ApiResponse({
+    status: 200,
+    description: "Статус субдомена",
+    schema: {
+      type: "object",
+      properties: {
+        slug: { type: "string", nullable: true },
+        status: { type: "string", nullable: true },
+        url: { type: "string", nullable: true },
+        error: { type: "string", nullable: true },
+        activatedAt: { type: "string", format: "date-time", nullable: true },
+        estimatedWaitMessage: { type: "string", nullable: true },
+      },
+    },
+  })
+  async getSubdomainStatus(@Param("botId") botId: string, @Request() req) {
+    return this.botsService.getSubdomainStatus(botId, req.user.id);
+  }
+
+  @Post(":botId/subdomain/retry")
+  @BotPermission(BotEntity.BOT, PermissionAction.UPDATE)
+  @ApiOperation({ summary: "Повторить активацию субдомена бронирования" })
+  @ApiResponse({
+    status: 200,
+    description: "Активация субдомена перезапущена",
+  })
+  @ApiResponse({ status: 400, description: "Субдомен уже активен или нет slug" })
+  async retrySubdomainActivation(
+    @Param("botId") botId: string,
+    @Request() req
+  ) {
+    const bot = await this.botsService.retrySubdomainActivation(
+      botId,
+      req.user.id
+    );
+    return {
+      id: bot.id,
+      slug: bot.slug,
+      subdomainStatus: bot.subdomainStatus,
+      message: "Активация субдомена перезапущена",
+    };
+  }
+
+  @Delete(":botId/subdomain")
+  @BotPermission(BotEntity.BOT, PermissionAction.UPDATE)
+  @ApiOperation({ summary: "Удалить субдомен бронирования" })
+  @ApiResponse({
+    status: 200,
+    description: "Субдомен удалён",
+  })
+  async removeSubdomain(@Param("botId") botId: string, @Request() req) {
+    const bot = await this.botsService.updateSlug(botId, null, req.user.id);
+    return {
+      id: bot.id,
+      slug: null,
+      subdomainStatus: null,
+      subdomainUrl: null,
+      message: "Субдомен удалён",
+    };
+  }
 }

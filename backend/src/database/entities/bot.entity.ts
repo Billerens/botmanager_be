@@ -16,6 +16,7 @@ import { BotFlow } from "./bot-flow.entity";
 import { ActivityLog } from "./activity-log.entity";
 import { BotCustomData } from "./bot-custom-data.entity";
 import { Specialist } from "./specialist.entity";
+import { SubdomainStatus } from "../../modules/custom-domains/enums/domain-status.enum";
 
 export enum BotStatus {
   ACTIVE = "active",
@@ -77,6 +78,35 @@ export class Bot {
   // Уникальный slug для публичных субдоменов: {slug}.booking.botmanagertest.online
   @Column({ nullable: true, unique: true })
   slug?: string;
+
+  /**
+   * Статус активации субдомена
+   */
+  @Column({
+    type: "enum",
+    enum: SubdomainStatus,
+    nullable: true,
+  })
+  subdomainStatus?: SubdomainStatus;
+
+  /**
+   * Сообщение об ошибке субдомена (если есть)
+   */
+  @Column({ nullable: true })
+  subdomainError?: string;
+
+  /**
+   * Дата активации субдомена
+   */
+  @Column({ nullable: true })
+  subdomainActivatedAt?: Date;
+
+  /**
+   * Полный URL субдомена (кэшированный для быстрого доступа)
+   * Например: "mysalon.booking.botmanagertest.online"
+   */
+  @Column({ nullable: true })
+  subdomainUrl?: string;
 
   @Column({
     type: "enum",
@@ -180,6 +210,40 @@ export class Bot {
     const frontendUrl =
       process.env.FRONTEND_URL || "https://botmanagertest.online";
     return `${frontendUrl}/booking/${this.id}`;
+  }
+
+  /**
+   * Публичный URL бронирования
+   * Возвращает субдомен если активен, иначе стандартный URL
+   */
+  get publicBookingUrl(): string {
+    if (this.subdomainStatus === SubdomainStatus.ACTIVE && this.subdomainUrl) {
+      return `https://${this.subdomainUrl}`;
+    }
+    return this.bookingUrl;
+  }
+
+  /**
+   * Проверка, активен ли субдомен
+   */
+  get hasActiveSubdomain(): boolean {
+    return (
+      !!this.slug &&
+      this.subdomainStatus === SubdomainStatus.ACTIVE &&
+      !!this.subdomainUrl
+    );
+  }
+
+  /**
+   * Проверка, в процессе ли активация субдомена
+   */
+  get isSubdomainPending(): boolean {
+    return (
+      !!this.slug &&
+      (this.subdomainStatus === SubdomainStatus.PENDING ||
+        this.subdomainStatus === SubdomainStatus.DNS_CREATING ||
+        this.subdomainStatus === SubdomainStatus.SSL_ISSUING)
+    );
   }
 
   get defaultBookingSettings(): BookingSettings {

@@ -10,6 +10,7 @@ import {
 import { User } from "./user.entity";
 import { Bot } from "./bot.entity";
 import { Shop } from "./shop.entity";
+import { SubdomainStatus } from "../../modules/custom-domains/enums/domain-status.enum";
 
 export enum CustomPageStatus {
   ACTIVE = "active",
@@ -48,7 +49,36 @@ export class CustomPage {
   title: string;
 
   @Column({ nullable: true, unique: true })
-  slug: string | null; // URL-friendly идентификатор (опционально, глобально уникален)
+  slug: string | null; // URL-friendly идентификатор для субдомена: {slug}.pages.domain
+
+  /**
+   * Статус активации субдомена
+   */
+  @Column({
+    type: "enum",
+    enum: SubdomainStatus,
+    nullable: true,
+  })
+  subdomainStatus?: SubdomainStatus;
+
+  /**
+   * Сообщение об ошибке субдомена (если есть)
+   */
+  @Column({ nullable: true })
+  subdomainError?: string;
+
+  /**
+   * Дата активации субдомена
+   */
+  @Column({ nullable: true })
+  subdomainActivatedAt?: Date;
+
+  /**
+   * Полный URL субдомена (кэшированный для быстрого доступа)
+   * Например: "promo.pages.botmanagertest.online"
+   */
+  @Column({ nullable: true })
+  subdomainUrl?: string;
 
   @Column({ type: "text", nullable: true })
   description: string;
@@ -139,6 +169,40 @@ export class CustomPage {
       process.env.FRONTEND_URL || "https://botmanagertest.online";
     const identifier = this.slug || this.id;
     return `${frontendUrl}/pages/${identifier}`;
+  }
+
+  /**
+   * Публичный URL страницы
+   * Возвращает субдомен если активен, иначе стандартный URL
+   */
+  get publicUrl(): string {
+    if (this.subdomainStatus === SubdomainStatus.ACTIVE && this.subdomainUrl) {
+      return `https://${this.subdomainUrl}`;
+    }
+    return this.url;
+  }
+
+  /**
+   * Проверка, активен ли субдомен
+   */
+  get hasActiveSubdomain(): boolean {
+    return (
+      !!this.slug &&
+      this.subdomainStatus === SubdomainStatus.ACTIVE &&
+      !!this.subdomainUrl
+    );
+  }
+
+  /**
+   * Проверка, в процессе ли активация субдомена
+   */
+  get isSubdomainPending(): boolean {
+    return (
+      !!this.slug &&
+      (this.subdomainStatus === SubdomainStatus.PENDING ||
+        this.subdomainStatus === SubdomainStatus.DNS_CREATING ||
+        this.subdomainStatus === SubdomainStatus.SSL_ISSUING)
+    );
   }
 
   /**
