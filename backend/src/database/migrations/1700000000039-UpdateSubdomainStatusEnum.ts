@@ -4,8 +4,10 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  * Миграция для обновления SubdomainStatus enum
  *
  * Изменения:
- * - SSL_ISSUING → ACTIVATING (ждём DNS propagation + SSL от Timeweb)
- * - SSL_ERROR, DNS_ERROR → ERROR (объединяем в один статус)
+ * - Добавляет новые значения: activating, error
+ * - Конвертирует старые значения в новые:
+ *   - ssl_issuing → activating
+ *   - dns_error, ssl_error → error
  *
  * Архитектура:
  * - Backend создаёт A-записи в Timeweb DNS
@@ -18,63 +20,85 @@ export class UpdateSubdomainStatusEnum1700000000039
   name = "UpdateSubdomainStatusEnum1700000000039";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // 1. Добавляем новые значения в enum
+    // Проверяем существование enum и добавляем новые значения
     await queryRunner.query(`
-      ALTER TYPE "subdomain_status_enum" ADD VALUE IF NOT EXISTS 'activating'
-    `);
-    await queryRunner.query(`
-      ALTER TYPE "subdomain_status_enum" ADD VALUE IF NOT EXISTS 'error'
-    `);
-
-    // 2. Обновляем существующие записи
-    // SSL_ISSUING → ACTIVATING
-    await queryRunner.query(`
-      UPDATE "shops" SET "subdomainStatus" = 'activating' WHERE "subdomainStatus" = 'ssl_issuing'
-    `);
-    await queryRunner.query(`
-      UPDATE "bots" SET "subdomainStatus" = 'activating' WHERE "subdomainStatus" = 'ssl_issuing'
-    `);
-    await queryRunner.query(`
-      UPDATE "custom_pages" SET "subdomainStatus" = 'activating' WHERE "subdomainStatus" = 'ssl_issuing'
-    `);
-
-    // DNS_ERROR, SSL_ERROR → ERROR
-    await queryRunner.query(`
-      UPDATE "shops" SET "subdomainStatus" = 'error' WHERE "subdomainStatus" IN ('dns_error', 'ssl_error')
-    `);
-    await queryRunner.query(`
-      UPDATE "bots" SET "subdomainStatus" = 'error' WHERE "subdomainStatus" IN ('dns_error', 'ssl_error')
-    `);
-    await queryRunner.query(`
-      UPDATE "custom_pages" SET "subdomainStatus" = 'error' WHERE "subdomainStatus" IN ('dns_error', 'ssl_error')
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'subdomain_status_enum') THEN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_enum 
+            WHERE enumlabel = 'activating' 
+            AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'subdomain_status_enum')
+          ) THEN
+            ALTER TYPE "subdomain_status_enum" ADD VALUE 'activating';
+          END IF;
+          
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_enum 
+            WHERE enumlabel = 'error' 
+            AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'subdomain_status_enum')
+          ) THEN
+            ALTER TYPE "subdomain_status_enum" ADD VALUE 'error';
+          END IF;
+        END IF;
+      END$$;
     `);
 
-    // Примечание: В PostgreSQL нельзя удалить значения из enum без пересоздания типа.
-    // Старые значения (ssl_issuing, dns_error, ssl_error) останутся в enum,
-    // но не будут использоваться в коде.
+    // Обновляем существующие записи: ssl_issuing → activating
+    await queryRunner.query(`
+      UPDATE "shops" SET "subdomainStatus" = 'activating' 
+      WHERE "subdomainStatus" = 'ssl_issuing'
+    `);
+    await queryRunner.query(`
+      UPDATE "bots" SET "subdomainStatus" = 'activating' 
+      WHERE "subdomainStatus" = 'ssl_issuing'
+    `);
+    await queryRunner.query(`
+      UPDATE "custom_pages" SET "subdomainStatus" = 'activating' 
+      WHERE "subdomainStatus" = 'ssl_issuing'
+    `);
+
+    // Обновляем: dns_error, ssl_error → error
+    await queryRunner.query(`
+      UPDATE "shops" SET "subdomainStatus" = 'error' 
+      WHERE "subdomainStatus" IN ('dns_error', 'ssl_error')
+    `);
+    await queryRunner.query(`
+      UPDATE "bots" SET "subdomainStatus" = 'error' 
+      WHERE "subdomainStatus" IN ('dns_error', 'ssl_error')
+    `);
+    await queryRunner.query(`
+      UPDATE "custom_pages" SET "subdomainStatus" = 'error' 
+      WHERE "subdomainStatus" IN ('dns_error', 'ssl_error')
+    `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // Обратная миграция: ACTIVATING → SSL_ISSUING, ERROR → DNS_ERROR
+    // Обратная миграция: activating → ssl_issuing, error → dns_error
     await queryRunner.query(`
-      UPDATE "shops" SET "subdomainStatus" = 'ssl_issuing' WHERE "subdomainStatus" = 'activating'
+      UPDATE "shops" SET "subdomainStatus" = 'ssl_issuing' 
+      WHERE "subdomainStatus" = 'activating'
     `);
     await queryRunner.query(`
-      UPDATE "bots" SET "subdomainStatus" = 'ssl_issuing' WHERE "subdomainStatus" = 'activating'
+      UPDATE "bots" SET "subdomainStatus" = 'ssl_issuing' 
+      WHERE "subdomainStatus" = 'activating'
     `);
     await queryRunner.query(`
-      UPDATE "custom_pages" SET "subdomainStatus" = 'ssl_issuing' WHERE "subdomainStatus" = 'activating'
+      UPDATE "custom_pages" SET "subdomainStatus" = 'ssl_issuing' 
+      WHERE "subdomainStatus" = 'activating'
     `);
 
     await queryRunner.query(`
-      UPDATE "shops" SET "subdomainStatus" = 'dns_error' WHERE "subdomainStatus" = 'error'
+      UPDATE "shops" SET "subdomainStatus" = 'dns_error' 
+      WHERE "subdomainStatus" = 'error'
     `);
     await queryRunner.query(`
-      UPDATE "bots" SET "subdomainStatus" = 'dns_error' WHERE "subdomainStatus" = 'error'
+      UPDATE "bots" SET "subdomainStatus" = 'dns_error' 
+      WHERE "subdomainStatus" = 'error'
     `);
     await queryRunner.query(`
-      UPDATE "custom_pages" SET "subdomainStatus" = 'dns_error' WHERE "subdomainStatus" = 'error'
+      UPDATE "custom_pages" SET "subdomainStatus" = 'dns_error' 
+      WHERE "subdomainStatus" = 'error'
     `);
   }
 }
-
