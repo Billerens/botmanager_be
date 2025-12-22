@@ -1,10 +1,11 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
 /**
- * Миграция для обновления SubdomainStatus enum
+ * Добавляет новые значения в enum: activating, error
  *
- * Добавляет новые значения: activating, error
- * Конвертирует старые значения в новые
+ * ВАЖНО: PostgreSQL не позволяет использовать новые значения enum
+ * в той же транзакции где они были добавлены.
+ * Поэтому обновление данных вынесено в отдельную миграцию 40.
  */
 export class UpdateSubdomainStatusEnum1700000000039
   implements MigrationInterface
@@ -12,10 +13,7 @@ export class UpdateSubdomainStatusEnum1700000000039
   name = "UpdateSubdomainStatusEnum1700000000039";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Добавляем новые значения во ВСЕ enum'ы которые могут существовать
-    // (TypeORM создаёт разные enum'ы для разных таблиц)
-
-    // Для shops (shops_subdomainstatus_enum)
+    // Добавляем новые значения в shops_subdomainstatus_enum
     await queryRunner.query(`
       DO $$
       BEGIN
@@ -39,7 +37,7 @@ export class UpdateSubdomainStatusEnum1700000000039
       END$$;
     `);
 
-    // Для subdomain_status_enum (общий, если есть)
+    // Добавляем новые значения в subdomain_status_enum
     await queryRunner.query(`
       DO $$
       BEGIN
@@ -62,62 +60,9 @@ export class UpdateSubdomainStatusEnum1700000000039
         END IF;
       END$$;
     `);
-
-    // Обновляем данные: ssl_issuing → activating
-    await queryRunner.query(`
-      UPDATE "shops" SET "subdomainStatus" = 'activating' 
-      WHERE "subdomainStatus" = 'ssl_issuing'
-    `);
-    await queryRunner.query(`
-      UPDATE "bots" SET "subdomainStatus" = 'activating' 
-      WHERE "subdomainStatus" = 'ssl_issuing'
-    `);
-    await queryRunner.query(`
-      UPDATE "custom_pages" SET "subdomainStatus" = 'activating' 
-      WHERE "subdomainStatus" = 'ssl_issuing'
-    `);
-
-    // Обновляем данные: dns_error, ssl_error → error
-    await queryRunner.query(`
-      UPDATE "shops" SET "subdomainStatus" = 'error' 
-      WHERE "subdomainStatus" IN ('dns_error', 'ssl_error')
-    `);
-    await queryRunner.query(`
-      UPDATE "bots" SET "subdomainStatus" = 'error' 
-      WHERE "subdomainStatus" IN ('dns_error', 'ssl_error')
-    `);
-    await queryRunner.query(`
-      UPDATE "custom_pages" SET "subdomainStatus" = 'error' 
-      WHERE "subdomainStatus" IN ('dns_error', 'ssl_error')
-    `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // Обратная миграция
-    await queryRunner.query(`
-      UPDATE "shops" SET "subdomainStatus" = 'ssl_issuing' 
-      WHERE "subdomainStatus" = 'activating'
-    `);
-    await queryRunner.query(`
-      UPDATE "bots" SET "subdomainStatus" = 'ssl_issuing' 
-      WHERE "subdomainStatus" = 'activating'
-    `);
-    await queryRunner.query(`
-      UPDATE "custom_pages" SET "subdomainStatus" = 'ssl_issuing' 
-      WHERE "subdomainStatus" = 'activating'
-    `);
-
-    await queryRunner.query(`
-      UPDATE "shops" SET "subdomainStatus" = 'dns_error' 
-      WHERE "subdomainStatus" = 'error'
-    `);
-    await queryRunner.query(`
-      UPDATE "bots" SET "subdomainStatus" = 'dns_error' 
-      WHERE "subdomainStatus" = 'error'
-    `);
-    await queryRunner.query(`
-      UPDATE "custom_pages" SET "subdomainStatus" = 'dns_error' 
-      WHERE "subdomainStatus" = 'error'
-    `);
+    // PostgreSQL не поддерживает удаление значений из enum
   }
 }
