@@ -3,16 +3,8 @@ import { MigrationInterface, QueryRunner } from "typeorm";
 /**
  * Миграция для обновления SubdomainStatus enum
  *
- * Изменения:
- * - Добавляет новые значения: activating, error
- * - Конвертирует старые значения в новые:
- *   - ssl_issuing → activating
- *   - dns_error, ssl_error → error
- *
- * Архитектура:
- * - Backend создаёт A-записи в Timeweb DNS
- * - Timeweb автоматически выдаёт SSL сертификаты
- * - Frontend определяет по hostname что показывать
+ * Добавляет новые значения: activating, error
+ * Конвертирует старые значения в новые
  */
 export class UpdateSubdomainStatusEnum1700000000039
   implements MigrationInterface
@@ -20,7 +12,34 @@ export class UpdateSubdomainStatusEnum1700000000039
   name = "UpdateSubdomainStatusEnum1700000000039";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Проверяем существование enum и добавляем новые значения
+    // Добавляем новые значения во ВСЕ enum'ы которые могут существовать
+    // (TypeORM создаёт разные enum'ы для разных таблиц)
+
+    // Для shops (shops_subdomainstatus_enum)
+    await queryRunner.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'shops_subdomainstatus_enum') THEN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_enum 
+            WHERE enumlabel = 'activating' 
+            AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'shops_subdomainstatus_enum')
+          ) THEN
+            ALTER TYPE "shops_subdomainstatus_enum" ADD VALUE 'activating';
+          END IF;
+          
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_enum 
+            WHERE enumlabel = 'error' 
+            AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'shops_subdomainstatus_enum')
+          ) THEN
+            ALTER TYPE "shops_subdomainstatus_enum" ADD VALUE 'error';
+          END IF;
+        END IF;
+      END$$;
+    `);
+
+    // Для subdomain_status_enum (общий, если есть)
     await queryRunner.query(`
       DO $$
       BEGIN
@@ -44,7 +63,7 @@ export class UpdateSubdomainStatusEnum1700000000039
       END$$;
     `);
 
-    // Обновляем существующие записи: ssl_issuing → activating
+    // Обновляем данные: ssl_issuing → activating
     await queryRunner.query(`
       UPDATE "shops" SET "subdomainStatus" = 'activating' 
       WHERE "subdomainStatus" = 'ssl_issuing'
@@ -58,7 +77,7 @@ export class UpdateSubdomainStatusEnum1700000000039
       WHERE "subdomainStatus" = 'ssl_issuing'
     `);
 
-    // Обновляем: dns_error, ssl_error → error
+    // Обновляем данные: dns_error, ssl_error → error
     await queryRunner.query(`
       UPDATE "shops" SET "subdomainStatus" = 'error' 
       WHERE "subdomainStatus" IN ('dns_error', 'ssl_error')
@@ -74,7 +93,7 @@ export class UpdateSubdomainStatusEnum1700000000039
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // Обратная миграция: activating → ssl_issuing, error → dns_error
+    // Обратная миграция
     await queryRunner.query(`
       UPDATE "shops" SET "subdomainStatus" = 'ssl_issuing' 
       WHERE "subdomainStatus" = 'activating'

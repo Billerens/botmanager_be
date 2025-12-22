@@ -110,9 +110,7 @@ export class AddSubdomainFieldsToBotsAndPages1700000000038
     // =====================================================
     // Удаляем из bots
     // =====================================================
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_bots_subdomain_status"`
-    );
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_bots_subdomain_status"`);
     await queryRunner.query(
       `ALTER TABLE "bots" DROP COLUMN IF EXISTS "subdomainUrl"`
     );
