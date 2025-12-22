@@ -40,7 +40,9 @@ export const AppDataSource = new DataSource({
   username: process.env.DATABASE_USERNAME || "botmanager",
   password: process.env.DATABASE_PASSWORD || "botmanager_password",
   database: process.env.DATABASE_NAME || "botmanager_dev",
-  synchronize: process.env.NODE_ENV === "development", // Только для разработки
+  // ВАЖНО: synchronize отключен! Используйте миграции для изменения схемы БД
+  // Для локальной разработки можно включить через DB_SYNCHRONIZE=true
+  synchronize: process.env.DB_SYNCHRONIZE === "true",
   logging: false,
   // Каждая миграция выполняется в отдельной транзакции
   // Это необходимо для PostgreSQL enum: новые значения не доступны в той же транзакции

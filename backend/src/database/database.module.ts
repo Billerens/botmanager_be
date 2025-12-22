@@ -74,7 +74,9 @@ import { CustomDomain } from "./entities/custom-domain.entity";
           AdminActionLog,
           CustomDomain,
         ],
-        synchronize: configService.get("NODE_ENV") === "development",
+        // ВАЖНО: synchronize отключен! Используйте миграции для изменения схемы БД
+        // Для локальной разработки можно включить через DB_SYNCHRONIZE=true
+        synchronize: configService.get("DB_SYNCHRONIZE") === "true",
         logging: false,
         ssl:
           configService.get("NODE_ENV") === "production"

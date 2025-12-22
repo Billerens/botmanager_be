@@ -6,7 +6,8 @@ export default registerAs("database", () => ({
   username: process.env.DATABASE_USERNAME || "botmanager",
   password: process.env.DATABASE_PASSWORD || "botmanager_password",
   database: process.env.DATABASE_NAME || "botmanager_dev",
-  synchronize: process.env.NODE_ENV === "development",
+  // ВАЖНО: synchronize отключен! Используйте миграции для изменения схемы БД
+  synchronize: process.env.DB_SYNCHRONIZE === "true",
   logging: false,
   ssl:
     process.env.NODE_ENV === "production"
