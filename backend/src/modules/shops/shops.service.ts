@@ -284,16 +284,8 @@ export class ShopsService {
   ): Promise<Shop> {
     const shop = await this.findOne(id, userId);
 
-    // Если меняется slug - обрабатываем через updateSlug
-    if (updateShopDto.slug !== undefined && updateShopDto.slug !== shop.slug) {
-      // Убираем slug из DTO, обработаем отдельно
-      const { slug: newSlug, ...restDto } = updateShopDto;
-      Object.assign(shop, restDto);
-      await this.shopRepository.save(shop);
-
-      // Обновляем slug через специальный метод
-      return this.updateSlug(id, newSlug || null, userId);
-    }
+    // Для изменения slug используйте отдельный метод updateSlug()
+    // через эндпоинт PUT /shops/:id/subdomain
 
     Object.assign(shop, updateShopDto);
     const updatedShop = await this.shopRepository.save(shop);
