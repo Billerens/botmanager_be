@@ -52,8 +52,8 @@ export class TimewebDnsService implements OnModuleInit {
   /** Базовый домен платформы (например: botmanagertest.online) */
   private readonly baseDomain: string;
 
-  /** IP адрес прокси-сервера */
-  private readonly proxyIp: string;
+  /** IP адрес Frontend сервера */
+  private readonly frontendIp: string;
 
   constructor(private readonly configService: ConfigService) {
     const apiToken = this.configService.get<string>("TIMEWEB_API_TOKEN");
@@ -63,8 +63,7 @@ export class TimewebDnsService implements OnModuleInit {
 
     this.baseDomain =
       this.configService.get<string>("BASE_DOMAIN") || "botmanagertest.online";
-    this.proxyIp =
-      this.configService.get<string>("PROXY_IP") || "185.104.114.135";
+    this.frontendIp = this.configService.get<string>("FRONTEND_IP") || "";
 
     this.client = axios.create({
       baseURL: apiUrl,
@@ -112,6 +111,13 @@ export class TimewebDnsService implements OnModuleInit {
    * @returns ID созданной записи или null при ошибке
    */
   async createSubdomainRecord(subdomain: string): Promise<number | null> {
+    if (!this.frontendIp) {
+      this.logger.error(
+        "FRONTEND_IP not configured. Cannot create DNS records for subdomains."
+      );
+      return null;
+    }
+
     try {
       // Проверяем, существует ли уже такая запись
       const existing = await this.findRecord(subdomain, "A");
@@ -127,14 +133,14 @@ export class TimewebDnsService implements OnModuleInit {
         {
           type: "A",
           subdomain: subdomain,
-          value: this.proxyIp,
+          value: this.frontendIp,
           ttl: 600, // 10 минут - быстрее распространение
         }
       );
 
       const recordId = response.data.dns_record?.id;
       this.logger.log(
-        `Created DNS A-record for ${subdomain}.${this.baseDomain} → ${this.proxyIp} (id: ${recordId})`
+        `Created DNS A-record for ${subdomain}.${this.baseDomain} → ${this.frontendIp} (id: ${recordId})`
       );
 
       return recordId;
