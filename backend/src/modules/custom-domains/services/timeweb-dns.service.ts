@@ -3,24 +3,28 @@ import { ConfigService } from "@nestjs/config";
 import axios, { AxiosInstance } from "axios";
 
 /**
- * DNS запись Timeweb
+ * DNS запись Timeweb (v1 API)
  */
 interface TimewebDnsRecord {
   id: number;
   type: string;
   ttl: number;
+  fqdn?: string;
   data: {
-    subdomain: string;
+    subdomain?: string | null;
     value: string;
     priority?: number;
   };
 }
 
 /**
- * Ответ Timeweb API на запрос записей
+ * Ответ Timeweb API на запрос записей (v1 API)
  */
 interface TimewebDnsResponse {
   dns_records: TimewebDnsRecord[];
+  meta?: {
+    total: number;
+  };
 }
 
 /**
@@ -59,6 +63,7 @@ export class TimewebDnsService implements OnModuleInit {
 
   constructor(private readonly configService: ConfigService) {
     const apiToken = this.configService.get<string>("TIMEWEB_API_TOKEN");
+    // Используем v1 API согласно официальной документации Timeweb Cloud
     this.apiUrl =
       this.configService.get<string>("TIMEWEB_API_URL") ||
       "https://api.timeweb.cloud/api/v1";
@@ -102,12 +107,17 @@ export class TimewebDnsService implements OnModuleInit {
    */
   async getRecords(): Promise<TimewebDnsRecord[]> {
     try {
+      // v1 API: GET /domains/{fqdn}/dns-records
       const response = await this.client.get<TimewebDnsResponse>(
         `/domains/${this.baseDomain}/dns-records`
       );
       return response.data.dns_records || [];
     } catch (error) {
-      this.logger.error(`Failed to get DNS records: ${error.message}`);
+      const status = error.response?.status;
+      const responseData = error.response?.data;
+      this.logger.error(
+        `Failed to get DNS records: status=${status}, message=${error.message}, response=${JSON.stringify(responseData)}`
+      );
       throw error;
     }
   }
@@ -136,10 +146,13 @@ export class TimewebDnsService implements OnModuleInit {
         return existing.id;
       }
 
-      const requestUrl = `/domains/${this.baseDomain}/dns-records`;
+      // Формат v1 API:
+      // URL: /domains/{fullFqdn}/dns-records (полный FQDN создаваемой записи)
+      // Body: { type, value } - без subdomain!
+      const fullDomain = `${subdomain}.${this.baseDomain}`;
+      const requestUrl = `/domains/${fullDomain}/dns-records`;
       const requestBody = {
         type: "A",
-        subdomain: subdomain,
         value: this.frontendIp,
       };
 
@@ -154,7 +167,7 @@ export class TimewebDnsService implements OnModuleInit {
 
       const recordId = response.data.dns_record?.id;
       this.logger.log(
-        `Created DNS A-record for ${subdomain}.${this.baseDomain} → ${this.frontendIp} (id: ${recordId})`
+        `Created DNS A-record for ${fullDomain} → ${this.frontendIp} (id: ${recordId})`
       );
 
       return recordId;
@@ -178,20 +191,23 @@ export class TimewebDnsService implements OnModuleInit {
     try {
       // Находим запись по субдомену
       const record = await this.findRecord(subdomain, "A");
+      const fullDomain = `${subdomain}.${this.baseDomain}`;
 
       if (!record) {
         this.logger.log(
-          `DNS record for ${subdomain}.${this.baseDomain} not found, nothing to delete`
+          `DNS record for ${fullDomain} not found, nothing to delete`
         );
         return true;
       }
 
+      // v1 API: DELETE /domains/{fqdn}/dns-records/{record_id}
+      // Используем полный FQDN записи
       await this.client.delete(
-        `/domains/${this.baseDomain}/dns-records/${record.id}`
+        `/domains/${fullDomain}/dns-records/${record.id}`
       );
 
       this.logger.log(
-        `Deleted DNS record for ${subdomain}.${this.baseDomain} (id: ${record.id})`
+        `Deleted DNS record for ${fullDomain} (id: ${record.id})`
       );
       return true;
     } catch (error) {
@@ -199,8 +215,10 @@ export class TimewebDnsService implements OnModuleInit {
         // Запись уже не существует
         return true;
       }
+      const status = error.response?.status;
+      const responseData = error.response?.data;
       this.logger.error(
-        `Failed to delete DNS record for ${subdomain}: ${error.message}`
+        `Failed to delete DNS record for ${subdomain}: status=${status}, message=${error.message}, response=${JSON.stringify(responseData)}`
       );
       return false;
     }
@@ -216,11 +234,12 @@ export class TimewebDnsService implements OnModuleInit {
     try {
       const records = await this.getRecords();
       return (
-        records.find(
-          (r) =>
-            r.type === type &&
-            r.data.subdomain.toLowerCase() === subdomain.toLowerCase()
-        ) || null
+        records.find((r) => {
+          if (r.type !== type) return false;
+          // subdomain может быть null для корневого домена
+          const recordSubdomain = r.data.subdomain || "";
+          return recordSubdomain.toLowerCase() === subdomain.toLowerCase();
+        }) || null
       );
     } catch {
       return null;
