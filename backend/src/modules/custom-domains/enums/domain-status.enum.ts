@@ -94,3 +94,38 @@ export enum DomainWarningCode {
   DNS_PROPAGATION_SLOW = "DNS_PROPAGATION_SLOW",
 }
 
+/**
+ * Статусы субдомена платформы (для бесплатных субдоменов)
+ * Используется для: *.shops.domain, *.booking.domain, *.pages.domain
+ */
+export enum SubdomainStatus {
+  /** Ожидает регистрации */
+  PENDING = "pending",
+
+  /** Создаётся DNS запись */
+  DNS_CREATING = "dns_creating",
+
+  /** DNS создан, ожидаем SSL */
+  SSL_ISSUING = "ssl_issuing",
+
+  /** Активен и работает */
+  ACTIVE = "active",
+
+  /** Ошибка при создании DNS */
+  DNS_ERROR = "dns_error",
+
+  /** Ошибка при получении SSL */
+  SSL_ERROR = "ssl_error",
+
+  /** Удаляется */
+  REMOVING = "removing",
+}
+
+/**
+ * Тип субдомена платформы
+ */
+export enum SubdomainType {
+  SHOP = "shops",
+  BOOKING = "booking",
+  PAGE = "pages",
+}

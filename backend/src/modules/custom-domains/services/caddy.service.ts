@@ -24,18 +24,44 @@ interface CaddyRoute {
   terminal?: boolean;
 }
 
+/**
+ * TLS Automation Policy для Caddy
+ * Используется для настройки DNS-01 challenge
+ */
+interface CaddyTlsPolicy {
+  "@id"?: string;
+  subjects: string[];
+  issuers: Array<{
+    module: string;
+    challenges?: {
+      dns?: {
+        provider: {
+          name: string;
+          api_token?: string;
+        };
+      };
+    };
+  }>;
+}
+
 @Injectable()
 export class CaddyService implements OnModuleInit {
   private readonly logger = new Logger(CaddyService.name);
   private client: AxiosInstance;
   private readonly adminUrl: string;
   private readonly backendUpstream: string;
+  private readonly timewebApiToken: string;
+  private readonly baseDomain: string;
 
   constructor(private readonly configService: ConfigService) {
     this.adminUrl =
       this.configService.get<string>("CADDY_ADMIN_URL") || "http://caddy:2019";
     this.backendUpstream =
       this.configService.get<string>("BACKEND_UPSTREAM") || "backend:3000";
+    this.timewebApiToken =
+      this.configService.get<string>("TIMEWEB_API_TOKEN") || "";
+    this.baseDomain =
+      this.configService.get<string>("BASE_DOMAIN") || "botmanagertest.online";
 
     this.client = axios.create({
       baseURL: this.adminUrl,
@@ -72,6 +98,9 @@ export class CaddyService implements OnModuleInit {
 
   /**
    * Добавить маршрут для кастомного домена
+   *
+   * Также добавляет TLS policy для DNS-01 challenge через Timeweb
+   * если домен является субдоменом платформы
    */
   async addRoute(config: CaddyRouteConfig): Promise<boolean> {
     const routeId = this.getRouteId(config.domain);
@@ -99,11 +128,13 @@ export class CaddyService implements OnModuleInit {
     };
 
     try {
+      // Добавляем TLS policy для DNS-01 challenge (для субдоменов платформы)
+      if (this.isPlatformSubdomain(config.domain)) {
+        await this.addTlsPolicy(config.domain);
+      }
+
       // Пробуем добавить маршрут
-      await this.client.post(
-        "/config/apps/http/servers/srv0/routes",
-        route
-      );
+      await this.client.post("/config/apps/http/servers/srv0/routes", route);
 
       this.logger.log(`Added Caddy route for ${config.domain}`);
       return true;
@@ -123,6 +154,88 @@ export class CaddyService implements OnModuleInit {
       }
 
       this.logger.error(`Failed to add route for ${config.domain}`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Проверить, является ли домен субдоменом платформы
+   */
+  private isPlatformSubdomain(domain: string): boolean {
+    return (
+      domain.endsWith(`.shops.${this.baseDomain}`) ||
+      domain.endsWith(`.booking.${this.baseDomain}`) ||
+      domain.endsWith(`.pages.${this.baseDomain}`)
+    );
+  }
+
+  /**
+   * Добавить TLS automation policy для домена
+   * Использует DNS-01 challenge через Timeweb
+   */
+  private async addTlsPolicy(domain: string): Promise<boolean> {
+    if (!this.timewebApiToken) {
+      this.logger.warn(
+        `TIMEWEB_API_TOKEN not set, skipping TLS policy for ${domain}`
+      );
+      return false;
+    }
+
+    const policyId = `tls_policy_${domain.replace(/\./g, "_")}`;
+
+    const policy: CaddyTlsPolicy = {
+      "@id": policyId,
+      subjects: [domain],
+      issuers: [
+        {
+          module: "acme",
+          challenges: {
+            dns: {
+              provider: {
+                name: "timeweb",
+                api_token: this.timewebApiToken,
+              },
+            },
+          },
+        },
+      ],
+    };
+
+    try {
+      // Добавляем policy в automation policies
+      await this.client.post("/config/apps/tls/automation/policies", policy);
+      this.logger.log(`Added TLS policy for ${domain}`);
+      return true;
+    } catch (error) {
+      // Policy может уже существовать - это не критично
+      if (error.response?.status === 400) {
+        this.logger.debug(`TLS policy for ${domain} already exists`);
+        return true;
+      }
+      this.logger.warn(
+        `Failed to add TLS policy for ${domain}: ${error.message}`
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Удалить TLS policy для домена
+   */
+  private async removeTlsPolicy(domain: string): Promise<boolean> {
+    const policyId = `tls_policy_${domain.replace(/\./g, "_")}`;
+
+    try {
+      await this.client.delete(`/id/${policyId}`);
+      this.logger.log(`Removed TLS policy for ${domain}`);
+      return true;
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return true; // Уже удалено
+      }
+      this.logger.warn(
+        `Failed to remove TLS policy for ${domain}: ${error.message}`
+      );
       return false;
     }
   }
@@ -167,13 +280,21 @@ export class CaddyService implements OnModuleInit {
 
   /**
    * Удалить маршрут для домена
+   * Также удаляет TLS policy если это субдомен платформы
    */
   async removeRoute(domain: string): Promise<boolean> {
     const routeId = this.getRouteId(domain);
 
     try {
+      // Удаляем маршрут
       await this.client.delete(`/id/${routeId}`);
       this.logger.log(`Removed Caddy route for ${domain}`);
+
+      // Удаляем TLS policy если это субдомен платформы
+      if (this.isPlatformSubdomain(domain)) {
+        await this.removeTlsPolicy(domain);
+      }
+
       return true;
     } catch (error) {
       if (error.response?.status === 404) {
@@ -201,7 +322,7 @@ export class CaddyService implements OnModuleInit {
 
   /**
    * Принудительное обновление SSL сертификата
-   * 
+   *
    * Caddy автоматически обновляет сертификаты, но мы можем
    * попробовать инициировать обновление, удалив кешированный сертификат
    */
@@ -210,7 +331,7 @@ export class CaddyService implements OnModuleInit {
       // Удаляем сертификат из хранилища Caddy
       // Это заставит Caddy запросить новый при следующем запросе
       await this.client.delete(`/certificates/${domain}`);
-      
+
       this.logger.log(`Initiated certificate renewal for ${domain}`);
 
       // Делаем запрос к домену чтобы инициировать получение нового сертификата
@@ -218,10 +339,7 @@ export class CaddyService implements OnModuleInit {
 
       return true;
     } catch (error) {
-      this.logger.error(
-        `Failed to renew certificate for ${domain}`,
-        error
-      );
+      this.logger.error(`Failed to renew certificate for ${domain}`, error);
       return false;
     }
   }
@@ -265,4 +383,3 @@ export class CaddyService implements OnModuleInit {
     return `custom_domain_${domain.replace(/\./g, "_")}`;
   }
 }
-

@@ -21,6 +21,7 @@ import { ShopPromocodesModule } from "../shop-promocodes/shop-promocodes.module"
 import { TelegramModule } from "../telegram/telegram.module";
 import { PublicAuthModule } from "../public-auth/public-auth.module";
 import { BotsModule } from "../bots/bots.module";
+import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { BotsModule } from "../bots/bots.module";
     forwardRef(() => TelegramModule),
     forwardRef(() => PublicAuthModule),
     forwardRef(() => BotsModule),
+    forwardRef(() => CustomDomainsModule),
   ],
   controllers: [ShopsController, PublicShopsController],
   providers: [ShopsService],

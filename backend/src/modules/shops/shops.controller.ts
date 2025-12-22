@@ -270,6 +270,7 @@ export class ShopsController {
     return {
       id: shop.id,
       name: shop.name,
+      slug: shop.slug,
       ownerId: shop.ownerId,
       botId: shop.botId,
       logoUrl: shop.logoUrl,
@@ -283,6 +284,7 @@ export class ShopsController {
       browserAccessRequireEmailVerification:
         shop.browserAccessRequireEmailVerification,
       url: shop.url,
+      publicUrl: shop.publicUrl,
       createdAt: shop.createdAt,
       updatedAt: shop.updatedAt,
       bot: shop.bot
@@ -293,7 +295,117 @@ export class ShopsController {
             status: shop.bot.status,
           }
         : undefined,
+      // Информация о субдомене
+      subdomain: shop.slug
+        ? {
+            status: shop.subdomainStatus,
+            url: shop.subdomainUrl,
+            error: shop.subdomainError,
+            activatedAt: shop.subdomainActivatedAt,
+          }
+        : undefined,
     };
+  }
+
+  // =====================================================
+  // SUBDOMAIN MANAGEMENT
+  // =====================================================
+
+  @Get(":id/subdomain/status")
+  @ApiOperation({
+    summary: "Получить статус субдомена магазина",
+    description:
+      "Возвращает текущий статус субдомена. Время активации может варьироваться от 30 секунд до нескольких минут.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Статус субдомена",
+    schema: {
+      type: "object",
+      properties: {
+        slug: { type: "string", nullable: true },
+        status: {
+          type: "string",
+          enum: [
+            "pending",
+            "dns_creating",
+            "ssl_issuing",
+            "active",
+            "dns_error",
+            "ssl_error",
+            "removing",
+          ],
+          nullable: true,
+        },
+        url: { type: "string", nullable: true },
+        error: { type: "string", nullable: true },
+        activatedAt: { type: "string", format: "date-time", nullable: true },
+        estimatedWaitMessage: { type: "string", nullable: true },
+      },
+    },
+  })
+  async getSubdomainStatus(@Param("id") id: string, @Request() req) {
+    return this.shopsService.getSubdomainStatus(id, req.user.id);
+  }
+
+  @Put(":id/subdomain")
+  @ApiOperation({
+    summary: "Установить или изменить slug (субдомен) магазина",
+    description:
+      "Устанавливает slug для субдомена. При изменении старый субдомен удаляется. " +
+      "Время активации нового субдомена может варьироваться от 30 секунд до нескольких минут.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Магазин с обновлённым субдоменом",
+    schema: { $ref: getSchemaPath(ShopResponseDto) },
+  })
+  @ApiResponse({ status: 400, description: "Slug недоступен или невалиден" })
+  async updateSubdomain(
+    @Param("id") id: string,
+    @Body("slug") slug: string | null,
+    @Request() req
+  ) {
+    const shop = await this.shopsService.updateSlug(id, slug, req.user.id);
+    return this.formatShopResponse(shop);
+  }
+
+  @Post(":id/subdomain/retry")
+  @ApiOperation({
+    summary: "Повторить регистрацию субдомена после ошибки",
+    description:
+      "Повторяет попытку регистрации субдомена если предыдущая завершилась ошибкой.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Регистрация перезапущена",
+    schema: { $ref: getSchemaPath(ShopResponseDto) },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Повтор невозможен (нет slug или нет ошибки)",
+  })
+  async retrySubdomainRegistration(@Param("id") id: string, @Request() req) {
+    const shop = await this.shopsService.retrySubdomainRegistration(
+      id,
+      req.user.id
+    );
+    return this.formatShopResponse(shop);
+  }
+
+  @Delete(":id/subdomain")
+  @ApiOperation({
+    summary: "Удалить субдомен магазина",
+    description: "Удаляет slug и деактивирует субдомен.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Субдомен удалён",
+    schema: { $ref: getSchemaPath(ShopResponseDto) },
+  })
+  async removeSubdomain(@Param("id") id: string, @Request() req) {
+    const shop = await this.shopsService.updateSlug(id, null, req.user.id);
+    return this.formatShopResponse(shop);
   }
 
   // =====================================================

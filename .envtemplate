@@ -102,6 +102,35 @@ HOST=localhost
 # ALLOWED_USERS=123456789,987654321
 
 # ===========================================
+# СУБДОМЕНЫ И CADDY PROXY (ОПЦИОНАЛЬНО)
+# ===========================================
+# Настройки для динамических субдоменов платформы
+# Требуется для работы субдоменов типа: myshop.shops.botmanagertest.online
+
+# Базовый домен платформы
+BASE_DOMAIN=botmanagertest.online
+
+# URL Caddy Admin API
+CADDY_ADMIN_URL=http://caddy:2019
+
+# Backend upstream для Caddy (внутренний адрес backend в Docker сети)
+BACKEND_UPSTREAM=backend:3000
+
+# Timeweb API токен для DNS управления
+# Получить: https://timeweb.cloud → API → Создать токен
+# Нужны права на редактирование DNS записей
+TIMEWEB_API_TOKEN=your_timeweb_api_token_here
+
+# Timeweb API URL (опционально)
+# TIMEWEB_API_URL=https://api.timeweb.cloud/api/v1
+
+# IP адрес прокси-сервера (для создания A-записей)
+PROXY_IP=185.104.114.135
+
+# Ожидаемый CNAME для кастомных доменов
+PROXY_DOMAIN=proxy.botmanagertest.online
+
+# ===========================================
 # ПРОИЗВОДСТВЕННЫЕ НАСТРОЙКИ
 # ===========================================
 # Для production окружения раскомментируйте и настройте:

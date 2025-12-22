@@ -138,8 +138,9 @@ export class CustomDomain {
 
   /**
    * Ожидаемое значение CNAME записи
+   * Значение устанавливается в CustomDomainsService из конфигурации
    */
-  @Column({ default: "proxy.botmanager.io" })
+  @Column({ default: "proxy.botmanagertest.online" })
   expectedCname: string;
 
   /**

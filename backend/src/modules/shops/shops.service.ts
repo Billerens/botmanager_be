@@ -30,6 +30,11 @@ import {
   ActivityLevel,
 } from "../../database/entities/activity-log.entity";
 import { TelegramService } from "../telegram/telegram.service";
+import { SubdomainService } from "../custom-domains/services/subdomain.service";
+import {
+  SubdomainStatus,
+  SubdomainType,
+} from "../custom-domains/enums/domain-status.enum";
 
 @Injectable()
 export class ShopsService {
@@ -52,7 +57,9 @@ export class ShopsService {
     private readonly publicUserRepository: Repository<PublicUser>,
     private readonly activityLogService: ActivityLogService,
     @Inject(forwardRef(() => TelegramService))
-    private readonly telegramService: TelegramService
+    private readonly telegramService: TelegramService,
+    @Inject(forwardRef(() => SubdomainService))
+    private readonly subdomainService: SubdomainService
   ) {}
 
   /**
@@ -277,6 +284,17 @@ export class ShopsService {
   ): Promise<Shop> {
     const shop = await this.findOne(id, userId);
 
+    // Если меняется slug - обрабатываем через updateSlug
+    if (updateShopDto.slug !== undefined && updateShopDto.slug !== shop.slug) {
+      // Убираем slug из DTO, обработаем отдельно
+      const { slug: newSlug, ...restDto } = updateShopDto;
+      Object.assign(shop, restDto);
+      await this.shopRepository.save(shop);
+
+      // Обновляем slug через специальный метод
+      return this.updateSlug(id, newSlug || null, userId);
+    }
+
     Object.assign(shop, updateShopDto);
     const updatedShop = await this.shopRepository.save(shop);
 
@@ -298,6 +316,266 @@ export class ShopsService {
       });
 
     return updatedShop;
+  }
+
+  /**
+   * Обновить slug магазина и управлять субдоменом
+   *
+   * @param id - ID магазина
+   * @param newSlug - Новый slug (null для удаления)
+   * @param userId - ID пользователя
+   * @returns Обновлённый магазин
+   *
+   * Примечание: Время активации субдомена может варьироваться от 30 секунд
+   * до нескольких минут в зависимости от скорости выпуска SSL сертификата.
+   */
+  async updateSlug(
+    id: string,
+    newSlug: string | null,
+    userId: string
+  ): Promise<Shop> {
+    const shop = await this.findOne(id, userId);
+    const oldSlug = shop.slug;
+
+    // Если slug не изменился - ничего не делаем
+    if (oldSlug === newSlug) {
+      return shop;
+    }
+
+    // Если устанавливаем новый slug
+    if (newSlug) {
+      // Проверяем доступность
+      const availability = await this.checkSlugAvailability(newSlug, id);
+      if (!availability.available) {
+        throw new BadRequestException(availability.message);
+      }
+
+      // Если был старый slug - удаляем старый субдомен
+      if (oldSlug) {
+        this.logger.log(
+          `Removing old subdomain for shop ${id}: ${oldSlug}.shops`
+        );
+        await this.subdomainService.remove(oldSlug, SubdomainType.SHOP);
+      }
+
+      // Регистрируем новый субдомен
+      this.logger.log(
+        `Registering new subdomain for shop ${id}: ${newSlug}.shops`
+      );
+
+      shop.slug = availability.slug; // Нормализованный slug
+      shop.subdomainStatus = SubdomainStatus.PENDING;
+      shop.subdomainError = null;
+      shop.subdomainActivatedAt = null;
+      shop.subdomainUrl = null;
+
+      await this.shopRepository.save(shop);
+
+      // Регистрируем субдомен (асинхронно, не блокируем)
+      this.registerSubdomainAsync(shop);
+
+      // Логируем
+      this.activityLogService
+        .create({
+          type: ActivityType.SHOP_UPDATED,
+          level: ActivityLevel.INFO,
+          message: `Установлен slug "${availability.slug}" для магазина "${shop.name}"`,
+          userId,
+          metadata: {
+            shopId: id,
+            oldSlug,
+            newSlug: availability.slug,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка логирования изменения slug:", error);
+        });
+    }
+    // Если удаляем slug
+    else if (oldSlug) {
+      this.logger.log(`Removing subdomain for shop ${id}: ${oldSlug}.shops`);
+
+      shop.slug = null;
+      shop.subdomainStatus = SubdomainStatus.REMOVING;
+      shop.subdomainError = null;
+
+      await this.shopRepository.save(shop);
+
+      // Удаляем субдомен
+      const removed = await this.subdomainService.remove(
+        oldSlug,
+        SubdomainType.SHOP
+      );
+
+      shop.subdomainStatus = null;
+      shop.subdomainUrl = null;
+      shop.subdomainActivatedAt = null;
+
+      if (!removed) {
+        this.logger.warn(`Failed to fully remove subdomain for shop ${id}`);
+      }
+
+      await this.shopRepository.save(shop);
+
+      // Логируем
+      this.activityLogService
+        .create({
+          type: ActivityType.SHOP_UPDATED,
+          level: ActivityLevel.INFO,
+          message: `Удалён slug "${oldSlug}" магазина "${shop.name}"`,
+          userId,
+          metadata: {
+            shopId: id,
+            removedSlug: oldSlug,
+          },
+        })
+        .catch((error) => {
+          this.logger.error("Ошибка логирования удаления slug:", error);
+        });
+    }
+
+    return this.shopRepository.findOne({
+      where: { id },
+      relations: ["bot"],
+    });
+  }
+
+  /**
+   * Асинхронная регистрация субдомена
+   * Выполняется в фоне, не блокирует основной запрос
+   */
+  private async registerSubdomainAsync(shop: Shop): Promise<void> {
+    try {
+      shop.subdomainStatus = SubdomainStatus.DNS_CREATING;
+      await this.shopRepository.save(shop);
+
+      const result = await this.subdomainService.register({
+        slug: shop.slug,
+        type: SubdomainType.SHOP,
+        targetId: shop.id,
+      });
+
+      if (result.success) {
+        shop.subdomainStatus = result.status;
+        shop.subdomainUrl = result.fullDomain;
+
+        // Ждём активации SSL (в фоне)
+        this.waitForSubdomainActivation(shop);
+      } else {
+        shop.subdomainStatus = result.status;
+        shop.subdomainError = result.error;
+        this.logger.error(
+          `Failed to register subdomain for shop ${shop.id}: ${result.error}`
+        );
+      }
+
+      await this.shopRepository.save(shop);
+    } catch (error) {
+      this.logger.error(
+        `Error registering subdomain for shop ${shop.id}: ${error.message}`
+      );
+      shop.subdomainStatus = SubdomainStatus.DNS_ERROR;
+      shop.subdomainError = error.message;
+      await this.shopRepository.save(shop);
+    }
+  }
+
+  /**
+   * Ожидание активации субдомена (SSL)
+   */
+  private async waitForSubdomainActivation(shop: Shop): Promise<void> {
+    try {
+      const activated = await this.subdomainService.waitForActivation(
+        shop.slug,
+        SubdomainType.SHOP,
+        120000 // 2 минуты
+      );
+
+      if (activated) {
+        shop.subdomainStatus = SubdomainStatus.ACTIVE;
+        shop.subdomainActivatedAt = new Date();
+        shop.subdomainError = null;
+        this.logger.log(
+          `Subdomain activated for shop ${shop.id}: ${shop.subdomainUrl}`
+        );
+      } else {
+        // SSL мог не успеть выпуститься, но это не критично
+        // Caddy продолжит попытки автоматически
+        shop.subdomainStatus = SubdomainStatus.SSL_ISSUING;
+        this.logger.warn(
+          `SSL not ready for shop ${shop.id} subdomain, but route is active`
+        );
+      }
+
+      await this.shopRepository.save(shop);
+    } catch (error) {
+      this.logger.error(
+        `Error waiting for subdomain activation for shop ${shop.id}: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Получить статус субдомена магазина
+   */
+  async getSubdomainStatus(
+    id: string,
+    userId: string
+  ): Promise<{
+    slug: string | null;
+    status: SubdomainStatus | null;
+    url: string | null;
+    error: string | null;
+    activatedAt: Date | null;
+    estimatedWaitMessage: string | null;
+  }> {
+    const shop = await this.findOne(id, userId);
+
+    let estimatedWaitMessage: string | null = null;
+    if (
+      shop.subdomainStatus === SubdomainStatus.PENDING ||
+      shop.subdomainStatus === SubdomainStatus.DNS_CREATING ||
+      shop.subdomainStatus === SubdomainStatus.SSL_ISSUING
+    ) {
+      estimatedWaitMessage =
+        "Субдомен активируется. Время ожидания может варьироваться от 30 секунд до нескольких минут.";
+    }
+
+    return {
+      slug: shop.slug || null,
+      status: shop.subdomainStatus || null,
+      url: shop.subdomainUrl || null,
+      error: shop.subdomainError || null,
+      activatedAt: shop.subdomainActivatedAt || null,
+      estimatedWaitMessage,
+    };
+  }
+
+  /**
+   * Повторить регистрацию субдомена (после ошибки)
+   */
+  async retrySubdomainRegistration(id: string, userId: string): Promise<Shop> {
+    const shop = await this.findOne(id, userId);
+
+    if (!shop.slug) {
+      throw new BadRequestException("У магазина не установлен slug");
+    }
+
+    if (
+      shop.subdomainStatus !== SubdomainStatus.DNS_ERROR &&
+      shop.subdomainStatus !== SubdomainStatus.SSL_ERROR
+    ) {
+      throw new BadRequestException("Повтор возможен только после ошибки");
+    }
+
+    // Сбрасываем статус и пытаемся снова
+    shop.subdomainStatus = SubdomainStatus.PENDING;
+    shop.subdomainError = null;
+    await this.shopRepository.save(shop);
+
+    this.registerSubdomainAsync(shop);
+
+    return shop;
   }
 
   /**
@@ -369,6 +647,22 @@ export class ShopsService {
    */
   async remove(id: string, userId: string): Promise<void> {
     const shop = await this.findOne(id, userId);
+    const shopName = shop.name;
+    const shopSlug = shop.slug;
+
+    // Удаляем субдомен если есть
+    if (shopSlug) {
+      this.logger.log(
+        `Removing subdomain before deleting shop ${id}: ${shopSlug}.shops`
+      );
+      await this.subdomainService
+        .remove(shopSlug, SubdomainType.SHOP)
+        .catch((error) => {
+          this.logger.error(
+            `Failed to remove subdomain for shop ${id}: ${error.message}`
+          );
+        });
+    }
 
     await this.shopRepository.remove(shop);
 
@@ -377,11 +671,12 @@ export class ShopsService {
       .create({
         type: ActivityType.SHOP_DELETED,
         level: ActivityLevel.WARNING,
-        message: `Удален магазин "${shop.name}"`,
+        message: `Удален магазин "${shopName}"`,
         userId,
         metadata: {
           shopId: id,
-          shopName: shop.name,
+          shopName: shopName,
+          removedSlug: shopSlug,
         },
       })
       .catch((error) => {

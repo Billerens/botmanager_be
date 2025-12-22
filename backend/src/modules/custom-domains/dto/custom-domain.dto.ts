@@ -117,10 +117,10 @@ export class DnsInfo {
   @ApiPropertyOptional()
   lastCheck?: Date;
 
-  @ApiProperty({ type: [String], example: ["proxy.botmanager.io"] })
+  @ApiProperty({ type: [String], example: ["proxy.botmanagertest.online"] })
   records: string[];
 
-  @ApiProperty({ example: "proxy.botmanager.io" })
+  @ApiProperty({ example: "proxy.botmanagertest.online" })
   expectedCname: string;
 
   @ApiProperty({ type: [DnsRecordInstruction] })

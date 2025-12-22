@@ -1,6 +1,44 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 /**
+ * Информация о субдомене магазина
+ */
+export class SubdomainInfoDto {
+  @ApiPropertyOptional({
+    description: "Статус субдомена",
+    enum: [
+      "pending",
+      "dns_creating",
+      "ssl_issuing",
+      "active",
+      "dns_error",
+      "ssl_error",
+      "removing",
+    ],
+    example: "active",
+  })
+  status?: string;
+
+  @ApiPropertyOptional({
+    description: "URL субдомена",
+    example: "myshop.shops.botmanagertest.online",
+  })
+  url?: string;
+
+  @ApiPropertyOptional({
+    description: "Сообщение об ошибке",
+    example: null,
+  })
+  error?: string;
+
+  @ApiPropertyOptional({
+    description: "Дата активации субдомена",
+    example: "2024-01-01T00:00:00.000Z",
+  })
+  activatedAt?: Date;
+}
+
+/**
  * DTO ответа для магазина
  */
 export class ShopResponseDto {
@@ -15,6 +53,12 @@ export class ShopResponseDto {
     example: "Мой магазин",
   })
   name: string;
+
+  @ApiPropertyOptional({
+    description: "Slug для субдомена",
+    example: "myshop",
+  })
+  slug?: string;
 
   @ApiProperty({
     description: "ID владельца",
@@ -80,10 +124,16 @@ export class ShopResponseDto {
   browserAccessRequireEmailVerification: boolean;
 
   @ApiProperty({
-    description: "URL магазина",
+    description: "URL магазина (стандартный)",
     example: "https://botmanagertest.online/shop/123e4567-e89b-12d3-a456-426614174000",
   })
   url: string;
+
+  @ApiPropertyOptional({
+    description: "Публичный URL магазина (субдомен если активен, иначе стандартный)",
+    example: "https://myshop.shops.botmanagertest.online",
+  })
+  publicUrl?: string;
 
   @ApiProperty({
     description: "Дата создания",
@@ -106,6 +156,12 @@ export class ShopResponseDto {
     username: string;
     status: string;
   };
+
+  @ApiPropertyOptional({
+    description: "Информация о субдомене (если slug установлен)",
+    type: SubdomainInfoDto,
+  })
+  subdomain?: SubdomainInfoDto;
 }
 
 /**

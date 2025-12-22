@@ -6,6 +6,7 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
+import { ConfigService } from "@nestjs/config";
 import { Repository, In } from "typeorm";
 import { v4 as uuidv4 } from "uuid";
 import { CustomDomain } from "../../../database/entities/custom-domain.entity";
@@ -37,12 +38,19 @@ export class CustomDomainsService {
   /** Максимум последовательных неудач до увеличения интервала */
   private readonly MAX_FAILURES_BEFORE_SLOWDOWN = 3;
 
+  /** Ожидаемый CNAME для кастомных доменов */
+  private readonly expectedCname: string;
+
   constructor(
     @InjectRepository(CustomDomain)
     private readonly domainsRepo: Repository<CustomDomain>,
     private readonly dnsValidator: DnsValidatorService,
-    private readonly caddyService: CaddyService
-  ) {}
+    private readonly caddyService: CaddyService,
+    private readonly configService: ConfigService
+  ) {
+    const baseDomain = this.configService.get<string>("BASE_DOMAIN") || "botmanagertest.online";
+    this.expectedCname = this.configService.get<string>("PROXY_DOMAIN") || `proxy.${baseDomain}`;
+  }
 
   /**
    * Получить все домены пользователя
@@ -98,7 +106,7 @@ export class CustomDomainsService {
       userId: user.id,
       status: DomainStatus.AWAITING_DNS,
       verificationToken,
-      expectedCname: "proxy.botmanager.io",
+      expectedCname: this.expectedCname,
     });
 
     await this.domainsRepo.save(domain);

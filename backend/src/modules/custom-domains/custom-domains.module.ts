@@ -7,6 +7,8 @@ import { CustomDomainsService } from "./services/custom-domains.service";
 import { DnsValidatorService } from "./services/dns-validator.service";
 import { CaddyService } from "./services/caddy.service";
 import { DomainHealthService } from "./services/domain-health.service";
+import { TimewebDnsService } from "./services/timeweb-dns.service";
+import { SubdomainService } from "./services/subdomain.service";
 
 @Module({
   imports: [
@@ -19,8 +21,10 @@ import { DomainHealthService } from "./services/domain-health.service";
     DnsValidatorService,
     CaddyService,
     DomainHealthService,
+    TimewebDnsService,
+    SubdomainService,
   ],
-  exports: [CustomDomainsService, CaddyService],
+  exports: [CustomDomainsService, CaddyService, SubdomainService, TimewebDnsService],
 })
 export class CustomDomainsModule {}
 

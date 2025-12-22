@@ -23,9 +23,14 @@ export class DnsValidatorService {
   /** Ожидаемые IP адреса (для A-записей) */
   private readonly EXPECTED_IPS: string[];
 
+  /** Базовый домен платформы */
+  private readonly BASE_DOMAIN: string;
+
   constructor(private readonly configService: ConfigService) {
+    this.BASE_DOMAIN =
+      this.configService.get<string>("BASE_DOMAIN") || "botmanagertest.online";
     this.EXPECTED_CNAME =
-      this.configService.get<string>("PROXY_DOMAIN") || "proxy.botmanager.io";
+      this.configService.get<string>("PROXY_DOMAIN") || `proxy.${this.BASE_DOMAIN}`;
     this.EXPECTED_IPS = (
       this.configService.get<string>("PROXY_IPS") || ""
     ).split(",");
@@ -211,8 +216,8 @@ export class DnsValidatorService {
         pointsToUs: records.some(
           (r) =>
             r === this.EXPECTED_CNAME ||
-            r.endsWith(".botmanager.io") ||
-            r.endsWith(".botmanager.io.")
+            r.endsWith(`.${this.BASE_DOMAIN}`) ||
+            r.endsWith(`.${this.BASE_DOMAIN}.`)
         ),
       };
     } catch (error) {

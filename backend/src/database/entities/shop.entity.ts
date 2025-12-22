@@ -17,6 +17,7 @@ import { Order } from "./order.entity";
 import { Cart } from "./cart.entity";
 import { ShopPromocode } from "./shop-promocode.entity";
 import { PublicUser } from "./public-user.entity";
+import { SubdomainStatus } from "../../modules/custom-domains/enums/domain-status.enum";
 
 /**
  * Сущность Shop - независимый магазин
@@ -35,6 +36,40 @@ export class Shop {
   // Уникальный slug для публичных субдоменов: {slug}.shops.botmanagertest.online
   @Column({ nullable: true, unique: true })
   slug?: string;
+
+  // ============================================================================
+  // СТАТУС СУБДОМЕНА ПЛАТФОРМЫ
+  // ============================================================================
+
+  /**
+   * Статус субдомена платформы
+   * null если slug не установлен
+   */
+  @Column({
+    type: "enum",
+    enum: SubdomainStatus,
+    nullable: true,
+  })
+  subdomainStatus?: SubdomainStatus;
+
+  /**
+   * Сообщение об ошибке субдомена (если есть)
+   */
+  @Column({ nullable: true })
+  subdomainError?: string;
+
+  /**
+   * Дата активации субдомена
+   */
+  @Column({ nullable: true })
+  subdomainActivatedAt?: Date;
+
+  /**
+   * Полный URL субдомена (кэшированный для быстрого доступа)
+   * Например: "myshop.shops.botmanagertest.online"
+   */
+  @Column({ nullable: true })
+  subdomainUrl?: string;
 
   // Владелец магазина
   @ManyToOne(() => User, { onDelete: "CASCADE" })
@@ -118,6 +153,17 @@ export class Shop {
     return `${frontendUrl}/shop/${this.id}`;
   }
 
+  /**
+   * Публичный URL магазина
+   * Возвращает субдомен если активен, иначе стандартный URL
+   */
+  get publicUrl(): string {
+    if (this.subdomainStatus === SubdomainStatus.ACTIVE && this.subdomainUrl) {
+      return `https://${this.subdomainUrl}`;
+    }
+    return this.url;
+  }
+
   get isActive(): boolean {
     // Магазин активен если у него есть хотя бы название или title
     return !!(this.name || this.title);
@@ -129,5 +175,28 @@ export class Shop {
 
   get displayName(): string {
     return this.title || this.name;
+  }
+
+  /**
+   * Проверяет, активен ли субдомен
+   */
+  get hasActiveSubdomain(): boolean {
+    return (
+      !!this.slug &&
+      this.subdomainStatus === SubdomainStatus.ACTIVE &&
+      !!this.subdomainUrl
+    );
+  }
+
+  /**
+   * Проверяет, находится ли субдомен в процессе активации
+   */
+  get isSubdomainPending(): boolean {
+    return (
+      !!this.slug &&
+      (this.subdomainStatus === SubdomainStatus.PENDING ||
+        this.subdomainStatus === SubdomainStatus.DNS_CREATING ||
+        this.subdomainStatus === SubdomainStatus.SSL_ISSUING)
+    );
   }
 }
