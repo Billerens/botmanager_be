@@ -13,6 +13,10 @@ export interface SubdomainRegistrationResult {
   error?: string;
   /** Примерное время ожидания активации (DNS + SSL) в секундах */
   estimatedWaitTime?: number;
+  /** ID поддомена в Timeweb (если создан) */
+  subdomainId?: number;
+  /** ID DNS записи в Timeweb (если создана) */
+  dnsRecordId?: number;
 }
 
 /**
@@ -31,18 +35,24 @@ export interface RegisterSubdomainConfig {
  * Сервис управления субдоменами платформы
  *
  * Отвечает за:
+ * - Создание поддоменов в Timeweb
  * - Создание A-записей в Timeweb DNS
- * - Удаление A-записей при удалении субдомена
+ * - Удаление поддоменов и DNS записей при удалении субдомена
  *
  * Архитектура:
- * - Backend создаёт/удаляет DNS записи через Timeweb API
+ * - Backend создаёт поддомены и DNS записи через Timeweb API
  * - Timeweb Load Balancer автоматически выдаёт SSL сертификаты
  * - Caddy роутит трафик по wildcard правилам (настроены статически)
  *
- * Flow регистрации:
- * 1. Backend создаёт A-запись в Timeweb DNS → IP сервера
- * 2. Timeweb LB обнаруживает новый домен и выдаёт SSL
- * 3. Caddy роутит запросы по wildcard правилам
+ * Flow регистрации (2-шаговый процесс):
+ * 1. Backend создаёт поддомен в Timeweb: POST /domains/{baseDomain}/subdomains/{fqdn}
+ * 2. Backend создаёт A-запись: POST /domains/{fqdn}/dns-records
+ * 3. Timeweb LB обнаруживает новый домен и выдаёт SSL
+ * 4. Caddy роутит запросы по wildcard правилам
+ *
+ * Flow удаления (2-шаговый процесс):
+ * 1. Удалить все DNS записи поддомена
+ * 2. Удалить сам поддомен
  */
 @Injectable()
 export class SubdomainService {
@@ -65,8 +75,11 @@ export class SubdomainService {
   /**
    * Зарегистрировать новый субдомен платформы
    *
-   * Создаёт A-запись в Timeweb DNS. SSL сертификат выдаётся
-   * автоматически Timeweb Load Balancer.
+   * Выполняет 2-шаговый процесс:
+   * 1. Создание поддомена в Timeweb
+   * 2. Создание A-записи для поддомена
+   *
+   * SSL сертификат выдаётся автоматически Timeweb Load Balancer.
    *
    * @param config - Конфигурация субдомена
    * @returns Результат регистрации
@@ -84,7 +97,6 @@ export class SubdomainService {
   async register(
     config: RegisterSubdomainConfig
   ): Promise<SubdomainRegistrationResult> {
-    const subdomain = this.timewebDns.getSubdomain(config.slug, config.type);
     const fullDomain = this.timewebDns.getFullDomain(config.slug, config.type);
 
     this.logger.log(
@@ -92,30 +104,35 @@ export class SubdomainService {
     );
 
     try {
-      // Создаём A-запись в Timeweb DNS
-      const dnsRecordId =
-        await this.timewebDns.createSubdomainRecord(subdomain);
+      // Используем новый 2-шаговый метод регистрации
+      const result = await this.timewebDns.registerSubdomain(
+        config.slug,
+        config.type
+      );
 
-      if (!dnsRecordId) {
-        this.logger.error(`Failed to create DNS record for ${fullDomain}`);
+      if (!result.success) {
+        this.logger.error(`Failed to register subdomain ${fullDomain}: ${result.error}`);
         return {
           success: false,
           status: SubdomainStatus.ERROR,
           fullDomain,
-          error: "Не удалось создать DNS запись. Попробуйте позже.",
+          error: result.error || "Не удалось зарегистрировать субдомен. Попробуйте позже.",
         };
       }
 
       this.logger.log(
-        `DNS record created for ${fullDomain} (ID: ${dnsRecordId}). ` +
+        `Subdomain registered: ${fullDomain} ` +
+          `(subdomain_id: ${result.subdomain?.id}, dns_record_id: ${result.dnsRecordId}). ` +
           `Waiting for DNS propagation and SSL certificate...`
       );
 
       return {
         success: true,
-        status: SubdomainStatus.DNS_CREATING,
+        status: SubdomainStatus.ACTIVATING,
         fullDomain,
         estimatedWaitTime: this.ESTIMATED_ACTIVATION_TIME,
+        subdomainId: result.subdomain?.id,
+        dnsRecordId: result.dnsRecordId,
       };
     } catch (error) {
       this.logger.error(
@@ -133,25 +150,27 @@ export class SubdomainService {
   /**
    * Удалить субдомен платформы
    *
-   * Удаляет A-запись из Timeweb DNS.
+   * Выполняет 2-шаговый процесс:
+   * 1. Удаление всех DNS записей поддомена
+   * 2. Удаление самого поддомена
    *
    * @param slug - Slug сущности
    * @param type - Тип субдомена
    * @returns true если удалён успешно
    */
   async remove(slug: string, type: SubdomainType): Promise<boolean> {
-    const subdomain = this.timewebDns.getSubdomain(slug, type);
     const fullDomain = this.timewebDns.getFullDomain(slug, type);
 
     this.logger.log(`Removing subdomain: ${fullDomain}`);
 
     try {
-      const deleted = await this.timewebDns.deleteSubdomainRecord(subdomain);
+      // Используем новый метод полного удаления
+      const deleted = await this.timewebDns.unregisterSubdomain(slug, type);
 
       if (deleted) {
         this.logger.log(`Subdomain ${fullDomain} removed successfully`);
       } else {
-        this.logger.warn(`Failed to delete DNS record for ${fullDomain}`);
+        this.logger.warn(`Failed to fully remove subdomain ${fullDomain}`);
       }
 
       return deleted;
@@ -166,7 +185,7 @@ export class SubdomainService {
   /**
    * Проверить статус субдомена
    *
-   * Проверяет существование DNS записи и доступность по HTTPS.
+   * Проверяет существование поддомена в Timeweb и доступность по HTTPS.
    *
    * @param slug - Slug сущности
    * @param type - Тип субдомена
@@ -176,19 +195,18 @@ export class SubdomainService {
     slug: string,
     type: SubdomainType
   ): Promise<SubdomainStatus> {
-    const subdomain = this.timewebDns.getSubdomain(slug, type);
     const fullDomain = this.timewebDns.getFullDomain(slug, type);
 
-    // Проверяем существование DNS записи в Timeweb
-    const dnsExists = await this.timewebDns.recordExists(subdomain);
-    if (!dnsExists) {
+    // Проверяем существование поддомена в Timeweb
+    const subdomainExists = await this.timewebDns.subdomainExists(fullDomain);
+    if (!subdomainExists) {
       return SubdomainStatus.ERROR;
     }
 
     // Проверяем доступность по HTTPS (DNS распространился + Timeweb выдал SSL)
     const isAccessible = await this.checkHttpsAccessible(fullDomain);
     if (!isAccessible) {
-      // DNS есть, но домен ещё недоступен - ждём propagation и SSL от Timeweb
+      // Поддомен есть, но домен ещё недоступен - ждём propagation и SSL от Timeweb
       return SubdomainStatus.ACTIVATING;
     }
 
@@ -235,6 +253,18 @@ export class SubdomainService {
   }
 
   /**
+   * Проверить существование субдомена в Timeweb
+   *
+   * @param slug - Slug сущности
+   * @param type - Тип субдомена
+   * @returns true если субдомен существует
+   */
+  async exists(slug: string, type: SubdomainType): Promise<boolean> {
+    const fullDomain = this.timewebDns.getFullDomain(slug, type);
+    return await this.timewebDns.subdomainExists(fullDomain);
+  }
+
+  /**
    * Получить полный домен для субдомена
    */
   getFullDomain(slug: string, type: SubdomainType): string {
@@ -249,7 +279,7 @@ export class SubdomainService {
       const https = await import("https");
       const axios = (await import("axios")).default;
 
-      const response = await axios.get(`https://${domain}/health`, {
+      await axios.get(`https://${domain}/health`, {
         timeout: 10000,
         httpsAgent: new https.Agent({
           rejectUnauthorized: true, // Проверяем валидность SSL
@@ -259,7 +289,7 @@ export class SubdomainService {
 
       // Если получили ответ без SSL ошибки - субдомен активен
       return true;
-    } catch (error) {
+    } catch {
       // SSL ещё не готов или другая ошибка
       return false;
     }

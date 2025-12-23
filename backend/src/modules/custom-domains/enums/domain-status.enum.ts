@@ -98,28 +98,51 @@ export enum DomainWarningCode {
  * Статусы субдомена платформы (для бесплатных субдоменов)
  * Используется для: *.shops.domain, *.booking.domain, *.pages.domain
  *
- * Архитектура:
- * - Backend создаёт A-записи в Timeweb DNS
- * - Timeweb автоматически выдаёт SSL сертификаты
- * - Frontend определяет по hostname что показывать
+ * Архитектура (2-шаговый процесс через Timeweb API):
+ * 1. Backend создаёт поддомен: POST /domains/{baseDomain}/subdomains/{fqdn}
+ * 2. Backend создаёт A-запись: POST /domains/{fqdn}/dns-records
+ * 3. Timeweb автоматически выдаёт SSL сертификаты
+ * 4. Frontend определяет по hostname что показывать
+ *
+ * State Machine:
+ * PENDING → DNS_CREATING → ACTIVATING → ACTIVE
+ *        ↘ ERROR (при ошибке на любом шаге)
+ * ACTIVE → REMOVING → null (удалён)
  */
 export enum SubdomainStatus {
-  /** Ожидает регистрации */
+  /** Ожидает регистрации (начальный статус) */
   PENDING = "pending",
 
-  /** Создаётся DNS запись в Timeweb */
+  /**
+   * Создаётся поддомен и DNS запись в Timeweb (2-шаговый процесс)
+   * Шаг 1: Создание поддомена
+   * Шаг 2: Создание A-записи
+   */
   DNS_CREATING = "dns_creating",
 
-  /** DNS создан, ждём распространение и SSL от Timeweb */
+  /**
+   * Поддомен и DNS созданы, ждём:
+   * - DNS propagation (обычно 1-5 минут)
+   * - SSL сертификат от Timeweb (автоматически)
+   */
   ACTIVATING = "activating",
 
-  /** Активен и работает */
+  /** Активен и работает (HTTPS доступен) */
   ACTIVE = "active",
 
-  /** Ошибка (DNS не создан или домен недоступен) */
+  /**
+   * Ошибка регистрации:
+   * - Не удалось создать поддомен
+   * - Не удалось создать DNS запись
+   * - Таймаут активации
+   */
   ERROR = "error",
 
-  /** Удаляется */
+  /**
+   * Удаляется (2-шаговый процесс):
+   * Шаг 1: Удаление всех DNS записей
+   * Шаг 2: Удаление поддомена
+   */
   REMOVING = "removing",
 }
 
