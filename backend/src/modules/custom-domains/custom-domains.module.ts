@@ -1,6 +1,5 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { ScheduleModule } from "@nestjs/schedule";
 import { CustomDomain } from "../../database/entities/custom-domain.entity";
 import { Shop } from "../../database/entities/shop.entity";
 import { Bot } from "../../database/entities/bot.entity";
@@ -16,8 +15,8 @@ import { SubdomainHealthService } from "./services/subdomain-health.service";
 
 @Module({
   imports: [
+    // ScheduleModule.forRoot() уже подключен глобально в app.module.ts
     TypeOrmModule.forFeature([CustomDomain, Shop, Bot, CustomPage]),
-    ScheduleModule.forRoot(),
   ],
   controllers: [CustomDomainsController],
   providers: [

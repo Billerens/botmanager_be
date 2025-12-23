@@ -36,12 +36,13 @@ export class SubdomainHealthService {
   ) {}
 
   /**
-   * Проверка субдоменов каждую 1 минуту
+   * Проверка субдоменов каждые 30 секунд
    *
    * Проверяет все субдомены в промежуточных статусах и обновляет их состояние.
    */
-  @Cron("* 1 * * * *") // Каждую 1 минуту
+  @Cron("*/30 * * * * *") // Каждые 30 секунд
   async checkPendingSubdomains(): Promise<void> {
+    this.logger.debug("Checking pending subdomains...");
     await Promise.all([
       this.checkShopSubdomains(),
       this.checkBotSubdomains(),

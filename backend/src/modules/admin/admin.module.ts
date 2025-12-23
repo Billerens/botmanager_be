@@ -3,7 +3,6 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { JwtModule } from "@nestjs/jwt";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { PassportModule } from "@nestjs/passport";
-import { ScheduleModule } from "@nestjs/schedule";
 
 // Entities
 import { Admin } from "../../database/entities/admin.entity";
@@ -69,7 +68,6 @@ import { TelegramValidationService } from "../../common/telegram-validation.serv
         },
       }),
     }),
-    ScheduleModule.forRoot(),
   ],
   controllers: [
     AdminAuthController,
