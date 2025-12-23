@@ -793,11 +793,16 @@ export class CustomPagesService {
 
     // Валидация формата slug
     const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-    if (!slugRegex.test(normalizedSlug) || normalizedSlug.length < 2 || normalizedSlug.length > 50) {
+    if (
+      !slugRegex.test(normalizedSlug) ||
+      normalizedSlug.length < 2 ||
+      normalizedSlug.length > 50
+    ) {
       return {
         available: false,
         slug: normalizedSlug,
-        message: "Slug может содержать только латинские буквы, цифры и дефисы (2-50 символов)",
+        message:
+          "Slug может содержать только латинские буквы, цифры и дефисы (2-50 символов)",
       };
     }
 
@@ -1123,7 +1128,9 @@ export class CustomPagesService {
     }
     // Если удаляем slug
     else if (oldSlug) {
-      this.logger.log(`Removing subdomain for page ${pageId}: ${oldSlug}.pages`);
+      this.logger.log(
+        `Removing subdomain for page ${pageId}: ${oldSlug}.pages`
+      );
 
       page.slug = null;
       page.subdomainStatus = SubdomainStatus.REMOVING;
@@ -1231,6 +1238,8 @@ export class CustomPagesService {
 
   /**
    * Получить статус субдомена страницы
+   *
+   * Статус обновляется фоновым сервисом SubdomainHealthService каждые 30 секунд.
    */
   async getSubdomainStatus(
     pageId: string,
@@ -1264,9 +1273,7 @@ export class CustomPagesService {
     return {
       slug: page.slug || null,
       status: page.subdomainStatus || null,
-      url: page.subdomainUrl
-        ? `https://${page.subdomainUrl}`
-        : null,
+      url: page.subdomainUrl ? `https://${page.subdomainUrl}` : null,
       error: page.subdomainError || null,
       activatedAt: page.subdomainActivatedAt || null,
       estimatedWaitMessage,

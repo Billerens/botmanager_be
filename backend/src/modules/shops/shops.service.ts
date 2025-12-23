@@ -508,6 +508,8 @@ export class ShopsService {
 
   /**
    * Получить статус субдомена магазина
+   *
+   * Статус обновляется фоновым сервисом SubdomainHealthService каждые 30 секунд.
    */
   async getSubdomainStatus(
     id: string,

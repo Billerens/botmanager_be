@@ -273,24 +273,34 @@ export class SubdomainService {
 
   /**
    * Проверка доступности HTTPS
+   *
+   * Проверяет, что:
+   * 1. DNS резолвится
+   * 2. SSL сертификат валиден
+   * 3. Сервер отвечает
    */
   private async checkHttpsAccessible(domain: string): Promise<boolean> {
     try {
       const https = await import("https");
       const axios = (await import("axios")).default;
 
-      await axios.get(`https://${domain}/health`, {
+      // Проверяем корень, а не /health - публичные страницы могут не иметь /health
+      await axios.get(`https://${domain}/`, {
         timeout: 10000,
         httpsAgent: new https.Agent({
           rejectUnauthorized: true, // Проверяем валидность SSL
         }),
-        validateStatus: () => true, // Любой HTTP статус OK
+        validateStatus: () => true, // Любой HTTP статус OK (включая 404)
+        maxRedirects: 5,
       });
 
       // Если получили ответ без SSL ошибки - субдомен активен
       return true;
-    } catch {
+    } catch (error) {
       // SSL ещё не готов или другая ошибка
+      this.logger.debug(
+        `HTTPS check failed for ${domain}: ${error.message}`
+      );
       return false;
     }
   }

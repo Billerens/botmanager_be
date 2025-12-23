@@ -919,6 +919,8 @@ export class BotsService {
 
   /**
    * Получить статус субдомена бота
+   *
+   * Статус обновляется фоновым сервисом SubdomainHealthService каждые 30 секунд.
    */
   async getSubdomainStatus(
     botId: string,
