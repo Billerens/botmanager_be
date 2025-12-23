@@ -199,8 +199,12 @@ export class TimewebDnsService implements OnModuleInit {
         return existing;
       }
 
-      // POST /domains/{baseDomain}/subdomains/{subdomain_fqdn}
-      const requestUrl = `/domains/${this.baseDomain}/subdomains/${subdomainFqdn}`;
+      // Извлекаем относительное имя субдомена (без базового домена)
+      // test.pages.botmanagertest.online → test.pages
+      const relativeName = this.extractRelativeName(subdomainFqdn);
+
+      // POST /domains/{baseDomain}/subdomains/{relative_subdomain_name}
+      const requestUrl = `/domains/${this.baseDomain}/subdomains/${relativeName}`;
 
       this.logger.log(`Creating subdomain: POST ${this.apiUrl}${requestUrl}`);
 
@@ -236,8 +240,11 @@ export class TimewebDnsService implements OnModuleInit {
    */
   async deleteSubdomain(subdomainFqdn: string): Promise<boolean> {
     try {
-      // DELETE /domains/{baseDomain}/subdomains/{subdomain_fqdn}
-      const requestUrl = `/domains/${this.baseDomain}/subdomains/${subdomainFqdn}`;
+      // Извлекаем относительное имя субдомена (без базового домена)
+      const relativeName = this.extractRelativeName(subdomainFqdn);
+
+      // DELETE /domains/{baseDomain}/subdomains/{relative_subdomain_name}
+      const requestUrl = `/domains/${this.baseDomain}/subdomains/${relativeName}`;
 
       this.logger.log(`Deleting subdomain: DELETE ${this.apiUrl}${requestUrl}`);
 
@@ -629,6 +636,21 @@ export class TimewebDnsService implements OnModuleInit {
    */
   getSubdomain(slug: string, type: string): string {
     return `${slug}.${type}`;
+  }
+
+  /**
+   * Извлечь относительное имя из FQDN (убрать базовый домен)
+   *
+   * @param fqdn - Полный FQDN (например: "test.pages.botmanagertest.online")
+   * @returns Относительное имя (например: "test.pages")
+   */
+  private extractRelativeName(fqdn: string): string {
+    const suffix = `.${this.baseDomain}`;
+    if (fqdn.toLowerCase().endsWith(suffix.toLowerCase())) {
+      return fqdn.slice(0, -suffix.length);
+    }
+    // Если суффикс не найден, возвращаем как есть
+    return fqdn;
   }
 
   /**
