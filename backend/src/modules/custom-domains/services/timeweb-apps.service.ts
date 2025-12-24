@@ -141,9 +141,7 @@ export class TimewebAppsService implements OnModuleInit {
       return;
     }
 
-    this.logger.log(
-      `Searching for frontend app with IP: ${this.frontendIp}`
-    );
+    this.logger.log(`Searching for frontend app with IP: ${this.frontendIp}`);
 
     // Пробуем найти приложение фронтенда при старте
     try {
@@ -151,7 +149,12 @@ export class TimewebAppsService implements OnModuleInit {
       const allApps = await this.getApps();
       this.logger.debug(
         `Found ${allApps.length} apps in Timeweb. ` +
-          `Apps with IPs: ${allApps.filter(a => a.ip).map(a => `${a.name}(${a.ip})`).join(", ") || "none"}`
+          `Apps with IPs: ${
+            allApps
+              .filter((a) => a.ip)
+              .map((a) => `${a.name}(${a.ip})`)
+              .join(", ") || "none"
+          }`
       );
 
       const app = await this.findFrontendApp();
@@ -161,12 +164,17 @@ export class TimewebAppsService implements OnModuleInit {
         this.logger.log(
           `Frontend app found: id=${app.id}, name="${app.name}", ` +
             `status="${app.status}", IP=${app.ip}, ` +
-            `domains=[${app.domains.map(d => d.fqdn).join(", ")}]`
+            `domains=[${app.domains.map((d) => d.fqdn).join(", ")}]`
         );
       } else {
         this.logger.warn(
           `Frontend app not found by IP ${this.frontendIp}. ` +
-            `Available apps with IPs: ${allApps.filter(a => a.ip).map(a => a.ip).join(", ") || "none"}. ` +
+            `Available apps with IPs: ${
+              allApps
+                .filter((a) => a.ip)
+                .map((a) => a.ip)
+                .join(", ") || "none"
+            }. ` +
             `Auto-redeploy will not work.`
         );
       }
@@ -255,15 +263,34 @@ export class TimewebAppsService implements OnModuleInit {
    * Запустить деплой приложения
    *
    * @param appId - ID приложения
-   * @param commitSha - (опционально) SHA коммита для деплоя
+   * @param commitSha - (опционально) SHA коммита для деплоя. Если не указан, используется текущий commit_sha приложения
    */
   async deployApp(appId: number, commitSha?: string): Promise<DeployResult> {
     try {
+      // Если commit_sha не указан, получаем текущий commit_sha из приложения
+      let finalCommitSha = commitSha;
+      if (!finalCommitSha) {
+        const app = await this.getAppById(appId);
+        if (app && app.commit_sha) {
+          finalCommitSha = app.commit_sha;
+          this.logger.log(
+            `Using current commit_sha from app: ${finalCommitSha}`
+          );
+        } else {
+          // Если не удалось получить commit_sha, используем пустую строку
+          // (API может принять это как "деплой текущего коммита")
+          finalCommitSha = "";
+          this.logger.warn(
+            `Could not get commit_sha from app ${appId}, using empty string`
+          );
+        }
+      }
+
       const requestUrl = `/apps/${appId}/deploy`;
-      const requestBody = commitSha ? { commit_sha: commitSha } : {};
+      const requestBody = { commit_sha: finalCommitSha };
 
       this.logger.log(
-        `Deploying app ${appId}: POST ${this.apiUrl}${requestUrl}`
+        `Deploying app ${appId}: POST ${this.apiUrl}${requestUrl}, commit_sha=${finalCommitSha || "current"}`
       );
 
       await this.client.post(requestUrl, requestBody);
@@ -319,7 +346,8 @@ export class TimewebAppsService implements OnModuleInit {
       };
     }
 
-    const result = await this.deployApp(app.id);
+    // Используем текущий commit_sha приложения для редеплоя
+    const result = await this.deployApp(app.id, app.commit_sha);
 
     if (result.success) {
       this.lastRedeployAt = new Date();
