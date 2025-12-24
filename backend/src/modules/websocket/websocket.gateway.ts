@@ -9,7 +9,14 @@ import {
   OnGatewayInit,
 } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
-import { Logger, Injectable, UnauthorizedException, Inject, forwardRef, OnModuleDestroy } from "@nestjs/common";
+import {
+  Logger,
+  Injectable,
+  UnauthorizedException,
+  Inject,
+  forwardRef,
+  OnModuleDestroy,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { createClient, RedisClientType } from "redis";
@@ -37,7 +44,11 @@ interface AuthenticatedSocket extends Socket {
 })
 @Injectable()
 export class BotManagerWebSocketGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
+  implements
+    OnGatewayInit,
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnModuleDestroy
 {
   @WebSocketServer()
   server: Server;
@@ -53,7 +64,7 @@ export class BotManagerWebSocketGateway
     private jwtService: JwtService,
     private authService: AuthService,
     @Inject(forwardRef(() => NotificationService))
-    private notificationService: NotificationService,
+    private notificationService: NotificationService
   ) {}
 
   /**
@@ -75,9 +86,14 @@ export class BotManagerWebSocketGateway
       }) as RedisClientType;
       this.redisSubClient = this.redisPubClient.duplicate() as RedisClientType;
 
-      await Promise.all([this.redisPubClient.connect(), this.redisSubClient.connect()]);
+      await Promise.all([
+        this.redisPubClient.connect(),
+        this.redisSubClient.connect(),
+      ]);
 
-      server.adapter(createAdapter(this.redisPubClient, this.redisSubClient));
+      server.server.adapter(
+        createAdapter(this.redisPubClient, this.redisSubClient)
+      );
       this.logger.log("Redis адаптер для Socket.IO настроен успешно");
     } catch (error) {
       this.logger.warn(
@@ -144,9 +160,13 @@ export class BotManagerWebSocketGateway
         // Удаляем запись пользователя только если не осталось активных подключений
         if (userSockets.size === 0) {
           this.connectedUsers.delete(userId);
-          this.logger.log(`Клиент ${client.id} отключен (Пользователь: ${userId}, больше нет активных подключений)`);
+          this.logger.log(
+            `Клиент ${client.id} отключен (Пользователь: ${userId}, больше нет активных подключений)`
+          );
         } else {
-          this.logger.log(`Клиент ${client.id} отключен (Пользователь: ${userId}, осталось активных подключений: ${userSockets.size})`);
+          this.logger.log(
+            `Клиент ${client.id} отключен (Пользователь: ${userId}, осталось активных подключений: ${userSockets.size})`
+          );
         }
       }
       this.socketToUser.delete(client.id);
@@ -278,8 +298,10 @@ export class BotManagerWebSocketGateway
       throw new UnauthorizedException("Пользователь не аутентифицирован");
     }
 
-    this.logger.log(`Клиент ${client.id} (Пользователь: ${client.userId}) готов принимать уведомления`);
-    
+    this.logger.log(
+      `Клиент ${client.id} (Пользователь: ${client.userId}) готов принимать уведомления`
+    );
+
     // Отправляем сводку по накопленным уведомлениям
     await this.sendNotificationsSummary(client.userId);
 
@@ -344,16 +366,18 @@ export class BotManagerWebSocketGateway
    */
   private async sendNotificationsSummary(userId: string): Promise<void> {
     try {
-      const unreadCount = await this.notificationService.getUnreadNotificationsCount(userId);
+      const unreadCount =
+        await this.notificationService.getUnreadNotificationsCount(userId);
       if (unreadCount > 0) {
-        const summary = await this.notificationService.getNotificationsSummary(userId);
-        
+        const summary =
+          await this.notificationService.getNotificationsSummary(userId);
+
         // Отправляем событие с количеством непрочитанных и сводкой
         this.emitToUser(userId, "notifications.summary", {
           unreadCount,
           summary,
         });
-        
+
         this.logger.log(
           `Отправлена сводка: ${unreadCount} непрочитанных уведомлений пользователю ${userId}`
         );
