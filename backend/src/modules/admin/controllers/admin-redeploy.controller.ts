@@ -90,6 +90,32 @@ export class AdminRedeployController {
   }
 
   /**
+   * Перепроверить и активировать планировщик
+   */
+  @Post("recheck")
+  async recheckScheduler(@Req() req: AdminRequest) {
+    const result = await this.frontendRedeployService.recheckAndActivate();
+
+    // Логируем действие
+    await this.actionLogService.logAction(
+      req.user,
+      AdminActionType.SYSTEM_SETTINGS_UPDATE,
+      `Перепроверка планировщика редеплоя: ${result.activated ? "активирован" : "не активирован"}. ${result.message}`,
+      {
+        level: AdminActionLevel.INFO,
+        metadata: {
+          activated: result.activated,
+          appId: result.appId,
+          appName: result.appName,
+        },
+        request: req,
+      }
+    );
+
+    return result;
+  }
+
+  /**
    * Запустить принудительный редеплой фронтенда
    */
   @Post("trigger")

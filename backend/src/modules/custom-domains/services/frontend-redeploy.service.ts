@@ -56,15 +56,28 @@ export class FrontendRedeployService implements OnModuleInit {
           "Either FRONTEND_IP is not configured or frontend app was not found during initialization."
       );
 
-      // Попытка найти приложение заново для диагностики
+      // Попытка найти приложение заново для диагностики и активации
       try {
         const app = await this.timewebAppsService.findFrontendApp();
         if (app) {
-          this.logger.warn(
-            `Frontend app found on retry: id=${app.id}, name="${app.name}", ` +
-              `IP=${app.ip}, status="${app.status}". ` +
-              "Scheduler will remain inactive until next restart."
-          );
+          // Если приложение найдено, активируем планировщик
+          const newScheduleInfo = this.timewebAppsService.getScheduleInfo();
+          if (newScheduleInfo.isActive) {
+            this.isSchedulerActive = true;
+            this.logger.log(
+              `Frontend app found on retry: id=${app.id}, name="${app.name}", ` +
+                `IP=${app.ip}, status="${app.status}". ` +
+                `Scheduler ACTIVATED. Interval: every ${newScheduleInfo.redeployIntervalHours} hours. ` +
+                `Next redeploy: ${newScheduleInfo.nextRedeployAt?.toISOString() || "unknown"}`
+            );
+          } else {
+            this.logger.warn(
+              `Frontend app found on retry: id=${app.id}, name="${app.name}", ` +
+                `IP=${app.ip}, status="${app.status}". ` +
+                `But scheduler remains inactive (isActive=${newScheduleInfo.isActive}, ` +
+                `cachedAppId=${newScheduleInfo.frontendAppId}, frontendIp=${frontendIp}).`
+            );
+          }
         } else {
           this.logger.warn(
             `Frontend app not found by IP ${frontendIp}. ` +
@@ -180,5 +193,87 @@ export class FrontendRedeployService implements OnModuleInit {
   setSchedulerActive(active: boolean): void {
     this.isSchedulerActive = active;
     this.logger.log(`Scheduler ${active ? "ACTIVATED" : "DEACTIVATED"}`);
+  }
+
+  /**
+   * Перепроверить и активировать планировщик, если приложение найдено
+   *
+   * Используется для активации планировщика после того, как приложение было найдено
+   * (например, если при инициализации оно еще не было доступно)
+   */
+  async recheckAndActivate(): Promise<{
+    activated: boolean;
+    message: string;
+    appId?: number;
+    appName?: string;
+  }> {
+    this.logger.log("Rechecking scheduler status...");
+
+    const scheduleInfo = this.timewebAppsService.getScheduleInfo();
+
+    if (scheduleInfo.isActive && !this.isSchedulerActive) {
+      // Приложение найдено, но планировщик неактивен - активируем
+      this.isSchedulerActive = true;
+      this.logger.log(
+        `Scheduler ACTIVATED after recheck. ` +
+          `App: ${scheduleInfo.frontendAppName} (id: ${scheduleInfo.frontendAppId}). ` +
+          `Interval: every ${scheduleInfo.redeployIntervalHours} hours. ` +
+          `Next redeploy: ${scheduleInfo.nextRedeployAt?.toISOString() || "unknown"}`
+      );
+
+      return {
+        activated: true,
+        message: `Планировщик активирован. Приложение: ${scheduleInfo.frontendAppName} (ID: ${scheduleInfo.frontendAppId})`,
+        appId: scheduleInfo.frontendAppId || undefined,
+        appName: scheduleInfo.frontendAppName || undefined,
+      };
+    } else if (scheduleInfo.isActive && this.isSchedulerActive) {
+      return {
+        activated: false,
+        message: "Планировщик уже активен",
+        appId: scheduleInfo.frontendAppId || undefined,
+        appName: scheduleInfo.frontendAppName || undefined,
+      };
+    } else {
+      // Попробуем найти приложение заново
+      try {
+        const app = await this.timewebAppsService.findFrontendApp();
+        const newScheduleInfo = this.timewebAppsService.getScheduleInfo();
+
+        if (newScheduleInfo.isActive && !this.isSchedulerActive) {
+          this.isSchedulerActive = true;
+          this.logger.log(
+            `Scheduler ACTIVATED after finding app. ` +
+              `App: ${app?.name} (id: ${app?.id}). ` +
+              `Interval: every ${newScheduleInfo.redeployIntervalHours} hours.`
+          );
+
+          return {
+            activated: true,
+            message: `Планировщик активирован после поиска приложения. Приложение: ${app?.name} (ID: ${app?.id})`,
+            appId: app?.id,
+            appName: app?.name,
+          };
+        } else if (app) {
+          return {
+            activated: false,
+            message: `Приложение найдено (${app.name}, ID: ${app.id}), но планировщик не может быть активирован. Проверьте настройки.`,
+            appId: app.id,
+            appName: app.name,
+          };
+        } else {
+          const frontendIp = this.timewebAppsService.getFrontendIp();
+          return {
+            activated: false,
+            message: `Приложение не найдено по IP ${frontendIp}. Проверьте настройку FRONTEND_IP.`,
+          };
+        }
+      } catch (error: any) {
+        return {
+          activated: false,
+          message: `Ошибка при поиске приложения: ${error.message}`,
+        };
+      }
+    }
   }
 }
