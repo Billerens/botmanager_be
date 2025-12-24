@@ -43,7 +43,11 @@ export class FrontendRedeployService implements OnModuleInit {
 
     // Если приложение найдено (есть ID и название), активируем планировщик автоматически
     // даже если isActive еще false из-за порядка инициализации
-    if (scheduleInfo.frontendAppId && scheduleInfo.frontendAppName && frontendIp !== "NOT SET") {
+    if (
+      scheduleInfo.frontendAppId &&
+      scheduleInfo.frontendAppName &&
+      frontendIp !== "NOT SET"
+    ) {
       this.isSchedulerActive = true;
       this.logger.log(
         `Frontend auto-redeploy scheduler ACTIVE (auto-activated). ` +
@@ -74,7 +78,10 @@ export class FrontendRedeployService implements OnModuleInit {
         if (app) {
           // Если приложение найдено, активируем планировщик автоматически
           const newScheduleInfo = this.timewebAppsService.getScheduleInfo();
-          if (newScheduleInfo.frontendAppId && newScheduleInfo.frontendAppName) {
+          if (
+            newScheduleInfo.frontendAppId &&
+            newScheduleInfo.frontendAppName
+          ) {
             this.isSchedulerActive = true;
             this.logger.log(
               `Frontend app found on retry: id=${app.id}, name="${app.name}", ` +
@@ -174,7 +181,7 @@ export class FrontendRedeployService implements OnModuleInit {
 
   /**
    * Получить статус планировщика
-   * 
+   *
    * Автоматически активирует планировщик, если приложение найдено
    */
   getSchedulerStatus(): {
@@ -188,16 +195,21 @@ export class FrontendRedeployService implements OnModuleInit {
   } {
     const scheduleInfo = this.timewebAppsService.getScheduleInfo();
     const frontendIp = this.timewebAppsService.getFrontendIp();
-    
+
     // Автоматически активируем планировщик, если приложение найдено
     // (даже если он был неактивен из-за порядка инициализации)
-    if (!this.isSchedulerActive && scheduleInfo.frontendAppId && scheduleInfo.frontendAppName && frontendIp) {
+    if (
+      !this.isSchedulerActive &&
+      scheduleInfo.frontendAppId &&
+      scheduleInfo.frontendAppName &&
+      frontendIp
+    ) {
       this.isSchedulerActive = true;
       this.logger.log(
         `Scheduler auto-activated: app found (id=${scheduleInfo.frontendAppId}, name="${scheduleInfo.frontendAppName}")`
       );
     }
-    
+
     const secondsUntilNext =
       this.timewebAppsService.getSecondsUntilNextRedeploy();
 
