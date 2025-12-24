@@ -25,17 +25,33 @@ export class FrontendRedeployService implements OnModuleInit {
   constructor(private readonly timewebAppsService: TimewebAppsService) {}
 
   async onModuleInit() {
+    // Даем время для инициализации TimewebAppsService
+    // (может быть проблема с порядком инициализации модулей)
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
     const scheduleInfo = this.timewebAppsService.getScheduleInfo();
+    const frontendIp = this.timewebAppsService.getFrontendIp() || "NOT SET";
 
     // Детальное логирование для диагностики
     this.logger.log(
       `Initializing frontend redeploy scheduler. ` +
-        `FRONTEND_IP configured: ${scheduleInfo.isActive ? "YES" : "NO"}, ` +
+        `FRONTEND_IP=${frontendIp}, ` +
         `Frontend app ID: ${scheduleInfo.frontendAppId || "NOT FOUND"}, ` +
-        `Frontend app name: ${scheduleInfo.frontendAppName || "NOT FOUND"}`
+        `Frontend app name: ${scheduleInfo.frontendAppName || "NOT FOUND"}, ` +
+        `isActive=${scheduleInfo.isActive}`
     );
 
-    if (scheduleInfo.isActive) {
+    // Если приложение найдено (есть ID и название), активируем планировщик автоматически
+    // даже если isActive еще false из-за порядка инициализации
+    if (scheduleInfo.frontendAppId && scheduleInfo.frontendAppName && frontendIp !== "NOT SET") {
+      this.isSchedulerActive = true;
+      this.logger.log(
+        `Frontend auto-redeploy scheduler ACTIVE (auto-activated). ` +
+          `App: ${scheduleInfo.frontendAppName} (id: ${scheduleInfo.frontendAppId}). ` +
+          `Interval: every ${scheduleInfo.redeployIntervalHours} hours. ` +
+          `Next redeploy: ${scheduleInfo.nextRedeployAt?.toISOString() || "unknown"}`
+      );
+    } else if (scheduleInfo.isActive) {
       this.isSchedulerActive = true;
       this.logger.log(
         `Frontend auto-redeploy scheduler ACTIVE. ` +
@@ -44,38 +60,34 @@ export class FrontendRedeployService implements OnModuleInit {
           `Next redeploy: ${scheduleInfo.nextRedeployAt?.toISOString() || "unknown"}`
       );
     } else {
-      // Детальное логирование причин неактивности
-      const frontendIp = this.timewebAppsService.getFrontendIp() || "NOT SET";
-      const cachedAppId = scheduleInfo.frontendAppId;
-
+      // Попытка найти приложение заново для диагностики и активации
       this.logger.warn(
         "Frontend auto-redeploy scheduler INACTIVE. " +
           `FRONTEND_IP=${frontendIp}, ` +
-          `Cached app ID=${cachedAppId || "null"}, ` +
+          `Cached app ID=${scheduleInfo.frontendAppId || "null"}, ` +
           `Cached app name=${scheduleInfo.frontendAppName || "null"}. ` +
-          "Either FRONTEND_IP is not configured or frontend app was not found during initialization."
+          "Attempting to find application..."
       );
 
-      // Попытка найти приложение заново для диагностики и активации
       try {
         const app = await this.timewebAppsService.findFrontendApp();
         if (app) {
-          // Если приложение найдено, активируем планировщик
+          // Если приложение найдено, активируем планировщик автоматически
           const newScheduleInfo = this.timewebAppsService.getScheduleInfo();
-          if (newScheduleInfo.isActive) {
+          if (newScheduleInfo.frontendAppId && newScheduleInfo.frontendAppName) {
             this.isSchedulerActive = true;
             this.logger.log(
               `Frontend app found on retry: id=${app.id}, name="${app.name}", ` +
                 `IP=${app.ip}, status="${app.status}". ` +
-                `Scheduler ACTIVATED. Interval: every ${newScheduleInfo.redeployIntervalHours} hours. ` +
+                `Scheduler AUTO-ACTIVATED. Interval: every ${newScheduleInfo.redeployIntervalHours} hours. ` +
                 `Next redeploy: ${newScheduleInfo.nextRedeployAt?.toISOString() || "unknown"}`
             );
           } else {
             this.logger.warn(
               `Frontend app found on retry: id=${app.id}, name="${app.name}", ` +
                 `IP=${app.ip}, status="${app.status}". ` +
-                `But scheduler remains inactive (isActive=${newScheduleInfo.isActive}, ` +
-                `cachedAppId=${newScheduleInfo.frontendAppId}, frontendIp=${frontendIp}).`
+                `But scheduler remains inactive (cachedAppId=${newScheduleInfo.frontendAppId}, ` +
+                `cachedAppName=${newScheduleInfo.frontendAppName}).`
             );
           }
         } else {
@@ -162,6 +174,8 @@ export class FrontendRedeployService implements OnModuleInit {
 
   /**
    * Получить статус планировщика
+   * 
+   * Автоматически активирует планировщик, если приложение найдено
    */
   getSchedulerStatus(): {
     isActive: boolean;
@@ -173,6 +187,17 @@ export class FrontendRedeployService implements OnModuleInit {
     intervalHours: number;
   } {
     const scheduleInfo = this.timewebAppsService.getScheduleInfo();
+    const frontendIp = this.timewebAppsService.getFrontendIp();
+    
+    // Автоматически активируем планировщик, если приложение найдено
+    // (даже если он был неактивен из-за порядка инициализации)
+    if (!this.isSchedulerActive && scheduleInfo.frontendAppId && scheduleInfo.frontendAppName && frontendIp) {
+      this.isSchedulerActive = true;
+      this.logger.log(
+        `Scheduler auto-activated: app found (id=${scheduleInfo.frontendAppId}, name="${scheduleInfo.frontendAppName}")`
+      );
+    }
+    
     const secondsUntilNext =
       this.timewebAppsService.getSecondsUntilNextRedeploy();
 
