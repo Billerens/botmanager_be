@@ -70,7 +70,7 @@ export class BotManagerWebSocketGateway
   /**
    * Инициализация Gateway после создания сервера
    */
-  async afterInit(server: Server) {
+  async afterInit() {
     this.logger.log("WebSocket Gateway инициализирован");
 
     // Настройка Redis адаптера для масштабируемости
@@ -91,7 +91,7 @@ export class BotManagerWebSocketGateway
         this.redisSubClient.connect(),
       ]);
 
-      server.server.adapter(
+      this.server.adapter(
         createAdapter(this.redisPubClient, this.redisSubClient)
       );
       this.logger.log("Redis адаптер для Socket.IO настроен успешно");
