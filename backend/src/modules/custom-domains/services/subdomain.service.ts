@@ -1,7 +1,12 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Inject, forwardRef } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { TimewebDnsService } from "./timeweb-dns.service";
+import { TimewebAppsService } from "./timeweb-apps.service";
 import { SubdomainStatus, SubdomainType } from "../enums/domain-status.enum";
+import {
+  SubdomainStatusData,
+  SubdomainStatusHelper,
+} from "../interfaces/subdomain-status.interface";
 
 /**
  * Результат регистрации субдомена
@@ -66,10 +71,74 @@ export class SubdomainService {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly timewebDns: TimewebDnsService
+    private readonly timewebDns: TimewebDnsService,
+    @Inject(forwardRef(() => TimewebAppsService))
+    private readonly timewebApps: TimewebAppsService
   ) {
     this.baseDomain =
       this.configService.get<string>("BASE_DOMAIN") || "botmanagertest.online";
+  }
+
+  // ============================================================================
+  // ИНФОРМАЦИЯ О РЕДЕПЛОЕ
+  // ============================================================================
+
+  /**
+   * Получить информацию о планируемом редеплое для статуса субдомена
+   */
+  getRedeployInfo(): {
+    nextRedeployAt: string | null;
+    secondsUntilRedeploy: number | null;
+    redeployIntervalHours: number | null;
+  } {
+    const scheduleInfo = this.timewebApps.getScheduleInfo();
+
+    if (!scheduleInfo.isActive) {
+      return {
+        nextRedeployAt: null,
+        secondsUntilRedeploy: null,
+        redeployIntervalHours: null,
+      };
+    }
+
+    return {
+      nextRedeployAt: scheduleInfo.nextRedeployAt?.toISOString() || null,
+      secondsUntilRedeploy: this.timewebApps.getSecondsUntilNextRedeploy(),
+      redeployIntervalHours: scheduleInfo.redeployIntervalHours,
+    };
+  }
+
+  /**
+   * Сформировать полные данные статуса субдомена
+   *
+   * Объединяет информацию о субдомене с информацией о планируемом редеплое.
+   */
+  buildStatusData(params: {
+    slug: string | null;
+    status: SubdomainStatus | null;
+    url: string | null;
+    error: string | null;
+    activatedAt: Date | null;
+  }): SubdomainStatusData {
+    const redeployInfo = this.getRedeployInfo();
+
+    // Формируем сообщение об ожидании с учётом информации о редеплое
+    const estimatedWaitMessage = SubdomainStatusHelper.getEstimatedWaitMessage(
+      params.status,
+      redeployInfo.secondsUntilRedeploy
+    );
+
+    return {
+      slug: params.slug,
+      status: params.status,
+      url: params.url,
+      error: params.error,
+      activatedAt: params.activatedAt,
+      estimatedWaitMessage,
+      nextRedeployAt: redeployInfo.nextRedeployAt,
+      secondsUntilRedeploy: redeployInfo.secondsUntilRedeploy,
+      redeployIntervalHours: redeployInfo.redeployIntervalHours,
+    };
   }
 
   /**

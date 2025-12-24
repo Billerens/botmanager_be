@@ -510,38 +510,18 @@ export class ShopsService {
    * Получить статус субдомена магазина
    *
    * Статус обновляется фоновым сервисом SubdomainHealthService каждые 30 секунд.
+   * Включает информацию о времени до следующего редеплоя для активации SSL.
    */
-  async getSubdomainStatus(
-    id: string,
-    userId: string
-  ): Promise<{
-    slug: string | null;
-    status: SubdomainStatus | null;
-    url: string | null;
-    error: string | null;
-    activatedAt: Date | null;
-    estimatedWaitMessage: string | null;
-  }> {
+  async getSubdomainStatus(id: string, userId: string) {
     const shop = await this.findOne(id, userId);
 
-    let estimatedWaitMessage: string | null = null;
-    if (
-      shop.subdomainStatus === SubdomainStatus.PENDING ||
-      shop.subdomainStatus === SubdomainStatus.DNS_CREATING ||
-      shop.subdomainStatus === SubdomainStatus.ACTIVATING
-    ) {
-      estimatedWaitMessage =
-        "Субдомен активируется. Время ожидания может варьироваться от 1 до 5 минут.";
-    }
-
-    return {
+    return this.subdomainService.buildStatusData({
       slug: shop.slug || null,
       status: shop.subdomainStatus || null,
       url: shop.subdomainUrl || null,
       error: shop.subdomainError || null,
       activatedAt: shop.subdomainActivatedAt || null,
-      estimatedWaitMessage,
-    };
+    });
   }
 
   /**

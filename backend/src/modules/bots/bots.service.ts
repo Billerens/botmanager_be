@@ -922,37 +922,22 @@ export class BotsService {
    *
    * Статус обновляется фоновым сервисом SubdomainHealthService каждые 30 секунд.
    */
-  async getSubdomainStatus(
-    botId: string,
-    userId: string
-  ): Promise<{
-    slug: string | null;
-    status: SubdomainStatus | null;
-    url: string | null;
-    error: string | null;
-    activatedAt: Date | null;
-    estimatedWaitMessage: string | null;
-  }> {
+  /**
+   * Получить статус субдомена бота
+   *
+   * Статус обновляется фоновым сервисом SubdomainHealthService каждые 30 секунд.
+   * Включает информацию о времени до следующего редеплоя для активации SSL.
+   */
+  async getSubdomainStatus(botId: string, userId: string) {
     const bot = await this.findOne(botId, userId);
 
-    let estimatedWaitMessage: string | null = null;
-    if (
-      bot.subdomainStatus === SubdomainStatus.PENDING ||
-      bot.subdomainStatus === SubdomainStatus.DNS_CREATING ||
-      bot.subdomainStatus === SubdomainStatus.ACTIVATING
-    ) {
-      estimatedWaitMessage =
-        "Субдомен активируется. Время ожидания может варьироваться от 30 секунд до нескольких минут.";
-    }
-
-    return {
+    return this.subdomainService.buildStatusData({
       slug: bot.slug || null,
       status: bot.subdomainStatus || null,
       url: bot.subdomainUrl ? `https://${bot.subdomainUrl}` : null,
       error: bot.subdomainError || null,
       activatedAt: bot.subdomainActivatedAt || null,
-      estimatedWaitMessage,
-    };
+    });
   }
 
   /**

@@ -1240,18 +1240,9 @@ export class CustomPagesService {
    * Получить статус субдомена страницы
    *
    * Статус обновляется фоновым сервисом SubdomainHealthService каждые 30 секунд.
+   * Включает информацию о времени до следующего редеплоя для активации SSL.
    */
-  async getSubdomainStatus(
-    pageId: string,
-    userId: string
-  ): Promise<{
-    slug: string | null;
-    status: SubdomainStatus | null;
-    url: string | null;
-    error: string | null;
-    activatedAt: Date | null;
-    estimatedWaitMessage: string | null;
-  }> {
+  async getSubdomainStatus(pageId: string, userId: string) {
     const page = await this.customPageRepository.findOne({
       where: { id: pageId, ownerId: userId },
     });
@@ -1260,24 +1251,13 @@ export class CustomPagesService {
       throw new NotFoundException("Страница не найдена");
     }
 
-    let estimatedWaitMessage: string | null = null;
-    if (
-      page.subdomainStatus === SubdomainStatus.PENDING ||
-      page.subdomainStatus === SubdomainStatus.DNS_CREATING ||
-      page.subdomainStatus === SubdomainStatus.ACTIVATING
-    ) {
-      estimatedWaitMessage =
-        "Субдомен активируется. Время ожидания может варьироваться от 30 секунд до нескольких минут.";
-    }
-
-    return {
+    return this.subdomainService.buildStatusData({
       slug: page.slug || null,
       status: page.subdomainStatus || null,
       url: page.subdomainUrl ? `https://${page.subdomainUrl}` : null,
       error: page.subdomainError || null,
       activatedAt: page.subdomainActivatedAt || null,
-      estimatedWaitMessage,
-    };
+    });
   }
 
   /**
