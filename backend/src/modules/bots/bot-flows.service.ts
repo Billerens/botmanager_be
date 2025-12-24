@@ -152,19 +152,12 @@ export class BotFlowsService {
 
       // Сначала сохраняем flow
       const savedFlow = await this.botFlowRepository.save(flow);
-      console.log("Flow сохранен с ID:", savedFlow.id);
 
       // Удаляем старые узлы и создаем новые
-      console.log("Удаляем старые узлы для flow:", savedFlow.id);
-      const deleteResult = await this.botFlowNodeRepository.delete({
+      await this.botFlowNodeRepository.delete({
         flowId: savedFlow.id,
       });
-      console.log("Удалено узлов:", deleteResult.affected);
 
-      console.log(
-        "Создаем новые узлы:",
-        updateFlowDto.flowData.nodes?.length || 0
-      );
       await this.createFlowNodes(savedFlow.id, updateFlowDto.flowData.nodes);
 
       // Если Flow активен, сбрасываем все сессии бота
@@ -333,15 +326,8 @@ export class BotFlowsService {
 
   private async createFlowNodes(flowId: string, nodes: any[]): Promise<void> {
     if (!nodes || nodes.length === 0) {
-      console.log("Нет узлов для создания");
       return;
     }
-
-    console.log("Создаем узлы для flowId:", flowId);
-    console.log(
-      "Узлы:",
-      nodes.map((n) => ({ id: n.id, type: n.type }))
-    );
 
     const flowNodes = nodes.map((node) => {
       // Маппим строковые типы на enum
@@ -356,13 +342,10 @@ export class BotFlowsService {
         data: node.data,
       };
 
-      console.log("Создаем узел:", nodeData);
       return this.botFlowNodeRepository.create(nodeData);
     });
 
-    console.log("Сохраняем узлы в базу...");
     await this.botFlowNodeRepository.save(flowNodes);
-    console.log("Узлы сохранены успешно");
   }
 
   private mapStringToNodeType(type: string): NodeType {

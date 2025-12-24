@@ -55,7 +55,6 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     processedFlatButtons: KeyboardButton[]
   ): Promise<any> {
     if (imageUrl) {
-      this.logger.log(`Отправляем фото с клавиатурой: ${imageUrl}`);
       return await this.sendAndSavePhoto(bot, chatId, imageUrl, {
         caption: messageText || undefined,
         parse_mode: messageText ? messageOptions.parse_mode : undefined,
@@ -67,9 +66,6 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       // Проверяем длину сообщения и выбираем подходящий метод отправки
       if (messageText.length > 4096) {
         // Для длинных сообщений используем sendLongMessage напрямую
-        this.logger.log(
-          `Сообщение длинное (${messageText.length} символов), используем sendLongMessage`
-        );
         const messageResults = await this.telegramService.sendLongMessage(
           decryptedToken,
           chatId,
@@ -158,8 +154,6 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
   async execute(context: FlowContext): Promise<void> {
     const { currentNode, bot, message, session } = context;
 
-    this.logger.log("Keyboard node data:", JSON.stringify(currentNode.data));
-
     // Если это callback запрос, сначала проверяем, относится ли он к текущей ноде
     let isCallbackForCurrentKeyboard = false;
     if (message.is_callback && message.callback_query) {
@@ -168,10 +162,6 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
         session.variables[`keyboard_${currentNode.nodeId}_sent_message_id`];
       const callbackMessageId =
         message.callback_query.message?.message_id?.toString();
-
-      this.logger.log(
-        `Проверка callback: сохраненный message_id=${savedMessageId}, callback message_id=${callbackMessageId}`
-      );
 
       // Callback относится к текущей ноде только если message_id совпадает
       isCallbackForCurrentKeyboard = callbackMessageId === savedMessageId;
@@ -205,18 +195,6 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
           session.variables[`keyboard_${currentNode.nodeId}_callback_chat_id`] =
             message.callback_query.message.chat?.id?.toString();
         }
-
-        this.logger.log(
-          `Callback данные сохранены для ноды ${currentNode.nodeId}: ${message.callback_query.data}`
-        );
-        this.logger.log(`Callback ID: ${message.callback_query.id}`);
-        this.logger.log(
-          `Callback от пользователя: ${message.callback_query.from?.id}`
-        );
-      } else {
-        this.logger.log(
-          `Callback не относится к текущей ноде ${currentNode.nodeId}, пропускаем сохранение данных`
-        );
       }
     }
 
@@ -232,15 +210,9 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     const isPersistent = currentNode.data?.isPersistent ?? false; // По умолчанию не постоянная
     const resizeKeyboard = currentNode.data?.resizeKeyboard ?? true; // По умолчанию автоматический размер
 
-    this.logger.log(`Изображение: ${imageUrl || "отсутствует"}`);
-
     // Нормализуем кнопки (поддержка обоих форматов)
     const buttonRows = this.normalizeButtons(buttons);
     const flatButtons = this.flattenButtons(buttonRows);
-
-    this.logger.log(
-      `Кнопок рядов: ${buttonRows.length}, всего кнопок: ${flatButtons.length}`
-    );
 
     // Валидация кнопок
     if (flatButtons.length === 0) {
@@ -274,12 +246,6 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       .filter((row) => row.length > 0); // Убираем пустые ряды
 
     const processedFlatButtons = this.flattenButtons(processedButtonRows);
-
-    this.logger.log("Keyboard buttons:", JSON.stringify(processedButtonRows));
-    this.logger.log("Is inline:", String(isInline));
-    this.logger.log("Parse mode:", parseMode || "не указан");
-    this.logger.log(`Исходный текст: "${rawMessageText}"`);
-    this.logger.log(`Обработанный текст: "${messageText}"`);
 
     // Создаем клавиатуру напрямую из двумерного массива
     let telegramKeyboard;
@@ -336,10 +302,6 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     if (message.is_callback && message.callback_query) {
       // Используем результат проверки, выполненной в начале функции
       if (!isCallbackForCurrentKeyboard) {
-        this.logger.log(
-          `Callback_query не относится к текущему keyboard узлу ${currentNode.nodeId}, отправляем клавиатуру`
-        );
-
         // Отправляем сообщение и сохраняем message_id
         const telegramResponse = await this.sendMessageWithKeyboard(
           bot,
@@ -354,10 +316,6 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
           // Сохраняем message_id отправленного сообщения для текущей ноды
           session.variables[`keyboard_${currentNode.nodeId}_sent_message_id`] =
             telegramResponse.message_id.toString();
-
-          this.logger.log(
-            `Сообщение отправлено, message_id сохранен: ${telegramResponse.message_id}`
-          );
         }
 
         // Проверяем, есть ли хотя бы одна кнопка с callbackData
@@ -366,32 +324,21 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
         );
 
         if (!hasCallbackButtons && processedFlatButtons.length > 0) {
-          this.logger.log(
-            `Все кнопки URL/webApp без callback - автоматически переходим к следующему узлу`
-          );
           await this.moveToNextNodeByOutput(
             context,
             currentNode.nodeId,
             "button-0"
           );
-        } else {
-          this.logger.log(`Keyboard узел завершен, ожидаем выбор пользователя`);
         }
         return;
       }
 
       // Находим индекс нажатой кнопки
       const pressedButtonData = message.callback_query.data;
-      this.logger.log(`Нажата кнопка с данными: ${pressedButtonData}`);
-      this.logger.log(
-        `Доступные кнопки: ${JSON.stringify(processedFlatButtons.map((b) => ({ text: b.text, callbackData: b.callbackData })))}`
-      );
 
       const buttonIndex = processedFlatButtons.findIndex(
         (button) => button.callbackData === pressedButtonData
       );
-
-      this.logger.log(`Найден индекс кнопки: ${buttonIndex}`);
 
       // Очищаем callback_query и text из сообщения перед переходом к следующему узлу
       // чтобы следующий узел не пытался обработать этот callback и не получил текст кнопки как ввод пользователя
@@ -405,7 +352,6 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       try {
         if (buttonIndex !== -1) {
           // Переходим к узлу, подключенному к соответствующему выходу
-          this.logger.log(`Переходим к выходу button-${buttonIndex}`);
           await this.moveToNextNodeByOutput(
             context,
             currentNode.nodeId,
@@ -413,9 +359,6 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
           );
         } else {
           // Если кнопка не найдена, переходим к первому выходу
-          this.logger.warn(
-            `Кнопка с данными ${pressedButtonData} не найдена, переходим к button-0`
-          );
           await this.moveToNextNodeByOutput(
             context,
             currentNode.nodeId,
@@ -431,21 +374,14 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       }
     } else {
       // Если это обычное сообщение
-      this.logger.log(`Получено обычное сообщение: "${message.text}"`);
-
       // Для обычных клавиатур (inline = false) проверяем, соответствует ли текст сообщения кнопке
       if (!isInline && message.text && message.text.trim()) {
         const pressedButtonText = message.text.trim();
-        this.logger.log(
-          `Проверяем, соответствует ли текст "${pressedButtonText}" кнопке`
-        );
 
         // Находим индекс кнопки по тексту
         const buttonIndex = processedFlatButtons.findIndex(
           (button) => button.text.trim() === pressedButtonText
         );
-
-        this.logger.log(`Найден индекс кнопки: ${buttonIndex}`);
 
         if (buttonIndex !== -1) {
           // Нашли кнопку - очищаем текст сообщения перед переходом к следующему узлу
@@ -455,9 +391,6 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
           try {
             // Переходим к узлу, подключенному к соответствующему выходу
-            this.logger.log(
-              `Найдена кнопка "${pressedButtonText}", переходим к выходу button-${buttonIndex}`
-            );
             await this.moveToNextNodeByOutput(
               context,
               currentNode.nodeId,
@@ -468,16 +401,10 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
             message.text = originalText;
           }
           return;
-        } else {
-          // Кнопка не найдена - отправляем клавиатуру и ждем выбора
-          this.logger.log(
-            `Кнопка с текстом "${pressedButtonText}" не найдена, отправляем клавиатуру`
-          );
         }
       }
 
       // Отправляем клавиатуру и ждем выбора пользователя
-      this.logger.log(`Отправляем клавиатуру и ждем выбора пользователя`);
 
       // Отправляем сообщение и сохраняем message_id
       const telegramResponse = await this.sendMessageWithKeyboard(
@@ -493,10 +420,6 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
         // Сохраняем message_id отправленного сообщения для текущей ноды
         session.variables[`keyboard_${currentNode.nodeId}_sent_message_id`] =
           telegramResponse.message_id.toString();
-
-        this.logger.log(
-          `Сообщение отправлено, message_id сохранен: ${telegramResponse.message_id}`
-        );
       }
 
       // Проверяем, есть ли хотя бы одна кнопка с callbackData
@@ -507,19 +430,14 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       );
 
       if (!hasCallbackButtons && processedFlatButtons.length > 0) {
-        this.logger.log(
-          `Все кнопки URL/webApp без callback - автоматически переходим к следующему узлу`
-        );
         // Переходим к первому выходу или default
         await this.moveToNextNodeByOutput(
           context,
           currentNode.nodeId,
           "button-0"
         );
-      } else {
-        // НЕ переходим к следующему узлу - ждем callback запрос
-        this.logger.log(`Keyboard узел завершен, ожидаем выбор пользователя`);
       }
+      // Иначе - ждем callback запрос
     }
   }
 }

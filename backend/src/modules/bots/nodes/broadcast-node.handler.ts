@@ -52,14 +52,8 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
     const broadcast = currentNode.data.broadcast as any;
     const startTime = new Date();
 
-    this.logger.log(
-      `Начинаем выполнение рассылки для ноды ${currentNode.nodeId}`
-    );
-
     // Подставляем переменные в текст
     const processedText = this.substituteVariables(broadcast.text, context);
-
-    this.logger.log(`Текст после подстановки переменных: ${processedText}`);
 
     // Получаем список получателей
     let recipientChatIds: string[] = [];
@@ -182,10 +176,6 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
           break;
       }
 
-      this.logger.log(
-        `Найдено ${recipientChatIds.length} получателей для рассылки`
-      );
-
       // Отправляем сообщения
       let sentCount = 0;
       let failedCount = 0;
@@ -223,15 +213,11 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
 
       for (const chatId of recipientChatIds) {
         try {
-          this.logger.log(`Отправка сообщения пользователю ${chatId}`);
           const decryptedToken = this.botsService.decryptToken(bot.token);
           let result = null;
 
           // Если есть изображение - отправляем фото с caption
           if (broadcast.image) {
-            this.logger.log(
-              `Отправляем фото пользователю ${chatId} с URL: ${broadcast.image}`
-            );
             // Для изображений с caption не используем sendLongMessage - Telegram ограничивает caption 1024 символами
             result = await this.telegramService.sendPhoto(
               decryptedToken,
@@ -261,23 +247,14 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
 
           if (result) {
             sentCount++;
-            this.logger.log(
-              `✅ Сообщение ${broadcast.image ? "с фото " : ""}отправлено пользователю ${chatId}`
-            );
           } else {
             failedCount++;
-            this.logger.warn(
-              `❌ Не удалось отправить сообщение пользователю ${chatId}`
-            );
           }
 
           // Добавляем небольшую задержку между отправками (защита от rate limit)
           await new Promise((resolve) => setTimeout(resolve, 50));
         } catch (error) {
           failedCount++;
-          this.logger.error(
-            `Ошибка отправки сообщения пользователю ${chatId}: ${error.message}`
-          );
         }
       }
 
@@ -300,12 +277,7 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
         completedTime.toISOString();
       session.variables[`broadcast_${currentNode.nodeId}_recipient_type`] =
         broadcast.recipientType || "all";
-
-      this.logger.log(
-        `Рассылка завершена: отправлено ${sentCount}, ошибок ${failedCount} из ${recipientChatIds.length} получателей`
-      );
     } catch (error) {
-      this.logger.error(`Ошибка при выполнении рассылки: ${error.message}`);
       session.variables[`broadcast_${currentNode.nodeId}_status`] = "failed";
       session.variables[`broadcast_${currentNode.nodeId}_error`] =
         error.message;

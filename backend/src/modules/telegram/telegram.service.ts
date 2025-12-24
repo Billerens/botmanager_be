@@ -104,19 +104,11 @@ export class TelegramService {
     try {
       const webhookUrl = `${this.configService.get("app.webhookBaseUrl")}/telegram/webhook/${botId}`;
 
-      console.log("Setting webhook:", {
-        token: token.substring(0, 10) + "...",
-        botId,
-        webhookUrl,
-        baseUrl: this.baseUrl,
-      });
-
       const response = await axios.post(`${this.baseUrl}${token}/setWebhook`, {
         url: webhookUrl,
         allowed_updates: ["message", "callback_query"],
       });
 
-      console.log("Webhook response:", response.data);
       return response.data.ok;
     } catch (error) {
       console.error("Ошибка установки webhook:", {
@@ -164,13 +156,6 @@ export class TelegramService {
           command: "shop",
           description: commandSettings?.description || "🛒 Открыть магазин",
         });
-        console.log(
-          `Добавлена команда /shop для бота ${bot.id} (shopId=${shop.id}, buttonTypes=${JSON.stringify(shop.buttonTypes)})`
-        );
-      } else {
-        console.log(
-          `Команда /shop НЕ добавлена для бота ${bot.id}: shop=${shop?.id || "null"}, buttonTypes=${JSON.stringify(shop?.buttonTypes)}`
-        );
       }
 
       // Добавляем команду бронирования если оно включено и команда настроена
@@ -180,13 +165,6 @@ export class TelegramService {
           command: "booking",
           description: commandSettings?.description || "📅 Записаться на прием",
         });
-        console.log(
-          `Добавлена команда /booking для бота ${bot.id} (isBookingEnabled=${bot.isBookingEnabled}, bookingButtonTypes=${JSON.stringify(bot.bookingButtonTypes)})`
-        );
-      } else {
-        console.log(
-          `Команда /booking НЕ добавлена для бота ${bot.id}: isBookingEnabled=${bot.isBookingEnabled}, bookingButtonTypes=${JSON.stringify(bot.bookingButtonTypes)}`
-        );
       }
 
       // Добавляем команды custom pages
@@ -194,11 +172,6 @@ export class TelegramService {
         const pageCommands =
           await this.customPagesBotService.generateBotCommands(bot.id);
         commands.push(...pageCommands);
-        if (pageCommands.length > 0) {
-          console.log(
-            `Добавлены команды custom pages для бота ${bot.id}: ${pageCommands.map((c) => `/${c.command}`).join(", ")}`
-          );
-        }
       } catch (error) {
         console.error(
           `Ошибка при добавлении команд custom pages для бота ${bot.id}:`,
@@ -213,8 +186,6 @@ export class TelegramService {
           scope: { type: "default" },
         }
       );
-
-      console.log("Bot commands установлены:", commands);
 
       // Определяем, какой Menu Button должен быть активен
       const hasShopMenuButton =
@@ -267,15 +238,8 @@ export class TelegramService {
           },
         },
       });
-
-      console.log("Menu button set successfully");
     } catch (error) {
       console.error("Ошибка установки Menu Button:", error.message);
-      // Добавляем более детальную информацию об ошибке
-      if (error.response) {
-        console.error("Response data:", error.response.data);
-        console.error("Response status:", error.response.status);
-      }
     }
   }
 
@@ -306,15 +270,8 @@ export class TelegramService {
           },
         },
       });
-
-      console.log("Booking Menu button set successfully");
     } catch (error) {
       console.error("Ошибка установки Booking Menu Button:", error.message);
-      // Добавляем более детальную информацию об ошибке
-      if (error.response) {
-        console.error("Response data:", error.response.data);
-        console.error("Response status:", error.response.status);
-      }
     }
   }
 
@@ -331,15 +288,8 @@ export class TelegramService {
 
       // Для очистки Menu Button передаем запрос без тела
       await axios.post(`${this.baseUrl}${token}/setChatMenuButton`);
-
-      console.log("Menu button cleared successfully");
     } catch (error) {
       console.error("Ошибка очистки Menu Button:", error.message);
-      // Добавляем более детальную информацию об ошибке
-      if (error.response) {
-        console.error("Response data:", error.response.data);
-        console.error("Response status:", error.response.status);
-      }
     }
   }
 
@@ -363,12 +313,6 @@ export class TelegramService {
       // }
 
       const url = `${this.baseUrl}${token}/sendMessage`;
-      console.log(`Отправляем сообщение на URL: ${url}`);
-      console.log(`Данные:`, {
-        chat_id: chatId,
-        text: processedText.substring(0, 50) + "...",
-        ...options,
-      });
 
       const response = await axios.post(url, {
         chat_id: chatId,
@@ -376,12 +320,10 @@ export class TelegramService {
         ...options,
       });
 
-      console.log(`Ответ Telegram API:`, response.data);
       return response.data.ok ? response.data.result : null;
     } catch (error) {
       // Проверяем, является ли ошибка "text is too long"
       if (error.response?.data?.description?.includes("text is too long")) {
-        console.log("Текст слишком длинный, используем sendLongMessage");
         // Для длинных сообщений отключаем parse_mode, так как разбитые части могут содержать невалидную разметку
         const plainOptions = { ...options };
         delete plainOptions.parse_mode;
@@ -401,9 +343,6 @@ export class TelegramService {
         error.response?.data?.description?.includes("Unsupported start tag") ||
         error.response?.data?.description?.includes("Bad Request: can't parse")
       ) {
-        console.log(
-          "Parse mode содержит неподдерживаемые конструкции, отправляем как обычный текст"
-        );
         // Отправляем без parse_mode
         const plainOptions = { ...options };
         delete plainOptions.parse_mode;
@@ -411,14 +350,10 @@ export class TelegramService {
         return await this.sendMessage(token, chatId, text, plainOptions);
       }
 
-      console.error("Ошибка отправки сообщения:", {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        url: `${this.baseUrl}${token.substring(0, 10)}.../sendMessage`,
-        chatId,
-      });
+      console.error(
+        "Ошибка отправки сообщения:",
+        error.response?.data?.description || error.message
+      );
       return null;
     }
   }
@@ -461,8 +396,6 @@ export class TelegramService {
 
     // Разбиваем текст на части по границам слов
     const parts = this.splitTextIntoParts(processedText, MAX_MESSAGE_LENGTH);
-
-    console.log(`Текст разбит на ${parts.length} частей для отправки`);
 
     // Отправляем каждую часть как отдельное сообщение
     // Для разбитых сообщений отключаем parse_mode, так как части могут содержать невалидную разметку

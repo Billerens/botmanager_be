@@ -53,11 +53,6 @@ export class EndpointNodeHandler extends BaseNodeHandler {
     const endpointConfig = currentNode.data.endpoint;
     const { url, accessKey } = endpointConfig;
 
-    this.logger.log(`=== ENDPOINT УЗЕЛ ВЫПОЛНЕНИЕ ===`);
-    this.logger.log(`Узел ID: ${currentNode.nodeId}`);
-    this.logger.log(`Пользователь: ${session.userId}`);
-    this.logger.log(`URL: ${url}`);
-
     // ВАЖНО: Устанавливаем currentNodeId на эту ноду, чтобы flow знал, где мы находимся
     // Это необходимо, т.к. мы можем остановиться здесь в ожидании данных
     session.currentNodeId = currentNode.nodeId;
@@ -87,11 +82,6 @@ export class EndpointNodeHandler extends BaseNodeHandler {
       `${process.env.BACKEND_URL || "http://localhost:3000"}${endpointUrl}`;
     session.variables[`endpoint_${currentNode.nodeId}_created`] = "true";
 
-    this.logger.log(`Эндпоинт создан: ${endpointUrl}`);
-    this.logger.log(
-      `Полный URL: ${session.variables[`endpoint_${currentNode.nodeId}_full_url`]}`
-    );
-
     // Проверяем, есть ли данные в глобальном хранилище эндпоинтов
     const storedEndpointData = this.flowExecutionService.getEndpointData(
       context.bot.id,
@@ -99,27 +89,12 @@ export class EndpointNodeHandler extends BaseNodeHandler {
     );
 
     if (storedEndpointData) {
-      this.logger.log(
-        `Найдены данные в глобальном хранилище эндпоинта (получено запросов: ${storedEndpointData.requestCount})`
-      );
-
       // Загружаем данные из глобального хранилища в переменные сессии
       Object.assign(session.variables, storedEndpointData.data);
-
-      this.logger.log(
-        `Данные из глобального хранилища загружены в сессию пользователя ${session.userId}`
-      );
 
       // Переходим к следующему узлу только если данные уже есть
       await this.moveToNextNode(context, currentNode.nodeId);
     } else {
-      this.logger.log(
-        `Данные в глобальном хранилище эндпоинта не найдены. Ожидание запросов на эндпоинт.`
-      );
-      this.logger.log(
-        `Flow остановлен на узле ${currentNode.nodeId}. Ожидается POST запрос на: ${endpointUrl}`
-      );
-
       // Отправляем пользователю информацию об ожидании данных
       const waitingMessage =
         currentNode.data?.endpoint?.waitingMessage ||
@@ -133,13 +108,8 @@ export class EndpointNodeHandler extends BaseNodeHandler {
           waitingMessage,
           { parse_mode: "HTML" }
         );
-        this.logger.log(
-          `Отправлено сообщение об ожидании данных пользователю ${session.userId}`
-        );
       } catch (error) {
-        this.logger.error(
-          `Ошибка при отправке сообщения об ожидании: ${error.message}`
-        );
+        // Ошибка отправки не критична
       }
 
       // НЕ переходим к следующему узлу - flow остановлен и ждет данных

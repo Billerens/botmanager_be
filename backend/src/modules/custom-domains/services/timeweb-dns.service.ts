@@ -127,24 +127,15 @@ export class TimewebDnsService implements OnModuleInit {
       },
     });
 
-    this.logger.log(
-      `Timeweb DNS configured: apiUrl=${this.apiUrl}, baseDomain=${this.baseDomain}, frontendIp=${this.frontendIp || "NOT SET"}`
-    );
   }
 
   async onModuleInit() {
     // Проверяем доступность API при старте
     try {
-      const domain = await this.getDomainInfo();
-      const subdomainsCount = domain?.subdomains?.length || 0;
-      this.logger.log(
-        `Timeweb DNS API available for domain ${this.baseDomain}. Found ${subdomainsCount} existing subdomains.`
-      );
+      await this.getDomainInfo();
     } catch (error) {
-      const status = error.response?.status;
-      const responseData = error.response?.data;
       this.logger.warn(
-        `Timeweb DNS API not available: status=${status}, message=${error.message}, response=${JSON.stringify(responseData)}. Subdomain management will not work.`
+        `Timeweb DNS API not available. Subdomain management will not work.`
       );
     }
   }
@@ -193,9 +184,6 @@ export class TimewebDnsService implements OnModuleInit {
       // Проверяем, существует ли уже такой поддомен
       const existing = await this.findSubdomain(subdomainFqdn);
       if (existing) {
-        this.logger.log(
-          `Subdomain ${subdomainFqdn} already exists (id: ${existing.id})`
-        );
         return existing;
       }
 
@@ -206,23 +194,15 @@ export class TimewebDnsService implements OnModuleInit {
       // POST /domains/{baseDomain}/subdomains/{relative_subdomain_name}
       const requestUrl = `/domains/${this.baseDomain}/subdomains/${relativeName}`;
 
-      this.logger.log(`Creating subdomain: POST ${this.apiUrl}${requestUrl}`);
-
       const response =
         await this.client.post<TimewebCreateSubdomainResponse>(requestUrl);
 
       const subdomain = response.data.subdomain;
-      this.logger.log(
-        `Created subdomain: ${subdomain.fqdn} (id: ${subdomain.id})`
-      );
 
       return subdomain;
     } catch (error) {
       // 409 Conflict - поддомен уже существует
       if (error.response?.status === 409) {
-        this.logger.log(
-          `Subdomain ${subdomainFqdn} already exists (409 Conflict)`
-        );
         // Пытаемся получить существующий поддомен
         return await this.findSubdomain(subdomainFqdn);
       }
@@ -246,18 +226,12 @@ export class TimewebDnsService implements OnModuleInit {
       // DELETE /domains/{baseDomain}/subdomains/{relative_subdomain_name}
       const requestUrl = `/domains/${this.baseDomain}/subdomains/${relativeName}`;
 
-      this.logger.log(`Deleting subdomain: DELETE ${this.apiUrl}${requestUrl}`);
-
       await this.client.delete(requestUrl);
 
-      this.logger.log(`Deleted subdomain: ${subdomainFqdn}`);
       return true;
     } catch (error) {
       // 404 - поддомен не существует, считаем удалённым
       if (error.response?.status === 404) {
-        this.logger.log(
-          `Subdomain ${subdomainFqdn} not found (404), nothing to delete`
-        );
         return true;
       }
 
@@ -332,19 +306,12 @@ export class TimewebDnsService implements OnModuleInit {
         ...(config.priority !== undefined && { priority: config.priority }),
       };
 
-      this.logger.log(
-        `Creating DNS record: POST ${this.apiUrl}${requestUrl} body=${JSON.stringify(requestBody)}`
-      );
-
       const response = await this.client.post<TimewebCreateDnsResponse>(
         requestUrl,
         requestBody
       );
 
       const recordId = response.data.dns_record?.id;
-      this.logger.log(
-        `Created DNS ${config.type}-record for ${fqdn} → ${config.value} (id: ${recordId})`
-      );
 
       return recordId;
     } catch (error) {
@@ -363,20 +330,12 @@ export class TimewebDnsService implements OnModuleInit {
     try {
       const requestUrl = `/domains/${fqdn}/dns-records/${recordId}`;
 
-      this.logger.log(
-        `Deleting DNS record: DELETE ${this.apiUrl}${requestUrl}`
-      );
-
       await this.client.delete(requestUrl);
 
-      this.logger.log(`Deleted DNS record ${recordId} for ${fqdn}`);
       return true;
     } catch (error) {
       // 404 - запись не существует
       if (error.response?.status === 404) {
-        this.logger.log(
-          `DNS record ${recordId} not found (404), nothing to delete`
-        );
         return true;
       }
 
@@ -395,13 +354,8 @@ export class TimewebDnsService implements OnModuleInit {
       const records = await this.getDnsRecords(subdomainFqdn);
 
       if (records.length === 0) {
-        this.logger.log(`No DNS records found for ${subdomainFqdn}`);
         return true;
       }
-
-      this.logger.log(
-        `Deleting ${records.length} DNS records for ${subdomainFqdn}`
-      );
 
       let allDeleted = true;
       for (const record of records) {
@@ -445,10 +399,7 @@ export class TimewebDnsService implements OnModuleInit {
 
     const subdomainFqdn = this.getFullDomain(slug, type);
 
-    this.logger.log(`Registering subdomain: ${subdomainFqdn}`);
-
     // ШАГ 1: Создать поддомен
-    this.logger.log(`Step 1: Creating subdomain entity ${subdomainFqdn}`);
     const subdomain = await this.createSubdomain(subdomainFqdn);
 
     if (!subdomain) {
@@ -459,9 +410,6 @@ export class TimewebDnsService implements OnModuleInit {
     }
 
     // ШАГ 2: Создать A-запись
-    this.logger.log(
-      `Step 2: Creating A-record for ${subdomainFqdn} → ${this.frontendIp}`
-    );
     const dnsRecordId = await this.createDnsRecord(subdomainFqdn, {
       type: "A",
       value: this.frontendIp,
@@ -469,9 +417,6 @@ export class TimewebDnsService implements OnModuleInit {
 
     if (!dnsRecordId) {
       // Rollback: удаляем созданный поддомен
-      this.logger.warn(
-        `Failed to create DNS record, rolling back subdomain ${subdomainFqdn}`
-      );
       await this.deleteSubdomain(subdomainFqdn);
 
       return {
@@ -479,10 +424,6 @@ export class TimewebDnsService implements OnModuleInit {
         error: `Failed to create DNS A-record for ${subdomainFqdn}`,
       };
     }
-
-    this.logger.log(
-      `Successfully registered subdomain ${subdomainFqdn} (subdomain_id: ${subdomain.id}, dns_record_id: ${dnsRecordId})`
-    );
 
     return {
       success: true,
@@ -504,21 +445,11 @@ export class TimewebDnsService implements OnModuleInit {
   async unregisterSubdomain(slug: string, type: string): Promise<boolean> {
     const subdomainFqdn = this.getFullDomain(slug, type);
 
-    this.logger.log(`Unregistering subdomain: ${subdomainFqdn}`);
-
     // ШАГ 1: Удалить все DNS записи
-    this.logger.log(`Step 1: Deleting DNS records for ${subdomainFqdn}`);
     await this.deleteAllDnsRecords(subdomainFqdn);
 
     // ШАГ 2: Удалить поддомен
-    this.logger.log(`Step 2: Deleting subdomain entity ${subdomainFqdn}`);
     const deleted = await this.deleteSubdomain(subdomainFqdn);
-
-    if (deleted) {
-      this.logger.log(`Successfully unregistered subdomain ${subdomainFqdn}`);
-    } else {
-      this.logger.warn(`Failed to fully unregister subdomain ${subdomainFqdn}`);
-    }
 
     return deleted;
   }

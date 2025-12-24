@@ -63,10 +63,6 @@ export class LangChainOpenRouterService {
     if (this.proxyUrl) {
       this.initializeProxy();
     }
-
-    this.logger.log(
-      `LangChain OpenRouter сервис инициализирован с моделью: ${this.defaultModel}`
-    );
   }
 
   /**
@@ -78,25 +74,16 @@ export class LangChainOpenRouterService {
     }
 
     try {
-      this.logger.log(`Проверка доступности прокси: ${this.proxyUrl}`);
-
       const isAvailable = await this.checkProxyAvailability();
 
       if (isAvailable) {
         this.proxyAgent = new HttpsProxyAgent(this.proxyUrl);
         this.proxyAvailable = true;
-        this.logger.log(`✓ Прокси ${this.proxyUrl} доступен и настроен`);
       } else {
         this.proxyAvailable = false;
-        this.logger.warn(
-          `✗ Прокси ${this.proxyUrl} недоступен, будет использоваться прямое подключение`
-        );
       }
     } catch (error) {
       this.proxyAvailable = false;
-      this.logger.warn(
-        `Ошибка при инициализации прокси: ${error.message}. Используется прямое подключение`
-      );
     }
   }
 
@@ -121,7 +108,6 @@ export class LangChainOpenRouterService {
 
       return response.status >= 200 && response.status < 500;
     } catch (error) {
-      this.logger.debug(`Прокси недоступен: ${error.message}`);
       return false;
     }
   }
@@ -143,13 +129,6 @@ export class LangChainOpenRouterService {
    */
   private createChatModel(modelName?: string, parameters?: any): ChatOpenAI {
     const model = modelName || this.defaultModel;
-
-    this.logger.debug(`Создание ChatOpenAI модели: ${model}`);
-
-    // Логируем использование прокси
-    if (this.proxyAvailable && this.proxyAgent) {
-      this.logger.debug(`Используется прокси: ${this.proxyUrl}`);
-    }
 
     // Формируем заголовки для OpenRouter
     const defaultHeaders: Record<string, string> = {};
@@ -231,10 +210,6 @@ export class LangChainOpenRouterService {
     const startTime = Date.now();
 
     try {
-      this.logger.debug(
-        `Обработка запроса чата с ${request.messages.length} сообщениями`
-      );
-
       // Валидация
       if (!request.messages || request.messages.length === 0) {
         throw new BadRequestException(
@@ -275,10 +250,6 @@ export class LangChainOpenRouterService {
         additionalMetadata: response.response_metadata,
       };
 
-      this.logger.log(
-        `Чат завершен успешно за ${generationTime.toFixed(2)}s. Токены: ${metadata.usage?.totalTokens || "N/A"}`
-      );
-
       return {
         content: response.content as string,
         metadata,
@@ -300,8 +271,6 @@ export class LangChainOpenRouterService {
   async simplePrompt(
     request: SimpleTextRequestDto
   ): Promise<LangChainChatResponseDto> {
-    this.logger.debug(`Обработка простого текстового запроса`);
-
     // Формируем сообщения
     const messages: ChatMessageDto[] = [];
 
@@ -333,8 +302,6 @@ export class LangChainOpenRouterService {
     request: LangChainChatRequestDto
   ): AsyncGenerator<string, void, unknown> {
     try {
-      this.logger.debug(`Начало потоковой генерации`);
-
       // Создаем модель
       const chatModel = this.createChatModel(request.model, request.parameters);
 
@@ -352,8 +319,6 @@ export class LangChainOpenRouterService {
           yield chunk.content as string;
         }
       }
-
-      this.logger.debug(`Потоковая генерация завершена`);
     } catch (error) {
       this.logger.error(
         `Ошибка при потоковой генерации: ${error.message}`,
@@ -373,8 +338,6 @@ export class LangChainOpenRouterService {
     const startTime = Date.now();
 
     try {
-      this.logger.debug(`Выполнение цепочки LangChain`);
-
       // Создаем модель
       const chatModel = this.createChatModel(request.model, request.parameters);
 
@@ -388,10 +351,6 @@ export class LangChainOpenRouterService {
 
       const endTime = Date.now();
       const generationTime = (endTime - startTime) / 1000;
-
-      this.logger.log(
-        `Цепочка выполнена успешно за ${generationTime.toFixed(2)}s`
-      );
 
       return {
         content: response.content as string,
@@ -427,8 +386,6 @@ export class LangChainOpenRouterService {
   async batchProcess(
     requests: LangChainChatRequestDto[]
   ): Promise<LangChainChatResponseDto[]> {
-    this.logger.log(`Начало батч-обработки ${requests.length} запросов`);
-
     try {
       // Обрабатываем запросы последовательно
       const results: LangChainChatResponseDto[] = [];

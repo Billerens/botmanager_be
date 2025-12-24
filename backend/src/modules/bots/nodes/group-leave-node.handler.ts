@@ -48,10 +48,6 @@ export class GroupLeaveNodeHandler extends BaseNodeHandler {
 
     if (!currentNode) return;
 
-    this.logger.log(
-      `Выполнение GROUP_LEAVE узла ${currentNode.nodeId} для пользователя ${session.userId}`
-    );
-
     try {
       const { groupLeave } = currentNode.data;
 
@@ -99,10 +95,6 @@ export class GroupLeaveNodeHandler extends BaseNodeHandler {
       // Очищаем lobbyData (уже очищено в service, но для уверенности)
       session.lobbyData = undefined;
 
-      this.logger.log(
-        `Пользователь ${session.userId} покинул группу ${groupId}`
-      );
-
       // Отправляем подтверждение пользователю
       await this.sendAndSaveMessage(bot, session.chatId, "Вы покинули группу.");
 
@@ -113,7 +105,6 @@ export class GroupLeaveNodeHandler extends BaseNodeHandler {
         const updatedGroup = await this.groupSessionService.findById(groupId);
         if (updatedGroup && updatedGroup.participantCount === 0) {
           await this.groupSessionService.archive(groupId);
-          this.logger.log(`Группа ${groupId} заархивирована (пустая)`);
         }
       }
 

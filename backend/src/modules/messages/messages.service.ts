@@ -191,34 +191,6 @@ export class MessagesService {
       take: limit,
     });
 
-    // Отладочная информация
-    console.log(`Dialog for botId: ${botId}, chatId: ${chatId}`);
-    console.log(`Total messages found: ${total}`);
-    console.log(`Messages on page ${page}: ${messages.length}`);
-
-    if (messages.length > 0) {
-      const messageTypes = messages.reduce(
-        (acc, msg) => {
-          acc[msg.type] = (acc[msg.type] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>
-      );
-      console.log("Message types in dialog:", messageTypes);
-
-      // Показываем примеры сообщений
-      console.log(
-        "Sample messages:",
-        messages.slice(0, 5).map((msg) => ({
-          id: msg.id,
-          type: msg.type,
-          chatId: msg.telegramChatId,
-          text: msg.text?.substring(0, 50) + "...",
-          createdAt: msg.createdAt,
-        }))
-      );
-    }
-
     // Получаем информацию о пользователе из первого сообщения
     const userInfo = messages.length > 0 ? messages[0].metadata : null;
 
@@ -446,9 +418,6 @@ export class MessagesService {
 
     const allMessages = await messagesQuery;
 
-    console.log("All messages found:", allMessages.length);
-    console.log("Chat IDs:", chatIds);
-
     // Группируем сообщения по chatId
     const messagesByChat = new Map<string, Message[]>();
     allMessages.forEach((message) => {
@@ -457,8 +426,6 @@ export class MessagesService {
       }
       messagesByChat.get(message.telegramChatId)!.push(message);
     });
-
-    console.log("Messages by chat:", Array.from(messagesByChat.keys()));
 
     // Получаем первые и последние сообщения
     const lastMessages: Message[] = [];
@@ -637,10 +604,6 @@ export class MessagesService {
       telegramChatId: chatId,
     });
 
-    console.log(
-      `Удален диалог: botId=${botId}, chatId=${chatId}, сообщений=${messageCount}`
-    );
-
     // Логируем удаление диалога
     this.activityLogService
       .create({
@@ -811,12 +774,6 @@ export class MessagesService {
       throw new BadRequestException("Неверный токен бота или бот недоступен");
     }
 
-    console.log(`Информация о боте:`, {
-      id: botInfo.id,
-      username: botInfo.username,
-      first_name: botInfo.first_name,
-    });
-
     // Получаем список получателей используя данные из диалогов
     let recipientChatIds: string[] = [];
 
@@ -840,9 +797,6 @@ export class MessagesService {
 
         const allUsersData = await allUsersQuery.getRawMany();
         recipientChatIds = allUsersData.map((user) => user.chatId);
-        console.log(
-          `Тип получателей: all, тип чата: ${data.recipients.chatType || "все"}, найдено: ${recipientChatIds.length}`
-        );
         break;
 
       case "specific":
@@ -875,9 +829,6 @@ export class MessagesService {
         }
 
         const allGroups = await allGroupsQuery.getRawMany();
-        console.log(
-          `Тип получателей: groups, тип чата: ${data.recipients.chatType || "все группы"}, найдено: ${allGroups.length}`
-        );
         recipientChatIds = allGroups.map((group) => group.chatId);
         break;
 
@@ -885,7 +836,6 @@ export class MessagesService {
         recipientChatIds = (data.recipients.specificGroups || []).filter(
           (chatId) => chatId && chatId.trim() !== ""
         );
-        console.log(`Конкретные группы для рассылки:`, recipientChatIds);
         break;
 
       case "activity":
@@ -922,16 +872,8 @@ export class MessagesService {
 
         const activityUsers = await activityQuery.getRawMany();
         recipientChatIds = activityUsers.map((user) => user.chatId);
-        console.log(
-          `Тип получателей: activity, тип чата: ${data.recipients.chatType || "все"}, найдено: ${recipientChatIds.length}`
-        );
         break;
     }
-
-    console.log(`Рассылка: найдено ${recipientChatIds.length} получателей`);
-    console.log(
-      `Токен бота: ${decryptedToken ? decryptedToken.substring(0, 10) + "..." : "НЕ НАЙДЕН"}`
-    );
 
     // Отправляем уведомление о начале рассылки
     this.notificationService
@@ -957,8 +899,6 @@ export class MessagesService {
 
         // Если есть изображение - отправляем фото с caption
         if (data.image) {
-          console.log(`Отправляем фото пользователю ${chatId}`);
-
           // Подготавливаем файл для отправки
           let photoData: string | Buffer;
           if (Buffer.isBuffer(data.image)) {
@@ -991,14 +931,8 @@ export class MessagesService {
             }
           );
 
-          console.log(
-            `Результат отправки фото:`,
-            result ? "успешно" : "ошибка"
-          );
-
           if (result) {
             success = true;
-            console.log(`Фото отправлено пользователю ${chatId}`);
 
             // Сохраняем сообщение в БД
             try {
@@ -1039,25 +973,13 @@ export class MessagesService {
                 isProcessed: true,
                 processedAt: new Date(),
               });
-              console.log(`Сообщение сохранено в БД для чата ${chatId}`);
             } catch (saveError) {
-              console.error(
-                `Ошибка сохранения сообщения в БД для чата ${chatId}:`,
-                saveError
-              );
+              // Ошибка сохранения не критична
             }
-          } else {
-            console.log(`Не удалось отправить фото пользователю ${chatId}`);
           }
         }
         // Если нет изображения, но есть текст - отправляем текстовое сообщение
         else if (data.text) {
-          console.log(
-            `Отправляем текст пользователю ${chatId}:`,
-            data.text.substring(0, 50) + "..."
-          );
-
-          console.log(`Reply markup:`, replyMarkup);
 
           const results = await this.telegramService.sendLongMessage(
             decryptedToken,
@@ -1069,16 +991,8 @@ export class MessagesService {
             }
           );
 
-          console.log(
-            `Результат отправки сообщения:`,
-            results.length > 0 ? `успешно (${results.length} частей)` : "ошибка"
-          );
-
           if (results.length > 0) {
             success = true;
-            console.log(
-              `Сообщение отправлено пользователю ${chatId}${results.length > 1 ? ` (${results.length} частей)` : ""}`
-            );
 
             // Сохраняем сообщения в БД (сохраняем информацию о первом сообщении)
             try {
@@ -1106,17 +1020,9 @@ export class MessagesService {
                 isProcessed: true,
                 processedAt: new Date(),
               });
-              console.log(`Сообщение сохранено в БД для чата ${chatId}`);
             } catch (saveError) {
-              console.error(
-                `Ошибка сохранения сообщения в БД для чата ${chatId}:`,
-                saveError
-              );
+              // Ошибка сохранения не критична
             }
-          } else {
-            console.log(
-              `Не удалось отправить сообщение пользователю ${chatId}`
-            );
           }
         }
 
@@ -1138,10 +1044,6 @@ export class MessagesService {
         failedChatIds.push(chatId);
       }
     }
-
-    console.log(
-      `Рассылка завершена: отправлено ${sentCount}, не удалось ${failedCount}`
-    );
 
     // Отправляем уведомление о завершении рассылки
     const hasErrors = failedCount > 0 || sentCount === 0;

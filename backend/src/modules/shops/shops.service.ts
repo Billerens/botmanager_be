@@ -107,7 +107,6 @@ export class ShopsService {
         this.logger.error("Ошибка логирования создания магазина:", error);
       });
 
-    this.logger.log(`Shop created: ${savedShop.id} by user ${userId}`);
     return savedShop;
   }
 
@@ -652,8 +651,6 @@ export class ShopsService {
       .catch((error) => {
         this.logger.error("Ошибка логирования удаления магазина:", error);
       });
-
-    this.logger.log(`Shop deleted: ${id} by user ${userId}`);
   }
 
   /**
@@ -721,7 +718,6 @@ export class ShopsService {
         this.logger.error("Ошибка логирования привязки бота:", error);
       });
 
-    this.logger.log(`Bot ${botId} linked to shop ${shopId}`);
     return updatedShop;
   }
 
@@ -773,7 +769,6 @@ export class ShopsService {
         this.logger.error("Ошибка логирования отвязки бота:", error);
       });
 
-    this.logger.log(`Bot unlinked from shop ${shopId}`);
     return updatedShop;
   }
 

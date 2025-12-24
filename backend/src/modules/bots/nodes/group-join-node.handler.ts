@@ -45,10 +45,6 @@ export class GroupJoinNodeHandler extends BaseNodeHandler {
 
     if (!currentNode) return;
 
-    this.logger.log(
-      `Выполнение GROUP_JOIN узла ${currentNode.nodeId} для пользователя ${session.userId}`
-    );
-
     try {
       const { groupJoin } = currentNode.data;
 
@@ -67,8 +63,6 @@ export class GroupJoinNodeHandler extends BaseNodeHandler {
           `Не удалось получить ID группы из ${groupJoin.groupIdSource}`
         );
       }
-
-      this.logger.log(`Попытка присоединения к группе ${groupId}`);
 
       // Получаем группу
       const group = await this.groupSessionService.findById(groupId);
@@ -97,7 +91,6 @@ export class GroupJoinNodeHandler extends BaseNodeHandler {
           return;
         } else if (onFullAction === "create_new") {
           // Создаем новую группу автоматически
-          this.logger.log("Создаем новую группу т.к. текущая полна");
           const newGroup = await this.groupSessionService.create(
             bot.id,
             context.flow.id,
@@ -134,10 +127,6 @@ export class GroupJoinNodeHandler extends BaseNodeHandler {
         joinedAt: new Date(),
         participantVariables: session.lobbyData?.participantVariables || {},
       };
-
-      this.logger.log(
-        `Пользователь ${session.userId} успешно присоединился к группе ${groupId}`
-      );
 
       await this.sendMessage(
         context,

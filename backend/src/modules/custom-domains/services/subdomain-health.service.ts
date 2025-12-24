@@ -42,7 +42,6 @@ export class SubdomainHealthService {
    */
   @Cron("*/30 * * * * *") // Каждые 30 секунд
   async checkPendingSubdomains(): Promise<void> {
-    this.logger.debug("Checking pending subdomains...");
     await Promise.all([
       this.checkShopSubdomains(),
       this.checkBotSubdomains(),
@@ -61,8 +60,6 @@ export class SubdomainHealthService {
     });
 
     if (shops.length === 0) return;
-
-    this.logger.debug(`Checking ${shops.length} shop subdomains...`);
 
     for (const shop of shops) {
       if (!shop.slug) continue;
@@ -96,8 +93,6 @@ export class SubdomainHealthService {
 
     if (bots.length === 0) return;
 
-    this.logger.debug(`Checking ${bots.length} bot subdomains...`);
-
     for (const bot of bots) {
       if (!bot.slug) continue;
 
@@ -129,8 +124,6 @@ export class SubdomainHealthService {
     });
 
     if (pages.length === 0) return;
-
-    this.logger.debug(`Checking ${pages.length} page subdomains...`);
 
     for (const page of pages) {
       if (!page.slug) continue;
@@ -165,19 +158,12 @@ export class SubdomainHealthService {
     if (newStatus === SubdomainStatus.ACTIVE) {
       shop.subdomainActivatedAt = new Date();
       shop.subdomainError = null;
-      this.logger.log(
-        `Shop ${shop.id} subdomain activated: ${shop.subdomainUrl}`
-      );
     } else if (newStatus === SubdomainStatus.ERROR) {
       shop.subdomainError =
         "Субдомен не найден в DNS. Попробуйте повторить активацию.";
-      this.logger.warn(`Shop ${shop.id} subdomain error: not found in DNS`);
     }
 
     await this.shopRepository.save(shop);
-    this.logger.debug(
-      `Shop ${shop.id} subdomain status: ${oldStatus} → ${newStatus}`
-    );
   }
 
   /**
@@ -193,17 +179,12 @@ export class SubdomainHealthService {
     if (newStatus === SubdomainStatus.ACTIVE) {
       bot.subdomainActivatedAt = new Date();
       bot.subdomainError = null;
-      this.logger.log(`Bot ${bot.id} subdomain activated: ${bot.subdomainUrl}`);
     } else if (newStatus === SubdomainStatus.ERROR) {
       bot.subdomainError =
         "Субдомен не найден в DNS. Попробуйте повторить активацию.";
-      this.logger.warn(`Bot ${bot.id} subdomain error: not found in DNS`);
     }
 
     await this.botRepository.save(bot);
-    this.logger.debug(
-      `Bot ${bot.id} subdomain status: ${oldStatus} → ${newStatus}`
-    );
   }
 
   /**
@@ -219,19 +200,12 @@ export class SubdomainHealthService {
     if (newStatus === SubdomainStatus.ACTIVE) {
       page.subdomainActivatedAt = new Date();
       page.subdomainError = null;
-      this.logger.log(
-        `Page ${page.id} subdomain activated: ${page.subdomainUrl}`
-      );
     } else if (newStatus === SubdomainStatus.ERROR) {
       page.subdomainError =
         "Субдомен не найден в DNS. Попробуйте повторить активацию.";
-      this.logger.warn(`Page ${page.id} subdomain error: not found in DNS`);
     }
 
     await this.customPageRepository.save(page);
-    this.logger.debug(
-      `Page ${page.id} subdomain status: ${oldStatus} → ${newStatus}`
-    );
   }
 
   /**
