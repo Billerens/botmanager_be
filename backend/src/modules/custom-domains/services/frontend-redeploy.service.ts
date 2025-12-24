@@ -27,6 +27,14 @@ export class FrontendRedeployService implements OnModuleInit {
   async onModuleInit() {
     const scheduleInfo = this.timewebAppsService.getScheduleInfo();
 
+    // Детальное логирование для диагностики
+    this.logger.log(
+      `Initializing frontend redeploy scheduler. ` +
+        `FRONTEND_IP configured: ${scheduleInfo.isActive ? "YES" : "NO"}, ` +
+        `Frontend app ID: ${scheduleInfo.frontendAppId || "NOT FOUND"}, ` +
+        `Frontend app name: ${scheduleInfo.frontendAppName || "NOT FOUND"}`
+    );
+
     if (scheduleInfo.isActive) {
       this.isSchedulerActive = true;
       this.logger.log(
@@ -36,10 +44,38 @@ export class FrontendRedeployService implements OnModuleInit {
           `Next redeploy: ${scheduleInfo.nextRedeployAt?.toISOString() || "unknown"}`
       );
     } else {
+      // Детальное логирование причин неактивности
+      const frontendIp = this.timewebAppsService.getFrontendIp() || "NOT SET";
+      const cachedAppId = scheduleInfo.frontendAppId;
+
       this.logger.warn(
         "Frontend auto-redeploy scheduler INACTIVE. " +
-          "Either FRONTEND_IP is not configured or frontend app was not found."
+          `FRONTEND_IP=${frontendIp}, ` +
+          `Cached app ID=${cachedAppId || "null"}, ` +
+          `Cached app name=${scheduleInfo.frontendAppName || "null"}. ` +
+          "Either FRONTEND_IP is not configured or frontend app was not found during initialization."
       );
+
+      // Попытка найти приложение заново для диагностики
+      try {
+        const app = await this.timewebAppsService.findFrontendApp();
+        if (app) {
+          this.logger.warn(
+            `Frontend app found on retry: id=${app.id}, name="${app.name}", ` +
+              `IP=${app.ip}, status="${app.status}". ` +
+              "Scheduler will remain inactive until next restart."
+          );
+        } else {
+          this.logger.warn(
+            `Frontend app not found by IP ${frontendIp}. ` +
+              "Please verify FRONTEND_IP configuration or check Timeweb Apps API."
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to retry finding frontend app: ${error.message}`
+        );
+      }
     }
   }
 

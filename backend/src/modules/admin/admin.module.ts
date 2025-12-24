@@ -13,6 +13,7 @@ import { BotFlow } from "../../database/entities/bot-flow.entity";
 import { Shop } from "../../database/entities/shop.entity";
 import { Order } from "../../database/entities/order.entity";
 import { Lead } from "../../database/entities/lead.entity";
+import { CustomPage } from "../../database/entities/custom-page.entity";
 
 // Services
 import { AdminAuthService } from "./services/admin-auth.service";
@@ -29,6 +30,7 @@ import { AdminOrdersController } from "./controllers/admin-orders.controller";
 import { AdminLeadsController } from "./controllers/admin-leads.controller";
 import { AdminLogsController } from "./controllers/admin-logs.controller";
 import { AdminDashboardController } from "./controllers/admin-dashboard.controller";
+import { AdminRedeployController } from "./controllers/admin-redeploy.controller";
 
 // Guards & Strategies
 import { AdminJwtGuard } from "./guards/admin-jwt.guard";
@@ -40,6 +42,9 @@ import adminConfig from "../../config/admin.config";
 
 // Common services
 import { TelegramValidationService } from "../../common/telegram-validation.service";
+
+// Custom Domains Module (for redeploy and subdomain services)
+import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
 
 @Module({
   imports: [
@@ -53,8 +58,10 @@ import { TelegramValidationService } from "../../common/telegram-validation.serv
       Shop,
       Order,
       Lead,
+      CustomPage,
     ]),
     PassportModule.register({ defaultStrategy: "admin-jwt" }),
+    forwardRef(() => CustomDomainsModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -78,6 +85,7 @@ import { TelegramValidationService } from "../../common/telegram-validation.serv
     AdminLeadsController,
     AdminLogsController,
     AdminDashboardController,
+    AdminRedeployController,
   ],
   providers: [
     AdminAuthService,

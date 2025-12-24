@@ -141,23 +141,39 @@ export class TimewebAppsService implements OnModuleInit {
       return;
     }
 
+    this.logger.log(
+      `Searching for frontend app with IP: ${this.frontendIp}`
+    );
+
     // Пробуем найти приложение фронтенда при старте
     try {
+      // Получаем список всех приложений для диагностики
+      const allApps = await this.getApps();
+      this.logger.debug(
+        `Found ${allApps.length} apps in Timeweb. ` +
+          `Apps with IPs: ${allApps.filter(a => a.ip).map(a => `${a.name}(${a.ip})`).join(", ") || "none"}`
+      );
+
       const app = await this.findFrontendApp();
       if (app) {
         this.cachedFrontendAppId = app.id;
         this.cachedFrontendAppName = app.name;
         this.logger.log(
-          `Frontend app found: id=${app.id}, name="${app.name}", status="${app.status}"`
+          `Frontend app found: id=${app.id}, name="${app.name}", ` +
+            `status="${app.status}", IP=${app.ip}, ` +
+            `domains=[${app.domains.map(d => d.fqdn).join(", ")}]`
         );
       } else {
         this.logger.warn(
-          `Frontend app not found by IP ${this.frontendIp}. Auto-redeploy will not work.`
+          `Frontend app not found by IP ${this.frontendIp}. ` +
+            `Available apps with IPs: ${allApps.filter(a => a.ip).map(a => a.ip).join(", ") || "none"}. ` +
+            `Auto-redeploy will not work.`
         );
       }
     } catch (error) {
-      this.logger.warn(
-        `Failed to find frontend app: ${error.message}. Auto-redeploy may not work.`
+      this.logger.error(
+        `Failed to find frontend app: ${error.message}. ` +
+          `Stack: ${error.stack}. Auto-redeploy may not work.`
       );
     }
   }
@@ -396,6 +412,13 @@ export class TimewebAppsService implements OnModuleInit {
    */
   getRedeployIntervalHours(): number {
     return this.redeployIntervalHours;
+  }
+
+  /**
+   * Получить IP адрес фронтенда (для диагностики)
+   */
+  getFrontendIp(): string {
+    return this.frontendIp;
   }
 
   // ============================================================================
