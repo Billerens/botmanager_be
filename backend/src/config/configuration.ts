@@ -4,12 +4,15 @@ export default registerAs("app", () => ({
   port: parseInt(process.env.PORT || "3000", 10),
   nodeEnv: process.env.NODE_ENV || "development",
   apiPrefix: process.env.API_PREFIX || "api",
+  // Базовый домен для публичных субдоменов (*.shops.domain, *.booking.domain, *.pages.domain)
+  baseDomain: process.env.BASE_DOMAIN || "botmanagertest.online",
   corsOrigin: process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
     : [
         "http://localhost:3001",
         "http://localhost:3000",
         "https://botmanagertest.online",
+        "https://app.botmanagertest.online",
         "https://api.botmanagertest.online",
       ],
   webhookBaseUrl:

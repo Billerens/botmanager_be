@@ -301,11 +301,55 @@ async function bootstrap() {
   });
 
   // CORS
-  const corsOrigin =
+  const corsOrigins: string[] =
     configService.get("app.corsOrigin") ||
-    process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim());
+    (process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
+      : []);
+
+  // Базовый домен для публичных субдоменов
+  const baseDomain =
+    process.env.BASE_DOMAIN ||
+    configService.get("app.baseDomain") ||
+    "botmanagertest.online";
+
+  // Паттерны для wildcard субдоменов: *.shops.domain, *.booking.domain, *.pages.domain
+  const subdomainPatterns = [
+    new RegExp(
+      `^https?://[a-zA-Z0-9-]+\\.shops\\.${baseDomain.replace(/\./g, "\\.")}$`
+    ),
+    new RegExp(
+      `^https?://[a-zA-Z0-9-]+\\.booking\\.${baseDomain.replace(/\./g, "\\.")}$`
+    ),
+    new RegExp(
+      `^https?://[a-zA-Z0-9-]+\\.pages\\.${baseDomain.replace(/\./g, "\\.")}$`
+    ),
+  ];
+
   app.enableCors({
-    origin: corsOrigin ?? true,
+    origin: (origin, callback) => {
+      // Разрешаем запросы без origin (например, мобильные приложения, Postman)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Проверяем точное совпадение с разрешёнными origins
+      if (corsOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      // Проверяем wildcard субдомены
+      for (const pattern of subdomainPatterns) {
+        if (pattern.test(origin)) {
+          return callback(null, true);
+        }
+      }
+
+      // Origin не разрешён
+      const logger = new Logger("CORS");
+      logger.warn(`Blocked CORS request from origin: ${origin}`);
+      callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: [
