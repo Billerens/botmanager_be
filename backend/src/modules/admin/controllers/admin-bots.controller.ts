@@ -10,11 +10,12 @@ import {
   Req,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Like } from "typeorm";
+import { Repository, Like, In } from "typeorm";
 import { Request } from "express";
 
 import { Bot, BotStatus } from "../../../database/entities/bot.entity";
 import { BotFlow } from "../../../database/entities/bot-flow.entity";
+import { Shop } from "../../../database/entities/shop.entity";
 import { Admin } from "../../../database/entities/admin.entity";
 import { AdminJwtGuard } from "../guards/admin-jwt.guard";
 import { AdminRolesGuard } from "../guards/admin-roles.guard";
@@ -36,6 +37,8 @@ export class AdminBotsController {
     private botRepository: Repository<Bot>,
     @InjectRepository(BotFlow)
     private botFlowRepository: Repository<BotFlow>,
+    @InjectRepository(Shop)
+    private shopRepository: Repository<Shop>,
     private actionLogService: AdminActionLogService
   ) {}
 
@@ -74,6 +77,24 @@ export class AdminBotsController {
 
     const [items, total] = await queryBuilder.getManyAndCount();
 
+    // Загружаем привязанные магазины для всех ботов одним запросом
+    const botIds = items.map((bot) => bot.id);
+    const shops = botIds.length > 0
+      ? await this.shopRepository.find({
+          where: { botId: In(botIds) },
+          select: ["id", "name", "botId"],
+        })
+      : [];
+
+    // Создаем мапу магазинов по botId
+    const shopMap = new Map(shops.map((shop) => [shop.botId, shop]));
+
+    // Добавляем магазины к ботам
+    const itemsWithShops = items.map((bot) => ({
+      ...bot,
+      shop: shopMap.get(bot.id) || null,
+    }));
+
     await this.actionLogService.logAction(
       req.user,
       AdminActionType.BOT_LIST,
@@ -82,7 +103,7 @@ export class AdminBotsController {
     );
 
     return {
-      items,
+      items: itemsWithShops,
       total,
       page: Number(page),
       limit: Number(limit),
@@ -97,6 +118,16 @@ export class AdminBotsController {
       relations: ["owner", "flows", "flows.nodes"],
     });
 
+    // Загружаем привязанный магазин
+    const shop = bot
+      ? await this.shopRepository.findOne({
+          where: { botId: bot.id },
+          select: ["id", "name", "botId"],
+        })
+      : null;
+
+    const botWithShop = bot ? { ...bot, shop: shop || null } : bot;
+
     await this.actionLogService.logAction(
       req.user,
       AdminActionType.BOT_VIEW,
@@ -104,7 +135,7 @@ export class AdminBotsController {
       { entityType: "bot", entityId: id, request: req }
     );
 
-    return bot;
+    return botWithShop;
   }
 
   @Put(":id")
