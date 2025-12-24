@@ -24,7 +24,10 @@ import {
 } from "../../../database/entities/admin-action-log.entity";
 import { FrontendRedeployService } from "../../custom-domains/services/frontend-redeploy.service";
 import { SubdomainService } from "../../custom-domains/services/subdomain.service";
-import { SubdomainStatus, SubdomainType } from "../../custom-domains/enums/domain-status.enum";
+import {
+  SubdomainStatus,
+  SubdomainType,
+} from "../../custom-domains/enums/domain-status.enum";
 
 interface AdminRequest extends Request {
   user: Admin;
@@ -94,18 +97,21 @@ export class AdminRedeployController {
     const result = await this.frontendRedeployService.triggerManualRedeploy();
 
     // Логируем действие
-    await this.actionLogService.logAction({
-      adminId: req.user.id,
-      actionType: AdminActionType.SYSTEM_ACTION,
-      level: AdminActionLevel.INFO,
-      description: `Принудительный редеплой фронтенда: ${result.success ? "успешно" : "ошибка"}. ${result.message}`,
-      metadata: {
-        success: result.success,
-        appId: result.appId,
-        appName: result.appName,
-        error: result.message,
-      },
-    });
+    await this.actionLogService.logAction(
+      req.user,
+      AdminActionType.SYSTEM_SETTINGS_UPDATE,
+      `Принудительный редеплой фронтенда: ${result.success ? "успешно" : "ошибка"}. ${result.message}`,
+      {
+        level: AdminActionLevel.INFO,
+        metadata: {
+          success: result.success,
+          appId: result.appId,
+          appName: result.appName,
+          error: result.message,
+        },
+        request: req,
+      }
+    );
 
     return result;
   }
@@ -125,7 +131,7 @@ export class AdminRedeployController {
             SubdomainStatus.ACTIVATING,
             SubdomainStatus.ACTIVE,
             SubdomainStatus.ERROR,
-            SubdomainStatus.SUSPENDED,
+            SubdomainStatus.REMOVING,
           ]),
         },
         select: [
@@ -149,7 +155,7 @@ export class AdminRedeployController {
             SubdomainStatus.ACTIVATING,
             SubdomainStatus.ACTIVE,
             SubdomainStatus.ERROR,
-            SubdomainStatus.SUSPENDED,
+            SubdomainStatus.REMOVING,
           ]),
         },
         select: [
@@ -173,7 +179,7 @@ export class AdminRedeployController {
             SubdomainStatus.ACTIVATING,
             SubdomainStatus.ACTIVE,
             SubdomainStatus.ERROR,
-            SubdomainStatus.SUSPENDED,
+            SubdomainStatus.REMOVING,
           ]),
         },
         select: [
@@ -246,16 +252,23 @@ export class AdminRedeployController {
       subdomains: subdomainsWithRedeployInfo,
       total: subdomains.length,
       byStatus: {
-        active: subdomains.filter((s) => s.subdomainStatus === SubdomainStatus.ACTIVE).length,
-        pending: subdomains.filter((s) =>
-          [SubdomainStatus.PENDING, SubdomainStatus.DNS_CREATING, SubdomainStatus.ACTIVATING].includes(
-            s.subdomainStatus as SubdomainStatus
-          )
+        active: subdomains.filter(
+          (s) => s.subdomainStatus === SubdomainStatus.ACTIVE
         ).length,
-        error: subdomains.filter((s) => s.subdomainStatus === SubdomainStatus.ERROR).length,
-        suspended: subdomains.filter((s) => s.subdomainStatus === SubdomainStatus.SUSPENDED).length,
+        pending: subdomains.filter((s) =>
+          [
+            SubdomainStatus.PENDING,
+            SubdomainStatus.DNS_CREATING,
+            SubdomainStatus.ACTIVATING,
+          ].includes(s.subdomainStatus as SubdomainStatus)
+        ).length,
+        error: subdomains.filter(
+          (s) => s.subdomainStatus === SubdomainStatus.ERROR
+        ).length,
+        removing: subdomains.filter(
+          (s) => s.subdomainStatus === SubdomainStatus.REMOVING
+        ).length,
       },
     };
   }
 }
-
