@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Delete,
   Body,
@@ -226,7 +227,7 @@ export class BookingSystemsController {
     return this.bookingSystemsService.getStats(id, req.user.id);
   }
 
-  @Get(":id/subdomain-status")
+  @Get(":id/subdomain/status")
   @ApiOperation({ summary: "Получить статус субдомена" })
   @ApiResponse({
     status: 200,
@@ -236,7 +237,7 @@ export class BookingSystemsController {
     return this.bookingSystemsService.getSubdomainStatus(id, req.user.id);
   }
 
-  @Patch(":id/subdomain")
+  @Put(":id/subdomain")
   @ApiOperation({ summary: "Обновить slug/субдомен системы бронирования" })
   @ApiResponse({
     status: 200,
@@ -260,6 +261,17 @@ export class BookingSystemsController {
   })
   async retrySubdomainRegistration(@Param("id") id: string, @Request() req) {
     return this.bookingSystemsService.retrySubdomainRegistration(id, req.user.id);
+  }
+
+  @Delete(":id/subdomain")
+  @ApiOperation({ summary: "Удалить субдомен системы бронирования" })
+  @ApiResponse({
+    status: 200,
+    description: "Субдомен удалён",
+    schema: { $ref: getSchemaPath(BookingSystemResponseDto) },
+  })
+  async removeSubdomain(@Param("id") id: string, @Request() req) {
+    return this.bookingSystemsService.removeSubdomain(id, req.user.id);
   }
 }
 

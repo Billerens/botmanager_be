@@ -512,6 +512,58 @@ export class BookingSystemsService {
   }
 
   /**
+   * Удалить субдомен системы бронирования
+   */
+  async removeSubdomain(id: string, userId: string): Promise<BookingSystem> {
+    const bookingSystem = await this.findOne(id, userId);
+
+    if (!bookingSystem.slug) {
+      throw new BadRequestException(
+        "У системы бронирования не установлен субдомен"
+      );
+    }
+
+    const oldSlug = bookingSystem.slug;
+
+    // Устанавливаем статус удаления
+    bookingSystem.subdomainStatus = SubdomainStatus.REMOVING;
+    await this.bookingSystemRepository.save(bookingSystem);
+
+    // Удаляем субдомен
+    await this.subdomainService.remove(oldSlug, SubdomainType.BOOKING);
+
+    // Обновляем запись
+    bookingSystem.slug = null;
+    bookingSystem.subdomainStatus = null;
+    bookingSystem.subdomainUrl = null;
+    bookingSystem.subdomainActivatedAt = null;
+    bookingSystem.subdomainError = null;
+
+    const updated = await this.bookingSystemRepository.save(bookingSystem);
+
+    // Логируем удаление субдомена
+    this.activityLogService
+      .create({
+        type: ActivityType.BOOKING_SYSTEM_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Удалён субдомен "${oldSlug}" системы бронирования "${bookingSystem.name}"`,
+        userId,
+        metadata: {
+          bookingSystemId: id,
+          removedSlug: oldSlug,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования удаления субдомена:", error);
+      });
+
+    return this.bookingSystemRepository.findOne({
+      where: { id },
+      relations: ["bot"],
+    });
+  }
+
+  /**
    * Обновить настройки системы бронирования
    */
   async updateSettings(
