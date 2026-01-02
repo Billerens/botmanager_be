@@ -31,6 +31,7 @@ import { Shop } from "./entities/shop.entity";
 import { Admin } from "./entities/admin.entity";
 import { AdminActionLog } from "./entities/admin-action-log.entity";
 import { CustomDomain } from "./entities/custom-domain.entity";
+import { BookingSystem } from "./entities/booking-system.entity";
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { CustomDomain } from "./entities/custom-domain.entity";
           Admin,
           AdminActionLog,
           CustomDomain,
+          BookingSystem,
         ],
         // ВАЖНО: synchronize отключен! Используйте миграции для изменения схемы БД
         // Для локальной разработки можно включить через DB_SYNCHRONIZE=true
@@ -115,6 +117,7 @@ import { CustomDomain } from "./entities/custom-domain.entity";
       Admin,
       AdminActionLog,
       CustomDomain,
+      BookingSystem,
     ]),
   ],
   exports: [TypeOrmModule],
