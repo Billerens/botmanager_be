@@ -5,6 +5,7 @@ import { Service } from "../../database/entities/service.entity";
 import { TimeSlot } from "../../database/entities/time-slot.entity";
 import { Booking } from "../../database/entities/booking.entity";
 import { Bot } from "../../database/entities/bot.entity";
+import { BookingSystem } from "../../database/entities/booking-system.entity";
 
 // Сервисы
 import { SpecialistsService } from "./services/specialists.service";
@@ -36,7 +37,7 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Specialist, Service, TimeSlot, Booking, Bot]),
+    TypeOrmModule.forFeature([Specialist, Service, TimeSlot, Booking, Bot, BookingSystem]),
     TelegramModule,
     QueueModule,
     forwardRef(() => BotsModule),

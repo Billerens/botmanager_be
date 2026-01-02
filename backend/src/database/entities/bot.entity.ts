@@ -24,12 +24,18 @@ export enum BotStatus {
   ERROR = "error",
 }
 
+/**
+ * @deprecated Используйте GlobalBreak из booking-system.entity.ts
+ */
 export interface GlobalBreak {
   startTime: string; // "12:00" в UTC
   endTime: string; // "13:00" в UTC
   reason?: string; // "Обеденный перерыв"
 }
 
+/**
+ * @deprecated Используйте BookingSystemSettings из booking-system.entity.ts
+ */
 export interface BookingSettings {
   // Основные настройки
   allowOnlineBooking: boolean;
@@ -75,11 +81,19 @@ export class Bot {
   @Column({ unique: true })
   username: string; // @botname
 
-  // Уникальный slug для публичных субдоменов: {slug}.booking.botmanagertest.online
+  // ============================================================================
+  // ПОЛЯ СУБДОМЕНА БРОНИРОВАНИЯ (deprecated - перенесены в BookingSystem)
+  // ============================================================================
+
+  /**
+   * @deprecated Используйте BookingSystem.slug. Поле будет удалено в будущих версиях.
+   * Уникальный slug для публичных субдоменов: {slug}.booking.botmanagertest.online
+   */
   @Column({ nullable: true, unique: true })
   slug?: string;
 
   /**
+   * @deprecated Используйте BookingSystem.subdomainStatus. Поле будет удалено в будущих версиях.
    * Статус активации субдомена
    */
   @Column({
@@ -90,18 +104,21 @@ export class Bot {
   subdomainStatus?: SubdomainStatus;
 
   /**
+   * @deprecated Используйте BookingSystem.subdomainError. Поле будет удалено в будущих версиях.
    * Сообщение об ошибке субдомена (если есть)
    */
   @Column({ nullable: true })
   subdomainError?: string;
 
   /**
+   * @deprecated Используйте BookingSystem.subdomainActivatedAt. Поле будет удалено в будущих версиях.
    * Дата активации субдомена
    */
   @Column({ nullable: true })
   subdomainActivatedAt?: Date;
 
   /**
+   * @deprecated Используйте BookingSystem.subdomainUrl. Поле будет удалено в будущих версиях.
    * Полный URL субдомена (кэшированный для быстрого доступа)
    * Например: "mysalon.booking.botmanagertest.online"
    */
@@ -168,32 +185,61 @@ export class Bot {
   @OneToMany(() => BotCustomData, (customData) => customData.bot)
   customData: BotCustomData[];
 
-  // Поля для системы бронирования
+  // ============================================================================
+  // ПОЛЯ СИСТЕМЫ БРОНИРОВАНИЯ (deprecated - перенесены в BookingSystem)
+  // ============================================================================
+
+  /**
+   * @deprecated Используйте связь с BookingSystem. Поле будет удалено в будущих версиях.
+   */
   @Column({ default: false })
   isBookingEnabled: boolean;
 
+  /**
+   * @deprecated Используйте BookingSystem.title. Поле будет удалено в будущих версиях.
+   */
   @Column({ nullable: true })
   bookingTitle: string;
 
+  /**
+   * @deprecated Используйте BookingSystem.description. Поле будет удалено в будущих версиях.
+   */
   @Column({ type: "text", nullable: true })
   bookingDescription: string;
 
+  /**
+   * @deprecated Используйте BookingSystem.logoUrl. Поле будет удалено в будущих версиях.
+   */
   @Column({ nullable: true })
   bookingLogoUrl: string;
 
+  /**
+   * @deprecated Используйте BookingSystem.customStyles. Поле будет удалено в будущих версиях.
+   */
   @Column({ type: "text", nullable: true })
   bookingCustomStyles: string;
 
+  /**
+   * @deprecated Используйте BookingSystem.buttonTypes. Поле будет удалено в будущих версиях.
+   */
   @Column({ type: "json", nullable: true })
   bookingButtonTypes: string[];
 
+  /**
+   * @deprecated Используйте BookingSystem.buttonSettings. Поле будет удалено в будущих версиях.
+   */
   @Column({ type: "json", nullable: true })
   bookingButtonSettings: Record<string, any>;
 
+  /**
+   * @deprecated Используйте BookingSystem.settings. Поле будет удалено в будущих версиях.
+   */
   @Column({ type: "json", nullable: true })
   bookingSettings: BookingSettings;
 
-  // Настройки браузерного доступа для бронирования
+  /**
+   * @deprecated Используйте BookingSystem.browserAccessEnabled. Поле будет удалено в будущих версиях.
+   */
   @Column({ default: false })
   bookingBrowserAccessEnabled: boolean;
 
@@ -206,6 +252,13 @@ export class Bot {
     return this.status === BotStatus.ERROR;
   }
 
+  // ============================================================================
+  // ГЕТТЕРЫ БРОНИРОВАНИЯ (deprecated - используйте BookingSystem)
+  // ============================================================================
+
+  /**
+   * @deprecated Используйте BookingSystem.url. Будет удален в будущих версиях.
+   */
   get bookingUrl(): string {
     const frontendUrl =
       process.env.FRONTEND_URL || "https://botmanagertest.online";
@@ -213,6 +266,7 @@ export class Bot {
   }
 
   /**
+   * @deprecated Используйте BookingSystem.publicUrl. Будет удален в будущих версиях.
    * Публичный URL бронирования
    * Возвращает субдомен если активен, иначе стандартный URL
    */
@@ -224,6 +278,7 @@ export class Bot {
   }
 
   /**
+   * @deprecated Используйте BookingSystem.hasActiveSubdomain. Будет удален в будущих версиях.
    * Проверка, активен ли субдомен
    */
   get hasActiveSubdomain(): boolean {
@@ -235,6 +290,7 @@ export class Bot {
   }
 
   /**
+   * @deprecated Используйте BookingSystem.isSubdomainPending. Будет удален в будущих версиях.
    * Проверка, в процессе ли активация субдомена
    */
   get isSubdomainPending(): boolean {
@@ -246,6 +302,9 @@ export class Bot {
     );
   }
 
+  /**
+   * @deprecated Используйте BookingSystem.defaultSettings. Будет удален в будущих версиях.
+   */
   get defaultBookingSettings(): BookingSettings {
     return {
       allowOnlineBooking: true,

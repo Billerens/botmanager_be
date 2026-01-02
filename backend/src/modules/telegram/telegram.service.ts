@@ -5,6 +5,7 @@ import FormData from "form-data";
 import * as fs from "fs";
 import { Bot } from "../../database/entities/bot.entity";
 import { Shop } from "../../database/entities/shop.entity";
+import { BookingSystem } from "../../database/entities/booking-system.entity";
 import { CustomPagesBotService } from "../custom-pages/services/custom-pages-bot.service";
 
 export interface TelegramBotInfo {
@@ -138,7 +139,8 @@ export class TelegramService {
   async setBotCommands(
     token: string,
     bot: Bot,
-    shop: Shop | null = null
+    shop: Shop | null = null,
+    bookingSystem: BookingSystem | null = null
   ): Promise<boolean> {
     try {
       const commands = [
@@ -158,8 +160,18 @@ export class TelegramService {
         });
       }
 
-      // Добавляем команду бронирования если оно включено и команда настроена
-      if (bot.isBookingEnabled && bot.bookingButtonTypes?.includes("command")) {
+      // Добавляем команду бронирования из BookingSystem (новая архитектура)
+      const hasBookingSystemCommand =
+        bookingSystem && bookingSystem.buttonTypes?.includes("command");
+      if (hasBookingSystemCommand) {
+        const commandSettings = bookingSystem.buttonSettings?.command;
+        commands.push({
+          command: "booking",
+          description: commandSettings?.description || "📅 Записаться на прием",
+        });
+      }
+      // Fallback: старая архитектура через Bot entity (deprecated)
+      else if (bot.isBookingEnabled && bot.bookingButtonTypes?.includes("command")) {
         const commandSettings = bot.bookingButtonSettings?.command;
         commands.push({
           command: "booking",
@@ -190,12 +202,17 @@ export class TelegramService {
       // Определяем, какой Menu Button должен быть активен
       const hasShopMenuButton =
         shop && shop.buttonTypes?.includes("menu_button");
-      const hasBookingMenuButton =
+      const hasBookingSystemMenuButton =
+        bookingSystem && bookingSystem.buttonTypes?.includes("menu_button");
+      // Fallback: старая архитектура (deprecated)
+      const hasBookingMenuButtonLegacy =
         bot.isBookingEnabled && bot.bookingButtonTypes?.includes("menu_button");
 
       if (hasShopMenuButton) {
         await this.setMenuButton(token, shop);
-      } else if (hasBookingMenuButton) {
+      } else if (hasBookingSystemMenuButton) {
+        await this.setBookingSystemMenuButton(token, bookingSystem);
+      } else if (hasBookingMenuButtonLegacy) {
         await this.setBookingMenuButton(token, bot);
       } else {
         // Если ни один Menu Button не включен, очищаем его
@@ -244,7 +261,47 @@ export class TelegramService {
   }
 
   /**
+   * Устанавливает Menu Button для системы бронирования (новая архитектура)
+   */
+  private async setBookingSystemMenuButton(
+    token: string,
+    bookingSystem: BookingSystem
+  ): Promise<void> {
+    try {
+      if (!token || token.trim() === "") {
+        console.error(
+          "Ошибка установки BookingSystem Menu Button: пустой токен"
+        );
+        return;
+      }
+
+      const buttonText =
+        bookingSystem.buttonSettings?.menu_button?.text || "📅 Записаться";
+
+      const bookingUrl =
+        bookingSystem.url ||
+        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/booking/${bookingSystem.id}`;
+
+      await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {
+        menu_button: {
+          type: "web_app",
+          text: buttonText,
+          web_app: {
+            url: bookingUrl,
+          },
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Ошибка установки BookingSystem Menu Button:",
+        error.message
+      );
+    }
+  }
+
+  /**
    * Устанавливает Menu Button для бронирования
+   * @deprecated Используйте setBookingSystemMenuButton с BookingSystem
    */
   private async setBookingMenuButton(token: string, bot: Bot): Promise<void> {
     try {

@@ -106,6 +106,14 @@ export enum ActivityType {
   SHOP_SETTINGS_UPDATED = "shop_settings_updated",
   SHOP_BOT_LINKED = "shop_bot_linked",
   SHOP_BOT_UNLINKED = "shop_bot_unlinked",
+
+  // BookingSystem (система бронирования как отдельная сущность)
+  BOOKING_SYSTEM_CREATED = "booking_system_created",
+  BOOKING_SYSTEM_UPDATED = "booking_system_updated",
+  BOOKING_SYSTEM_DELETED = "booking_system_deleted",
+  BOOKING_SYSTEM_SETTINGS_UPDATED = "booking_system_settings_updated",
+  BOOKING_SYSTEM_BOT_LINKED = "booking_system_bot_linked",
+  BOOKING_SYSTEM_BOT_UNLINKED = "booking_system_bot_unlinked",
 }
 
 export enum ActivityLevel {

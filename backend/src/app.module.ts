@@ -41,6 +41,7 @@ import { MailModule } from "./modules/mail/mail.module";
 import { ShopsModule } from "./modules/shops/shops.module";
 import { AdminModule } from "./modules/admin/admin.module";
 import { CustomDomainsModule } from "./modules/custom-domains/custom-domains.module";
+import { BookingSystemsModule } from "./modules/booking-systems/booking-systems.module";
 
 @Module({
   imports: [
@@ -111,6 +112,7 @@ import { CustomDomainsModule } from "./modules/custom-domains/custom-domains.mod
     ShopsModule, // Магазины (независимые от ботов)
     AdminModule, // Админ-панель для техподдержки
     CustomDomainsModule, // Кастомные домены пользователей
+    BookingSystemsModule, // Системы бронирования (независимые от ботов)
   ],
 })
 export class AppModule {}

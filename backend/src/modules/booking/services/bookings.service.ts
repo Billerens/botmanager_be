@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   forwardRef,
   Inject,
 } from "@nestjs/common";
@@ -15,6 +16,7 @@ import { TimeSlot } from "../../../database/entities/time-slot.entity";
 import { Specialist } from "../../../database/entities/specialist.entity";
 import { Service } from "../../../database/entities/service.entity";
 import { Bot } from "../../../database/entities/bot.entity";
+import { BookingSystem } from "../../../database/entities/booking-system.entity";
 import {
   CreateBookingDto,
   UpdateBookingDto,
@@ -43,6 +45,8 @@ export class BookingsService {
     private serviceRepository: Repository<Service>,
     @InjectRepository(Bot)
     private botRepository: Repository<Bot>,
+    @InjectRepository(BookingSystem)
+    private bookingSystemRepository: Repository<BookingSystem>,
     @Inject(forwardRef(() => BookingNotificationsService))
     private notificationsService: BookingNotificationsService,
     private notificationService: NotificationService,
@@ -714,5 +718,483 @@ export class BookingsService {
       cancellationRate: total > 0 ? (cancelled / total) * 100 : 0,
       noShowRate: confirmed > 0 ? (noShow / confirmed) * 100 : 0,
     };
+  }
+
+  // ============================================
+  // Методы для работы через BookingSystem
+  // ============================================
+
+  /**
+   * Создать бронирование для системы бронирования (публичный метод)
+   */
+  async createByBookingSystem(
+    bookingSystemId: string,
+    createBookingDto: CreateBookingDto
+  ): Promise<Booking> {
+    // Проверяем, что все связанные сущности существуют и принадлежат системе бронирования
+    const specialist = await this.specialistRepository.findOne({
+      where: { id: createBookingDto.specialistId, bookingSystemId },
+    });
+
+    if (!specialist) {
+      throw new NotFoundException("Специалист не найден");
+    }
+
+    const service = await this.serviceRepository
+      .createQueryBuilder("service")
+      .innerJoin("service.specialists", "specialist")
+      .where("service.id = :serviceId", {
+        serviceId: createBookingDto.serviceId,
+      })
+      .andWhere("specialist.id = :specialistId", {
+        specialistId: createBookingDto.specialistId,
+      })
+      .getOne();
+
+    if (!service) {
+      throw new NotFoundException(
+        "Услуга не найдена или не связана с этим специалистом"
+      );
+    }
+
+    const timeSlot = await this.timeSlotRepository.findOne({
+      where: {
+        id: createBookingDto.timeSlotId,
+        specialistId: createBookingDto.specialistId,
+        isAvailable: true,
+        isBooked: false,
+      },
+    });
+
+    if (!timeSlot) {
+      throw new NotFoundException("Таймслот недоступен для бронирования");
+    }
+
+    // Проверяем, что время слота не в прошлом
+    if (timeSlot.isInPast()) {
+      throw new BadRequestException("Нельзя забронировать время в прошлом");
+    }
+
+    // Проверяем, что специалист работает в это время
+    if (!specialist.isWorkingAt(timeSlot.startTime)) {
+      throw new BadRequestException("Специалист не работает в указанное время");
+    }
+
+    // Проверяем, что нет перерыва в это время
+    if (specialist.isOnBreak(timeSlot.startTime)) {
+      throw new BadRequestException("В указанное время у специалиста перерыв");
+    }
+
+    // Проверяем длительность услуги
+    const slotDuration = timeSlot.getDuration();
+    if (slotDuration < service.duration) {
+      throw new BadRequestException(
+        "Длительность слота меньше длительности услуги"
+      );
+    }
+
+    // Создаем бронирование
+    const booking = this.bookingRepository.create({
+      ...createBookingDto,
+      status: BookingStatus.PENDING,
+    });
+
+    // Генерируем код подтверждения если требуется
+    const bookingSystem = await this.bookingSystemRepository.findOne({
+      where: { id: bookingSystemId },
+    });
+    if (bookingSystem?.settings?.requireConfirmation) {
+      booking.generateConfirmationCode();
+    }
+
+    const savedBooking = await this.bookingRepository.save(booking);
+
+    // Помечаем слот как забронированный
+    timeSlot.isBooked = true;
+    await this.timeSlotRepository.save(timeSlot);
+
+    // Планируем напоминания если они указаны
+    if (savedBooking.reminders && savedBooking.reminders.length > 0) {
+      try {
+        await this.notificationsService.scheduleReminders(savedBooking);
+      } catch (error) {
+        console.error("Failed to schedule reminders:", error);
+      }
+    }
+
+    // Отправляем уведомление владельцу системы бронирования
+    if (bookingSystem && bookingSystem.ownerId) {
+      const fullBooking = await this.bookingRepository.findOne({
+        where: { id: savedBooking.id },
+        relations: ["specialist", "service", "timeSlot"],
+      });
+
+      if (fullBooking) {
+        this.notificationService
+          .sendToUser(bookingSystem.ownerId, NotificationType.BOOKING_CREATED, {
+            bookingSystemId: bookingSystem.id,
+            bookingSystemName: bookingSystem.name,
+            booking: {
+              id: fullBooking.id,
+              clientName: fullBooking.clientName,
+              clientPhone: fullBooking.clientPhone,
+              status: fullBooking.status,
+            },
+            specialist: fullBooking.specialist
+              ? { name: fullBooking.specialist.name }
+              : undefined,
+            service: fullBooking.service
+              ? { name: fullBooking.service.name }
+              : undefined,
+            timeSlot: fullBooking.timeSlot
+              ? { startTime: fullBooking.timeSlot.startTime }
+              : undefined,
+          })
+          .catch((error) => {
+            console.error(
+              "Ошибка отправки уведомления о создании бронирования:",
+              error
+            );
+          });
+      }
+
+      // Логируем создание бронирования
+      this.activityLogService
+        .create({
+          type: ActivityType.BOOKING_CREATED,
+          level: ActivityLevel.SUCCESS,
+          message: `Создано бронирование от ${savedBooking.clientName || "неизвестно"}`,
+          userId: bookingSystem.ownerId,
+          metadata: {
+            bookingId: savedBooking.id,
+            clientName: savedBooking.clientName,
+            clientPhone: savedBooking.clientPhone,
+            specialistId: savedBooking.specialistId,
+            serviceId: savedBooking.serviceId,
+            timeSlotId: savedBooking.timeSlotId,
+            status: savedBooking.status,
+            bookingSystemId,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования создания бронирования:", error);
+        });
+    }
+
+    return savedBooking;
+  }
+
+  /**
+   * Получить все бронирования системы бронирования
+   */
+  async findAllByBookingSystem(
+    bookingSystemId: string,
+    userId: string
+  ): Promise<Booking[]> {
+    await this.validateBookingSystemOwnership(bookingSystemId, userId);
+
+    return this.bookingRepository.find({
+      where: {
+        specialist: { bookingSystemId },
+      },
+      relations: ["specialist", "service", "timeSlot"],
+      order: { createdAt: "DESC" },
+    });
+  }
+
+  /**
+   * Получить бронирование по ID для системы бронирования
+   */
+  async findOneByBookingSystem(
+    id: string,
+    bookingSystemId: string,
+    userId: string
+  ): Promise<Booking> {
+    await this.validateBookingSystemOwnership(bookingSystemId, userId);
+
+    const booking = await this.bookingRepository.findOne({
+      where: {
+        id,
+        specialist: { bookingSystemId },
+      },
+      relations: ["specialist", "service", "timeSlot"],
+    });
+
+    if (!booking) {
+      throw new NotFoundException("Бронирование не найдено");
+    }
+
+    return booking;
+  }
+
+  /**
+   * Обновить бронирование для системы бронирования
+   */
+  async updateByBookingSystem(
+    id: string,
+    bookingSystemId: string,
+    userId: string,
+    updateBookingDto: UpdateBookingDto
+  ): Promise<Booking> {
+    await this.validateBookingSystemOwnership(bookingSystemId, userId);
+    const booking = await this.findOneByBookingSystem(id, bookingSystemId, userId);
+
+    // Ограничиваем изменения в зависимости от статуса
+    if (booking.isConfirmed || booking.isCompleted) {
+      const allowedFields = ["notes", "clientData"];
+      const updateFields = Object.keys(updateBookingDto);
+      const hasRestrictedFields = updateFields.some(
+        (field) => !allowedFields.includes(field)
+      );
+
+      if (hasRestrictedFields) {
+        throw new BadRequestException(
+          "Нельзя изменять подтвержденное или завершенное бронирование"
+        );
+      }
+    }
+
+    Object.assign(booking, updateBookingDto);
+    const updatedBooking = await this.bookingRepository.save(booking);
+
+    // Логируем обновление бронирования
+    this.activityLogService
+      .create({
+        type: ActivityType.BOOKING_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Обновлено бронирование #${updatedBooking.id} от ${updatedBooking.clientName || "неизвестно"}`,
+        userId,
+        metadata: {
+          bookingId: updatedBooking.id,
+          clientName: updatedBooking.clientName,
+          changes: updateBookingDto,
+          bookingSystemId,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования обновления бронирования:", error);
+      });
+
+    return updatedBooking;
+  }
+
+  /**
+   * Подтвердить бронирование для системы бронирования (публичный)
+   */
+  async confirmByBookingSystem(
+    bookingSystemId: string,
+    id: string,
+    confirmBookingDto: ConfirmBookingDto
+  ): Promise<Booking> {
+    const booking = await this.bookingRepository.findOne({
+      where: {
+        id,
+        specialist: { bookingSystemId },
+      },
+      relations: ["specialist"],
+    });
+
+    if (!booking) {
+      throw new NotFoundException("Бронирование не найдено");
+    }
+
+    if (!booking.canBeConfirmed) {
+      throw new BadRequestException("Бронирование не может быть подтверждено");
+    }
+
+    if (booking.confirmationCode !== confirmBookingDto.confirmationCode) {
+      throw new BadRequestException("Неверный код подтверждения");
+    }
+
+    booking.confirm();
+
+    const savedBooking = await this.bookingRepository.save(booking);
+
+    // Логируем подтверждение бронирования
+    const bookingSystem = await this.bookingSystemRepository.findOne({
+      where: { id: bookingSystemId },
+    });
+    if (bookingSystem && bookingSystem.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.BOOKING_CONFIRMED,
+          level: ActivityLevel.SUCCESS,
+          message: `Подтверждено бронирование #${savedBooking.id} от ${savedBooking.clientName || "неизвестно"}`,
+          userId: bookingSystem.ownerId,
+          metadata: {
+            bookingId: savedBooking.id,
+            clientName: savedBooking.clientName,
+            clientPhone: savedBooking.clientPhone,
+            bookingSystemId,
+          },
+        })
+        .catch((error) => {
+          console.error("Ошибка логирования подтверждения бронирования:", error);
+        });
+    }
+
+    return savedBooking;
+  }
+
+  /**
+   * Отменить бронирование для системы бронирования
+   */
+  async cancelByBookingSystem(
+    id: string,
+    bookingSystemId: string,
+    userId: string,
+    cancelBookingDto: CancelBookingDto
+  ): Promise<Booking> {
+    await this.validateBookingSystemOwnership(bookingSystemId, userId);
+    const booking = await this.findOneByBookingSystem(id, bookingSystemId, userId);
+
+    if (!booking.canBeCancelled) {
+      throw new BadRequestException("Бронирование не может быть отменено");
+    }
+
+    booking.cancel(cancelBookingDto.cancellationReason);
+
+    // Освобождаем все составные слоты
+    await this.freeBookingSlots(booking);
+
+    const savedBooking = await this.bookingRepository.save(booking);
+
+    // Отменяем все запланированные напоминания
+    try {
+      await this.notificationsService.cancelReminders(booking.id);
+    } catch (error) {
+      console.error("Failed to cancel reminders:", error);
+    }
+
+    // Отправляем уведомление об отмене
+    if (cancelBookingDto.cancellationReason && booking.telegramUserId) {
+      try {
+        await this.notificationsService.sendCancellationNotification(
+          booking.id,
+          cancelBookingDto.cancellationReason
+        );
+      } catch (error) {
+        console.error("Failed to send cancellation notification:", error);
+      }
+    }
+
+    // Логируем отмену бронирования
+    this.activityLogService
+      .create({
+        type: ActivityType.BOOKING_CANCELLED,
+        level: ActivityLevel.WARNING,
+        message: `Отменено бронирование #${savedBooking.id} от ${savedBooking.clientName || "неизвестно"}`,
+        userId,
+        metadata: {
+          bookingId: savedBooking.id,
+          clientName: savedBooking.clientName,
+          cancellationReason: cancelBookingDto.cancellationReason,
+          bookingSystemId,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования отмены бронирования:", error);
+      });
+
+    return savedBooking;
+  }
+
+  /**
+   * Завершить бронирование для системы бронирования
+   */
+  async markAsCompletedByBookingSystem(
+    id: string,
+    bookingSystemId: string,
+    userId: string
+  ): Promise<Booking> {
+    await this.validateBookingSystemOwnership(bookingSystemId, userId);
+    const booking = await this.findOneByBookingSystem(id, bookingSystemId, userId);
+
+    booking.markAsCompleted();
+
+    const savedBooking = await this.bookingRepository.save(booking);
+
+    // Логируем завершение бронирования
+    this.activityLogService
+      .create({
+        type: ActivityType.BOOKING_COMPLETED,
+        level: ActivityLevel.SUCCESS,
+        message: `Завершено бронирование #${savedBooking.id} от ${savedBooking.clientName || "неизвестно"}`,
+        userId,
+        metadata: {
+          bookingId: savedBooking.id,
+          clientName: savedBooking.clientName,
+          bookingSystemId,
+        },
+      })
+      .catch((error) => {
+        console.error("Ошибка логирования завершения бронирования:", error);
+      });
+
+    return savedBooking;
+  }
+
+  /**
+   * Получить статистику для системы бронирования
+   */
+  async getStatisticsByBookingSystem(
+    bookingSystemId: string,
+    userId: string
+  ): Promise<any> {
+    await this.validateBookingSystemOwnership(bookingSystemId, userId);
+
+    const stats = await this.bookingRepository
+      .createQueryBuilder("booking")
+      .leftJoin("booking.specialist", "specialist")
+      .select([
+        "COUNT(*) as total",
+        "COUNT(CASE WHEN booking.status = :confirmed THEN 1 END) as confirmed",
+        "COUNT(CASE WHEN booking.status = :completed THEN 1 END) as completed",
+        "COUNT(CASE WHEN booking.status = :cancelled THEN 1 END) as cancelled",
+        "COUNT(CASE WHEN booking.status = :noShow THEN 1 END) as noShow",
+      ])
+      .where("specialist.bookingSystemId = :bookingSystemId", { bookingSystemId })
+      .setParameters({
+        confirmed: BookingStatus.CONFIRMED,
+        completed: BookingStatus.COMPLETED,
+        cancelled: BookingStatus.CANCELLED,
+        noShow: BookingStatus.NO_SHOW,
+      })
+      .getRawOne();
+
+    const total = parseInt(stats.total) || 0;
+    const confirmed = parseInt(stats.confirmed) || 0;
+    const completed = parseInt(stats.completed) || 0;
+    const cancelled = parseInt(stats.cancelled) || 0;
+    const noShow = parseInt(stats.noShow) || 0;
+
+    return {
+      total,
+      confirmed,
+      completed,
+      cancelled,
+      noShow,
+      confirmationRate: total > 0 ? (confirmed / total) * 100 : 0,
+      completionRate: confirmed > 0 ? (completed / confirmed) * 100 : 0,
+      cancellationRate: total > 0 ? (cancelled / total) * 100 : 0,
+      noShowRate: confirmed > 0 ? (noShow / confirmed) * 100 : 0,
+    };
+  }
+
+  /**
+   * Валидация владения системой бронирования
+   */
+  private async validateBookingSystemOwnership(
+    bookingSystemId: string,
+    userId: string
+  ): Promise<void> {
+    const bookingSystem = await this.bookingSystemRepository.findOne({
+      where: { id: bookingSystemId, ownerId: userId },
+    });
+    if (!bookingSystem) {
+      throw new ForbiddenException(
+        "У вас нет доступа к этой системе бронирования"
+      );
+    }
   }
 }

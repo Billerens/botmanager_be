@@ -8,8 +8,10 @@ import {
   ManyToMany,
   OneToMany,
   JoinColumn,
+  Index,
 } from "typeorm";
 import { Bot } from "./bot.entity";
+import { BookingSystem } from "./booking-system.entity";
 import { Service } from "./service.entity";
 import { Booking } from "./booking.entity";
 import { TimeSlot } from "./time-slot.entity";
@@ -38,6 +40,7 @@ export interface BreakTime {
 }
 
 @Entity("specialists")
+@Index(["bookingSystemId"])
 export class Specialist {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -84,13 +87,40 @@ export class Specialist {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // Связи
-  @ManyToOne(() => Bot, (bot) => bot.specialists, { onDelete: "CASCADE" })
-  @JoinColumn({ name: "botId" })
-  bot: Bot;
+  // ============================================================
+  // Связь с системой бронирования (основная)
+  // ============================================================
+  @ManyToOne(
+    () => BookingSystem,
+    (bookingSystem) => bookingSystem.specialists,
+    {
+      onDelete: "CASCADE",
+    }
+  )
+  @JoinColumn({ name: "bookingSystemId" })
+  bookingSystem: BookingSystem;
 
-  @Column()
-  botId: string;
+  @Column({ nullable: true })
+  bookingSystemId: string;
+
+  // ============================================================
+  // Связь с ботом (deprecated, для обратной совместимости)
+  // ============================================================
+  /**
+   * @deprecated Используйте bookingSystemId. Это поле будет удалено в будущих версиях.
+   */
+  @ManyToOne(() => Bot, (bot) => bot.specialists, {
+    onDelete: "CASCADE",
+    nullable: true,
+  })
+  @JoinColumn({ name: "botId" })
+  bot?: Bot;
+
+  /**
+   * @deprecated Используйте bookingSystemId. Это поле будет удалено в будущих версиях.
+   */
+  @Column({ nullable: true })
+  botId?: string;
 
   @ManyToMany(() => Service, (service) => service.specialists)
   services: Service[];
