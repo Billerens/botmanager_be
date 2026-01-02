@@ -27,7 +27,13 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Specialist, Service, TimeSlot, Booking, BookingSystem]),
+    TypeOrmModule.forFeature([
+      Specialist,
+      Service,
+      TimeSlot,
+      Booking,
+      BookingSystem,
+    ]),
     TelegramModule,
     QueueModule,
     WebSocketModule,
