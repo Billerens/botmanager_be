@@ -141,6 +141,21 @@ export class BookingSystemsController {
     return this.bookingSystemsService.checkSlugAvailability(slug, excludeId);
   }
 
+  @Get("by-bot/:botId")
+  @ApiOperation({ summary: "Получить систему бронирования по ID бота" })
+  @ApiResponse({
+    status: 200,
+    description: "Система бронирования найдена",
+    schema: { $ref: getSchemaPath(BookingSystemResponseDto) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Система бронирования не найдена",
+  })
+  async findByBotId(@Param("botId") botId: string, @Request() req) {
+    return this.bookingSystemsService.findByBotId(botId, req.user.id);
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "Получить систему бронирования по ID" })
   @ApiResponse({
