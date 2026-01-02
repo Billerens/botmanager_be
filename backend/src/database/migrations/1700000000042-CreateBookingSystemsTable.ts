@@ -204,7 +204,7 @@ export class CreateBookingSystemsTable1700000000042
         uuid_generate_v4(),
         COALESCE(b."bookingTitle", b."name", 'Система бронирования'),
         b."slug",
-        b."subdomainStatus"::"subdomain_status_enum",
+        b."subdomainStatus"::text::"public"."booking_systems_subdomainstatus_enum",
         b."subdomainError",
         b."subdomainActivatedAt",
         b."subdomainUrl",
