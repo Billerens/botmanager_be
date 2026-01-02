@@ -20,8 +20,6 @@ import { BookingReminderProcessor } from "./processors/booking-reminder.processo
 // Модули
 import { TelegramModule } from "../telegram/telegram.module";
 import { QueueModule } from "../queue/queue.module";
-import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
-import { TelegramInitDataValidationService } from "../../common/telegram-initdata-validation.service";
 import { WebSocketModule } from "../websocket/websocket.module";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
 
@@ -48,8 +46,6 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
     BookingNotificationsService,
     BookingReminderProcessor,
     BookingReminderSchedulerService,
-    TelegramInitDataGuard,
-    TelegramInitDataValidationService,
   ],
   exports: [
     SpecialistsService,
