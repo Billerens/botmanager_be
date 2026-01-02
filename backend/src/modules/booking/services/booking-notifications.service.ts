@@ -6,7 +6,6 @@ import {
   Booking,
   BookingReminder,
 } from "../../../database/entities/booking.entity";
-import { Bot } from "../../../database/entities/bot.entity";
 import { BookingSystem } from "../../../database/entities/booking-system.entity";
 import { TelegramService } from "../../telegram/telegram.service";
 import { QueueService } from "../../queue/queue.service";
@@ -20,8 +19,6 @@ export class BookingNotificationsService {
   constructor(
     @InjectRepository(Booking)
     private readonly bookingRepository: Repository<Booking>,
-    @InjectRepository(Bot)
-    private readonly botRepository: Repository<Bot>,
     @InjectRepository(BookingSystem)
     private readonly bookingSystemRepository: Repository<BookingSystem>,
     private readonly telegramService: TelegramService,

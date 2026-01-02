@@ -1,4 +1,4 @@
-import { Module, forwardRef } from "@nestjs/common";
+import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { Specialist } from "../../database/entities/specialist.entity";
 import { Service } from "../../database/entities/service.entity";
@@ -22,7 +22,6 @@ import { TelegramModule } from "../telegram/telegram.module";
 import { QueueModule } from "../queue/queue.module";
 import { TelegramInitDataGuard } from "../auth/guards/telegram-initdata.guard";
 import { TelegramInitDataValidationService } from "../../common/telegram-initdata-validation.service";
-import { BotsModule } from "../bots/bots.module";
 import { WebSocketModule } from "../websocket/websocket.module";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
 
@@ -31,7 +30,6 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
     TypeOrmModule.forFeature([Specialist, Service, TimeSlot, Booking, BookingSystem]),
     TelegramModule,
     QueueModule,
-    forwardRef(() => BotsModule),
     WebSocketModule,
     ActivityLogModule,
   ],
