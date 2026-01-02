@@ -11,6 +11,7 @@ import { PublicBookingSystemsController } from "./public-booking-systems.control
 import { ActivityLogModule } from "../activity-log/activity-log.module";
 import { TelegramModule } from "../telegram/telegram.module";
 import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
+import { BookingModule } from "../booking/booking.module";
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
     ActivityLogModule,
     forwardRef(() => TelegramModule),
     forwardRef(() => CustomDomainsModule),
+    forwardRef(() => BookingModule),
   ],
   controllers: [BookingSystemsController, PublicBookingSystemsController],
   providers: [BookingSystemsService],
