@@ -61,7 +61,7 @@ export class AdminOrdersController {
 
     const [items, total] = await this.orderRepository.findAndCount({
       where,
-      relations: ["shop", "items", "items.product"],
+      relations: ["shop"],
       order: { createdAt: "DESC" },
       skip: (page - 1) * limit,
       take: limit,
@@ -87,7 +87,7 @@ export class AdminOrdersController {
   async findOne(@Param("id") id: string, @Req() req: AdminRequest) {
     const order = await this.orderRepository.findOne({
       where: { id },
-      relations: ["shop", "items", "items.product"],
+      relations: ["shop"],
     });
 
     await this.actionLogService.logAction(
