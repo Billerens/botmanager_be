@@ -3,8 +3,8 @@ import { Cron } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, In } from "typeorm";
 import { Shop } from "../../../database/entities/shop.entity";
-import { Bot } from "../../../database/entities/bot.entity";
 import { CustomPage } from "../../../database/entities/custom-page.entity";
+import { BookingSystem } from "../../../database/entities/booking-system.entity";
 import { SubdomainStatus, SubdomainType } from "../enums/domain-status.enum";
 import { SubdomainService } from "./subdomain.service";
 
@@ -28,10 +28,10 @@ export class SubdomainHealthService {
   constructor(
     @InjectRepository(Shop)
     private readonly shopRepository: Repository<Shop>,
-    @InjectRepository(Bot)
-    private readonly botRepository: Repository<Bot>,
     @InjectRepository(CustomPage)
     private readonly customPageRepository: Repository<CustomPage>,
+    @InjectRepository(BookingSystem)
+    private readonly bookingSystemRepository: Repository<BookingSystem>,
     private readonly subdomainService: SubdomainService
   ) {}
 
@@ -44,8 +44,8 @@ export class SubdomainHealthService {
   async checkPendingSubdomains(): Promise<void> {
     await Promise.all([
       this.checkShopSubdomains(),
-      this.checkBotSubdomains(),
       this.checkPageSubdomains(),
+      this.checkBookingSystemSubdomains(),
     ]);
   }
 
@@ -76,38 +76,6 @@ export class SubdomainHealthService {
       } catch (error) {
         this.logger.warn(
           `Failed to check subdomain for shop ${shop.id}: ${error.message}`
-        );
-      }
-    }
-  }
-
-  /**
-   * Проверка субдоменов бронирования (боты)
-   */
-  private async checkBotSubdomains(): Promise<void> {
-    const bots = await this.botRepository.find({
-      where: {
-        subdomainStatus: In(this.PENDING_STATUSES),
-      },
-    });
-
-    if (bots.length === 0) return;
-
-    for (const bot of bots) {
-      if (!bot.slug) continue;
-
-      try {
-        const realStatus = await this.subdomainService.checkStatus(
-          bot.slug,
-          SubdomainType.BOOKING
-        );
-
-        if (realStatus !== bot.subdomainStatus) {
-          await this.updateBotStatus(bot, realStatus);
-        }
-      } catch (error) {
-        this.logger.warn(
-          `Failed to check subdomain for bot ${bot.id}: ${error.message}`
         );
       }
     }
@@ -146,6 +114,38 @@ export class SubdomainHealthService {
   }
 
   /**
+   * Проверка субдоменов систем бронирования
+   */
+  private async checkBookingSystemSubdomains(): Promise<void> {
+    const bookingSystems = await this.bookingSystemRepository.find({
+      where: {
+        subdomainStatus: In(this.PENDING_STATUSES),
+      },
+    });
+
+    if (bookingSystems.length === 0) return;
+
+    for (const bookingSystem of bookingSystems) {
+      if (!bookingSystem.slug) continue;
+
+      try {
+        const realStatus = await this.subdomainService.checkStatus(
+          bookingSystem.slug,
+          SubdomainType.BOOKING
+        );
+
+        if (realStatus !== bookingSystem.subdomainStatus) {
+          await this.updateBookingSystemStatus(bookingSystem, realStatus);
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to check subdomain for booking system ${bookingSystem.id}: ${error.message}`
+        );
+      }
+    }
+  }
+
+  /**
    * Обновить статус субдомена магазина
    */
   private async updateShopStatus(
@@ -164,27 +164,6 @@ export class SubdomainHealthService {
     }
 
     await this.shopRepository.save(shop);
-  }
-
-  /**
-   * Обновить статус субдомена бота
-   */
-  private async updateBotStatus(
-    bot: Bot,
-    newStatus: SubdomainStatus
-  ): Promise<void> {
-    const oldStatus = bot.subdomainStatus;
-    bot.subdomainStatus = newStatus;
-
-    if (newStatus === SubdomainStatus.ACTIVE) {
-      bot.subdomainActivatedAt = new Date();
-      bot.subdomainError = null;
-    } else if (newStatus === SubdomainStatus.ERROR) {
-      bot.subdomainError =
-        "Субдомен не найден в DNS. Попробуйте повторить активацию.";
-    }
-
-    await this.botRepository.save(bot);
   }
 
   /**
@@ -209,20 +188,46 @@ export class SubdomainHealthService {
   }
 
   /**
+   * Обновить статус субдомена системы бронирования
+   */
+  private async updateBookingSystemStatus(
+    bookingSystem: BookingSystem,
+    newStatus: SubdomainStatus
+  ): Promise<void> {
+    const oldStatus = bookingSystem.subdomainStatus;
+    bookingSystem.subdomainStatus = newStatus;
+
+    if (newStatus === SubdomainStatus.ACTIVE) {
+      bookingSystem.subdomainActivatedAt = new Date();
+      bookingSystem.subdomainError = null;
+    } else if (newStatus === SubdomainStatus.ERROR) {
+      bookingSystem.subdomainError =
+        "Субдомен не найден в DNS. Попробуйте повторить активацию.";
+    }
+
+    await this.bookingSystemRepository.save(bookingSystem);
+  }
+
+  /**
    * Получить статистику субдоменов
    */
   async getSubdomainStatistics(): Promise<{
     shops: { total: number; active: number; pending: number; error: number };
-    bots: { total: number; active: number; pending: number; error: number };
     pages: { total: number; active: number; pending: number; error: number };
+    bookingSystems: {
+      total: number;
+      active: number;
+      pending: number;
+      error: number;
+    };
   }> {
-    const [shops, bots, pages] = await Promise.all([
+    const [shops, pages, bookingSystems] = await Promise.all([
       this.getShopStats(),
-      this.getBotStats(),
       this.getPageStats(),
+      this.getBookingSystemStats(),
     ]);
 
-    return { shops, bots, pages };
+    return { shops, pages, bookingSystems };
   }
 
   private async getShopStats(): Promise<{
@@ -248,29 +253,6 @@ export class SubdomainHealthService {
     return { total, active, pending, error };
   }
 
-  private async getBotStats(): Promise<{
-    total: number;
-    active: number;
-    pending: number;
-    error: number;
-  }> {
-    const [total, active, pending, error] = await Promise.all([
-      this.botRepository.count({
-        where: { subdomainStatus: In(Object.values(SubdomainStatus)) },
-      }),
-      this.botRepository.count({
-        where: { subdomainStatus: SubdomainStatus.ACTIVE },
-      }),
-      this.botRepository.count({
-        where: { subdomainStatus: In(this.PENDING_STATUSES) },
-      }),
-      this.botRepository.count({
-        where: { subdomainStatus: SubdomainStatus.ERROR },
-      }),
-    ]);
-    return { total, active, pending, error };
-  }
-
   private async getPageStats(): Promise<{
     total: number;
     active: number;
@@ -288,6 +270,29 @@ export class SubdomainHealthService {
         where: { subdomainStatus: In(this.PENDING_STATUSES) },
       }),
       this.customPageRepository.count({
+        where: { subdomainStatus: SubdomainStatus.ERROR },
+      }),
+    ]);
+    return { total, active, pending, error };
+  }
+
+  private async getBookingSystemStats(): Promise<{
+    total: number;
+    active: number;
+    pending: number;
+    error: number;
+  }> {
+    const [total, active, pending, error] = await Promise.all([
+      this.bookingSystemRepository.count({
+        where: { subdomainStatus: In(Object.values(SubdomainStatus)) },
+      }),
+      this.bookingSystemRepository.count({
+        where: { subdomainStatus: SubdomainStatus.ACTIVE },
+      }),
+      this.bookingSystemRepository.count({
+        where: { subdomainStatus: In(this.PENDING_STATUSES) },
+      }),
+      this.bookingSystemRepository.count({
         where: { subdomainStatus: SubdomainStatus.ERROR },
       }),
     ]);

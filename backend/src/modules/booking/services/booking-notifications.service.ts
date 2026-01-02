@@ -7,6 +7,7 @@ import {
   BookingReminder,
 } from "../../../database/entities/booking.entity";
 import { Bot } from "../../../database/entities/bot.entity";
+import { BookingSystem } from "../../../database/entities/booking-system.entity";
 import { TelegramService } from "../../telegram/telegram.service";
 import { QueueService } from "../../queue/queue.service";
 import { NotificationService } from "../../websocket/services/notification.service";
@@ -21,6 +22,8 @@ export class BookingNotificationsService {
     private readonly bookingRepository: Repository<Booking>,
     @InjectRepository(Bot)
     private readonly botRepository: Repository<Bot>,
+    @InjectRepository(BookingSystem)
+    private readonly bookingSystemRepository: Repository<BookingSystem>,
     private readonly telegramService: TelegramService,
     private readonly queueService: QueueService,
     private readonly notificationService: NotificationService
@@ -208,10 +211,21 @@ export class BookingNotificationsService {
     try {
       // Загружаем полную информацию если не загружена
       let fullBooking = booking;
-      if (!booking.specialist || !booking.service || !booking.timeSlot) {
+      if (
+        !booking.specialist ||
+        !booking.service ||
+        !booking.timeSlot ||
+        !booking.specialist.bookingSystem?.bot
+      ) {
         const loaded = await this.bookingRepository.findOne({
           where: { id: booking.id },
-          relations: ["specialist", "service", "timeSlot"],
+          relations: [
+            "specialist",
+            "specialist.bookingSystem",
+            "specialist.bookingSystem.bot",
+            "service",
+            "timeSlot",
+          ],
         });
 
         if (!loaded) {
@@ -229,10 +243,8 @@ export class BookingNotificationsService {
         return;
       }
 
-      // Находим бота
-      const bot = await this.botRepository.findOne({
-        where: { id: fullBooking.specialist.botId },
-      });
+      // Получаем бота через bookingSystem
+      const bot = fullBooking.specialist.bookingSystem?.bot;
 
       if (!bot) {
         this.logger.error(`Bot not found for booking ${booking.id}`);
@@ -264,10 +276,8 @@ export class BookingNotificationsService {
 
       // Отправляем уведомление владельцу бота о напоминании
       if (bot && bot.ownerId) {
-        this.notificationService.sendToUser(
-          bot.ownerId,
-          NotificationType.BOOKING_REMINDER,
-          {
+        this.notificationService
+          .sendToUser(bot.ownerId, NotificationType.BOOKING_REMINDER, {
             botId: bot.id,
             botName: bot.name,
             booking: {
@@ -285,10 +295,13 @@ export class BookingNotificationsService {
               ? { startTime: fullBooking.timeSlot.startTime }
               : undefined,
             reminderIndex,
-          }
-        ).catch((error) => {
-          this.logger.error("Ошибка отправки уведомления о напоминании:", error);
-        });
+          })
+          .catch((error) => {
+            this.logger.error(
+              "Ошибка отправки уведомления о напоминании:",
+              error
+            );
+          });
       }
     } catch (error) {
       this.logger.error(
@@ -391,13 +404,15 @@ export class BookingNotificationsService {
   }
 
   /**
-   * Получает статистику по уведомлениям
+   * Получает статистику по уведомлениям для BookingSystem
    */
-  async getReminderStats(botId: string): Promise<any> {
+  async getReminderStats(bookingSystemId: string): Promise<any> {
     const bookings = await this.bookingRepository
       .createQueryBuilder("booking")
       .leftJoin("booking.specialist", "specialist")
-      .where("specialist.botId = :botId", { botId })
+      .where("specialist.bookingSystemId = :bookingSystemId", {
+        bookingSystemId,
+      })
       .andWhere("booking.reminders IS NOT NULL")
       .getMany();
 
@@ -429,10 +444,16 @@ export class BookingNotificationsService {
     reason: string
   ): Promise<void> {
     try {
-      // Загружаем полную информацию о бронировании
+      // Загружаем полную информацию о бронировании с bookingSystem и bot
       const booking = await this.bookingRepository.findOne({
         where: { id: bookingId },
-        relations: ["specialist", "service", "timeSlot"],
+        relations: [
+          "specialist",
+          "specialist.bookingSystem",
+          "specialist.bookingSystem.bot",
+          "service",
+          "timeSlot",
+        ],
       });
 
       if (!booking) {
@@ -447,10 +468,8 @@ export class BookingNotificationsService {
         return;
       }
 
-      // Получаем бота
-      const bot = await this.botRepository.findOne({
-        where: { id: booking.specialist.botId },
-      });
+      // Получаем бота через bookingSystem
+      const bot = booking.specialist?.bookingSystem?.bot;
 
       if (!bot) {
         this.logger.error(`Bot not found for booking ${bookingId}`);

@@ -3,6 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { BotFlow, FlowStatus } from "../../database/entities/bot-flow.entity";
 import { Shop } from "../../database/entities/shop.entity";
+import { BookingSystem } from "../../database/entities/booking-system.entity";
 import {
   BotFlowNode,
   NodeType,
@@ -91,6 +92,8 @@ export class FlowExecutionService implements OnModuleInit {
     private readonly botFlowNodeRepository: Repository<BotFlowNode>,
     @InjectRepository(Shop)
     private readonly shopRepository: Repository<Shop>,
+    @InjectRepository(BookingSystem)
+    private readonly bookingSystemRepository: Repository<BookingSystem>,
     private readonly telegramService: TelegramService,
     private readonly botsService: BotsService,
     private readonly sessionStorageService: SessionStorageService,
@@ -392,22 +395,25 @@ export class FlowExecutionService implements OnModuleInit {
           }
         } else if (message.text === "/booking") {
           // Проверяем условия для команды /booking
+          // BookingSystem теперь отдельная сущность - ищем систему бронирования, привязанную к боту
+          const bookingSystem = await this.bookingSystemRepository.findOne({
+            where: { botId: bot.id },
+          });
+
           this.logger.log(
-            `Получена команда "/booking". Проверка условий: isBookingEnabled=${bot.isBookingEnabled}, bookingButtonTypes=${JSON.stringify(bot.bookingButtonTypes)}`
+            `Получена команда "/booking". BookingSystem привязан: ${!!bookingSystem}, buttonTypes=${JSON.stringify(bookingSystem?.buttonTypes)}`
           );
 
-          if (!bot.isBookingEnabled) {
+          if (!bookingSystem) {
+            this.logger.warn(`У бота ${bot.id} нет привязанной системы бронирования`);
+          } else if (!bookingSystem.buttonTypes?.includes("command")) {
             this.logger.warn(
-              `Бот ${bot.id} не имеет включенного бронирования (isBookingEnabled=false)`
-            );
-          } else if (!bot.bookingButtonTypes?.includes("command")) {
-            this.logger.warn(
-              `В настройках бота ${bot.id} не включена команда /booking. bookingButtonTypes=${JSON.stringify(bot.bookingButtonTypes)}`
+              `В настройках системы бронирования ${bookingSystem.id} не включена команда /booking. buttonTypes=${JSON.stringify(bookingSystem.buttonTypes)}`
             );
           } else {
             // Все условия выполнены - открываем бронирование
-            this.logger.log(`Команда "/booking" - открываем бронирование`);
-            await this.handleBookingCommand(bot, message);
+            this.logger.log(`Команда "/booking" - открываем бронирование ${bookingSystem.id}`);
+            await this.handleBookingCommand(bot, bookingSystem, message);
             return; // Не обрабатываем через flow
           }
         } else if (message.text && message.text.startsWith("/")) {
@@ -1036,21 +1042,21 @@ export class FlowExecutionService implements OnModuleInit {
   /**
    * Обрабатывает команду /booking для открытия системы бронирования
    */
-  private async handleBookingCommand(bot: any, message: any): Promise<void> {
+  private async handleBookingCommand(bot: any, bookingSystem: BookingSystem, message: any): Promise<void> {
     try {
       const bookingUrl =
-        bot.bookingUrl ||
-        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/booking/${bot.id}`;
+        bookingSystem.url ||
+        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/booking-system/${bookingSystem.id}`;
 
       // Расшифровываем токен бота
       const decryptedToken = this.botsService.decryptToken(bot.token);
 
       // Получаем настройки команды
-      const commandSettings = bot.bookingButtonSettings?.command;
+      const commandSettings = bookingSystem.buttonSettings?.command;
       const buttonText = commandSettings?.text || "📅 Записаться на прием";
       const messageText =
         commandSettings?.messageText ||
-        bot.bookingDescription ||
+        bookingSystem.description ||
         "Добро пожаловать в нашу систему бронирования! Нажмите кнопку ниже, чтобы записаться на прием.";
 
       // Отправляем сообщение с кнопкой для открытия системы бронирования

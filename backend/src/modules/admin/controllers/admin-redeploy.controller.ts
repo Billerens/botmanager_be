@@ -12,8 +12,8 @@ import { Repository, In } from "typeorm";
 import { Request } from "express";
 
 import { Shop } from "../../../database/entities/shop.entity";
-import { Bot } from "../../../database/entities/bot.entity";
 import { CustomPage } from "../../../database/entities/custom-page.entity";
+import { BookingSystem } from "../../../database/entities/booking-system.entity";
 import { Admin } from "../../../database/entities/admin.entity";
 import { AdminJwtGuard } from "../guards/admin-jwt.guard";
 import { AdminRolesGuard } from "../guards/admin-roles.guard";
@@ -35,7 +35,7 @@ interface AdminRequest extends Request {
 
 interface SubdomainStatusItem {
   id: string;
-  type: "shop" | "bot" | "page";
+  type: "shop" | "page" | "booking";
   name: string;
   slug: string | null;
   subdomainStatus: SubdomainStatus | null;
@@ -52,10 +52,10 @@ export class AdminRedeployController {
   constructor(
     @InjectRepository(Shop)
     private shopRepository: Repository<Shop>,
-    @InjectRepository(Bot)
-    private botRepository: Repository<Bot>,
     @InjectRepository(CustomPage)
     private customPageRepository: Repository<CustomPage>,
+    @InjectRepository(BookingSystem)
+    private bookingSystemRepository: Repository<BookingSystem>,
     @Inject(forwardRef(() => FrontendRedeployService))
     private frontendRedeployService: FrontendRedeployService,
     @Inject(forwardRef(() => SubdomainService))
@@ -147,43 +147,19 @@ export class AdminRedeployController {
    */
   @Get("subdomains")
   async getSubdomainsStatus() {
+    const subdomainStatuses = [
+      SubdomainStatus.PENDING,
+      SubdomainStatus.DNS_CREATING,
+      SubdomainStatus.ACTIVATING,
+      SubdomainStatus.ACTIVE,
+      SubdomainStatus.ERROR,
+      SubdomainStatus.REMOVING,
+    ];
+
     // Получаем все субдомены из разных источников
-    const [shops, bots, pages] = await Promise.all([
+    const [shops, pages, bookingSystems] = await Promise.all([
       this.shopRepository.find({
-        where: {
-          subdomainStatus: In([
-            SubdomainStatus.PENDING,
-            SubdomainStatus.DNS_CREATING,
-            SubdomainStatus.ACTIVATING,
-            SubdomainStatus.ACTIVE,
-            SubdomainStatus.ERROR,
-            SubdomainStatus.REMOVING,
-          ]),
-        },
-        select: [
-          "id",
-          "name",
-          "slug",
-          "subdomainStatus",
-          "subdomainUrl",
-          "subdomainError",
-          "subdomainActivatedAt",
-          "createdAt",
-          "updatedAt",
-        ],
-        order: { createdAt: "DESC" },
-      }),
-      this.botRepository.find({
-        where: {
-          subdomainStatus: In([
-            SubdomainStatus.PENDING,
-            SubdomainStatus.DNS_CREATING,
-            SubdomainStatus.ACTIVATING,
-            SubdomainStatus.ACTIVE,
-            SubdomainStatus.ERROR,
-            SubdomainStatus.REMOVING,
-          ]),
-        },
+        where: { subdomainStatus: In(subdomainStatuses) },
         select: [
           "id",
           "name",
@@ -198,19 +174,25 @@ export class AdminRedeployController {
         order: { createdAt: "DESC" },
       }),
       this.customPageRepository.find({
-        where: {
-          subdomainStatus: In([
-            SubdomainStatus.PENDING,
-            SubdomainStatus.DNS_CREATING,
-            SubdomainStatus.ACTIVATING,
-            SubdomainStatus.ACTIVE,
-            SubdomainStatus.ERROR,
-            SubdomainStatus.REMOVING,
-          ]),
-        },
+        where: { subdomainStatus: In(subdomainStatuses) },
         select: [
           "id",
           "title",
+          "slug",
+          "subdomainStatus",
+          "subdomainUrl",
+          "subdomainError",
+          "subdomainActivatedAt",
+          "createdAt",
+          "updatedAt",
+        ],
+        order: { createdAt: "DESC" },
+      }),
+      this.bookingSystemRepository.find({
+        where: { subdomainStatus: In(subdomainStatuses) },
+        select: [
+          "id",
+          "name",
           "slug",
           "subdomainStatus",
           "subdomainUrl",
@@ -237,18 +219,6 @@ export class AdminRedeployController {
         createdAt: shop.createdAt,
         updatedAt: shop.updatedAt,
       })),
-      ...bots.map((bot) => ({
-        id: bot.id,
-        type: "bot" as const,
-        name: bot.name,
-        slug: bot.slug,
-        subdomainStatus: bot.subdomainStatus,
-        subdomainUrl: bot.subdomainUrl,
-        subdomainError: bot.subdomainError,
-        subdomainActivatedAt: bot.subdomainActivatedAt,
-        createdAt: bot.createdAt,
-        updatedAt: bot.updatedAt,
-      })),
       ...pages.map((page) => ({
         id: page.id,
         type: "page" as const,
@@ -260,6 +230,18 @@ export class AdminRedeployController {
         subdomainActivatedAt: page.subdomainActivatedAt,
         createdAt: page.createdAt,
         updatedAt: page.updatedAt,
+      })),
+      ...bookingSystems.map((bs) => ({
+        id: bs.id,
+        type: "booking" as const,
+        name: bs.name,
+        slug: bs.slug,
+        subdomainStatus: bs.subdomainStatus,
+        subdomainUrl: bs.subdomainUrl,
+        subdomainError: bs.subdomainError,
+        subdomainActivatedAt: bs.subdomainActivatedAt,
+        createdAt: bs.createdAt,
+        updatedAt: bs.updatedAt,
       })),
     ];
 

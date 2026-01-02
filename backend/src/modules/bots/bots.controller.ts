@@ -27,7 +27,6 @@ import { JwtAuthGuard, Public } from "../auth/guards/jwt-auth.guard";
 import { BotPermissionGuard } from "./guards/bot-permission.guard";
 import { CreateBotDto, UpdateBotDto } from "./dto/bot.dto";
 import { BotResponseDto, BotStatsResponseDto } from "./dto/bot-response.dto";
-import { ButtonSettingsDto } from "./dto/command-button-settings.dto";
 import { BotPermissionsService } from "./bot-permissions.service";
 import { BotInvitationsService } from "./bot-invitations.service";
 import {
@@ -86,35 +85,7 @@ export class BotsController {
     return this.botsService.findAll(req.user.id);
   }
 
-  @Get("check-slug/:slug")
-  @ApiOperation({
-    summary: "Проверить доступность slug для бота (бронирование)",
-    description:
-      "Проверяет, свободен ли указанный slug. Можно указать excludeId для исключения текущего бота при редактировании.",
-  })
-  @ApiQuery({
-    name: "excludeId",
-    required: false,
-    description: "ID бота для исключения из проверки",
-  })
-  @ApiResponse({
-    status: 200,
-    description: "Результат проверки",
-    schema: {
-      type: "object",
-      properties: {
-        available: { type: "boolean", description: "Slug доступен" },
-        slug: { type: "string", description: "Нормализованный slug" },
-        message: { type: "string", description: "Сообщение" },
-      },
-    },
-  })
-  async checkSlug(
-    @Param("slug") slug: string,
-    @Query("excludeId") excludeId?: string
-  ) {
-    return this.botsService.checkSlugAvailability(slug, excludeId);
-  }
+  // Эндпоинт check-slug удалён - используйте BookingSystemsController
 
   @Get(":id/stats")
   @ApiOperation({ summary: "Получить статистику бота" })
@@ -156,34 +127,8 @@ export class BotsController {
 
   // Эндпоинт shop-settings удалён - используйте ShopsController
   // PATCH /shops/:shopId для обновления настроек магазина
-
-  @Patch(":id/booking-settings")
-  @ApiOperation({ summary: "Обновить настройки бронирования бота" })
-  @ApiResponse({ status: 200, description: "Настройки бронирования обновлены" })
-  @ApiResponse({ status: 404, description: "Бот не найден" })
-  @BotPermission(BotEntity.BOOKING_SETTINGS, PermissionAction.UPDATE)
-  async updateBookingSettings(
-    @Param("id") id: string,
-    @Body()
-    bookingSettings: {
-      slug?: string;
-      isBookingEnabled?: boolean;
-      bookingTitle?: string;
-      bookingDescription?: string;
-      bookingLogoUrl?: string;
-      bookingCustomStyles?: string;
-      bookingButtonTypes?: string[];
-      bookingButtonSettings?: ButtonSettingsDto;
-      bookingSettings?: any;
-    },
-    @Request() req
-  ) {
-    return this.botsService.updateBookingSettings(
-      id,
-      bookingSettings,
-      req.user.id
-    );
-  }
+  // Эндпоинт booking-settings удалён - используйте BookingSystemsController
+  // PATCH /booking-systems/:id для обновления настроек бронирования
 
   @Get("shared")
   @ApiOperation({ summary: "Получить боты доступные пользователю" })
@@ -553,125 +498,5 @@ export class BotsController {
           }
         : undefined,
     }));
-  }
-
-  // =====================================================
-  // УПРАВЛЕНИЕ СУБДОМЕНАМИ (BOOKING)
-  // =====================================================
-
-  @Get(":botId/subdomain/check/:slug")
-  @BotPermission(BotEntity.BOT_SETTINGS, PermissionAction.READ)
-  @ApiOperation({ summary: "Проверить доступность slug для бронирования" })
-  @ApiResponse({
-    status: 200,
-    description: "Результат проверки доступности slug",
-    schema: {
-      type: "object",
-      properties: {
-        available: { type: "boolean" },
-        slug: { type: "string" },
-        message: { type: "string" },
-      },
-    },
-  })
-  async checkSlugAvailability(
-    @Param("botId") botId: string,
-    @Param("slug") slug: string
-  ) {
-    return this.botsService.checkSlugAvailability(slug, botId);
-  }
-
-  @Put(":botId/subdomain")
-  @BotPermission(BotEntity.BOT_SETTINGS, PermissionAction.UPDATE)
-  @ApiOperation({
-    summary: "Установить или обновить slug бота (субдомен бронирования)",
-  })
-  @ApiResponse({
-    status: 200,
-    description: "Slug обновлен, субдомен в процессе активации",
-  })
-  @ApiResponse({ status: 400, description: "Неверный slug или конфликт" })
-  async updateBotSubdomain(
-    @Param("botId") botId: string,
-    @Body() body: { slug: string | null },
-    @Request() req
-  ) {
-    const bot = await this.botsService.updateSlug(botId, body.slug, req.user.id);
-    return {
-      id: bot.id,
-      slug: bot.slug,
-      subdomainStatus: bot.subdomainStatus,
-      subdomainUrl: bot.subdomainUrl
-        ? `https://${bot.subdomainUrl}`
-        : null,
-      subdomainError: bot.subdomainError,
-      message: bot.slug
-        ? "Субдомен в процессе активации. Время ожидания может варьироваться от 30 секунд до нескольких минут."
-        : "Субдомен удалён",
-    };
-  }
-
-  @Get(":botId/subdomain/status")
-  @BotPermission(BotEntity.BOT_SETTINGS, PermissionAction.READ)
-  @ApiOperation({ summary: "Получить статус субдомена бронирования" })
-  @ApiResponse({
-    status: 200,
-    description: "Статус субдомена",
-    schema: {
-      type: "object",
-      properties: {
-        slug: { type: "string", nullable: true },
-        status: { type: "string", nullable: true },
-        url: { type: "string", nullable: true },
-        error: { type: "string", nullable: true },
-        activatedAt: { type: "string", format: "date-time", nullable: true },
-        estimatedWaitMessage: { type: "string", nullable: true },
-      },
-    },
-  })
-  async getSubdomainStatus(@Param("botId") botId: string, @Request() req) {
-    return this.botsService.getSubdomainStatus(botId, req.user.id);
-  }
-
-  @Post(":botId/subdomain/retry")
-  @BotPermission(BotEntity.BOT_SETTINGS, PermissionAction.UPDATE)
-  @ApiOperation({ summary: "Повторить активацию субдомена бронирования" })
-  @ApiResponse({
-    status: 200,
-    description: "Активация субдомена перезапущена",
-  })
-  @ApiResponse({ status: 400, description: "Субдомен уже активен или нет slug" })
-  async retrySubdomainActivation(
-    @Param("botId") botId: string,
-    @Request() req
-  ) {
-    const bot = await this.botsService.retrySubdomainActivation(
-      botId,
-      req.user.id
-    );
-    return {
-      id: bot.id,
-      slug: bot.slug,
-      subdomainStatus: bot.subdomainStatus,
-      message: "Активация субдомена перезапущена",
-    };
-  }
-
-  @Delete(":botId/subdomain")
-  @BotPermission(BotEntity.BOT_SETTINGS, PermissionAction.UPDATE)
-  @ApiOperation({ summary: "Удалить субдомен бронирования" })
-  @ApiResponse({
-    status: 200,
-    description: "Субдомен удалён",
-  })
-  async removeSubdomain(@Param("botId") botId: string, @Request() req) {
-    const bot = await this.botsService.updateSlug(botId, null, req.user.id);
-    return {
-      id: bot.id,
-      slug: null,
-      subdomainStatus: null,
-      subdomainUrl: null,
-      message: "Субдомен удалён",
-    };
   }
 }

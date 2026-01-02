@@ -4,7 +4,6 @@ import { Specialist } from "../../database/entities/specialist.entity";
 import { Service } from "../../database/entities/service.entity";
 import { TimeSlot } from "../../database/entities/time-slot.entity";
 import { Booking } from "../../database/entities/booking.entity";
-import { Bot } from "../../database/entities/bot.entity";
 import { BookingSystem } from "../../database/entities/booking-system.entity";
 
 // Сервисы
@@ -12,16 +11,8 @@ import { SpecialistsService } from "./services/specialists.service";
 import { ServicesService } from "./services/services.service";
 import { TimeSlotsService } from "./services/time-slots.service";
 import { BookingsService } from "./services/bookings.service";
-import { BookingMiniAppService } from "./services/booking-mini-app.service";
 import { BookingNotificationsService } from "./services/booking-notifications.service";
 import { BookingReminderSchedulerService } from "./services/booking-reminder-scheduler.service";
-
-// Контроллеры
-import { SpecialistsController } from "./controllers/specialists.controller";
-import { ServicesController } from "./controllers/services.controller";
-import { TimeSlotsController } from "./controllers/time-slots.controller";
-import { BookingsController } from "./controllers/bookings.controller";
-import { PublicBookingController } from "./controllers/public-booking.controller";
 
 // Процессоры
 import { BookingReminderProcessor } from "./processors/booking-reminder.processor";
@@ -37,26 +28,19 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Specialist, Service, TimeSlot, Booking, Bot, BookingSystem]),
+    TypeOrmModule.forFeature([Specialist, Service, TimeSlot, Booking, BookingSystem]),
     TelegramModule,
     QueueModule,
     forwardRef(() => BotsModule),
     WebSocketModule,
     ActivityLogModule,
   ],
-  controllers: [
-    SpecialistsController,
-    ServicesController,
-    TimeSlotsController,
-    BookingsController,
-    PublicBookingController,
-  ],
+  controllers: [],
   providers: [
     SpecialistsService,
     ServicesService,
     TimeSlotsService,
     BookingsService,
-    BookingMiniAppService,
     BookingNotificationsService,
     BookingReminderProcessor,
     BookingReminderSchedulerService,
@@ -68,7 +52,6 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
     ServicesService,
     TimeSlotsService,
     BookingsService,
-    BookingMiniAppService,
     BookingNotificationsService,
     BookingReminderSchedulerService,
   ],

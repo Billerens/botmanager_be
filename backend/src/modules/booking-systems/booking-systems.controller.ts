@@ -536,7 +536,6 @@ export class BookingSystemsController {
     @Query("serviceId") serviceId?: string
   ) {
     return this.timeSlotsService.findAvailableSlotsByBookingSystem(id, {
-      botId: "", // Не используется в методе
       specialistId,
       serviceId,
       date,

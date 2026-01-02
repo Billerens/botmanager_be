@@ -14,6 +14,7 @@ import { Shop } from "../../database/entities/shop.entity";
 import { Order } from "../../database/entities/order.entity";
 import { Lead } from "../../database/entities/lead.entity";
 import { CustomPage } from "../../database/entities/custom-page.entity";
+import { BookingSystem } from "../../database/entities/booking-system.entity";
 
 // Services
 import { AdminAuthService } from "./services/admin-auth.service";
@@ -59,6 +60,7 @@ import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
       Order,
       Lead,
       CustomPage,
+      BookingSystem,
     ]),
     PassportModule.register({ defaultStrategy: "admin-jwt" }),
     forwardRef(() => CustomDomainsModule),

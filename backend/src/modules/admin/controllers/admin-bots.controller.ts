@@ -238,16 +238,10 @@ export class AdminBotsController {
       where: { status: BotStatus.ACTIVE },
     });
 
-    // Боты с включенным бронированием
-    const withBooking = await this.botRepository.count({
-      where: { isBookingEnabled: true },
-    });
-
     return {
       total,
       active,
       inactive: total - active,
-      withBooking,
     };
   }
 }

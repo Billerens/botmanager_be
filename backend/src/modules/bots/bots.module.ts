@@ -19,6 +19,7 @@ import { Booking } from "../../database/entities/booking.entity";
 import { Cart } from "../../database/entities/cart.entity";
 import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
 import { Shop } from "../../database/entities/shop.entity";
+import { BookingSystem } from "../../database/entities/booking-system.entity";
 import { TimeSlot } from "../../database/entities/time-slot.entity";
 import { CustomPage } from "../../database/entities/custom-page.entity";
 import { User } from "../../database/entities/user.entity";
@@ -27,7 +28,6 @@ import { BotUserPermission } from "../../database/entities/bot-user-permission.e
 import { BotInvitation } from "../../database/entities/bot-invitation.entity";
 import { BotsService } from "./bots.service";
 import { BotsController } from "./bots.controller";
-import { PublicBotsController } from "./public-bots.controller";
 import { BotFlowsService } from "./bot-flows.service";
 import { BotFlowsController } from "./bot-flows.controller";
 import { FlowExecutionService } from "./flow-execution.service";
@@ -102,6 +102,7 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
       Cart,
       ShopPromocode,
       Shop,
+      BookingSystem,
       TimeSlot,
       CustomPage,
       User,
@@ -167,7 +168,6 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
   ],
   controllers: [
     BotsController,
-    PublicBotsController,
     BotFlowsController,
     EndpointController,
   ],

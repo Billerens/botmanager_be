@@ -16,7 +16,6 @@ import {
   Booking,
   BookingStatus,
 } from "../../../database/entities/booking.entity";
-import { Bot } from "../../../database/entities/bot.entity";
 import { BookingSystem } from "../../../database/entities/booking-system.entity";
 import {
   CreateTimeSlotDto,
@@ -41,202 +40,10 @@ export class TimeSlotsService {
     private serviceRepository: Repository<Service>,
     @InjectRepository(Booking)
     private bookingRepository: Repository<Booking>,
-    @InjectRepository(Bot)
-    private botRepository: Repository<Bot>,
     @InjectRepository(BookingSystem)
     private bookingSystemRepository: Repository<BookingSystem>,
     private activityLogService: ActivityLogService
   ) {}
-
-  async create(
-    createTimeSlotDto: CreateTimeSlotDto,
-    botId: string
-  ): Promise<TimeSlot> {
-    // Проверяем, что специалист существует и принадлежит боту
-    const specialist = await this.specialistRepository.findOne({
-      where: { id: createTimeSlotDto.specialistId, botId },
-    });
-
-    if (!specialist) {
-      throw new NotFoundException("Специалист не найден");
-    }
-
-    const startTime = new Date(createTimeSlotDto.startTime);
-    const endTime = new Date(createTimeSlotDto.endTime);
-
-    // Проверяем, что время корректное
-    if (startTime >= endTime) {
-      throw new BadRequestException(
-        "Время начала должно быть раньше времени окончания"
-      );
-    }
-
-    // Для доступных слотов проверяем рабочее время и перерывы
-    // Для недоступных слотов (исключения) пропускаем эти проверки
-    if (createTimeSlotDto.isAvailable !== false) {
-      // Проверяем, что специалист работает в это время
-      if (!specialist.isWorkingAt(startTime)) {
-        throw new BadRequestException(
-          "Специалист не работает в указанное время"
-        );
-      }
-
-      // Проверяем, что нет перерыва в это время
-      if (specialist.isOnBreak(startTime)) {
-        throw new BadRequestException(
-          "В указанное время у специалиста перерыв"
-        );
-      }
-    }
-
-    // Проверяем конфликты с существующими слотами
-    const conflictingSlots = await this.timeSlotRepository.find({
-      where: {
-        specialistId: createTimeSlotDto.specialistId,
-        startTime: LessThan(endTime),
-        endTime: MoreThan(startTime),
-      },
-    });
-
-    if (conflictingSlots.length > 0) {
-      throw new BadRequestException(
-        "Время конфликтует с существующими слотами"
-      );
-    }
-
-    const timeSlot = this.timeSlotRepository.create({
-      ...createTimeSlotDto,
-      startTime,
-      endTime,
-    });
-
-    const savedTimeSlot = await this.timeSlotRepository.save(timeSlot);
-
-    // Логируем создание таймслота
-    const bot = await this.botRepository.findOne({ where: { id: botId } });
-    if (bot && bot.ownerId) {
-      this.activityLogService
-        .create({
-          type: ActivityType.TIME_SLOT_CREATED,
-          level: ActivityLevel.SUCCESS,
-          message: `Создан таймслот для специалиста`,
-          userId: bot.ownerId,
-          botId,
-          metadata: {
-            timeSlotId: savedTimeSlot.id,
-            specialistId: savedTimeSlot.specialistId,
-            startTime: savedTimeSlot.startTime.toISOString(),
-            endTime: savedTimeSlot.endTime.toISOString(),
-            isAvailable: savedTimeSlot.isAvailable,
-          },
-        })
-        .catch((error) => {
-          console.error("Ошибка логирования создания таймслота:", error);
-        });
-    }
-
-    return savedTimeSlot;
-  }
-
-  async findAll(botId: string): Promise<TimeSlot[]> {
-    return this.timeSlotRepository.find({
-      where: {
-        specialist: { botId },
-      },
-      relations: ["specialist"],
-      order: { startTime: "ASC" },
-    });
-  }
-
-  async findBySpecialist(
-    specialistId: string,
-    botId: string
-  ): Promise<TimeSlot[]> {
-    // Проверяем, что специалист принадлежит боту
-    const specialist = await this.specialistRepository.findOne({
-      where: { id: specialistId, botId },
-    });
-
-    if (!specialist) {
-      throw new NotFoundException("Специалист не найден");
-    }
-
-    return this.timeSlotRepository.find({
-      where: { specialistId },
-      relations: ["specialist", "booking"],
-      order: { startTime: "ASC" },
-    });
-  }
-
-  async findAvailableSlots(
-    getAvailableSlotsDto: GetAvailableSlotsDto,
-    botId: string
-  ): Promise<TimeSlot[]> {
-    const { specialistId, serviceId, date } = getAvailableSlotsDto;
-
-    // Проверяем, что специалист принадлежит боту
-    const specialist = await this.specialistRepository.findOne({
-      where: { id: specialistId, botId },
-    });
-
-    if (!specialist) {
-      throw new NotFoundException("Специалист не найден");
-    }
-
-    // Если указана услуга, проверяем её длительность
-    let serviceDuration = specialist.defaultSlotDuration;
-    if (serviceId) {
-      const service = await this.serviceRepository
-        .createQueryBuilder("service")
-        .innerJoin("service.specialists", "specialist")
-        .where("service.id = :serviceId", { serviceId })
-        .andWhere("specialist.id = :specialistId", { specialistId })
-        .getOne();
-      if (service) {
-        serviceDuration = service.duration;
-      }
-    }
-
-    const startDate = new Date(date);
-    const endDate = new Date(date);
-    endDate.setUTCDate(endDate.getUTCDate() + 1);
-
-    // Загружаем физические слоты за день (если есть исключения)
-    const physicalSlots = await this.timeSlotRepository.find({
-      where: {
-        specialistId,
-        startTime: Between(startDate, endDate),
-      },
-      relations: ["specialist"],
-      order: { startTime: "ASC" },
-    });
-
-    // Генерируем виртуальные слоты с учетом перерывов
-    const targetDate = new Date(date);
-    const duration = specialist.defaultSlotDuration;
-    const buffer = specialist.bufferTime;
-
-    const virtualSlots = await this.generateVirtualSlotsForDay(
-      specialist,
-      targetDate,
-      duration,
-      buffer
-    );
-
-    // Объединяем виртуальные и физические слоты
-    const availableSlots = this.mergePhysicalAndVirtualSlots(
-      virtualSlots,
-      physicalSlots
-    );
-
-    // Если услуга не указана или слотов нет, возвращаем как есть
-    if (!serviceDuration || availableSlots.length === 0) {
-      return availableSlots;
-    }
-
-    // Объединяем последовательные слоты для создания слотов нужной длительности
-    return this.mergeConsecutiveSlots(availableSlots, serviceDuration);
-  }
 
   /**
    * Объединяет виртуальные и физические слоты, приоритет у физических
@@ -354,283 +161,6 @@ export class TimeSlotsService {
     }
 
     return mergedSlots;
-  }
-
-  async findOne(id: string, botId: string): Promise<TimeSlot> {
-    const timeSlot = await this.timeSlotRepository.findOne({
-      where: {
-        id,
-        specialist: { botId },
-      },
-      relations: ["specialist", "booking"],
-    });
-
-    if (!timeSlot) {
-      throw new NotFoundException("Таймслот не найден");
-    }
-
-    return timeSlot;
-  }
-
-  async update(
-    id: string,
-    updateTimeSlotDto: UpdateTimeSlotDto,
-    botId: string
-  ): Promise<TimeSlot> {
-    const timeSlot = await this.findOne(id, botId);
-
-    // Если слот забронирован, ограничиваем изменения
-    if (timeSlot.isBooked) {
-      const allowedFields = ["isAvailable", "metadata"];
-      const updateFields = Object.keys(updateTimeSlotDto);
-      const hasRestrictedFields = updateFields.some(
-        (field) => !allowedFields.includes(field)
-      );
-
-      if (hasRestrictedFields) {
-        throw new BadRequestException("Нельзя изменять забронированный слот");
-      }
-    }
-
-    Object.assign(timeSlot, updateTimeSlotDto);
-
-    const updatedTimeSlot = await this.timeSlotRepository.save(timeSlot);
-
-    // Логируем обновление таймслота
-    const bot = await this.botRepository.findOne({ where: { id: botId } });
-    if (bot && bot.ownerId) {
-      this.activityLogService
-        .create({
-          type: ActivityType.TIME_SLOT_UPDATED,
-          level: ActivityLevel.SUCCESS,
-          message: `Обновлен таймслот`,
-          userId: bot.ownerId,
-          botId,
-          metadata: {
-            timeSlotId: updatedTimeSlot.id,
-            specialistId: updatedTimeSlot.specialistId,
-            startTime: updatedTimeSlot.startTime.toISOString(),
-            endTime: updatedTimeSlot.endTime.toISOString(),
-            isAvailable: updatedTimeSlot.isAvailable,
-          },
-        })
-        .catch((error) => {
-          console.error("Ошибка логирования обновления таймслота:", error);
-        });
-    }
-
-    return updatedTimeSlot;
-  }
-
-  async remove(id: string, botId: string): Promise<void> {
-    const timeSlot = await this.findOne(id, botId);
-
-    if (timeSlot.isBooked) {
-      throw new BadRequestException("Нельзя удалить забронированный слот");
-    }
-
-    const bot = await this.botRepository.findOne({ where: { id: botId } });
-    const timeSlotData = {
-      specialistId: timeSlot.specialistId,
-      startTime: timeSlot.startTime.toISOString(),
-      endTime: timeSlot.endTime.toISOString(),
-    };
-
-    await this.timeSlotRepository.remove(timeSlot);
-
-    // Логируем удаление таймслота
-    if (bot && bot.ownerId) {
-      this.activityLogService
-        .create({
-          type: ActivityType.TIME_SLOT_DELETED,
-          level: ActivityLevel.SUCCESS,
-          message: `Удален таймслот`,
-          userId: bot.ownerId,
-          botId,
-          metadata: {
-            timeSlotId: id,
-            ...timeSlotData,
-          },
-        })
-        .catch((error) => {
-          console.error("Ошибка логирования удаления таймслота:", error);
-        });
-    }
-  }
-
-  // Метод для предпросмотра слотов (виртуальные + реальные)
-  async previewTimeSlots(
-    specialistId: string,
-    date: string,
-    botId: string
-  ): Promise<TimeSlot[]> {
-    // Проверяем, что специалист принадлежит боту
-    const specialist = await this.specialistRepository.findOne({
-      where: { id: specialistId, botId },
-    });
-
-    if (!specialist) {
-      throw new NotFoundException("Специалист не найден");
-    }
-
-    const targetDate = new Date(date);
-    const duration = specialist.defaultSlotDuration;
-    const buffer = specialist.bufferTime;
-
-    // Генерируем виртуальные слоты для дня (не сохраняя в БД)
-    const virtualSlots = await this.generateVirtualSlotsForDay(
-      specialist,
-      targetDate,
-      duration,
-      buffer
-    );
-
-    // Загружаем реальные слоты из БД для этого дня
-    const startOfDay = new Date(targetDate);
-    startOfDay.setUTCHours(0, 0, 0, 0);
-    const endOfDay = new Date(targetDate);
-    endOfDay.setUTCHours(23, 59, 59, 999);
-
-    const existingSlots = await this.timeSlotRepository.find({
-      where: {
-        specialistId: specialist.id,
-        startTime: Between(startOfDay, endOfDay),
-      },
-      order: { startTime: "ASC" },
-    });
-
-    // Загружаем все активные бронирования на этот день
-    const bookingsOnDay = await this.bookingRepository.find({
-      where: {
-        specialistId: specialist.id,
-        status: In([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
-        timeSlot: {
-          startTime: Between(startOfDay, endOfDay),
-        },
-      },
-      relations: ["service", "timeSlot"],
-    });
-
-    // Создаем Map для поиска бронирований по timeSlotId
-    const bookingsBySlotId = new Map<string, any>();
-    bookingsOnDay.forEach((booking) => {
-      bookingsBySlotId.set(booking.timeSlotId, booking);
-
-      // Также добавляем составные слоты если есть
-      if (booking.clientData?.mergedSlotIds) {
-        booking.clientData.mergedSlotIds.forEach((slotId: string) => {
-          bookingsBySlotId.set(slotId, booking);
-        });
-      }
-    });
-
-    // Создаем Map для быстрого поиска существующих слотов по времени
-    const existingSlotsMap = new Map<string, any>();
-    existingSlots.forEach((slot) => {
-      const key = `${slot.startTime.toISOString()}_${slot.endTime.toISOString()}`;
-
-      // Добавляем информацию о бронировании к слоту (для совместимости с фронтендом)
-      const slotWithBooking = {
-        ...slot,
-        booking: bookingsBySlotId.get(slot.id),
-      };
-
-      existingSlotsMap.set(key, slotWithBooking);
-    });
-
-    // Объединяем виртуальные и реальные слоты
-    const resultSlots: TimeSlot[] = [];
-
-    for (const virtualSlot of virtualSlots) {
-      const key = `${virtualSlot.startTime.toISOString()}_${virtualSlot.endTime.toISOString()}`;
-      const existingSlot = existingSlotsMap.get(key);
-
-      if (existingSlot) {
-        // Если слот существует в БД, используем его
-        resultSlots.push(existingSlot);
-        existingSlotsMap.delete(key);
-      } else {
-        // Иначе используем виртуальный слот
-        resultSlots.push(virtualSlot);
-      }
-    }
-
-    // Добавляем оставшиеся реальные слоты (которые не совпали с виртуальными)
-    existingSlotsMap.forEach((slot) => {
-      resultSlots.push(slot);
-    });
-
-    return resultSlots.sort(
-      (a, b) => a.startTime.getTime() - b.startTime.getTime()
-    );
-  }
-
-  async generateTimeSlots(
-    generateTimeSlotsDto: GenerateTimeSlotsDto,
-    botId: string
-  ): Promise<TimeSlot[]> {
-    const { specialistId, startDate, endDate, slotDuration, bufferTime } =
-      generateTimeSlotsDto;
-
-    // Проверяем, что специалист принадлежит боту
-    const specialist = await this.specialistRepository.findOne({
-      where: { id: specialistId, botId },
-    });
-
-    if (!specialist) {
-      throw new NotFoundException("Специалист не найден");
-    }
-
-    const duration = slotDuration || specialist.defaultSlotDuration;
-    const buffer = bufferTime || specialist.bufferTime;
-    const slots: TimeSlot[] = [];
-
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    // Генерируем слоты для каждого дня
-    for (
-      let date = new Date(start);
-      date < end;
-      date.setUTCDate(date.getUTCDate() + 1)
-    ) {
-      const daySlots = await this.generateSlotsForDay(
-        specialist,
-        date,
-        duration,
-        buffer
-      );
-      slots.push(...daySlots);
-    }
-
-    // Сохраняем все слоты
-    const savedSlots = await this.timeSlotRepository.save(slots);
-
-    // Логируем генерацию таймслотов
-    const bot = await this.botRepository.findOne({ where: { id: botId } });
-    if (bot && bot.ownerId) {
-      this.activityLogService
-        .create({
-          type: ActivityType.TIME_SLOT_GENERATED,
-          level: ActivityLevel.SUCCESS,
-          message: `Сгенерировано ${savedSlots.length} таймслотов для специалиста`,
-          userId: bot.ownerId,
-          botId,
-          metadata: {
-            specialistId,
-            slotsCount: savedSlots.length,
-            startDate: start.toISOString(),
-            endDate: end.toISOString(),
-            slotDuration: duration,
-            bufferTime: buffer,
-          },
-        })
-        .catch((error) => {
-          console.error("Ошибка логирования генерации таймслотов:", error);
-        });
-    }
-
-    return savedSlots;
   }
 
   // Генерирует виртуальные слоты (не сохраняя в БД) для предпросмотра
@@ -792,10 +322,6 @@ export class TimeSlotsService {
     return result.affected || 0;
   }
 
-  // ============================================
-  // Методы для работы через BookingSystem
-  // ============================================
-
   /**
    * Создать таймслот для системы бронирования
    */
@@ -939,7 +465,11 @@ export class TimeSlotsService {
     updateTimeSlotDto: UpdateTimeSlotDto
   ): Promise<TimeSlot> {
     await this.validateBookingSystemOwnership(bookingSystemId, userId);
-    const timeSlot = await this.findOneByBookingSystem(id, bookingSystemId, userId);
+    const timeSlot = await this.findOneByBookingSystem(
+      id,
+      bookingSystemId,
+      userId
+    );
 
     // Если слот забронирован, ограничиваем изменения
     if (timeSlot.isBooked) {
@@ -990,7 +520,11 @@ export class TimeSlotsService {
     userId: string
   ): Promise<void> {
     await this.validateBookingSystemOwnership(bookingSystemId, userId);
-    const timeSlot = await this.findOneByBookingSystem(id, bookingSystemId, userId);
+    const timeSlot = await this.findOneByBookingSystem(
+      id,
+      bookingSystemId,
+      userId
+    );
 
     if (timeSlot.isBooked) {
       throw new BadRequestException("Нельзя удалить забронированный слот");

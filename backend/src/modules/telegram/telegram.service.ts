@@ -170,14 +170,6 @@ export class TelegramService {
           description: commandSettings?.description || "📅 Записаться на прием",
         });
       }
-      // Fallback: старая архитектура через Bot entity (deprecated)
-      else if (bot.isBookingEnabled && bot.bookingButtonTypes?.includes("command")) {
-        const commandSettings = bot.bookingButtonSettings?.command;
-        commands.push({
-          command: "booking",
-          description: commandSettings?.description || "📅 Записаться на прием",
-        });
-      }
 
       // Добавляем команды custom pages
       try {
@@ -204,16 +196,11 @@ export class TelegramService {
         shop && shop.buttonTypes?.includes("menu_button");
       const hasBookingSystemMenuButton =
         bookingSystem && bookingSystem.buttonTypes?.includes("menu_button");
-      // Fallback: старая архитектура (deprecated)
-      const hasBookingMenuButtonLegacy =
-        bot.isBookingEnabled && bot.bookingButtonTypes?.includes("menu_button");
 
       if (hasShopMenuButton) {
         await this.setMenuButton(token, shop);
       } else if (hasBookingSystemMenuButton) {
         await this.setBookingSystemMenuButton(token, bookingSystem);
-      } else if (hasBookingMenuButtonLegacy) {
-        await this.setBookingMenuButton(token, bot);
       } else {
         // Если ни один Menu Button не включен, очищаем его
         await this.clearMenuButton(token);
@@ -296,39 +283,6 @@ export class TelegramService {
         "Ошибка установки BookingSystem Menu Button:",
         error.message
       );
-    }
-  }
-
-  /**
-   * Устанавливает Menu Button для бронирования
-   * @deprecated Используйте setBookingSystemMenuButton с BookingSystem
-   */
-  private async setBookingMenuButton(token: string, bot: Bot): Promise<void> {
-    try {
-      // Проверяем, что токен не пустой
-      if (!token || token.trim() === "") {
-        console.error("Ошибка установки Booking Menu Button: пустой токен");
-        return;
-      }
-
-      const buttonText =
-        bot.bookingButtonSettings?.menu_button?.text || "📅 Записаться";
-
-      const bookingUrl =
-        bot.bookingUrl ||
-        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/booking/${bot.id}`;
-
-      await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {
-        menu_button: {
-          type: "web_app",
-          text: buttonText,
-          web_app: {
-            url: bookingUrl,
-          },
-        },
-      });
-    } catch (error) {
-      console.error("Ошибка установки Booking Menu Button:", error.message);
     }
   }
 
