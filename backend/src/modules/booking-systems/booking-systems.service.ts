@@ -621,28 +621,34 @@ export class BookingSystemsService {
     // и изменялись настройки buttonTypes или buttonSettings
     if (
       updated.botId &&
-      updated.bot &&
       (visualSettings.buttonTypes !== undefined ||
         visualSettings.buttonSettings !== undefined)
     ) {
       try {
-        const token = this.decryptToken(updated.bot.token);
-        // Получаем связанный магазин для корректного обновления всех команд
-        const linkedShop = await this.getLinkedShopByBotId(updated.botId);
-        const success = await this.telegramService.setBotCommands(
-          token,
-          updated.bot,
-          linkedShop,
-          updated
-        );
-        if (success) {
-          this.logger.log(
-            `Bot commands updated after booking system settings change for ${updated.id}`
+        // Получаем бота отдельно, т.к. после save() relation может быть потерян
+        const bot = await this.botRepository.findOne({
+          where: { id: updated.botId },
+        });
+
+        if (bot) {
+          const token = this.decryptToken(bot.token);
+          // Получаем связанный магазин для корректного обновления всех команд
+          const linkedShop = await this.getLinkedShopByBotId(updated.botId);
+          const success = await this.telegramService.setBotCommands(
+            token,
+            bot,
+            linkedShop,
+            updated
           );
-        } else {
-          this.logger.error(
-            `Failed to update bot commands for booking system ${updated.id}`
-          );
+          if (success) {
+            this.logger.log(
+              `Bot commands updated after booking system settings change for ${updated.id}`
+            );
+          } else {
+            this.logger.error(
+              `Failed to update bot commands for booking system ${updated.id}`
+            );
+          }
         }
       } catch (error) {
         this.logger.error(

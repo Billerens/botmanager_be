@@ -577,31 +577,37 @@ export class ShopsService {
     // Обновляем команды бота в Telegram если магазин привязан к боту
     // и изменялись настройки buttonTypes или buttonSettings
     if (
-      updatedShop.bot &&
       updatedShop.botId &&
       (settings.buttonTypes !== undefined ||
         settings.buttonSettings !== undefined)
     ) {
       try {
-        const token = this.decryptToken(updatedShop.bot.token);
-        // Получаем связанную систему бронирования для корректного обновления всех команд
-        const linkedBookingSystem = await this.getLinkedBookingSystemByBotId(
-          updatedShop.botId
-        );
-        const success = await this.telegramService.setBotCommands(
-          token,
-          updatedShop.bot,
-          updatedShop,
-          linkedBookingSystem
-        );
-        if (success) {
-          this.logger.log(
-            `Bot commands updated after shop settings change for shop ${updatedShop.id}`
+        // Получаем бота отдельно, т.к. после save() relation может быть потерян
+        const bot = await this.botRepository.findOne({
+          where: { id: updatedShop.botId },
+        });
+
+        if (bot) {
+          const token = this.decryptToken(bot.token);
+          // Получаем связанную систему бронирования для корректного обновления всех команд
+          const linkedBookingSystem = await this.getLinkedBookingSystemByBotId(
+            updatedShop.botId
           );
-        } else {
-          this.logger.error(
-            `Failed to update bot commands for shop ${updatedShop.id}`
+          const success = await this.telegramService.setBotCommands(
+            token,
+            bot,
+            updatedShop,
+            linkedBookingSystem
           );
+          if (success) {
+            this.logger.log(
+              `Bot commands updated after shop settings change for shop ${updatedShop.id}`
+            );
+          } else {
+            this.logger.error(
+              `Failed to update bot commands for shop ${updatedShop.id}`
+            );
+          }
         }
       } catch (error) {
         this.logger.error(
