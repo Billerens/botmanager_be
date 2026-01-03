@@ -565,19 +565,43 @@ export class BookingSystemsService {
 
   /**
    * Обновить настройки системы бронирования
+   * Обрабатывает как визуальные настройки (title, logoUrl и т.д.), так и технические настройки бронирования
    */
   async updateSettings(
     id: string,
-    settings: UpdateBookingSystemSettingsDto,
+    settingsDto: UpdateBookingSystemSettingsDto,
     userId: string
   ): Promise<BookingSystem> {
     const bookingSystem = await this.findOne(id, userId);
 
-    // Мержим настройки
-    bookingSystem.settings = {
-      ...bookingSystem.settings,
-      ...settings,
-    };
+    // Извлекаем вложенные настройки бронирования
+    const { settings, ...visualSettings } = settingsDto;
+
+    // Применяем визуальные настройки к корню сущности
+    if (visualSettings.slug !== undefined)
+      bookingSystem.slug = visualSettings.slug;
+    if (visualSettings.logoUrl !== undefined)
+      bookingSystem.logoUrl = visualSettings.logoUrl;
+    if (visualSettings.title !== undefined)
+      bookingSystem.title = visualSettings.title;
+    if (visualSettings.description !== undefined)
+      bookingSystem.description = visualSettings.description;
+    if (visualSettings.customStyles !== undefined)
+      bookingSystem.customStyles = visualSettings.customStyles;
+    if (visualSettings.buttonTypes !== undefined)
+      bookingSystem.buttonTypes = visualSettings.buttonTypes;
+    if (visualSettings.buttonSettings !== undefined)
+      bookingSystem.buttonSettings = visualSettings.buttonSettings;
+    if (visualSettings.browserAccessEnabled !== undefined)
+      bookingSystem.browserAccessEnabled = visualSettings.browserAccessEnabled;
+
+    // Мержим технические настройки бронирования
+    if (settings) {
+      bookingSystem.settings = {
+        ...bookingSystem.settings,
+        ...settings,
+      };
+    }
 
     const updated = await this.bookingSystemRepository.save(bookingSystem);
 

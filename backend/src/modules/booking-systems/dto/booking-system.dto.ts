@@ -196,5 +196,64 @@ export class LinkBotDto {
 
 /**
  * DTO для обновления настроек системы бронирования
+ * Включает как визуальные настройки (title, logo и т.д.), так и технические настройки бронирования
  */
-export class UpdateBookingSystemSettingsDto extends BookingSystemSettingsDto {}
+export class UpdateBookingSystemSettingsDto {
+  @ApiPropertyOptional({
+    description: "Уникальный slug для субдомена",
+    example: "my-salon",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(63)
+  @Matches(/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/, {
+    message: "Slug может содержать только строчные буквы, цифры и дефисы",
+  })
+  slug?: string;
+
+  @ApiPropertyOptional({ description: "URL логотипа" })
+  @IsOptional()
+  @IsString()
+  logoUrl?: string;
+
+  @ApiPropertyOptional({
+    description: "Заголовок (отображается пользователям)",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  title?: string;
+
+  @ApiPropertyOptional({ description: "Описание системы бронирования" })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional({ description: "Кастомные CSS стили" })
+  @IsOptional()
+  @IsString()
+  customStyles?: string;
+
+  @ApiPropertyOptional({
+    description: "Типы кнопок (command, menu_button)",
+    example: ["command"],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  buttonTypes?: string[];
+
+  @ApiPropertyOptional({ description: "Настройки кнопок" })
+  @IsOptional()
+  @IsObject()
+  buttonSettings?: Record<string, any>;
+
+  @ApiPropertyOptional({ description: "Настройки системы бронирования" })
+  @IsOptional()
+  settings?: BookingSystemSettingsDto;
+
+  @ApiPropertyOptional({ description: "Включить браузерный доступ" })
+  @IsOptional()
+  @IsBoolean()
+  browserAccessEnabled?: boolean;
+}
