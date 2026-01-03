@@ -2,6 +2,7 @@ import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { BookingSystem } from "../../database/entities/booking-system.entity";
 import { Bot } from "../../database/entities/bot.entity";
+import { Shop } from "../../database/entities/shop.entity";
 import { Specialist } from "../../database/entities/specialist.entity";
 import { Service } from "../../database/entities/service.entity";
 import { Booking } from "../../database/entities/booking.entity";
@@ -18,6 +19,7 @@ import { BookingModule } from "../booking/booking.module";
     TypeOrmModule.forFeature([
       BookingSystem,
       Bot,
+      Shop,
       Specialist,
       Service,
       Booking,

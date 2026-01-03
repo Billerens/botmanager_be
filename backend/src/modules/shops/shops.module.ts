@@ -7,6 +7,7 @@ import { ShopsController } from "./shops.controller";
 import { PublicShopsController } from "./public-shops.controller";
 import { Shop } from "../../database/entities/shop.entity";
 import { Bot } from "../../database/entities/bot.entity";
+import { BookingSystem } from "../../database/entities/booking-system.entity";
 import { Product } from "../../database/entities/product.entity";
 import { Category } from "../../database/entities/category.entity";
 import { Order } from "../../database/entities/order.entity";
@@ -28,6 +29,7 @@ import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
     TypeOrmModule.forFeature([
       Shop,
       Bot,
+      BookingSystem,
       Product,
       Category,
       Order,

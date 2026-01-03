@@ -18,6 +18,7 @@ import {
 } from "../../../database/entities/custom-page.entity";
 import { Bot } from "../../../database/entities/bot.entity";
 import { Shop } from "../../../database/entities/shop.entity";
+import { BookingSystem } from "../../../database/entities/booking-system.entity";
 import {
   CreateCustomPageDto,
   UpdateCustomPageDto,
@@ -47,6 +48,8 @@ export class CustomPagesService {
     private readonly botRepository: Repository<Bot>,
     @InjectRepository(Shop)
     private readonly shopRepository: Repository<Shop>,
+    @InjectRepository(BookingSystem)
+    private readonly bookingSystemRepository: Repository<BookingSystem>,
     private readonly uploadService: UploadService,
     @Inject(forwardRef(() => TelegramService))
     private readonly telegramService: TelegramService,
@@ -962,11 +965,16 @@ export class CustomPagesService {
         where: { botId },
       });
 
+      const bookingSystem = await this.bookingSystemRepository.findOne({
+        where: { botId },
+      });
+
       const decryptedToken = this.decryptToken(bot.token);
       const success = await this.telegramService.setBotCommands(
         decryptedToken,
         bot,
-        shop
+        shop,
+        bookingSystem
       );
 
       if (success) {

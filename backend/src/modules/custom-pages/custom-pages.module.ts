@@ -4,6 +4,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { CustomPage } from "../../database/entities/custom-page.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import { Shop } from "../../database/entities/shop.entity";
+import { BookingSystem } from "../../database/entities/booking-system.entity";
 import { CustomPagesService } from "./services/custom-pages.service";
 import { CustomPagesController } from "./controllers/custom-pages.controller";
 import { PublicCustomPagesController } from "./controllers/public-custom-pages.controller";
@@ -16,7 +17,7 @@ import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CustomPage, Bot, Shop]),
+    TypeOrmModule.forFeature([CustomPage, Bot, Shop, BookingSystem]),
     UploadModule,
     forwardRef(() => TelegramModule),
     forwardRef(() => BotsModule),

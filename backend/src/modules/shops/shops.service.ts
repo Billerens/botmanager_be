@@ -13,6 +13,7 @@ import { Repository, Like, IsNull, Not } from "typeorm";
 import * as crypto from "crypto";
 import { Shop } from "../../database/entities/shop.entity";
 import { Bot } from "../../database/entities/bot.entity";
+import { BookingSystem } from "../../database/entities/booking-system.entity";
 import { Product } from "../../database/entities/product.entity";
 import { Category } from "../../database/entities/category.entity";
 import { Order } from "../../database/entities/order.entity";
@@ -45,6 +46,8 @@ export class ShopsService {
     private readonly shopRepository: Repository<Shop>,
     @InjectRepository(Bot)
     private readonly botRepository: Repository<Bot>,
+    @InjectRepository(BookingSystem)
+    private readonly bookingSystemRepository: Repository<BookingSystem>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     @InjectRepository(Category)
@@ -61,6 +64,17 @@ export class ShopsService {
     @Inject(forwardRef(() => SubdomainService))
     private readonly subdomainService: SubdomainService
   ) {}
+
+  /**
+   * Получить связанную систему бронирования по botId
+   */
+  private async getLinkedBookingSystemByBotId(
+    botId: string
+  ): Promise<BookingSystem | null> {
+    return this.bookingSystemRepository.findOne({
+      where: { botId },
+    });
+  }
 
   /**
    * Расшифровать токен бота
@@ -564,15 +578,21 @@ export class ShopsService {
     // и изменялись настройки buttonTypes или buttonSettings
     if (
       updatedShop.bot &&
+      updatedShop.botId &&
       (settings.buttonTypes !== undefined ||
         settings.buttonSettings !== undefined)
     ) {
       try {
         const token = this.decryptToken(updatedShop.bot.token);
+        // Получаем связанную систему бронирования для корректного обновления всех команд
+        const linkedBookingSystem = await this.getLinkedBookingSystemByBotId(
+          updatedShop.botId
+        );
         const success = await this.telegramService.setBotCommands(
           token,
           updatedShop.bot,
-          updatedShop
+          updatedShop,
+          linkedBookingSystem
         );
         if (success) {
           this.logger.log(
@@ -695,7 +715,14 @@ export class ShopsService {
     // Обновляем команды бота в Telegram (добавляем /shop)
     try {
       const token = this.decryptToken(bot.token);
-      await this.telegramService.setBotCommands(token, bot, updatedShop);
+      // Получаем связанную систему бронирования для корректного обновления всех команд
+      const linkedBookingSystem = await this.getLinkedBookingSystemByBotId(botId);
+      await this.telegramService.setBotCommands(
+        token,
+        bot,
+        updatedShop,
+        linkedBookingSystem
+      );
       this.logger.log(`Bot commands updated after linking shop ${shopId}`);
     } catch (error) {
       this.logger.error("Ошибка обновления команд бота:", error.message);
@@ -740,10 +767,19 @@ export class ShopsService {
     const updatedShop = await this.shopRepository.save(shop);
 
     // Обновляем команды бота в Telegram (убираем /shop)
-    if (previousBot) {
+    if (previousBot && previousBotId) {
       try {
         const token = this.decryptToken(previousBot.token);
-        await this.telegramService.setBotCommands(token, previousBot, null);
+        // Получаем связанную систему бронирования для корректного обновления команд
+        const linkedBookingSystem =
+          await this.getLinkedBookingSystemByBotId(previousBotId);
+        // shop = null, т.к. мы его отвязали
+        await this.telegramService.setBotCommands(
+          token,
+          previousBot,
+          null,
+          linkedBookingSystem
+        );
         this.logger.log(
           `Bot commands updated after unlinking from shop ${shopId}`
         );
