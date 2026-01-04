@@ -30,6 +30,8 @@ import { Admin } from "./entities/admin.entity";
 import { AdminActionLog } from "./entities/admin-action-log.entity";
 import { CustomDomain } from "./entities/custom-domain.entity";
 import { BookingSystem } from "./entities/booking-system.entity";
+import { PaymentConfig } from "./entities/payment-config.entity";
+import { Payment } from "./entities/payment.entity";
 
 // Загружаем переменные окружения
 config();
@@ -79,6 +81,8 @@ export const AppDataSource = new DataSource({
     AdminActionLog,
     CustomDomain,
     BookingSystem,
+    PaymentConfig,
+    Payment,
   ],
   migrations: ["src/database/migrations/*.ts"],
   subscribers: ["src/database/subscribers/*.ts"],
