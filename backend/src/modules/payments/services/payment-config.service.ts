@@ -377,9 +377,9 @@ export class PaymentConfigService {
 
   /**
    * Маскирование секретных данных для фронтенда
+   * Модифицирует объект напрямую, не теряя методы класса
    */
   private maskConfigSecrets(config: PaymentConfig): PaymentConfig {
-    const maskedConfig = { ...config };
     const maskedProviderSettings: Record<string, any> = {};
 
     for (const [provider, settings] of Object.entries(
@@ -388,15 +388,15 @@ export class PaymentConfigService {
       maskedProviderSettings[provider] = maskProviderConfig(provider, settings);
     }
 
-    maskedConfig.providerSettings = maskedProviderSettings;
-    return maskedConfig;
+    config.providerSettings = maskedProviderSettings;
+    return config;
   }
 
   /**
    * Расшифровка секретных данных для внутреннего использования
+   * Модифицирует объект напрямую, не теряя методы класса
    */
   private decryptConfigSecrets(config: PaymentConfig): PaymentConfig {
-    const decryptedConfig = { ...config };
     const decryptedProviderSettings: Record<string, any> = {};
 
     for (const [provider, settings] of Object.entries(
@@ -408,8 +408,8 @@ export class PaymentConfigService {
       );
     }
 
-    decryptedConfig.providerSettings = decryptedProviderSettings;
-    return decryptedConfig;
+    config.providerSettings = decryptedProviderSettings;
+    return config;
   }
 }
 

@@ -39,6 +39,8 @@ export enum NodeType {
   // AI узлы
   AI_SINGLE = "ai_single",
   AI_CHAT = "ai_chat",
+  // Платежи
+  PAYMENT = "payment",
 }
 
 export enum MessageNodeType {
@@ -364,6 +366,23 @@ export class BotFlowNode {
       maxHistoryTokens?: number; // Максимальное количество токенов в истории
       temperature?: number; // Температура генерации (0-1)
       exitKeywords?: string[]; // Ключевые слова для выхода из чата
+    };
+
+    // Для PAYMENT нод
+    payment?: {
+      action: "create" | "check_status" | "cancel" | "refund";
+      provider?: string; // ID провайдера
+      amount?: number | string; // Сумма или переменная
+      currency?: string; // Валюта
+      description?: string; // Описание платежа
+      orderId?: string; // ID заказа (переменная)
+      paymentIdVariable?: string; // Куда сохранить ID платежа
+      statusVariable?: string; // Куда сохранить статус
+      urlVariable?: string; // Куда сохранить URL оплаты
+      successMessage?: string; // Сообщение при успехе
+      errorMessage?: string; // Сообщение при ошибке
+      refundAmount?: number | string; // Сумма возврата
+      refundReason?: string; // Причина возврата
     };
 
     // Общие настройки

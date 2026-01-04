@@ -114,6 +114,14 @@ export enum ActivityType {
   BOOKING_SYSTEM_SETTINGS_UPDATED = "booking_system_settings_updated",
   BOOKING_SYSTEM_BOT_LINKED = "booking_system_bot_linked",
   BOOKING_SYSTEM_BOT_UNLINKED = "booking_system_bot_unlinked",
+
+  // Payment (платежи)
+  PAYMENT_CREATED = "payment_created",
+  PAYMENT_SUCCEEDED = "payment_succeeded",
+  PAYMENT_FAILED = "payment_failed",
+  PAYMENT_CANCELED = "payment_canceled",
+  PAYMENT_REFUNDED = "payment_refunded",
+  PAYMENT_ACTION = "payment_action",
 }
 
 export enum ActivityLevel {
