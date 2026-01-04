@@ -38,10 +38,13 @@ import { Booking } from "../../database/entities/booking.entity";
     EventEmitterModule.forRoot(),
   ],
   controllers: [
-    PaymentsController,
-    PaymentConfigController,
+    // ВАЖНО: контроллеры с более специфичными путями должны быть первыми,
+    // иначе generic маршруты типа /:botId/:module/:provider/:externalPaymentId
+    // в PaymentsController перехватят запросы раньше
     EntityPaymentController,
     EntityWebhookController,
+    PaymentConfigController,
+    PaymentsController,
   ],
   providers: [
     PaymentsService,
