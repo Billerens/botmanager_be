@@ -13,6 +13,7 @@ import { Specialist } from "./specialist.entity";
 import { Service } from "./service.entity";
 import { TimeSlot } from "./time-slot.entity";
 import { PublicUser } from "./public-user.entity";
+import { Payment, EntityPaymentStatus } from "./payment.entity";
 
 export enum BookingStatus {
   PENDING = "pending",
@@ -100,6 +101,38 @@ export class Booking {
   @Column({ type: "timestamptz", nullable: true })
   confirmationCodeExpires: Date; // Срок действия кода подтверждения
 
+  // ============================================
+  // Платёжная информация
+  // ============================================
+
+  /**
+   * ID связанного платежа
+   */
+  @Column({ nullable: true })
+  paymentId: string | null;
+
+  /**
+   * Статус оплаты бронирования
+   */
+  @Column({
+    type: "enum",
+    enum: EntityPaymentStatus,
+    default: EntityPaymentStatus.NOT_REQUIRED,
+  })
+  paymentStatus: EntityPaymentStatus;
+
+  /**
+   * Требуется ли оплата для этого бронирования
+   */
+  @Column({ default: false })
+  paymentRequired: boolean;
+
+  /**
+   * Сумма к оплате
+   */
+  @Column({ type: "decimal", precision: 12, scale: 2, nullable: true })
+  paymentAmount: number | null;
+
   @CreateDateColumn()
   createdAt: Date;
 
@@ -136,7 +169,17 @@ export class Booking {
   @JoinColumn({ name: "publicUserId" })
   publicUser?: PublicUser;
 
+  /**
+   * Связь с платежом
+   */
+  @ManyToOne(() => Payment, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "paymentId" })
+  payment?: Payment;
+
+  // ============================================
   // Методы
+  // ============================================
+
   get isPending(): boolean {
     return this.status === BookingStatus.PENDING;
   }
@@ -246,5 +289,50 @@ export class Booking {
     }
 
     this.status = BookingStatus.COMPLETED;
+  }
+
+  // ============================================
+  // Методы для работы с платежами
+  // ============================================
+
+  /**
+   * Проверка, оплачено ли бронирование
+   */
+  get isPaid(): boolean {
+    return this.paymentStatus === EntityPaymentStatus.PAID;
+  }
+
+  /**
+   * Проверка, ожидает ли бронирование оплаты
+   */
+  get isAwaitingPayment(): boolean {
+    return (
+      this.paymentRequired &&
+      this.paymentStatus === EntityPaymentStatus.PENDING
+    );
+  }
+
+  /**
+   * Проверка, была ли ошибка оплаты
+   */
+  get isPaymentFailed(): boolean {
+    return this.paymentStatus === EntityPaymentStatus.FAILED;
+  }
+
+  /**
+   * Проверка, был ли возврат
+   */
+  get isRefunded(): boolean {
+    return (
+      this.paymentStatus === EntityPaymentStatus.REFUNDED ||
+      this.paymentStatus === EntityPaymentStatus.PARTIALLY_REFUNDED
+    );
+  }
+
+  /**
+   * Сумма к оплате (paymentAmount или стоимость услуги)
+   */
+  get amountToPay(): number | null {
+    return this.paymentAmount;
   }
 }

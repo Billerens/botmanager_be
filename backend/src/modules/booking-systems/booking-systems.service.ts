@@ -979,4 +979,29 @@ export class BookingSystemsService {
     const bookingSystem = await this.findOneBySlug(slug);
     return this.getPublicData(bookingSystem.id);
   }
+
+  /**
+   * Получить бронирование по ID (для публичного доступа)
+   * Проверяет принадлежность бронирования системе бронирования
+   */
+  async getBookingById(
+    bookingSystemId: string,
+    bookingId: string
+  ): Promise<Booking | null> {
+    const booking = await this.bookingRepository.findOne({
+      where: { id: bookingId },
+      relations: ["specialist"],
+    });
+
+    if (!booking) {
+      return null;
+    }
+
+    // Проверяем, что бронирование принадлежит этой системе бронирования
+    if (booking.specialist?.bookingSystemId !== bookingSystemId) {
+      return null;
+    }
+
+    return booking;
+  }
 }

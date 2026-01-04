@@ -36,6 +36,8 @@ export enum FlowNodeType {
   // AI узлы
   AI_SINGLE = "ai_single",
   AI_CHAT = "ai_chat",
+  // Платёжные узлы
+  PAYMENT = "payment",
 }
 
 export class KeyboardButtonDto {
@@ -416,6 +418,29 @@ export class FlowNodeDataDto {
     maxHistoryTokens?: number;
     temperature?: number;
     exitKeywords?: string[];
+  };
+
+  // Платёжный узел
+  @IsOptional()
+  @IsObject()
+  payment?: {
+    action: "create" | "check_status" | "cancel" | "refund";
+    provider: string;
+    // Для action = 'create'
+    amount?: string; // Может быть переменной: {{variable}}
+    currency?: string;
+    description?: string;
+    returnUrl?: string;
+    cancelUrl?: string;
+    // Для action = 'check_status', 'cancel', 'refund'
+    paymentIdVariable?: string; // Имя переменной с ID платежа
+    // Для action = 'refund'
+    refundAmount?: string; // Может быть переменной
+    refundReason?: string;
+    // Результат сохраняется в переменные
+    resultVariable?: string; // Для сохранения результата
+    paymentUrlVariable?: string; // Для сохранения URL оплаты
+    statusVariable?: string; // Для сохранения статуса
   };
 }
 

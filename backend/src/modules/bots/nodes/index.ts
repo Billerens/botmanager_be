@@ -31,3 +31,6 @@ export * from "./group-leave-node.handler";
 // AI handlers
 export * from "./ai-single-node.handler";
 export * from "./ai-chat-node.handler";
+
+// Payment handler
+export * from "./payment-node.handler";

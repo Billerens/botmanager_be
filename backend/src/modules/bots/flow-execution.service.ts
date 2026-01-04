@@ -49,6 +49,7 @@ import {
   GroupLeaveNodeHandler,
   AiSingleNodeHandler,
   AiChatNodeHandler,
+  PaymentNodeHandler,
 } from "./nodes";
 import { GroupSessionService } from "./group-session.service";
 import { CustomPagesBotService } from "../custom-pages/services/custom-pages-bot.service";
@@ -129,7 +130,9 @@ export class FlowExecutionService implements OnModuleInit {
     private readonly groupLeaveNodeHandler: GroupLeaveNodeHandler,
     // AI handlers
     private readonly aiSingleNodeHandler: AiSingleNodeHandler,
-    private readonly aiChatNodeHandler: AiChatNodeHandler
+    private readonly aiChatNodeHandler: AiChatNodeHandler,
+    // Payment handler
+    private readonly paymentNodeHandler: PaymentNodeHandler
   ) {
     // Регистрируем все обработчики
     this.registerNodeHandlers();
@@ -222,6 +225,9 @@ export class FlowExecutionService implements OnModuleInit {
     );
     this.nodeHandlerService.registerHandler("ai_chat", this.aiChatNodeHandler);
 
+    // Payment handler
+    this.nodeHandlerService.registerHandler("payment", this.paymentNodeHandler);
+
     // Устанавливаем callback для всех обработчиков
     const handlers = [
       this.startNodeHandler,
@@ -249,6 +255,7 @@ export class FlowExecutionService implements OnModuleInit {
       this.groupLeaveNodeHandler,
       this.aiSingleNodeHandler,
       this.aiChatNodeHandler,
+      this.paymentNodeHandler,
     ];
 
     handlers.forEach((handler) => {

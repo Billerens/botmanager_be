@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { Specialist } from "../../database/entities/specialist.entity";
 import { Service } from "../../database/entities/service.entity";
@@ -22,6 +22,7 @@ import { TelegramModule } from "../telegram/telegram.module";
 import { QueueModule } from "../queue/queue.module";
 import { WebSocketModule } from "../websocket/websocket.module";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
+import { PaymentsModule } from "../payments/payments.module";
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
     QueueModule,
     WebSocketModule,
     ActivityLogModule,
+    forwardRef(() => PaymentsModule),
   ],
   controllers: [],
   providers: [

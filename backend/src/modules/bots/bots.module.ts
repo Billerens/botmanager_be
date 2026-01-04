@@ -42,6 +42,7 @@ import { CustomPagesModule } from "../custom-pages/custom-pages.module";
 import { AssistantBotModule } from "../assistant-bot/assistant-bot.module";
 import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
 import { LangChainOpenRouterModule } from "../langchain-openrouter/langchain-openrouter.module";
+import { PaymentsModule } from "../payments/payments.module";
 import { CustomLoggerService } from "../../common/logger.service";
 import {
   NodeHandlerService,
@@ -70,6 +71,7 @@ import {
   GroupLeaveNodeHandler,
   AiSingleNodeHandler,
   AiChatNodeHandler,
+  PaymentNodeHandler,
 } from "./nodes";
 import { AiModelSelectorService } from "./services/ai-model-selector.service";
 import { StreamingResponseService } from "./services/streaming-response.service";
@@ -123,6 +125,7 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
     AssistantBotModule,
     LangChainOpenRouterModule,
     forwardRef(() => CustomDomainsModule),
+    forwardRef(() => PaymentsModule),
   ],
   providers: [
     BotsService,
@@ -159,6 +162,7 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
     GroupLeaveNodeHandler,
     AiSingleNodeHandler,
     AiChatNodeHandler,
+    PaymentNodeHandler,
     AiModelSelectorService,
     StreamingResponseService,
     BotPermissionGuard,

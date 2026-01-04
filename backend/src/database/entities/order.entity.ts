@@ -11,6 +11,7 @@ import {
 import { CartItem } from "./cart.entity";
 import { PublicUser } from "./public-user.entity";
 import { Shop } from "./shop.entity";
+import { Payment, EntityPaymentStatus } from "./payment.entity";
 
 export enum OrderStatus {
   PENDING = "pending", // Ожидает обработки
@@ -79,6 +80,38 @@ export class Order {
   @Column({ type: "decimal", precision: 10, scale: 2, nullable: true })
   promocodeDiscount: number | null; // Размер скидки от промокода
 
+  // ============================================
+  // Платёжная информация
+  // ============================================
+
+  /**
+   * ID связанного платежа
+   */
+  @Column({ nullable: true })
+  paymentId: string | null;
+
+  /**
+   * Статус оплаты заказа
+   */
+  @Column({
+    type: "enum",
+    enum: EntityPaymentStatus,
+    default: EntityPaymentStatus.NOT_REQUIRED,
+  })
+  paymentStatus: EntityPaymentStatus;
+
+  /**
+   * Требуется ли оплата для этого заказа
+   */
+  @Column({ default: false })
+  paymentRequired: boolean;
+
+  /**
+   * Сумма к оплате (может отличаться от totalPrice при частичной оплате)
+   */
+  @Column({ type: "decimal", precision: 12, scale: 2, nullable: true })
+  paymentAmount: number | null;
+
   @CreateDateColumn()
   createdAt: Date;
 
@@ -96,7 +129,16 @@ export class Order {
   @JoinColumn({ name: "publicUserId" })
   publicUser?: PublicUser;
 
+  /**
+   * Связь с платежом
+   */
+  @ManyToOne(() => Payment, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "paymentId" })
+  payment?: Payment;
+
+  // ============================================
   // Методы
+  // ============================================
   get totalItems(): number {
     if (!this.items || this.items.length === 0) return 0;
     return this.items.reduce((sum, item) => sum + item.quantity, 0);
@@ -124,5 +166,50 @@ export class Order {
 
   get isCancelled(): boolean {
     return this.status === OrderStatus.CANCELLED;
+  }
+
+  // ============================================
+  // Методы для работы с платежами
+  // ============================================
+
+  /**
+   * Проверка, оплачен ли заказ
+   */
+  get isPaid(): boolean {
+    return this.paymentStatus === EntityPaymentStatus.PAID;
+  }
+
+  /**
+   * Проверка, ожидает ли заказ оплаты
+   */
+  get isAwaitingPayment(): boolean {
+    return (
+      this.paymentRequired &&
+      this.paymentStatus === EntityPaymentStatus.PENDING
+    );
+  }
+
+  /**
+   * Проверка, была ли ошибка оплаты
+   */
+  get isPaymentFailed(): boolean {
+    return this.paymentStatus === EntityPaymentStatus.FAILED;
+  }
+
+  /**
+   * Проверка, был ли возврат
+   */
+  get isRefunded(): boolean {
+    return (
+      this.paymentStatus === EntityPaymentStatus.REFUNDED ||
+      this.paymentStatus === EntityPaymentStatus.PARTIALLY_REFUNDED
+    );
+  }
+
+  /**
+   * Сумма к оплате (paymentAmount или totalPrice)
+   */
+  get amountToPay(): number {
+    return this.paymentAmount ?? this.totalPrice;
   }
 }

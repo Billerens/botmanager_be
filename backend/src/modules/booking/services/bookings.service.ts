@@ -5,9 +5,11 @@ import {
   ForbiddenException,
   forwardRef,
   Inject,
+  Logger,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, Between, MoreThan } from "typeorm";
+import { OnEvent } from "@nestjs/event-emitter";
 import {
   Booking,
   BookingStatus,
@@ -30,9 +32,19 @@ import {
   ActivityType,
   ActivityLevel,
 } from "../../../database/entities/activity-log.entity";
+import { PaymentConfigService } from "../../payments/services/payment-config.service";
+import { PaymentEntityType } from "../../../database/entities/payment-config.entity";
+import {
+  Payment,
+  EntityPaymentStatus,
+  PaymentTargetType,
+} from "../../../database/entities/payment.entity";
+import { PaymentEvent } from "../../payments/services/payment-transaction.service";
 
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
+
   constructor(
     @InjectRepository(Booking)
     private bookingRepository: Repository<Booking>,
@@ -47,8 +59,104 @@ export class BookingsService {
     @Inject(forwardRef(() => BookingNotificationsService))
     private notificationsService: BookingNotificationsService,
     private notificationService: NotificationService,
-    private activityLogService: ActivityLogService
+    private activityLogService: ActivityLogService,
+    @Inject(forwardRef(() => PaymentConfigService))
+    private paymentConfigService: PaymentConfigService
   ) {}
+
+  // =====================================================
+  // ОБРАБОТЧИКИ СОБЫТИЙ ПЛАТЕЖЕЙ
+  // =====================================================
+
+  /**
+   * Обработка события успешного платежа
+   */
+  @OnEvent(PaymentEvent.SUCCEEDED)
+  async handlePaymentSucceeded(payment: Payment): Promise<void> {
+    if (payment.targetType !== PaymentTargetType.BOOKING) {
+      return;
+    }
+
+    this.logger.log(`Payment succeeded for booking ${payment.targetId}`);
+
+    try {
+      const booking = await this.bookingRepository.findOne({
+        where: { id: payment.targetId },
+      });
+
+      if (!booking) {
+        this.logger.warn(`Booking ${payment.targetId} not found for payment`);
+        return;
+      }
+
+      // Обновляем статус оплаты
+      booking.paymentId = payment.id;
+      booking.paymentStatus = EntityPaymentStatus.PAID;
+
+      // Автоматически подтверждаем бронирование при успешной оплате
+      if (booking.status === BookingStatus.PENDING) {
+        booking.status = BookingStatus.CONFIRMED;
+      }
+
+      await this.bookingRepository.save(booking);
+
+      this.logger.log(`Booking ${booking.id} payment status updated to PAID`);
+    } catch (error) {
+      this.logger.error(
+        `Error handling payment succeeded for booking ${payment.targetId}`,
+        error
+      );
+    }
+  }
+
+  /**
+   * Обработка события неудачного платежа
+   */
+  @OnEvent(PaymentEvent.FAILED)
+  async handlePaymentFailed(payment: Payment): Promise<void> {
+    if (payment.targetType !== PaymentTargetType.BOOKING) {
+      return;
+    }
+
+    this.logger.log(`Payment failed for booking ${payment.targetId}`);
+
+    try {
+      await this.bookingRepository.update(payment.targetId, {
+        paymentId: payment.id,
+        paymentStatus: EntityPaymentStatus.FAILED,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error handling payment failed for booking ${payment.targetId}`,
+        error
+      );
+    }
+  }
+
+  /**
+   * Обработка события возврата платежа
+   */
+  @OnEvent(PaymentEvent.REFUNDED)
+  async handlePaymentRefunded(payment: Payment): Promise<void> {
+    if (payment.targetType !== PaymentTargetType.BOOKING) {
+      return;
+    }
+
+    this.logger.log(`Payment refunded for booking ${payment.targetId}`);
+
+    try {
+      await this.bookingRepository.update(payment.targetId, {
+        paymentStatus: payment.isFullyRefunded
+          ? EntityPaymentStatus.REFUNDED
+          : EntityPaymentStatus.PARTIALLY_REFUNDED,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error handling payment refunded for booking ${payment.targetId}`,
+        error
+      );
+    }
+  }
 
   /**
    * Освобождает все слоты, связанные с бронированием

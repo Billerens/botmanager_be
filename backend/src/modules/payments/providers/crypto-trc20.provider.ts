@@ -23,7 +23,7 @@ const USDT_CONTRACT_ADDRESS = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const USDT_TESTNET_CONTRACT_ADDRESS = "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj";
 
 // Интерфейсы для TronGrid API
-interface TRC20Transaction {
+export interface TRC20Transaction {
   transaction_id: string;
   block_timestamp: number;
   from: string;
@@ -295,6 +295,16 @@ export class CryptoTRC20Provider extends BasePaymentProvider {
     }
 
     return confirmedPayments;
+  }
+
+  /**
+   * Публичный метод поиска подходящей транзакции для платежа
+   * Используется TronMonitorService для проверки платежей из БД
+   */
+  async findMatchingTransactionPublic(
+    payment: PendingCryptoPayment
+  ): Promise<TRC20Transaction | null> {
+    return this.findMatchingTransaction(payment);
   }
 
   /**

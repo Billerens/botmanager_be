@@ -15,6 +15,7 @@ import { WebSocketModule } from "../websocket/websocket.module";
 import { ShopPromocodesModule } from "../shop-promocodes/shop-promocodes.module";
 import { CartModule } from "../cart/cart.module";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
+import { PaymentsModule } from "../payments/payments.module";
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
     forwardRef(() => ShopPromocodesModule),
     forwardRef(() => CartModule),
     ActivityLogModule,
+    forwardRef(() => PaymentsModule),
   ],
   controllers: [],
   providers: [OrdersService],

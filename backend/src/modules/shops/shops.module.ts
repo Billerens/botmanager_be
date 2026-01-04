@@ -23,6 +23,7 @@ import { TelegramModule } from "../telegram/telegram.module";
 import { PublicAuthModule } from "../public-auth/public-auth.module";
 import { BotsModule } from "../bots/bots.module";
 import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
+import { PaymentsModule } from "../payments/payments.module";
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
     forwardRef(() => PublicAuthModule),
     forwardRef(() => BotsModule),
     forwardRef(() => CustomDomainsModule),
+    forwardRef(() => PaymentsModule),
   ],
   controllers: [ShopsController, PublicShopsController],
   providers: [ShopsService],

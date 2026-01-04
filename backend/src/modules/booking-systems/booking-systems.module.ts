@@ -13,6 +13,7 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
 import { TelegramModule } from "../telegram/telegram.module";
 import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
 import { BookingModule } from "../booking/booking.module";
+import { PaymentsModule } from "../payments/payments.module";
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { BookingModule } from "../booking/booking.module";
     forwardRef(() => TelegramModule),
     forwardRef(() => CustomDomainsModule),
     forwardRef(() => BookingModule),
+    forwardRef(() => PaymentsModule),
   ],
   controllers: [BookingSystemsController, PublicBookingSystemsController],
   providers: [BookingSystemsService],

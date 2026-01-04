@@ -9,6 +9,8 @@ import {
   Body,
   UseGuards,
   Req,
+  HttpCode,
+  HttpStatus,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -17,14 +19,38 @@ import {
   ApiQuery,
   getSchemaPath,
   ApiBearerAuth,
+  ApiProperty,
+  ApiPropertyOptional,
 } from "@nestjs/swagger";
 import { Request } from "express";
+import { IsString, IsOptional } from "class-validator";
 import { ShopsService } from "./shops.service";
 import { CartService, CartUserIdentifier } from "../cart/cart.service";
 import { OrdersService, OrderUserIdentifier } from "../orders/orders.service";
 import { PublicShopResponseDto } from "./dto/shop-response.dto";
 import { PublicAccessGuard } from "../public-auth/guards/public-access.guard";
 import { CreateOrderDto } from "../orders/dto/order.dto";
+import { PaymentConfigService } from "../payments/services/payment-config.service";
+import { PaymentTransactionService } from "../payments/services/payment-transaction.service";
+import { PaymentEntityType } from "../../database/entities/payment-config.entity";
+import { PaymentTargetType } from "../../database/entities/payment.entity";
+
+// DTO для создания платежа
+class CreatePublicOrderPaymentDto {
+  @ApiProperty({ description: "ID платежного провайдера" })
+  @IsString()
+  provider: string;
+
+  @ApiPropertyOptional({ description: "URL возврата после успешной оплаты" })
+  @IsOptional()
+  @IsString()
+  returnUrl?: string;
+
+  @ApiPropertyOptional({ description: "URL возврата при отмене" })
+  @IsOptional()
+  @IsString()
+  cancelUrl?: string;
+}
 
 // Расширяем Request для публичного пользователя
 interface PublicRequest extends Request {
@@ -44,7 +70,9 @@ export class PublicShopsController {
   constructor(
     private readonly shopsService: ShopsService,
     private readonly cartService: CartService,
-    private readonly ordersService: OrdersService
+    private readonly ordersService: OrdersService,
+    private readonly paymentConfigService: PaymentConfigService,
+    private readonly paymentTransactionService: PaymentTransactionService
   ) {}
 
   /**
@@ -370,5 +398,142 @@ export class PublicShopsController {
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 20,
     });
+  }
+
+  // =====================================================
+  // PAYMENT ENDPOINTS
+  // =====================================================
+
+  @Get(":id/payment-providers")
+  @ApiOperation({ summary: "Получить доступные способы оплаты для магазина" })
+  @ApiResponse({
+    status: 200,
+    description: "Список провайдеров получен",
+  })
+  async getPaymentProviders(@Param("id") shopId: string) {
+    const config = await this.paymentConfigService.getConfig(
+      PaymentEntityType.SHOP,
+      shopId
+    );
+
+    if (!config || !config.enabled) {
+      return {
+        enabled: false,
+        providers: [],
+      };
+    }
+
+    // Формируем список провайдеров с их названиями
+    const providerNames: Record<string, { name: string; logo?: string }> = {
+      yookassa: { name: "ЮKassa", logo: "/images/yookassa-logo.svg" },
+      tinkoff: { name: "Тинькофф Оплата", logo: "/images/tpay-logo.svg" },
+      robokassa: { name: "Robokassa", logo: "/images/robokassa-logo.svg" },
+      stripe: { name: "Stripe", logo: "/images/stripe-logo.svg" },
+      crypto_trc20: {
+        name: "USDT TRC-20",
+        logo: "/images/usdt-trc20-logo.svg",
+      },
+    };
+
+    const providers = (config.providers || []).map((providerId) => ({
+      id: providerId,
+      name: providerNames[providerId]?.name || providerId,
+      logo: providerNames[providerId]?.logo,
+    }));
+
+    return {
+      enabled: true,
+      providers,
+    };
+  }
+
+  @Post(":id/orders/:orderId/payment")
+  @UseGuards(PublicAccessGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Создать платёж для заказа" })
+  @ApiResponse({
+    status: 200,
+    description: "Платёж создан",
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Невалидные данные или платежи не настроены",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Заказ не найден",
+  })
+  async createOrderPayment(
+    @Param("id") shopId: string,
+    @Param("orderId") orderId: string,
+    @Body() dto: CreatePublicOrderPaymentDto,
+    @Req() req: PublicRequest
+  ) {
+    // Получаем заказ и проверяем принадлежность пользователю
+    const user = this.getUserIdentifier(req) as OrderUserIdentifier;
+    const order = await this.ordersService.getUserOrder(shopId, orderId, user);
+
+    if (!order) {
+      throw new Error("Заказ не найден");
+    }
+
+    // Создаём платёж
+    const payment = await this.paymentTransactionService.createPayment({
+      entityType: PaymentEntityType.SHOP,
+      entityId: shopId,
+      targetType: PaymentTargetType.ORDER,
+      targetId: orderId,
+      provider: dto.provider as any,
+      amount: order.paymentAmount || order.totalPrice,
+      currency: order.currency,
+      description: `Оплата заказа #${orderId.slice(0, 8)}`,
+      returnUrl: dto.returnUrl,
+      cancelUrl: dto.cancelUrl,
+      metadata: {
+        orderId,
+        shopId,
+      },
+    });
+
+    return {
+      paymentId: payment.id,
+      paymentUrl: payment.paymentUrl,
+      externalId: payment.externalId,
+    };
+  }
+
+  @Get(":id/orders/:orderId/payment-status")
+  @UseGuards(PublicAccessGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Получить статус оплаты заказа" })
+  @ApiResponse({
+    status: 200,
+    description: "Статус оплаты получен",
+  })
+  async getOrderPaymentStatus(
+    @Param("id") shopId: string,
+    @Param("orderId") orderId: string,
+    @Req() req: PublicRequest
+  ) {
+    // Проверяем принадлежность заказа пользователю
+    const user = this.getUserIdentifier(req) as OrderUserIdentifier;
+    const order = await this.ordersService.getUserOrder(shopId, orderId, user);
+
+    if (!order) {
+      throw new Error("Заказ не найден");
+    }
+
+    // Получаем платёж для заказа
+    const payment = await this.paymentTransactionService.getPaymentByTarget(
+      PaymentTargetType.ORDER,
+      orderId
+    );
+
+    return {
+      paymentStatus: order.paymentStatus,
+      paymentId: payment?.id,
+      paymentUrl: payment?.paymentUrl,
+    };
   }
 }

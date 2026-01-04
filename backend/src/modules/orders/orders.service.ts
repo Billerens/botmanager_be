@@ -9,6 +9,7 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
+import { OnEvent } from "@nestjs/event-emitter";
 import { Order, OrderStatus } from "../../database/entities/order.entity";
 import { Cart } from "../../database/entities/cart.entity";
 import { Shop } from "../../database/entities/shop.entity";
@@ -25,6 +26,14 @@ import {
   ActivityType,
   ActivityLevel,
 } from "../../database/entities/activity-log.entity";
+import { PaymentConfigService } from "../payments/services/payment-config.service";
+import { PaymentEntityType } from "../../database/entities/payment-config.entity";
+import {
+  Payment,
+  EntityPaymentStatus,
+  PaymentTargetType,
+} from "../../database/entities/payment.entity";
+import { PaymentEvent } from "../payments/services/payment-transaction.service";
 
 /**
  * Идентификатор пользователя для заказов
@@ -56,8 +65,104 @@ export class OrdersService {
     private readonly shopPromocodesService: ShopPromocodesService,
     @Inject(forwardRef(() => CartService))
     private readonly cartService: CartService,
-    private readonly activityLogService: ActivityLogService
+    private readonly activityLogService: ActivityLogService,
+    @Inject(forwardRef(() => PaymentConfigService))
+    private readonly paymentConfigService: PaymentConfigService
   ) {}
+
+  // =====================================================
+  // ОБРАБОТЧИКИ СОБЫТИЙ ПЛАТЕЖЕЙ
+  // =====================================================
+
+  /**
+   * Обработка события успешного платежа
+   */
+  @OnEvent(PaymentEvent.SUCCEEDED)
+  async handlePaymentSucceeded(payment: Payment): Promise<void> {
+    if (payment.targetType !== PaymentTargetType.ORDER) {
+      return;
+    }
+
+    this.logger.log(`Payment succeeded for order ${payment.targetId}`);
+
+    try {
+      const order = await this.orderRepository.findOne({
+        where: { id: payment.targetId },
+      });
+
+      if (!order) {
+        this.logger.warn(`Order ${payment.targetId} not found for payment`);
+        return;
+      }
+
+      // Обновляем статус оплаты
+      order.paymentId = payment.id;
+      order.paymentStatus = EntityPaymentStatus.PAID;
+
+      // Автоматически подтверждаем заказ при успешной оплате
+      if (order.status === OrderStatus.PENDING) {
+        order.status = OrderStatus.CONFIRMED;
+      }
+
+      await this.orderRepository.save(order);
+
+      this.logger.log(`Order ${order.id} payment status updated to PAID`);
+    } catch (error) {
+      this.logger.error(
+        `Error handling payment succeeded for order ${payment.targetId}`,
+        error
+      );
+    }
+  }
+
+  /**
+   * Обработка события неудачного платежа
+   */
+  @OnEvent(PaymentEvent.FAILED)
+  async handlePaymentFailed(payment: Payment): Promise<void> {
+    if (payment.targetType !== PaymentTargetType.ORDER) {
+      return;
+    }
+
+    this.logger.log(`Payment failed for order ${payment.targetId}`);
+
+    try {
+      await this.orderRepository.update(payment.targetId, {
+        paymentId: payment.id,
+        paymentStatus: EntityPaymentStatus.FAILED,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error handling payment failed for order ${payment.targetId}`,
+        error
+      );
+    }
+  }
+
+  /**
+   * Обработка события возврата платежа
+   */
+  @OnEvent(PaymentEvent.REFUNDED)
+  async handlePaymentRefunded(payment: Payment): Promise<void> {
+    if (payment.targetType !== PaymentTargetType.ORDER) {
+      return;
+    }
+
+    this.logger.log(`Payment refunded for order ${payment.targetId}`);
+
+    try {
+      await this.orderRepository.update(payment.targetId, {
+        paymentStatus: payment.isFullyRefunded
+          ? EntityPaymentStatus.REFUNDED
+          : EntityPaymentStatus.PARTIALLY_REFUNDED,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error handling payment refunded for order ${payment.targetId}`,
+        error
+      );
+    }
+  }
 
   // =====================================================
   // ОСНОВНЫЕ МЕТОДЫ (работают с shopId)
@@ -174,19 +279,46 @@ export class OrdersService {
       }
     }
 
+    // Проверяем настройки платежей для магазина
+    let paymentRequired = false;
+    let paymentStatus = EntityPaymentStatus.NOT_REQUIRED;
+
+    try {
+      const paymentEnabled = await this.paymentConfigService.isPaymentEnabled(
+        PaymentEntityType.SHOP,
+        shopId
+      );
+      if (paymentEnabled) {
+        paymentRequired = true;
+        paymentStatus = EntityPaymentStatus.PENDING;
+      }
+    } catch (error) {
+      // Если не удалось проверить настройки платежей, продолжаем без требования оплаты
+      this.logger.warn(
+        `Failed to check payment config for shop ${shopId}: ${error.message}`
+      );
+    }
+
+    // Рассчитываем сумму к оплате
+    const totalOrderPrice = cart.totalPrice - promocodeDiscount;
+
     // Создаем заказ
     const order = this.orderRepository.create({
       shopId,
       telegramUsername: telegramUsername || null,
       publicUserId: publicUserId || null,
       items: cart.items,
-      totalPrice: cart.totalPrice - promocodeDiscount,
+      totalPrice: totalOrderPrice,
       currency: cart.currency,
       status: OrderStatus.PENDING,
       customerData: createOrderDto.customerData,
       additionalMessage: createOrderDto.additionalMessage,
       appliedPromocodeId,
       promocodeDiscount: promocodeDiscount > 0 ? promocodeDiscount : null,
+      // Платёжные поля
+      paymentRequired,
+      paymentStatus,
+      paymentAmount: paymentRequired ? totalOrderPrice : null,
     });
 
     const savedOrder = await this.orderRepository.save(order);
@@ -338,6 +470,25 @@ export class OrdersService {
     if (order.status === OrderStatus.DELIVERED) {
       throw new BadRequestException(
         "Нельзя изменить статус доставленного заказа"
+      );
+    }
+
+    // Проверяем оплату при переходе к статусам, требующим оплаты
+    const statusesRequiringPayment = [
+      OrderStatus.CONFIRMED,
+      OrderStatus.PROCESSING,
+      OrderStatus.SHIPPED,
+      OrderStatus.DELIVERED,
+    ];
+
+    if (
+      order.paymentRequired &&
+      statusesRequiringPayment.includes(updateDto.status) &&
+      order.paymentStatus !== EntityPaymentStatus.PAID
+    ) {
+      throw new BadRequestException(
+        "Невозможно изменить статус заказа без оплаты. Текущий статус оплаты: " +
+          order.paymentStatus
       );
     }
 
