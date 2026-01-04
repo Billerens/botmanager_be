@@ -93,7 +93,7 @@ export class PaymentNodeHandler extends BaseNodeHandler {
       // Логирование
       if (bot.ownerId) {
         await this.activityLogService.create({
-          type: ActivityType.BOT_ACTION,
+          type: ActivityType.PAYMENT_ACTION,
           level: ActivityLevel.INFO,
           message: `Payment action executed: ${action}`,
           userId: bot.ownerId,
