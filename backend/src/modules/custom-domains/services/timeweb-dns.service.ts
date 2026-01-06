@@ -1,6 +1,13 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Inject,
+  forwardRef,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import axios, { AxiosInstance } from "axios";
+import { TimewebAppsService, TimewebApp } from "./timeweb-apps.service";
 
 // ============================================================================
 // ИНТЕРФЕЙСЫ TIMEWEB API
@@ -107,7 +114,11 @@ export class TimewebDnsService implements OnModuleInit {
 
   private readonly apiUrl: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    @Inject(forwardRef(() => TimewebAppsService))
+    private readonly timewebAppsService: TimewebAppsService
+  ) {
     const apiToken = this.configService.get<string>("TIMEWEB_API_TOKEN");
     // Используем v1 API согласно официальной документации Timeweb Cloud
     this.apiUrl =
@@ -126,7 +137,6 @@ export class TimewebDnsService implements OnModuleInit {
         "Content-Type": "application/json",
       },
     });
-
   }
 
   async onModuleInit() {
@@ -379,8 +389,9 @@ export class TimewebDnsService implements OnModuleInit {
   /**
    * Зарегистрировать поддомен платформы (2-шаговый процесс)
    *
-   * Шаг 1: Создать поддомен в Timeweb
-   * Шаг 2: Создать A-запись для поддомена
+   * Шаг 1: Получить приложение Timeweb по FRONTEND_IP
+   * Шаг 2: Создать поддомен в Timeweb DNS
+   * Шаг 3: Добавить домен к приложению через API
    *
    * @param slug - Slug сущности (например: "myshop")
    * @param type - Тип субдомена ("shops", "booking", "pages")
@@ -399,9 +410,17 @@ export class TimewebDnsService implements OnModuleInit {
 
     const subdomainFqdn = this.getFullDomain(slug, type);
 
-    // ШАГ 1: Создать поддомен
-    const subdomain = await this.createSubdomain(subdomainFqdn);
+    // ШАГ 1: Получить приложение Timeweb по IP
+    const app = await this.timewebAppsService.findFrontendApp();
+    if (!app) {
+      return {
+        success: false,
+        error: `Frontend app not found by IP ${this.frontendIp}. Cannot create subdomain.`,
+      };
+    }
 
+    // ШАГ 2: Создать поддомен в Timeweb DNS
+    const subdomain = await this.createSubdomain(subdomainFqdn);
     if (!subdomain) {
       return {
         success: false,
@@ -409,34 +428,31 @@ export class TimewebDnsService implements OnModuleInit {
       };
     }
 
-    // ШАГ 2: Создать A-запись
-    const dnsRecordId = await this.createDnsRecord(subdomainFqdn, {
-      type: "A",
-      value: this.frontendIp,
-    });
-
-    if (!dnsRecordId) {
+    // ШАГ 3: Добавить домен к приложению через API
+    const domainAdded = await this.addDomainToApp(app.id, subdomainFqdn);
+    if (!domainAdded) {
       // Rollback: удаляем созданный поддомен
       await this.deleteSubdomain(subdomainFqdn);
 
       return {
         success: false,
-        error: `Failed to create DNS A-record for ${subdomainFqdn}`,
+        error: `Failed to add domain ${subdomainFqdn} to app ${app.id}`,
       };
     }
 
     return {
       success: true,
       subdomain,
-      dnsRecordId,
     };
   }
 
   /**
    * Удалить поддомен платформы (полное удаление)
    *
-   * Шаг 1: Удалить все DNS записи поддомена
-   * Шаг 2: Удалить сам поддомен
+   * Шаг 1: Получить приложение Timeweb по FRONTEND_IP
+   * Шаг 2: Удалить домен из приложения через API
+   * Шаг 3: Удалить все DNS записи поддомена
+   * Шаг 4: Удалить сам поддомен
    *
    * @param slug - Slug сущности
    * @param type - Тип субдомена
@@ -445,10 +461,17 @@ export class TimewebDnsService implements OnModuleInit {
   async unregisterSubdomain(slug: string, type: string): Promise<boolean> {
     const subdomainFqdn = this.getFullDomain(slug, type);
 
-    // ШАГ 1: Удалить все DNS записи
+    // ШАГ 1: Получить приложение Timeweb по IP
+    const app = await this.timewebAppsService.findFrontendApp();
+    if (app) {
+      // ШАГ 2: Удалить домен из приложения
+      await this.removeDomainFromApp(app.id, subdomainFqdn);
+    }
+
+    // ШАГ 3: Удалить все DNS записи
     await this.deleteAllDnsRecords(subdomainFqdn);
 
-    // ШАГ 2: Удалить поддомен
+    // ШАГ 4: Удалить поддомен
     const deleted = await this.deleteSubdomain(subdomainFqdn);
 
     return deleted;
@@ -541,6 +564,109 @@ export class TimewebDnsService implements OnModuleInit {
   async recordExists(subdomain: string): Promise<boolean> {
     const record = await this.findRecord(subdomain, "A");
     return record !== null;
+  }
+
+  // ============================================================================
+  // РАБОТА С ДОМЕНАМИ ПРИЛОЖЕНИЙ
+  // ============================================================================
+
+  /**
+   * Добавить домен к приложению Timeweb через API
+   *
+   * @param appId - ID приложения
+   * @param domainFqdn - Полный FQDN домена
+   * @returns true если домен добавлен успешно
+   */
+  async addDomainToApp(appId: number, domainFqdn: string): Promise<boolean> {
+    try {
+      // Получаем текущее приложение с его доменами
+      const app = await this.timewebAppsService.getAppById(appId);
+      if (!app) {
+        this.logger.error(`App ${appId} not found`);
+        return false;
+      }
+
+      // Проверяем, не добавлен ли уже этот домен
+      const existingDomain = app.domains.find(
+        (d) => d.fqdn.toLowerCase() === domainFqdn.toLowerCase()
+      );
+      if (existingDomain) {
+        this.logger.log(`Domain ${domainFqdn} already exists in app ${appId}`);
+        return true;
+      }
+
+      // Формируем массив всех доменов (существующие + новый)
+      const allDomains = [...app.domains.map((d) => d.fqdn), domainFqdn];
+
+      // PATCH /api/v1/apps/{app_id} с полем domains
+      const requestUrl = `/apps/${appId}`;
+      const requestBody = {
+        domains: allDomains.map((fqdn) => ({ fqdn })),
+      };
+
+      await this.client.patch(requestUrl, requestBody);
+
+      this.logger.log(
+        `Domain ${domainFqdn} added to app ${appId} successfully`
+      );
+      return true;
+    } catch (error) {
+      this.logError(`addDomainToApp(${appId}, ${domainFqdn})`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Удалить домен из приложения Timeweb через API
+   *
+   * @param appId - ID приложения
+   * @param domainFqdn - Полный FQDN домена
+   * @returns true если домен удалён успешно
+   */
+  async removeDomainFromApp(
+    appId: number,
+    domainFqdn: string
+  ): Promise<boolean> {
+    try {
+      // Получаем текущее приложение с его доменами
+      const app = await this.timewebAppsService.getAppById(appId);
+      if (!app) {
+        this.logger.warn(`App ${appId} not found, skipping domain removal`);
+        return true; // Считаем успешным, если приложение не найдено
+      }
+
+      // Проверяем, существует ли этот домен
+      const domainExists = app.domains.some(
+        (d) => d.fqdn.toLowerCase() === domainFqdn.toLowerCase()
+      );
+      if (!domainExists) {
+        this.logger.log(
+          `Domain ${domainFqdn} not found in app ${appId}, already removed`
+        );
+        return true;
+      }
+
+      // Формируем массив доменов без удаляемого
+      const remainingDomains = app.domains
+        .filter((d) => d.fqdn.toLowerCase() !== domainFqdn.toLowerCase())
+        .map((d) => d.fqdn);
+
+      // PATCH /api/v1/apps/{app_id} с обновлённым списком доменов
+      const requestUrl = `/apps/${appId}`;
+      const requestBody = {
+        domains: remainingDomains.map((fqdn) => ({ fqdn })),
+      };
+
+      await this.client.patch(requestUrl, requestBody);
+
+      this.logger.log(
+        `Domain ${domainFqdn} removed from app ${appId} successfully`
+      );
+      return true;
+    } catch (error) {
+      this.logError(`removeDomainFromApp(${appId}, ${domainFqdn})`, error);
+      return false;
+    }
   }
 
   // ============================================================================
