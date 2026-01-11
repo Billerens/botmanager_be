@@ -32,6 +32,7 @@ import { PaymentConfigService } from "../payments/services/payment-config.servic
 import { PaymentTransactionService } from "../payments/services/payment-transaction.service";
 import { PaymentEntityType } from "../../database/entities/payment-config.entity";
 import { PaymentTargetType } from "../../database/entities/payment.entity";
+import { TimeSlotsService } from "../booking/services/time-slots.service";
 
 // DTO для создания платежа бронирования
 class CreatePublicBookingPaymentDto {
@@ -65,7 +66,8 @@ export class PublicBookingSystemsController {
   constructor(
     private readonly bookingSystemsService: BookingSystemsService,
     private readonly paymentConfigService: PaymentConfigService,
-    private readonly paymentTransactionService: PaymentTransactionService
+    private readonly paymentTransactionService: PaymentTransactionService,
+    private readonly timeSlotsService: TimeSlotsService
   ) {}
 
   @Get(":id")
@@ -86,7 +88,9 @@ export class PublicBookingSystemsController {
   }
 
   @Get("by-slug/:slug")
-  @ApiOperation({ summary: "Получить публичные данные системы бронирования по slug" })
+  @ApiOperation({
+    summary: "Получить публичные данные системы бронирования по slug",
+  })
   @ApiParam({ name: "slug", description: "Slug системы бронирования" })
   @ApiResponse({
     status: 200,
@@ -124,6 +128,46 @@ export class PublicBookingSystemsController {
   async getServices(@Param("id") id: string) {
     const data = await this.bookingSystemsService.getPublicData(id);
     return data.services;
+  }
+
+  @Get(":id/time-slots")
+  @ApiOperation({ summary: "Получить доступные таймслоты для специалиста" })
+  @ApiParam({ name: "id", description: "ID системы бронирования" })
+  @ApiQuery({
+    name: "specialistId",
+    required: true,
+    description: "ID специалиста",
+  })
+  @ApiQuery({
+    name: "date",
+    required: true,
+    description: "Дата в формате YYYY-MM-DD",
+  })
+  @ApiQuery({
+    name: "serviceId",
+    required: false,
+    description: "ID услуги (опционально)",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Список доступных таймслотов",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Система бронирования или специалист не найдены",
+    schema: { $ref: getSchemaPath(ErrorResponseDto) },
+  })
+  async getTimeSlots(
+    @Param("id") id: string,
+    @Query("specialistId") specialistId: string,
+    @Query("date") date: string,
+    @Query("serviceId") serviceId?: string
+  ) {
+    return this.timeSlotsService.findAvailableSlotsByBookingSystem(id, {
+      specialistId,
+      serviceId,
+      date,
+    });
   }
 
   // =====================================================
@@ -268,4 +312,3 @@ export class PublicBookingSystemsController {
     };
   }
 }
-
