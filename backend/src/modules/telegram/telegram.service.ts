@@ -267,7 +267,7 @@ export class TelegramService {
 
       const bookingUrl =
         bookingSystem.url ||
-        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/booking/${bookingSystem.id}`;
+        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/booking-system/${bookingSystem.id}`;
 
       await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {
         menu_button: {
