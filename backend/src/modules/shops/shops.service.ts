@@ -571,6 +571,21 @@ export class ShopsService {
   ): Promise<Shop> {
     const shop = await this.findOne(id, userId);
 
+    // Валидация: проверяем конфликт menu_button с системой бронирования
+    if (settings.buttonTypes?.includes("menu_button") && shop.botId) {
+      const linkedBookingSystem = await this.getLinkedBookingSystemByBotId(
+        shop.botId
+      );
+      if (
+        linkedBookingSystem &&
+        linkedBookingSystem.buttonTypes?.includes("menu_button")
+      ) {
+        throw new BadRequestException(
+          "Menu Button уже используется в системе бронирования. Отключите его там перед включением в магазине."
+        );
+      }
+    }
+
     Object.assign(shop, settings);
     const updatedShop = await this.shopRepository.save(shop);
 
@@ -722,7 +737,8 @@ export class ShopsService {
     try {
       const token = this.decryptToken(bot.token);
       // Получаем связанную систему бронирования для корректного обновления всех команд
-      const linkedBookingSystem = await this.getLinkedBookingSystemByBotId(botId);
+      const linkedBookingSystem =
+        await this.getLinkedBookingSystemByBotId(botId);
       await this.telegramService.setBotCommands(
         token,
         bot,

@@ -586,6 +586,19 @@ export class BookingSystemsService {
   ): Promise<BookingSystem> {
     const bookingSystem = await this.findOne(id, userId);
 
+    // Валидация: проверяем конфликт menu_button с магазином
+    if (
+      settingsDto.buttonTypes?.includes("menu_button") &&
+      bookingSystem.botId
+    ) {
+      const linkedShop = await this.getLinkedShopByBotId(bookingSystem.botId);
+      if (linkedShop && linkedShop.buttonTypes?.includes("menu_button")) {
+        throw new BadRequestException(
+          "Menu Button уже используется в магазине. Отключите его там перед включением в системе бронирования."
+        );
+      }
+    }
+
     // Извлекаем вложенные настройки бронирования
     const { settings, ...visualSettings } = settingsDto;
 
