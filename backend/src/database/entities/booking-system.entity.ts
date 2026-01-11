@@ -160,7 +160,7 @@ export class BookingSystem {
   get url(): string {
     const frontendUrl =
       process.env.FRONTEND_URL || "https://botmanagertest.online";
-    return `${frontendUrl}/booking/${this.id}`;
+    return `${frontendUrl}/booking-system/${this.id}`;
   }
 
   /**
