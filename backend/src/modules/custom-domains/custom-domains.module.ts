@@ -8,7 +8,6 @@ import { BookingSystem } from "../../database/entities/booking-system.entity";
 import { CustomDomainsController } from "./custom-domains.controller";
 import { CustomDomainsService } from "./services/custom-domains.service";
 import { DnsValidatorService } from "./services/dns-validator.service";
-import { CaddyService } from "./services/caddy.service";
 import { DomainHealthService } from "./services/domain-health.service";
 import { TimewebDnsService } from "./services/timeweb-dns.service";
 import { TimewebAppsService } from "./services/timeweb-apps.service";
@@ -25,7 +24,6 @@ import { FrontendRedeployService } from "./services/frontend-redeploy.service";
   providers: [
     CustomDomainsService,
     DnsValidatorService,
-    CaddyService,
     DomainHealthService,
     TimewebDnsService,
     TimewebAppsService,
@@ -35,7 +33,6 @@ import { FrontendRedeployService } from "./services/frontend-redeploy.service";
   ],
   exports: [
     CustomDomainsService,
-    CaddyService,
     SubdomainService,
     TimewebDnsService,
     TimewebAppsService,

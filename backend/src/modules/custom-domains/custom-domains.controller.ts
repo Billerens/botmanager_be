@@ -32,15 +32,15 @@ export class CustomDomainsController {
   constructor(private readonly domainsService: CustomDomainsService) {}
 
   /**
-   * Публичный endpoint для проверки домена (используется Caddy on-demand TLS)
-   * Caddy делает запрос: GET /api/custom-domains/verify-domain?domain=shop.example.com
+   * Публичный endpoint для проверки домена (используется для on-demand TLS)
+   * Фронтенд-сервер делает запрос: GET /custom-domains/verify-domain?domain=shop.example.com
    * Ответ 200 = домен разрешён, 404 = запрещён
    */
   @Get("verify-domain")
   @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: "Проверить домен для on-demand TLS (используется Caddy)",
+    summary: "Проверить домен для on-demand TLS",
   })
   @ApiResponse({ status: 200, description: "Домен разрешён" })
   @ApiResponse({ status: 404, description: "Домен не найден или не активен" })
@@ -55,9 +55,18 @@ export class CustomDomainsController {
   }
 
   @Get()
-  @ApiOperation({ summary: "Получить все домены пользователя" })
+  @ApiOperation({ summary: "Получить домены пользователя (с опциональной фильтрацией)" })
   @ApiResponse({ status: 200, type: [DomainResponseDto] })
-  async getAll(@CurrentUser() user: User): Promise<DomainResponseDto[]> {
+  async getAll(
+    @CurrentUser() user: User,
+    @Query("targetType") targetType?: string,
+    @Query("targetId") targetId?: string
+  ): Promise<DomainResponseDto[]> {
+    // Если переданы параметры фильтрации - фильтруем по сущности
+    if (targetType && targetId) {
+      return this.domainsService.getDomainsByTarget(user.id, targetType, targetId);
+    }
+    // Иначе возвращаем все домены пользователя
     return this.domainsService.getUserDomains(user.id);
   }
 
@@ -121,6 +130,22 @@ export class CustomDomainsController {
     @CurrentUser() user: User
   ): Promise<DomainResponseDto> {
     return this.domainsService.reactivateDomain(id, user.id);
+  }
+
+  @Post(":id/check-ssl")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Проверить SSL сертификат для домена" })
+  @ApiResponse({ status: 200, type: DomainResponseDto })
+  @ApiResponse({
+    status: 400,
+    description: "Неверный статус домена или rate limit",
+  })
+  @ApiResponse({ status: 404, description: "Домен не найден" })
+  async checkSsl(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: User
+  ): Promise<DomainResponseDto> {
+    return this.domainsService.recheckSsl(id, user.id);
   }
 
   @Delete(":id")

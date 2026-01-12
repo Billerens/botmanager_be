@@ -5,7 +5,6 @@ import { Repository, In } from "typeorm";
 import { CustomDomain } from "../../../database/entities/custom-domain.entity";
 import { DomainStatus } from "../enums/domain-status.enum";
 import { DnsValidatorService } from "./dns-validator.service";
-import { CaddyService } from "./caddy.service";
 
 @Injectable()
 export class DomainHealthService {
@@ -14,8 +13,7 @@ export class DomainHealthService {
   constructor(
     @InjectRepository(CustomDomain)
     private readonly domainsRepo: Repository<CustomDomain>,
-    private readonly dnsValidator: DnsValidatorService,
-    private readonly caddyService: CaddyService
+    private readonly dnsValidator: DnsValidatorService
   ) {}
 
   /**
@@ -138,7 +136,7 @@ export class DomainHealthService {
       });
 
       this.logger.error(`SSL expired for ${domain.domain}`);
-      // SSL управляется Timeweb автоматически
+      // SSL обновляется фронтенд-сервером через on-demand TLS
     } else if (daysUntilExpiry <= 7) {
       // Критично - SSL истекает через 7 дней или меньше
       domain.status = DomainStatus.SSL_EXPIRING;
@@ -150,7 +148,7 @@ export class DomainHealthService {
         domain.notificationsSent.push("ssl_critical");
         // TODO: Отправить критическое уведомление пользователю
       }
-      // SSL управляется Timeweb автоматически
+      // SSL обновляется фронтенд-сервером через on-demand TLS
     } else if (daysUntilExpiry <= 14) {
       // Предупреждение - SSL истекает через 14 дней
       if (!domain.notificationsSent.includes("ssl_warning_14d")) {
@@ -167,7 +165,7 @@ export class DomainHealthService {
         // TODO: Отправить предупреждение пользователю
       }
     } else if (daysUntilExpiry <= 30) {
-      // Информационно - Caddy должен обновить автоматически
+      // Информационно - фронтенд-сервер должен обновить SSL автоматически
       this.logger.debug(
         `SSL for ${domain.domain} expires in ${daysUntilExpiry} days (normal renewal window)`
       );
@@ -187,8 +185,8 @@ export class DomainHealthService {
     domain.suspendedAt = new Date();
     domain.suspendReason = reason;
 
-    // Удаляем маршрут из Caddy
-    await this.caddyService.removeRoute(domain.domain);
+    // При новой архитектуре маршруты не управляются через Caddy API
+    // Приостановленный домен просто не пройдёт проверку в isDomainAllowedForTls
 
     // TODO: Отправить уведомление пользователю о приостановке
 

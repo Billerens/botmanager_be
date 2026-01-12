@@ -17,7 +17,6 @@ import {
   VerificationMethod,
 } from "../enums/domain-status.enum";
 import { DnsValidatorService } from "./dns-validator.service";
-import { CaddyService } from "./caddy.service";
 import {
   CreateDomainDto,
   DomainResponseDto,
@@ -45,7 +44,6 @@ export class CustomDomainsService {
     @InjectRepository(CustomDomain)
     private readonly domainsRepo: Repository<CustomDomain>,
     private readonly dnsValidator: DnsValidatorService,
-    private readonly caddyService: CaddyService,
     private readonly configService: ConfigService
   ) {
     // IP-адрес фронтенд-сервера, на который должны указывать кастомные домены
@@ -58,6 +56,43 @@ export class CustomDomainsService {
   async getUserDomains(userId: string): Promise<DomainResponseDto[]> {
     const domains = await this.domainsRepo.find({
       where: { userId },
+      order: { createdAt: "DESC" },
+    });
+
+    return domains.map((domain) => this.buildResponse(domain));
+  }
+
+  /**
+   * Получить домены для конкретной сущности (shop, booking, custom_page)
+   */
+  async getDomainsByTarget(
+    userId: string,
+    targetType: string,
+    targetId: string
+  ): Promise<DomainResponseDto[]> {
+    const whereClause: Record<string, any> = {
+      userId,
+      targetType,
+    };
+
+    // Определяем поле ID в зависимости от типа сущности
+    switch (targetType) {
+      case DomainTargetType.SHOP:
+        whereClause.shopId = targetId;
+        break;
+      case DomainTargetType.BOOKING:
+        whereClause.bookingId = targetId;
+        break;
+      case DomainTargetType.CUSTOM_PAGE:
+        whereClause.customPageId = targetId;
+        break;
+      default:
+        // Если неизвестный тип — вернём пустой массив
+        return [];
+    }
+
+    const domains = await this.domainsRepo.find({
+      where: whereClause,
       order: { createdAt: "DESC" },
     });
 
@@ -251,53 +286,66 @@ export class CustomDomainsService {
   }
 
   /**
-   * Активировать домен (добавить в Caddy)
+   * Активировать домен
+   *
+   * Проверяет доступность домена по HTTPS:
+   * - Если SSL работает - активируем домен
+   * - Если SSL ещё не готов - оставляем в статусе ISSUING_SSL
    */
   async activateDomain(domain: CustomDomain): Promise<void> {
     try {
-      // Добавляем маршрут в Caddy
-      const success = await this.caddyService.addRoute({
-        domain: domain.domain,
-        targetType: domain.targetType,
-        targetId: domain.shopId || domain.bookingId || domain.customPageId,
-      });
+      // Проверяем доступность по HTTPS (SSL настроен)
+      const isAccessible = await this.checkDomainAccessibility(domain.domain);
 
-      if (!success) {
-        throw new Error("Failed to add route to Caddy");
+      if (isAccessible) {
+        // SSL работает - получаем информацию о сертификате
+        const sslInfo = await this.dnsValidator.getSslCertificateInfo(
+          domain.domain
+        );
+
+        if (sslInfo) {
+          domain.sslIssuedAt = sslInfo.issuedAt;
+          domain.sslExpiresAt = sslInfo.expiresAt;
+          domain.sslIssuer = sslInfo.issuer;
+          domain.lastSslCheck = {
+            timestamp: new Date(),
+            success: true,
+            daysUntilExpiry: sslInfo.daysUntilExpiry,
+          };
+        }
+
+        // Активируем домен
+        domain.status = DomainStatus.ACTIVE;
+        domain.errors = [];
+
+        await this.domainsRepo.save(domain);
+
+        this.logger.log(`Domain ${domain.domain} activated successfully`);
+      } else {
+        // SSL ещё не готов - оставляем в статусе ISSUING_SSL
+        domain.status = DomainStatus.ISSUING_SSL;
+        domain.warnings = [
+          {
+            code: "SSL_PENDING",
+            message:
+              "SSL сертификат ещё не готов. Убедитесь, что домен правильно настроен на сервере.",
+            timestamp: new Date(),
+          },
+        ];
+
+        await this.domainsRepo.save(domain);
+
+        this.logger.warn(
+          `SSL not ready for ${domain.domain}, staying in ISSUING_SSL status`
+        );
       }
-
-      // Ждём получения сертификата
-      await this.waitForSsl(domain);
-
-      // Получаем информацию о сертификате
-      const sslInfo = await this.dnsValidator.getSslCertificateInfo(
-        domain.domain
-      );
-
-      if (sslInfo) {
-        domain.sslIssuedAt = sslInfo.issuedAt;
-        domain.sslExpiresAt = sslInfo.expiresAt;
-        domain.sslIssuer = sslInfo.issuer;
-        domain.lastSslCheck = {
-          timestamp: new Date(),
-          success: true,
-          daysUntilExpiry: sslInfo.daysUntilExpiry,
-        };
-      }
-
-      domain.status = DomainStatus.ACTIVE;
-      domain.errors = [];
-
-      await this.domainsRepo.save(domain);
-
-      this.logger.log(`Domain ${domain.domain} activated successfully`);
     } catch (error) {
       this.logger.error(`Failed to activate domain ${domain.domain}`, error);
 
       domain.status = DomainStatus.SSL_ERROR;
       domain.errors.push({
-        code: "SSL_ISSUANCE_FAILED",
-        message: `Не удалось получить SSL: ${error.message}`,
+        code: "SSL_CHECK_FAILED",
+        message: `Не удалось проверить SSL: ${error.message}`,
         timestamp: new Date(),
         resolved: false,
       });
@@ -307,15 +355,42 @@ export class CustomDomainsService {
   }
 
   /**
+   * Проверка доступности домена по HTTPS
+   *
+   * Проверяет, что:
+   * 1. DNS резолвится
+   * 2. SSL сертификат валиден
+   * 3. Сервер отвечает
+   */
+  private async checkDomainAccessibility(domain: string): Promise<boolean> {
+    try {
+      const https = await import("https");
+      const axios = (await import("axios")).default;
+
+      await axios.get(`https://${domain}/`, {
+        timeout: 15000,
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: true, // Проверяем валидность SSL
+        }),
+        validateStatus: () => true, // Любой HTTP статус OK (включая 404)
+        maxRedirects: 5,
+      });
+
+      // Если получили ответ без SSL ошибки - домен доступен
+      this.logger.log(`Domain ${domain} is accessible via HTTPS`);
+      return true;
+    } catch (error) {
+      // SSL ещё не готов или другая ошибка
+      this.logger.debug(`Domain ${domain} not accessible: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
    * Удалить домен
    */
   async deleteDomain(domainId: string, userId: string): Promise<void> {
     const domain = await this.findUserDomain(domainId, userId);
-
-    // Удаляем маршрут из Caddy
-    if (domain.status === DomainStatus.ACTIVE) {
-      await this.caddyService.removeRoute(domain.domain);
-    }
 
     await this.domainsRepo.remove(domain);
 
@@ -350,6 +425,94 @@ export class CustomDomainsService {
   }
 
   /**
+   * Повторно проверить SSL для домена в статусе ISSUING_SSL или SSL_ERROR
+   */
+  async recheckSsl(
+    domainId: string,
+    userId: string
+  ): Promise<DomainResponseDto> {
+    const domain = await this.findUserDomain(domainId, userId);
+
+    // Проверяем, что домен в нужном статусе
+    if (
+      domain.status !== DomainStatus.ISSUING_SSL &&
+      domain.status !== DomainStatus.SSL_ERROR
+    ) {
+      throw new BadRequestException(
+        "Проверка SSL доступна только для доменов в статусе ISSUING_SSL или SSL_ERROR"
+      );
+    }
+
+    // Проверяем rate limit
+    this.checkRateLimit(domain);
+
+    // Обновляем время следующей проверки
+    domain.nextAllowedCheck = new Date(Date.now() + this.MIN_CHECK_INTERVAL_MS);
+
+    // Проверяем доступность по HTTPS
+    const isAccessible = await this.checkDomainAccessibility(domain.domain);
+
+    if (isAccessible) {
+      // SSL работает - получаем информацию о сертификате
+      const sslInfo = await this.dnsValidator.getSslCertificateInfo(
+        domain.domain
+      );
+
+      if (sslInfo) {
+        domain.sslIssuedAt = sslInfo.issuedAt;
+        domain.sslExpiresAt = sslInfo.expiresAt;
+        domain.sslIssuer = sslInfo.issuer;
+        domain.lastSslCheck = {
+          timestamp: new Date(),
+          success: true,
+          daysUntilExpiry: sslInfo.daysUntilExpiry,
+        };
+      }
+
+      // Активируем домен
+      domain.status = DomainStatus.ACTIVE;
+      domain.errors = [];
+      domain.warnings = [];
+      domain.consecutiveFailures = 0;
+
+      this.logger.log(
+        `SSL check passed for ${domain.domain}, domain activated`
+      );
+    } else {
+      // SSL всё ещё не готов
+      domain.consecutiveFailures++;
+      domain.lastSslCheck = {
+        timestamp: new Date(),
+        success: false,
+        error: "SSL сертификат не обнаружен или невалиден",
+      };
+
+      // Увеличиваем интервал при множестве неудач
+      if (domain.consecutiveFailures >= this.MAX_FAILURES_BEFORE_SLOWDOWN) {
+        domain.nextAllowedCheck = new Date(
+          Date.now() + this.EXTENDED_CHECK_INTERVAL_MS
+        );
+        domain.warnings = [
+          {
+            code: "SSL_MULTIPLE_FAILURES",
+            message:
+              "SSL сертификат не обнаружен после нескольких проверок. Убедитесь, что сертификат настроен на сервере.",
+            timestamp: new Date(),
+          },
+        ];
+      }
+
+      this.logger.warn(
+        `SSL check failed for ${domain.domain} (attempt #${domain.consecutiveFailures})`
+      );
+    }
+
+    await this.domainsRepo.save(domain);
+
+    return this.buildResponse(domain);
+  }
+
+  /**
    * Получить активные домены для мониторинга
    */
   async getActiveDomainsForMonitoring(): Promise<CustomDomain[]> {
@@ -363,7 +526,10 @@ export class CustomDomainsService {
 
   /**
    * Проверить, разрешён ли домен для выпуска TLS сертификата
-   * Используется Caddy on-demand TLS
+   * Используется фронтенд-сервером для on-demand TLS (Caddy/Nginx)
+   *
+   * Фронтенд делает запрос: GET /custom-domains/verify-domain?domain=shop.example.com
+   * Ответ 200 = домен разрешён, 404 = запрещён
    */
   async isDomainAllowedForTls(domain: string): Promise<boolean> {
     if (!domain) return false;
@@ -461,31 +627,6 @@ export class CustomDomainsService {
         }
         break;
     }
-  }
-
-  private async waitForSsl(
-    domain: CustomDomain,
-    maxWaitMs = 60000
-  ): Promise<void> {
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < maxWaitMs) {
-      const sslInfo = await this.dnsValidator.getSslCertificateInfo(
-        domain.domain
-      );
-
-      if (sslInfo && sslInfo.isValid) {
-        return;
-      }
-
-      // Ждём 5 секунд перед следующей проверкой
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-    }
-
-    // Если не дождались, всё равно продолжаем (Caddy получит сертификат позже)
-    this.logger.warn(
-      `SSL not ready for ${domain.domain} after ${maxWaitMs}ms, continuing...`
-    );
   }
 
   private buildResponse(domain: CustomDomain): DomainResponseDto {
