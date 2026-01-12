@@ -128,8 +128,83 @@ export class TimewebAppsService implements OnModuleInit {
       },
     });
 
+    // Добавляем interceptors для подробного логирования
+    this.setupLoggingInterceptors();
+
     this.logger.log(
       `Timeweb Apps configured: apiUrl=${this.apiUrl}, frontendIp=${this.frontendIp || "NOT SET"}, redeployInterval=${this.redeployIntervalHours}h`
+    );
+  }
+
+  /**
+   * Настройка interceptors для логирования всех запросов и ответов Timeweb API
+   */
+  private setupLoggingInterceptors(): void {
+    // Request interceptor - логируем исходящие запросы
+    this.client.interceptors.request.use(
+      (config) => {
+        const method = config.method?.toUpperCase() || "UNKNOWN";
+        const url = config.url || "";
+        const fullUrl = config.baseURL
+          ? `${config.baseURL}${url}`
+          : url;
+        const params = config.params
+          ? JSON.stringify(config.params)
+          : "none";
+        const data = config.data ? JSON.stringify(config.data) : "none";
+
+        this.logger.log(
+          `🔵 [TIMEWEB APPS API REQUEST] ${method} ${fullUrl}` +
+            (params !== "none" ? ` | Query: ${params}` : "") +
+            (data !== "none" ? ` | Body: ${data}` : "")
+        );
+
+        return config;
+      },
+      (error) => {
+        this.logger.error(
+          `🔴 [TIMEWEB APPS API REQUEST ERROR] ${error.message}`,
+          error.stack
+        );
+        return Promise.reject(error);
+      }
+    );
+
+    // Response interceptor - логируем успешные ответы
+    this.client.interceptors.response.use(
+      (response) => {
+        const method = response.config.method?.toUpperCase() || "UNKNOWN";
+        const url = response.config.url || "";
+        const fullUrl = response.config.baseURL
+          ? `${response.config.baseURL}${url}`
+          : url;
+        const status = response.status;
+        const responseData = JSON.stringify(response.data);
+
+        this.logger.log(
+          `🟢 [TIMEWEB APPS API RESPONSE] ${method} ${fullUrl} | Status: ${status} | Response: ${responseData}`
+        );
+
+        return response;
+      },
+      (error) => {
+        const method = error.config?.method?.toUpperCase() || "UNKNOWN";
+        const url = error.config?.url || "";
+        const fullUrl = error.config?.baseURL
+          ? `${error.config.baseURL}${url}`
+          : url;
+        const status = error.response?.status || "NO_STATUS";
+        const responseData = error.response?.data
+          ? JSON.stringify(error.response.data)
+          : "NO_RESPONSE";
+        const message = error.message || "Unknown error";
+
+        this.logger.error(
+          `🔴 [TIMEWEB APPS API RESPONSE ERROR] ${method} ${fullUrl} | Status: ${status} | Message: ${message} | Response: ${responseData}`
+        );
+
+        return Promise.reject(error);
+      }
     );
   }
 
