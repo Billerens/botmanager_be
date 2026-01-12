@@ -17,23 +17,12 @@ import * as tls from "tls";
 export class DnsValidatorService {
   private readonly logger = new Logger(DnsValidatorService.name);
 
-  /** Ожидаемое значение CNAME записи */
-  private readonly EXPECTED_CNAME: string;
-
-  /** Ожидаемые IP адреса (для A-записей) */
-  private readonly EXPECTED_IPS: string[];
-
-  /** Базовый домен платформы */
-  private readonly BASE_DOMAIN: string;
+  /** Ожидаемый IP адрес фронтенд-сервера (для A-записей) */
+  private readonly EXPECTED_IP: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.BASE_DOMAIN =
-      this.configService.get<string>("BASE_DOMAIN") || "botmanagertest.online";
-    this.EXPECTED_CNAME =
-      this.configService.get<string>("PROXY_DOMAIN") || `proxy.${this.BASE_DOMAIN}`;
-    this.EXPECTED_IPS = (
-      this.configService.get<string>("PROXY_IPS") || ""
-    ).split(",");
+    // IP-адрес фронтенд-сервера, на который должны указывать кастомные домены
+    this.EXPECTED_IP = this.configService.get<string>("FRONTEND_IP") || "";
   }
 
   /**
@@ -51,31 +40,7 @@ export class DnsValidatorService {
     };
 
     try {
-      // Проверяем CNAME
-      const cnameResult = await this.checkCname(domain);
-
-      if (cnameResult.found) {
-        result.recordType = "CNAME";
-        result.records = cnameResult.records;
-
-        if (cnameResult.pointsToUs) {
-          result.isValid = true;
-          this.logger.log(`DNS valid for ${domain}: CNAME → ${cnameResult.records[0]}`);
-        } else {
-          result.errors.push({
-            code: "CNAME_WRONG_TARGET",
-            message: `CNAME указывает на ${cnameResult.records[0]}, а должен на ${this.EXPECTED_CNAME}`,
-          });
-          result.instructions.push({
-            action: "UPDATE_CNAME",
-            current: cnameResult.records[0],
-            expected: this.EXPECTED_CNAME,
-          });
-        }
-        return result;
-      }
-
-      // Если CNAME нет, проверяем A-запись
+      // Проверяем A-запись (основной метод для кастомных доменов)
       const aResult = await this.checkARecord(domain);
 
       if (aResult.found) {
@@ -88,12 +53,12 @@ export class DnsValidatorService {
         } else {
           result.errors.push({
             code: "A_RECORD_WRONG_IP",
-            message: `A-запись указывает на ${aResult.records.join(", ")}, а должна на ${this.EXPECTED_IPS.join(" или ")}`,
+            message: `A-запись указывает на ${aResult.records.join(", ")}, а должна на ${this.EXPECTED_IP}`,
           });
           result.instructions.push({
-            action: "USE_CNAME_INSTEAD",
-            message: "Рекомендуем использовать CNAME вместо A-записи",
-            expected: this.EXPECTED_CNAME,
+            action: "UPDATE_A_RECORD",
+            current: aResult.records.join(", "),
+            expected: this.EXPECTED_IP,
           });
         }
         return result;
@@ -103,15 +68,14 @@ export class DnsValidatorService {
       result.errors.push({
         code: "NO_DNS_RECORDS",
         message:
-          "DNS-записи не найдены. Возможно, они ещё не распространились (это может занять до 48 часов).",
+          "A-запись не найдена. Возможно, DNS изменения ещё не распространились (это может занять до 48 часов, обычно 5-30 минут).",
       });
 
-      const subdomain = this.extractSubdomain(domain);
       result.instructions.push({
-        action: "ADD_CNAME",
-        recordType: "CNAME",
-        name: subdomain || "@",
-        value: this.EXPECTED_CNAME,
+        action: "ADD_A_RECORD",
+        recordType: "A",
+        name: "@",
+        value: this.EXPECTED_IP,
         ttl: 3600,
       });
     } catch (error) {
@@ -205,30 +169,6 @@ export class DnsValidatorService {
   }
 
   /**
-   * Проверка CNAME записи
-   */
-  private async checkCname(domain: string): Promise<CnameResult> {
-    try {
-      const records = await dns.resolveCname(domain);
-      return {
-        found: true,
-        records,
-        pointsToUs: records.some(
-          (r) =>
-            r === this.EXPECTED_CNAME ||
-            r.endsWith(`.${this.BASE_DOMAIN}`) ||
-            r.endsWith(`.${this.BASE_DOMAIN}.`)
-        ),
-      };
-    } catch (error) {
-      if (error.code === "ENODATA" || error.code === "ENOTFOUND") {
-        return { found: false, records: [], pointsToUs: false };
-      }
-      throw error;
-    }
-  }
-
-  /**
    * Проверка A-записи
    */
   private async checkARecord(domain: string): Promise<ARecordResult> {
@@ -237,7 +177,7 @@ export class DnsValidatorService {
       return {
         found: true,
         records,
-        pointsToUs: records.some((ip) => this.EXPECTED_IPS.includes(ip)),
+        pointsToUs: records.some((ip) => ip === this.EXPECTED_IP),
       };
     } catch (error) {
       if (error.code === "ENODATA" || error.code === "ENOTFOUND") {

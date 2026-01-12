@@ -38,8 +38,8 @@ export class CustomDomainsService {
   /** Максимум последовательных неудач до увеличения интервала */
   private readonly MAX_FAILURES_BEFORE_SLOWDOWN = 3;
 
-  /** Ожидаемый CNAME для кастомных доменов */
-  private readonly expectedCname: string;
+  /** Ожидаемый IP-адрес для A-записи кастомных доменов */
+  private readonly expectedIp: string;
 
   constructor(
     @InjectRepository(CustomDomain)
@@ -48,8 +48,8 @@ export class CustomDomainsService {
     private readonly caddyService: CaddyService,
     private readonly configService: ConfigService
   ) {
-    const baseDomain = this.configService.get<string>("BASE_DOMAIN") || "botmanagertest.online";
-    this.expectedCname = this.configService.get<string>("PROXY_DOMAIN") || `proxy.${baseDomain}`;
+    // IP-адрес фронтенд-сервера, на который должны указывать кастомные домены
+    this.expectedIp = this.configService.get<string>("FRONTEND_IP") || "";
   }
 
   /**
@@ -106,7 +106,7 @@ export class CustomDomainsService {
       userId: user.id,
       status: DomainStatus.AWAITING_DNS,
       verificationToken,
-      expectedCname: this.expectedCname,
+      expectedIp: this.expectedIp,
     });
 
     await this.domainsRepo.save(domain);
@@ -502,7 +502,7 @@ export class CustomDomainsService {
         isConfigured: domain.lastDnsCheck?.success ?? false,
         lastCheck: domain.lastDnsCheck?.timestamp,
         records: domain.lastDnsCheck?.records ?? [],
-        expectedCname: domain.expectedCname,
+        expectedIp: domain.expectedIp,
         instructions: this.getDnsInstructions(domain),
       },
 
@@ -547,24 +547,23 @@ export class CustomDomainsService {
   }
 
   private getDnsInstructions(domain: CustomDomain): DnsRecordInstruction[] {
-    const subdomain = this.extractSubdomain(domain.domain);
-
     return [
       {
         step: 1,
-        title: "Добавьте CNAME запись",
+        title: "Добавьте A запись",
         description:
-          "Войдите в панель управления DNS вашего домена и добавьте запись:",
+          "Войдите в панель управления DNS вашего домена и добавьте A-запись, указывающую на наш сервер:",
         record: {
-          type: "CNAME",
-          name: subdomain || "@",
-          value: domain.expectedCname,
+          type: "A",
+          name: "@",
+          value: domain.expectedIp,
           ttl: 3600,
         },
         tips: [
-          "Если используете Cloudflare, отключите проксирование (серая иконка облака)",
-          "Изменения DNS могут занять до 48 часов, но обычно происходят за 5-30 минут",
-          "Убедитесь, что нет конфликтующих A-записей для этого поддомена",
+          "Используйте '@' для корневого домена или имя поддомена (например, 'shop')",
+          "Если используете Cloudflare, можно оставить проксирование включенным",
+          "Изменения DNS обычно применяются за 5-30 минут, но могут занять до 48 часов",
+          "После настройки DNS нажмите кнопку 'Проверить DNS' для активации домена",
         ],
       },
     ];

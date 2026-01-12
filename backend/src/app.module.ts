@@ -42,6 +42,7 @@ import { ShopsModule } from "./modules/shops/shops.module";
 import { AdminModule } from "./modules/admin/admin.module";
 import { CustomDomainsModule } from "./modules/custom-domains/custom-domains.module";
 import { BookingSystemsModule } from "./modules/booking-systems/booking-systems.module";
+import { DomainResolverModule } from "./modules/domain-resolver/domain-resolver.module";
 
 @Module({
   imports: [
@@ -113,6 +114,7 @@ import { BookingSystemsModule } from "./modules/booking-systems/booking-systems.
     AdminModule, // Админ-панель для техподдержки
     CustomDomainsModule, // Кастомные домены пользователей
     BookingSystemsModule, // Системы бронирования (независимые от ботов)
+    DomainResolverModule, // Резолв кастомных доменов в ресурсы
   ],
 })
 export class AppModule {}

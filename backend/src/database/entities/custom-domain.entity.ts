@@ -137,11 +137,12 @@ export class CustomDomain {
   // ===========================================================================
 
   /**
-   * Ожидаемое значение CNAME записи
+   * Ожидаемый IP-адрес для A-записи
    * Значение устанавливается в CustomDomainsService из конфигурации
+   * Это IP-адрес фронтенд-сервера
    */
-  @Column({ default: "proxy.botmanagertest.online" })
-  expectedCname: string;
+  @Column({ nullable: true })
+  expectedIp: string;
 
   /**
    * Результат последней DNS проверки

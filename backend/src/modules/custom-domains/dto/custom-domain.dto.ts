@@ -61,7 +61,7 @@ export class DnsRecordInstruction {
   @ApiProperty({ example: 1 })
   step: number;
 
-  @ApiProperty({ example: "Добавьте CNAME запись" })
+  @ApiProperty({ example: "Добавьте A запись" })
   title: string;
 
   @ApiProperty({ example: "Войдите в панель управления DNS..." })
@@ -69,7 +69,7 @@ export class DnsRecordInstruction {
 
   @ApiProperty()
   record: {
-    type: "CNAME" | "A" | "TXT";
+    type: "A" | "TXT";
     name: string;
     value: string;
     ttl: number;
@@ -117,11 +117,11 @@ export class DnsInfo {
   @ApiPropertyOptional()
   lastCheck?: Date;
 
-  @ApiProperty({ type: [String], example: ["proxy.botmanagertest.online"] })
+  @ApiProperty({ type: [String], example: ["1.2.3.4"] })
   records: string[];
 
-  @ApiProperty({ example: "proxy.botmanagertest.online" })
-  expectedCname: string;
+  @ApiProperty({ example: "1.2.3.4" })
+  expectedIp: string;
 
   @ApiProperty({ type: [DnsRecordInstruction] })
   instructions: DnsRecordInstruction[];
@@ -247,4 +247,3 @@ export class DomainResponseDto {
   @ApiProperty()
   updatedAt: Date;
 }
-
