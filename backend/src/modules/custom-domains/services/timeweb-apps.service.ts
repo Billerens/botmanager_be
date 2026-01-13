@@ -145,12 +145,8 @@ export class TimewebAppsService implements OnModuleInit {
       (config) => {
         const method = config.method?.toUpperCase() || "UNKNOWN";
         const url = config.url || "";
-        const fullUrl = config.baseURL
-          ? `${config.baseURL}${url}`
-          : url;
-        const params = config.params
-          ? JSON.stringify(config.params)
-          : "none";
+        const fullUrl = config.baseURL ? `${config.baseURL}${url}` : url;
+        const params = config.params ? JSON.stringify(config.params) : "none";
         const data = config.data ? JSON.stringify(config.data) : "none";
 
         this.logger.log(
@@ -522,6 +518,13 @@ export class TimewebAppsService implements OnModuleInit {
    */
   getFrontendIp(): string {
     return this.frontendIp;
+  }
+
+  /**
+   * Получить ID приложения фронтенда
+   */
+  getFrontendAppId(): number | null {
+    return this.cachedFrontendAppId;
   }
 
   // ============================================================================

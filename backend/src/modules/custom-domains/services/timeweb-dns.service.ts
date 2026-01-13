@@ -1,6 +1,13 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Inject,
+  forwardRef,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import axios, { AxiosInstance } from "axios";
+import { TimewebAppsService } from "./timeweb-apps.service";
 
 // ============================================================================
 // ИНТЕРФЕЙСЫ TIMEWEB API
@@ -82,6 +89,8 @@ export interface CreateDnsRecordConfig {
   ttl?: number;
   /** Приоритет (для MX записей) */
   priority?: number;
+  /** ID приложения Timeweb (для A-записей) */
+  app_id?: number;
 }
 
 /**
@@ -107,7 +116,16 @@ export class TimewebDnsService implements OnModuleInit {
 
   private readonly apiUrl: string;
 
-  constructor(private readonly configService: ConfigService) {
+  /** Кэш для информации о домене */
+  private domainInfoCache: TimewebDomain | null = null;
+  private domainInfoCacheTime: number = 0;
+  private readonly DOMAIN_INFO_CACHE_TTL = 60000; // 60 секунд
+
+  constructor(
+    private readonly configService: ConfigService,
+    @Inject(forwardRef(() => TimewebAppsService))
+    private readonly timewebAppsService?: TimewebAppsService
+  ) {
     const apiToken = this.configService.get<string>("TIMEWEB_API_TOKEN");
     // Используем v1 API согласно официальной документации Timeweb Cloud
     this.apiUrl =
@@ -216,17 +234,47 @@ export class TimewebDnsService implements OnModuleInit {
 
   /**
    * Получить информацию о базовом домене
+   *
+   * Использует кэширование на 60 секунд для уменьшения количества запросов к API.
    */
   async getDomainInfo(): Promise<TimewebDomain | null> {
+    const now = Date.now();
+
+    // Проверяем кэш
+    if (
+      this.domainInfoCache &&
+      now - this.domainInfoCacheTime < this.DOMAIN_INFO_CACHE_TTL
+    ) {
+      this.logger.debug(
+        `Using cached domain info for ${this.baseDomain} (cache age: ${Math.floor((now - this.domainInfoCacheTime) / 1000)}s)`
+      );
+      return this.domainInfoCache;
+    }
+
     try {
       const response = await this.client.get<TimewebDomainResponse>(
         `/domains/${this.baseDomain}`
       );
-      return response.data.domain;
+      const domain = response.data.domain;
+
+      // Обновляем кэш
+      this.domainInfoCache = domain;
+      this.domainInfoCacheTime = now;
+
+      return domain;
     } catch (error) {
       this.logError("getDomainInfo", error);
       return null;
     }
+  }
+
+  /**
+   * Инвалидировать кэш информации о домене
+   * Вызывается после создания/удаления поддоменов
+   */
+  private invalidateDomainInfoCache(): void {
+    this.domainInfoCache = null;
+    this.domainInfoCacheTime = 0;
   }
 
   /**
@@ -269,6 +317,9 @@ export class TimewebDnsService implements OnModuleInit {
 
       const subdomain = response.data.subdomain;
 
+      // Инвалидируем кэш после создания поддомена
+      this.invalidateDomainInfoCache();
+
       return subdomain;
     } catch (error) {
       // 409 Conflict - поддомен уже существует
@@ -297,6 +348,9 @@ export class TimewebDnsService implements OnModuleInit {
       const requestUrl = `/domains/${this.baseDomain}/subdomains/${relativeName}`;
 
       await this.client.delete(requestUrl);
+
+      // Инвалидируем кэш после удаления поддомена
+      this.invalidateDomainInfoCache();
 
       return true;
     } catch (error) {
@@ -374,6 +428,7 @@ export class TimewebDnsService implements OnModuleInit {
         value: config.value,
         ...(config.ttl && { ttl: config.ttl }),
         ...(config.priority !== undefined && { priority: config.priority }),
+        ...(config.app_id !== undefined && { app_id: config.app_id }),
       };
 
       const response = await this.client.post<TimewebCreateDnsResponse>(
@@ -480,9 +535,13 @@ export class TimewebDnsService implements OnModuleInit {
     }
 
     // ШАГ 2: Создать A-запись
+    // Получаем app_id из TimewebAppsService, если доступен
+    const appId = this.timewebAppsService?.getFrontendAppId() || undefined;
+
     const dnsRecordId = await this.createDnsRecord(subdomainFqdn, {
       type: "A",
       value: this.frontendIp,
+      ...(appId && { app_id: appId }),
     });
 
     if (!dnsRecordId) {
