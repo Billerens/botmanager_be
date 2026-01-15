@@ -78,6 +78,9 @@ import {
   ToggleActiveResponseDto as UserToggleDto,
   DeleteResponseDto as UserDeleteDto,
 } from "./modules/users/dto/user-response.dto";
+import { DataSource } from "typeorm";
+import { CustomDomain } from "./database/entities/custom-domain.entity";
+import { DomainStatus } from "./modules/custom-domains/enums/domain-status.enum";
 
 // Критически важные переменные окружения
 const CRITICAL_ENV_VARS = [
@@ -322,8 +325,58 @@ async function bootstrap() {
     ),
   ];
 
+  // Получаем DataSource для проверки кастомных доменов
+  const dataSource = app.get(DataSource);
+  const customDomainRepo = dataSource.getRepository(CustomDomain);
+
+  // Кэш для кастомных доменов (TTL 5 минут)
+  const customDomainCache = new Map<
+    string,
+    { allowed: boolean; expiry: number }
+  >();
+  const CACHE_TTL_MS = 5 * 60 * 1000; // 5 минут
+
+  /**
+   * Проверяет, является ли origin разрешённым кастомным доменом клиента
+   */
+  async function isAllowedCustomDomain(origin: string): Promise<boolean> {
+    try {
+      // Извлекаем hostname из origin (https://example.com -> example.com)
+      const url = new URL(origin);
+      const hostname = url.hostname.toLowerCase();
+
+      // Проверяем кэш
+      const cached = customDomainCache.get(hostname);
+      if (cached && cached.expiry > Date.now()) {
+        return cached.allowed;
+      }
+
+      // Проверяем в базе данных
+      const customDomain = await customDomainRepo.findOne({
+        where: {
+          domain: hostname,
+          status: DomainStatus.ACTIVE,
+          isVerified: true,
+        },
+      });
+
+      const allowed = !!customDomain;
+
+      // Сохраняем в кэш
+      customDomainCache.set(hostname, {
+        allowed,
+        expiry: Date.now() + CACHE_TTL_MS,
+      });
+
+      return allowed;
+    } catch (error) {
+      // При ошибке парсинга URL или БД - не разрешаем
+      return false;
+    }
+  }
+
   app.enableCors({
-    origin: (origin, callback) => {
+    origin: async (origin, callback) => {
       // Разрешаем запросы без origin (например, мобильные приложения, Postman)
       if (!origin) {
         return callback(null, true);
@@ -339,6 +392,14 @@ async function bootstrap() {
         if (pattern.test(origin)) {
           return callback(null, true);
         }
+      }
+
+      // Проверяем кастомные домены клиентов из БД
+      const isCustomDomainAllowed = await isAllowedCustomDomain(origin);
+      if (isCustomDomainAllowed) {
+        const logger = new Logger("CORS");
+        logger.debug(`Allowed custom domain: ${origin}`);
+        return callback(null, true);
       }
 
       // Origin не разрешён
