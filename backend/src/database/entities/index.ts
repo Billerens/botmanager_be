@@ -36,6 +36,21 @@ export { CustomDomain } from "./custom-domain.entity";
 export { BookingSystem } from "./booking-system.entity";
 export { PaymentConfig, PaymentEntityType } from "./payment-config.entity";
 export { Payment, PaymentStatus, PaymentTargetType, EntityPaymentStatus } from "./payment.entity";
+export { 
+  CustomCollectionSchema, 
+  CustomDataOwnerType, 
+  FieldType, 
+  RelationType,
+  DEFAULT_ACCESS_SETTINGS,
+  DEFAULT_RLS_RULES,
+  type FieldSchema,
+  type CollectionSchemaDefinition,
+  type CollectionRelation,
+  type CollectionAccessSettings,
+  type RowLevelSecurityRules,
+} from "./custom-collection-schema.entity";
+export { CustomData } from "./custom-data.entity";
+export { PublicApiKey, generateApiKey } from "./public-api-key.entity";
 
 /**
  * Массив всех entity классов для TypeORM
@@ -73,6 +88,9 @@ import { CustomDomain } from "./custom-domain.entity";
 import { BookingSystem } from "./booking-system.entity";
 import { PaymentConfig } from "./payment-config.entity";
 import { Payment } from "./payment.entity";
+import { CustomCollectionSchema } from "./custom-collection-schema.entity";
+import { CustomData } from "./custom-data.entity";
+import { PublicApiKey } from "./public-api-key.entity";
 
 export const ALL_ENTITIES = [
   User,
@@ -107,5 +125,8 @@ export const ALL_ENTITIES = [
   BookingSystem,
   PaymentConfig,
   Payment,
+  CustomCollectionSchema,
+  CustomData,
+  PublicApiKey,
 ];
 

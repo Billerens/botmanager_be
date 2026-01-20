@@ -43,6 +43,7 @@ import { MailModule } from "../mail/mail.module";
     PublicAccessGuard,
     TelegramInitDataValidationService,
     TypeOrmModule,
+    JwtModule, // Экспортируем JwtModule для использования в других модулях
   ],
 })
 export class PublicAuthModule {}

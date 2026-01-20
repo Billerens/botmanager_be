@@ -43,6 +43,7 @@ import { AdminModule } from "./modules/admin/admin.module";
 import { CustomDomainsModule } from "./modules/custom-domains/custom-domains.module";
 import { BookingSystemsModule } from "./modules/booking-systems/booking-systems.module";
 import { DomainResolverModule } from "./modules/domain-resolver/domain-resolver.module";
+import { CustomDataModule } from "./modules/custom-data/custom-data.module";
 
 @Module({
   imports: [
@@ -115,6 +116,7 @@ import { DomainResolverModule } from "./modules/domain-resolver/domain-resolver.
     CustomDomainsModule, // Кастомные домены пользователей
     BookingSystemsModule, // Системы бронирования (независимые от ботов)
     DomainResolverModule, // Резолв кастомных доменов в ресурсы
+    CustomDataModule, // Кастомная БД пользователей
   ],
 })
 export class AppModule {}
