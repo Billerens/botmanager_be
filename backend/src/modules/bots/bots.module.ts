@@ -43,6 +43,7 @@ import { AssistantBotModule } from "../assistant-bot/assistant-bot.module";
 import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
 import { LangChainOpenRouterModule } from "../langchain-openrouter/langchain-openrouter.module";
 import { PaymentsModule } from "../payments/payments.module";
+import { CustomDataModule } from "../custom-data/custom-data.module";
 import { CustomLoggerService } from "../../common/logger.service";
 import {
   NodeHandlerService,
@@ -126,6 +127,7 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
     LangChainOpenRouterModule,
     forwardRef(() => CustomDomainsModule),
     forwardRef(() => PaymentsModule),
+    forwardRef(() => CustomDataModule),
   ],
   providers: [
     BotsService,

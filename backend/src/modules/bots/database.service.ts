@@ -19,9 +19,11 @@ import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
 import { TimeSlot } from "../../database/entities/time-slot.entity";
 import { CustomPage } from "../../database/entities/custom-page.entity";
 import { CustomLoggerService } from "../../common/logger.service";
+import { CustomDataService } from "../custom-data/custom-data.service";
+import { CustomDataOwnerType } from "../../database/entities/custom-collection-schema.entity";
 
 export interface DatabaseQueryConfig {
-  dataSource: "bot_data" | "custom_storage";
+  dataSource: "bot_data" | "custom_storage" | "custom_data";
   table?: string;
   collection?: string;
   operation: "select" | "insert" | "update" | "delete" | "count";
@@ -30,7 +32,9 @@ export interface DatabaseQueryConfig {
   limit?: number;
   offset?: number;
   orderBy?: string;
-  key?: string; // для custom_storage
+  orderDirection?: "asc" | "desc";
+  key?: string; // для custom_storage и custom_data
+  filter?: Record<string, any>; // для custom_data — фильтр по полям
 }
 
 export interface DatabaseQueryResult {
@@ -71,7 +75,8 @@ export class DatabaseService {
     private readonly timeSlotRepository: Repository<TimeSlot>,
     @InjectRepository(CustomPage)
     private readonly customPageRepository: Repository<CustomPage>,
-    private readonly logger: CustomLoggerService
+    private readonly logger: CustomLoggerService,
+    private readonly customDataService: CustomDataService,
   ) {}
 
   async executeQuery(
@@ -86,6 +91,8 @@ export class DatabaseService {
           return await this.executeBotDataQuery(botId, config);
         case "custom_storage":
           return await this.executeCustomStorageQuery(botId, config);
+        case "custom_data":
+          return await this.executeCustomDataQuery(botId, config);
         default:
           return { success: false, error: "Unsupported data source" };
       }
@@ -599,6 +606,173 @@ export class DatabaseService {
           success: false,
           error: "Unsupported operation for custom storage",
         };
+    }
+  }
+
+  /**
+   * Выполняет запрос к новой системе CustomData
+   * Использует CustomDataService с ownerType: BOT
+   */
+  private async executeCustomDataQuery(
+    botId: string,
+    config: DatabaseQueryConfig
+  ): Promise<DatabaseQueryResult> {
+    const {
+      collection,
+      operation,
+      key,
+      data,
+      filter,
+      limit = 100,
+      offset = 0,
+      orderBy,
+      orderDirection = "desc",
+    } = config;
+
+    if (!collection) {
+      return {
+        success: false,
+        error: "Collection name required for custom_data source",
+      };
+    }
+
+    try {
+      switch (operation) {
+        case "select": {
+          // Если указан key — получаем одну запись
+          if (key) {
+            try {
+              const record = await this.customDataService.getRecord(
+                botId,
+                CustomDataOwnerType.BOT,
+                collection,
+                key
+              );
+              return {
+                success: true,
+                data: record ? [record] : [],
+                count: record ? 1 : 0,
+              };
+            } catch (error) {
+              // Запись не найдена
+              return { success: true, data: [], count: 0 };
+            }
+          }
+
+          // Получаем список записей с фильтрацией
+          const result = await this.customDataService.findRecords(
+            botId,
+            CustomDataOwnerType.BOT,
+            collection,
+            {
+              filter: filter ? JSON.stringify(filter) : undefined,
+              limit: Math.min(limit, 1000),
+              offset,
+              sortBy: orderBy,
+              sortOrder: orderDirection,
+            }
+          );
+
+          return {
+            success: true,
+            data: result.data,
+            count: result.total,
+          };
+        }
+
+        case "count": {
+          const countResult = await this.customDataService.findRecords(
+            botId,
+            CustomDataOwnerType.BOT,
+            collection,
+            { filter: filter ? JSON.stringify(filter) : undefined, limit: 1 }
+          );
+          return { success: true, count: countResult.total };
+        }
+
+        case "insert": {
+          if (!data) {
+            return {
+              success: false,
+              error: "Data required for insert operation",
+            };
+          }
+
+          const newRecord = await this.customDataService.createRecord(
+            botId,
+            CustomDataOwnerType.BOT,
+            collection,
+            { key, data }
+          );
+
+          return { success: true, data: newRecord };
+        }
+
+        case "update": {
+          if (!data) {
+            return {
+              success: false,
+              error: "Data required for update operation",
+            };
+          }
+
+          if (!key) {
+            return {
+              success: false,
+              error: "Key required for update operation in custom_data",
+            };
+          }
+
+          try {
+            const updatedRecord = await this.customDataService.updateRecord(
+              botId,
+              CustomDataOwnerType.BOT,
+              collection,
+              key,
+              { data }
+            );
+            return { success: true, data: updatedRecord };
+          } catch (error) {
+            return {
+              success: false,
+              error: `Record with key "${key}" not found`,
+            };
+          }
+        }
+
+        case "delete": {
+          if (!key) {
+            return {
+              success: false,
+              error: "Key required for delete operation in custom_data",
+            };
+          }
+
+          try {
+            await this.customDataService.deleteRecord(
+              botId,
+              CustomDataOwnerType.BOT,
+              collection,
+              key
+            );
+            return { success: true, count: 1 };
+          } catch (error) {
+            return {
+              success: false,
+              error: `Record with key "${key}" not found`,
+            };
+          }
+        }
+
+        default:
+          return {
+            success: false,
+            error: `Unsupported operation "${operation}" for custom_data`,
+          };
+      }
+    } catch (error) {
+      this.logger.error(`custom_data query error: ${error.message}`);
+      return { success: false, error: error.message };
     }
   }
 

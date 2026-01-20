@@ -34,6 +34,7 @@ export enum BotEntity {
   CUSTOM_PAGES = "custom_pages",
   SHOP_PROMOCODES = "shop_promocodes",
   BOT_USERS = "bot_users",
+  CUSTOM_DATA = "custom_data", // Права на кастомные данные (новая система)
 }
 
 @Entity("bot_user_permissions")

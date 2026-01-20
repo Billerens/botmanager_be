@@ -103,11 +103,11 @@ export class CustomDataOwnershipGuard implements CanActivate {
       return true;
     }
 
-    // Проверяем, есть ли у пользователя права на бота через систему разрешений
+    // Проверяем, есть ли у пользователя права на кастомные данные бота через систему разрешений
     const hasPermission = await this.botPermissionsService.hasPermission(
       userId,
       botId,
-      BotEntity.BOT,
+      BotEntity.CUSTOM_DATA,
       PermissionAction.READ,
     );
 
@@ -142,12 +142,12 @@ export class CustomDataOwnershipGuard implements CanActivate {
       return true;
     }
 
-    // Проверяем права через систему разрешений бота
+    // Проверяем права через систему разрешений бота на кастомные данные
     if (shop.botId) {
       const hasPermission = await this.botPermissionsService.hasPermission(
         userId,
         shop.botId,
-        BotEntity.SHOP,
+        BotEntity.CUSTOM_DATA,
         PermissionAction.READ,
       );
 
@@ -186,12 +186,12 @@ export class CustomDataOwnershipGuard implements CanActivate {
       return true;
     }
 
-    // Проверяем права через систему разрешений бота
+    // Проверяем права через систему разрешений бота на кастомные данные
     if (bookingSystem.botId) {
       const hasPermission = await this.botPermissionsService.hasPermission(
         userId,
         bookingSystem.botId,
-        BotEntity.BOOKING,
+        BotEntity.CUSTOM_DATA,
         PermissionAction.READ,
       );
 

@@ -284,6 +284,7 @@ ${this.formatPermissions(permissions)}
       [BotEntity.CUSTOM_PAGES]: "Кастомные страницы",
       [BotEntity.SHOP_PROMOCODES]: "Промокоды магазина",
       [BotEntity.BOT_USERS]: "Пользователи бота",
+      [BotEntity.CUSTOM_DATA]: "Кастомные данные (базы данных)",
     };
 
     const actionLabels: Record<PermissionAction, string> = {
