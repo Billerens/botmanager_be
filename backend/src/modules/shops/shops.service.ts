@@ -18,7 +18,7 @@ import { Product } from "../../database/entities/product.entity";
 import { Category } from "../../database/entities/category.entity";
 import { Order } from "../../database/entities/order.entity";
 import { Cart } from "../../database/entities/cart.entity";
-import { PublicUser } from "../../database/entities/public-user.entity";
+import { PublicUser, PublicUserOwnerType } from "../../database/entities/public-user.entity";
 import {
   CreateShopDto,
   UpdateShopDto,
@@ -860,7 +860,7 @@ export class ShopsService {
         .where("cart.shopId = :shopId", { shopId })
         .andWhere("json_array_length(cart.items) > 0")
         .getCount(),
-      this.publicUserRepository.count({ where: { shopId } }),
+      this.publicUserRepository.count({ where: { ownerId: shopId, ownerType: PublicUserOwnerType.SHOP } }),
     ]);
 
     return {
