@@ -139,6 +139,8 @@ export class CustomDataService {
     if (dto.titleField !== undefined) collection.titleField = dto.titleField;
     if (dto.relations !== undefined) collection.relations = dto.relations;
     if (dto.uiSettings !== undefined) collection.uiSettings = dto.uiSettings;
+    if (dto.accessSettings !== undefined) collection.accessSettings = dto.accessSettings;
+    if (dto.rowLevelSecurity !== undefined) collection.rowLevelSecurity = dto.rowLevelSecurity;
     if (dto.isActive !== undefined) collection.isActive = dto.isActive;
 
     return this.schemaRepo.save(collection);
