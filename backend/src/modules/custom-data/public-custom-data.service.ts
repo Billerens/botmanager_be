@@ -236,10 +236,8 @@ export class PublicCustomDataService {
     dto: PublicCreateDto,
     userContext: PublicUserContext,
   ): Promise<CustomData> {
-    if (!userContext.isAuthenticated) {
-      throw new ForbiddenException("Требуется авторизация для создания записей");
-    }
-
+    // Проверка прав доступа происходит в getCollectionWithAccessCheck
+    // Если public.create = true, создание разрешено без авторизации
     const collection = await this.getCollectionWithAccessCheck(
       apiKeyContext,
       collectionName,
@@ -299,10 +297,8 @@ export class PublicCustomDataService {
     dto: PublicUpdateDto,
     userContext: PublicUserContext,
   ): Promise<CustomData> {
-    if (!userContext.isAuthenticated) {
-      throw new ForbiddenException("Требуется авторизация для обновления записей");
-    }
-
+    // Проверка прав доступа происходит в getCollectionWithAccessCheck
+    // Если public.update = true, обновление разрешено без авторизации
     const collection = await this.getCollectionWithAccessCheck(
       apiKeyContext,
       collectionName,
@@ -352,10 +348,8 @@ export class PublicCustomDataService {
     key: string,
     userContext: PublicUserContext,
   ): Promise<void> {
-    if (!userContext.isAuthenticated) {
-      throw new ForbiddenException("Требуется авторизация для удаления записей");
-    }
-
+    // Проверка прав доступа происходит в getCollectionWithAccessCheck
+    // Если public.delete = true, удаление разрешено без авторизации
     const collection = await this.getCollectionWithAccessCheck(
       apiKeyContext,
       collectionName,
