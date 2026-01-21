@@ -147,6 +147,9 @@ export class CustomDataService {
         public: {
           read: dto.accessSettings.public?.read ?? collection.accessSettings.public.read,
           list: dto.accessSettings.public?.list ?? collection.accessSettings.public.list,
+          create: dto.accessSettings.public?.create ?? collection.accessSettings.public.create,
+          update: dto.accessSettings.public?.update ?? collection.accessSettings.public.update,
+          delete: dto.accessSettings.public?.delete ?? collection.accessSettings.public.delete,
         },
         authenticated: {
           read: dto.accessSettings.authenticated?.read ?? collection.accessSettings.authenticated.read,

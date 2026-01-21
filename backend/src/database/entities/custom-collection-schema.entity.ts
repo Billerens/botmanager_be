@@ -113,6 +113,12 @@ export interface CollectionAccessSettings {
     read: boolean;
     /** Разрешено получать список записей */
     list: boolean;
+    /** Разрешено создавать записи */
+    create: boolean;
+    /** Разрешено обновлять записи */
+    update: boolean;
+    /** Разрешено удалять записи */
+    delete: boolean;
   };
   /**
    * Доступ для авторизованных пользователей (Telegram/Browser session + API Key)
@@ -170,6 +176,9 @@ export const DEFAULT_ACCESS_SETTINGS: CollectionAccessSettings = {
   public: {
     read: false,
     list: false,
+    create: false,
+    update: false,
+    delete: false,
   },
   authenticated: {
     read: true,

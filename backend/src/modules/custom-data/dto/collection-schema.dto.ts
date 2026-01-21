@@ -167,6 +167,21 @@ export class PublicAccessDto {
   @IsOptional()
   @IsBoolean()
   list?: boolean;
+
+  @ApiPropertyOptional({ description: "Разрешено создавать записи" })
+  @IsOptional()
+  @IsBoolean()
+  create?: boolean;
+
+  @ApiPropertyOptional({ description: "Разрешено обновлять записи" })
+  @IsOptional()
+  @IsBoolean()
+  update?: boolean;
+
+  @ApiPropertyOptional({ description: "Разрешено удалять записи" })
+  @IsOptional()
+  @IsBoolean()
+  delete?: boolean;
 }
 
 /**

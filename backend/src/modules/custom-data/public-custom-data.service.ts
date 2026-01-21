@@ -442,14 +442,18 @@ export class PublicCustomDataService {
           return settings.authenticated.delete;
       }
     } else {
-      // Неавторизованный пользователь (только public права)
+      // Неавторизованный пользователь (public права)
       switch (action) {
         case "read":
           return settings.public.read;
         case "list":
           return settings.public.list;
-        default:
-          return false; // create/update/delete требуют авторизации
+        case "create":
+          return settings.public.create;
+        case "update":
+          return settings.public.update;
+        case "delete":
+          return settings.public.delete;
       }
     }
   }
