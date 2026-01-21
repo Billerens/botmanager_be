@@ -19,6 +19,8 @@ import {
   FieldSchema,
   CollectionSchemaDefinition,
   CollectionRelation,
+  CollectionAccessSettings,
+  RowLevelSecurityRules,
 } from "../../../database/entities/custom-collection-schema.entity";
 
 /**
@@ -155,6 +157,93 @@ export class CollectionRelationDto implements CollectionRelation {
 }
 
 /**
+ * DTO для публичного доступа
+ */
+export class PublicAccessDto {
+  @ApiPropertyOptional({ description: "Разрешено читать отдельные записи" })
+  @IsOptional()
+  @IsBoolean()
+  read?: boolean;
+
+  @ApiPropertyOptional({ description: "Разрешено получать список записей" })
+  @IsOptional()
+  @IsBoolean()
+  list?: boolean;
+}
+
+/**
+ * DTO для доступа авторизованных пользователей
+ */
+export class AuthenticatedAccessDto {
+  @ApiPropertyOptional({ description: "Разрешено читать отдельные записи" })
+  @IsOptional()
+  @IsBoolean()
+  read?: boolean;
+
+  @ApiPropertyOptional({ description: "Разрешено получать список записей" })
+  @IsOptional()
+  @IsBoolean()
+  list?: boolean;
+
+  @ApiPropertyOptional({ description: "Разрешено создавать записи" })
+  @IsOptional()
+  @IsBoolean()
+  create?: boolean;
+
+  @ApiPropertyOptional({ description: "Разрешено обновлять записи" })
+  @IsOptional()
+  @IsBoolean()
+  update?: boolean;
+
+  @ApiPropertyOptional({ description: "Разрешено удалять записи" })
+  @IsOptional()
+  @IsBoolean()
+  delete?: boolean;
+}
+
+/**
+ * DTO для настроек доступа к коллекции
+ */
+export class CollectionAccessSettingsDto implements CollectionAccessSettings {
+  @ApiPropertyOptional({ description: "Публичный доступ", type: PublicAccessDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PublicAccessDto)
+  public?: PublicAccessDto;
+
+  @ApiPropertyOptional({ description: "Доступ авторизованных пользователей", type: AuthenticatedAccessDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AuthenticatedAccessDto)
+  authenticated?: AuthenticatedAccessDto;
+}
+
+/**
+ * DTO для правил Row-Level Security
+ */
+export class RowLevelSecurityRulesDto implements RowLevelSecurityRules {
+  @ApiPropertyOptional({ description: "Условие для чтения записи" })
+  @IsOptional()
+  @IsString()
+  read?: string;
+
+  @ApiPropertyOptional({ description: "Условие для создания записи" })
+  @IsOptional()
+  @IsString()
+  create?: string;
+
+  @ApiPropertyOptional({ description: "Условие для обновления записи" })
+  @IsOptional()
+  @IsString()
+  update?: string;
+
+  @ApiPropertyOptional({ description: "Условие для удаления записи" })
+  @IsOptional()
+  @IsString()
+  delete?: string;
+}
+
+/**
  * DTO для настроек UI
  */
 export class UiSettingsDto {
@@ -244,6 +333,18 @@ export class CreateCollectionDto {
   @ValidateNested()
   @Type(() => UiSettingsDto)
   uiSettings?: UiSettingsDto;
+
+  @ApiPropertyOptional({ description: "Настройки доступа", type: CollectionAccessSettingsDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CollectionAccessSettingsDto)
+  accessSettings?: CollectionAccessSettingsDto;
+
+  @ApiPropertyOptional({ description: "Правила Row-Level Security", type: RowLevelSecurityRulesDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RowLevelSecurityRulesDto)
+  rowLevelSecurity?: RowLevelSecurityRulesDto;
 }
 
 /**
@@ -292,6 +393,18 @@ export class UpdateCollectionDto {
   @ValidateNested()
   @Type(() => UiSettingsDto)
   uiSettings?: UiSettingsDto;
+
+  @ApiPropertyOptional({ description: "Настройки доступа", type: CollectionAccessSettingsDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CollectionAccessSettingsDto)
+  accessSettings?: CollectionAccessSettingsDto;
+
+  @ApiPropertyOptional({ description: "Правила Row-Level Security", type: RowLevelSecurityRulesDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RowLevelSecurityRulesDto)
+  rowLevelSecurity?: RowLevelSecurityRulesDto;
 
   @ApiPropertyOptional({ description: "Активна ли коллекция" })
   @IsOptional()
