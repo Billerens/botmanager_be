@@ -153,6 +153,9 @@ export class LangChainOpenRouterController {
       if (!isStreamEnded) {
         const heartbeatData = JSON.stringify({ heartbeat: true, done: false });
         response.write(`data: ${heartbeatData}\n\n`);
+        if (typeof (response as any).flush === "function") {
+          (response as any).flush();
+        }
         this.logger.debug("Heartbeat отправлен для поддержания SSE соединения");
       }
     };
@@ -169,13 +172,19 @@ export class LangChainOpenRouterController {
     try {
       // Настраиваем заголовки для SSE
       response.setHeader("Content-Type", "text/event-stream");
-      response.setHeader("Cache-Control", "no-cache");
+      response.setHeader("Cache-Control", "no-cache, no-transform");
       response.setHeader("Connection", "keep-alive");
       response.setHeader("X-Accel-Buffering", "no");
+      // Важно для предотвращения буферизации в Node.js
+      response.flushHeaders();
 
       // Отправляем начальный чанк для подтверждения соединения
       const initData = JSON.stringify({ init: true, done: false });
       response.write(`data: ${initData}\n\n`);
+      // Явный flush для немедленной отправки
+      if (typeof (response as any).flush === "function") {
+        (response as any).flush();
+      }
 
       // Запускаем heartbeat для поддержания соединения
       heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
@@ -194,6 +203,10 @@ export class LangChainOpenRouterController {
         if (isStreamEnded) break;
         const data = JSON.stringify({ content: chunk, done: false });
         response.write(`data: ${data}\n\n`);
+        // Явный flush для немедленной отправки каждого чанка
+        if (typeof (response as any).flush === "function") {
+          (response as any).flush();
+        }
       }
 
       // Останавливаем heartbeat
@@ -202,6 +215,9 @@ export class LangChainOpenRouterController {
       // Отправляем финальный чанк
       const finalData = JSON.stringify({ content: "", done: true });
       response.write(`data: ${finalData}\n\n`);
+      if (typeof (response as any).flush === "function") {
+        (response as any).flush();
+      }
 
       // Закрываем соединение
       response.end();
@@ -219,6 +235,9 @@ export class LangChainOpenRouterController {
         done: true,
       });
       response.write(`data: ${errorData}\n\n`);
+      if (typeof (response as any).flush === "function") {
+        (response as any).flush();
+      }
       response.end();
     }
   }
