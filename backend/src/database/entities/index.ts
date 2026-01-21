@@ -28,7 +28,7 @@ export { BotUser } from "./bot-user.entity";
 export { BotUserPermission } from "./bot-user-permission.entity";
 export { BotInvitation } from "./bot-invitation.entity";
 export { GroupSession } from "./group-session.entity";
-export { PublicUser } from "./public-user.entity";
+export { PublicUser, PublicUserOwnerType } from "./public-user.entity";
 export { Shop } from "./shop.entity";
 export { Admin } from "./admin.entity";
 export { AdminActionLog } from "./admin-action-log.entity";

@@ -10,9 +10,8 @@ import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import * as bcrypt from "bcrypt";
-import * as crypto from "crypto";
 
-import { PublicUser } from "../../database/entities/public-user.entity";
+import { PublicUser, PublicUserOwnerType } from "../../database/entities/public-user.entity";
 import {
   RegisterPublicUserDto,
   LoginPublicUserDto,
@@ -28,7 +27,8 @@ import { MailService } from "../mail/mail.service";
 export interface PublicUserJwtPayload {
   sub: string; // publicUserId
   email: string;
-  shopId: string; // ID магазина
+  ownerId: string; // ID владельца
+  ownerType: PublicUserOwnerType; // Тип владельца
   type: "public"; // Для отличия от обычных пользователей админки
 }
 
@@ -55,15 +55,16 @@ export class PublicAuthService {
     message: string;
     requiresEmailVerification: boolean;
   }> {
-    const { shopId, email, password, firstName, lastName, phone } = dto;
+    const { ownerId, email, password, firstName, lastName, phone } = dto;
+    const ownerType = dto.ownerType || PublicUserOwnerType.USER;
 
     this.logger.log(
-      `Регистрация публичного пользователя: ${email} для магазина ${shopId}`
+      `Регистрация публичного пользователя: ${email} для ${ownerType}:${ownerId}`
     );
 
-    // Проверяем, существует ли пользователь в этом магазине
+    // Проверяем, существует ли пользователь у этого владельца
     const existingUser = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase(), shopId },
+      where: { email: email.toLowerCase(), ownerId, ownerType },
     });
 
     if (existingUser) {
@@ -84,7 +85,8 @@ export class PublicAuthService {
 
     // Создаем пользователя
     const user = this.publicUserRepository.create({
-      shopId,
+      ownerId,
+      ownerType,
       email: email.toLowerCase(),
       passwordHash,
       firstName,
@@ -131,10 +133,11 @@ export class PublicAuthService {
     accessToken: string;
     refreshToken: string;
   }> {
-    const { shopId, email, password } = dto;
+    const { ownerId, email, password } = dto;
+    const ownerType = dto.ownerType || PublicUserOwnerType.USER;
 
     const user = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase(), shopId },
+      where: { email: email.toLowerCase(), ownerId, ownerType },
     });
 
     if (!user) {
@@ -171,10 +174,11 @@ export class PublicAuthService {
   async verifyEmail(
     dto: VerifyEmailDto
   ): Promise<{ user: PublicUser; message: string }> {
-    const { shopId, email, code } = dto;
+    const { ownerId, email, code } = dto;
+    const ownerType = dto.ownerType || PublicUserOwnerType.USER;
 
     const user = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase(), shopId },
+      where: { email: email.toLowerCase(), ownerId, ownerType },
     });
 
     if (!user) {
@@ -215,11 +219,12 @@ export class PublicAuthService {
    * Повторная отправка кода верификации
    */
   async resendVerificationEmail(
-    shopId: string,
+    ownerId: string,
+    ownerType: PublicUserOwnerType,
     email: string
   ): Promise<{ message: string }> {
     const user = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase(), shopId },
+      where: { email: email.toLowerCase(), ownerId, ownerType },
     });
 
     if (!user) {
@@ -253,10 +258,11 @@ export class PublicAuthService {
    * Запрос сброса пароля
    */
   async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
-    const { shopId, email } = dto;
+    const { ownerId, email } = dto;
+    const ownerType = dto.ownerType || PublicUserOwnerType.USER;
 
     const user = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase(), shopId },
+      where: { email: email.toLowerCase(), ownerId, ownerType },
     });
 
     if (!user) {
@@ -287,10 +293,11 @@ export class PublicAuthService {
    * Сброс пароля
    */
   async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
-    const { shopId, token, newPassword } = dto;
+    const { ownerId, token, newPassword } = dto;
+    const ownerType = dto.ownerType || PublicUserOwnerType.USER;
 
     const user = await this.publicUserRepository.findOne({
-      where: { passwordResetToken: token, shopId },
+      where: { passwordResetToken: token, ownerId, ownerType },
     });
 
     if (!user || user.isPasswordResetTokenExpired()) {
@@ -441,9 +448,9 @@ export class PublicAuthService {
       throw new UnauthorizedException("Пользователь не найден");
     }
 
-    // Проверяем, не связан ли уже этот Telegram ID с другим пользователем в этом магазине
+    // Проверяем, не связан ли уже этот Telegram ID с другим пользователем у этого владельца
     const existingLink = await this.publicUserRepository.findOne({
-      where: { telegramId: dto.telegramId, shopId: user.shopId },
+      where: { telegramId: dto.telegramId, ownerId: user.ownerId, ownerType: user.ownerType },
     });
 
     if (existingLink && existingLink.id !== userId) {
@@ -489,22 +496,27 @@ export class PublicAuthService {
   }
 
   /**
-   * Поиск пользователя по email в конкретном магазине
+   * Поиск пользователя по email у конкретного владельца
    */
-  async findByEmail(shopId: string, email: string): Promise<PublicUser | null> {
+  async findByEmail(
+    ownerId: string,
+    ownerType: PublicUserOwnerType,
+    email: string
+  ): Promise<PublicUser | null> {
     return this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase(), shopId },
+      where: { email: email.toLowerCase(), ownerId, ownerType },
     });
   }
 
   /**
-   * Поиск пользователя по Telegram ID в конкретном магазине
+   * Поиск пользователя по Telegram ID у конкретного владельца
    */
   async findByTelegramId(
-    shopId: string,
+    ownerId: string,
+    ownerType: PublicUserOwnerType,
     telegramId: string
   ): Promise<PublicUser | null> {
-    return this.publicUserRepository.findOne({ where: { telegramId, shopId } });
+    return this.publicUserRepository.findOne({ where: { telegramId, ownerId, ownerType } });
   }
 
   // ============ Приватные методы ============
@@ -516,7 +528,8 @@ export class PublicAuthService {
     const payload: PublicUserJwtPayload = {
       sub: user.id,
       email: user.email,
-      shopId: user.shopId,
+      ownerId: user.ownerId,
+      ownerType: user.ownerType,
       type: "public",
     };
 

@@ -4,18 +4,36 @@ import {
   MinLength,
   MaxLength,
   IsOptional,
-  IsUUID,
-  Matches,
+  IsEnum,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { PublicUserOwnerType } from "../../../database/entities/public-user.entity";
 
+/**
+ * DTO для регистрации публичного пользователя
+ * 
+ * ownerId + ownerType определяют контекст регистрации:
+ * - ownerType: 'user' + ownerId: userId — глобальный пользователь владельца аккаунта
+ * - ownerType: 'bot' + ownerId: botId — пользователь конкретного бота
+ * - ownerType: 'shop' + ownerId: shopId — пользователь магазина
+ */
 export class RegisterPublicUserDto {
   @ApiProperty({
-    description: "ID магазина",
+    description: "ID владельца (userId, botId или shopId)",
     example: "550e8400-e29b-41d4-a716-446655440000",
   })
-  @IsUUID("4", { message: "Некорректный формат shopId" })
-  shopId: string;
+  @IsString()
+  ownerId: string;
+
+  @ApiPropertyOptional({
+    description: "Тип владельца",
+    enum: PublicUserOwnerType,
+    default: PublicUserOwnerType.USER,
+    example: "user",
+  })
+  @IsOptional()
+  @IsEnum(PublicUserOwnerType, { message: "Некорректный тип владельца" })
+  ownerType?: PublicUserOwnerType;
 
   @ApiProperty({
     description: "Email пользователя",
@@ -64,11 +82,21 @@ export class RegisterPublicUserDto {
 
 export class LoginPublicUserDto {
   @ApiProperty({
-    description: "ID магазина",
+    description: "ID владельца (userId, botId или shopId)",
     example: "550e8400-e29b-41d4-a716-446655440000",
   })
-  @IsUUID("4", { message: "Некорректный формат shopId" })
-  shopId: string;
+  @IsString()
+  ownerId: string;
+
+  @ApiPropertyOptional({
+    description: "Тип владельца",
+    enum: PublicUserOwnerType,
+    default: PublicUserOwnerType.USER,
+    example: "user",
+  })
+  @IsOptional()
+  @IsEnum(PublicUserOwnerType, { message: "Некорректный тип владельца" })
+  ownerType?: PublicUserOwnerType;
 
   @ApiProperty({
     description: "Email пользователя",
@@ -87,11 +115,20 @@ export class LoginPublicUserDto {
 
 export class VerifyEmailDto {
   @ApiProperty({
-    description: "ID магазина",
+    description: "ID владельца",
     example: "550e8400-e29b-41d4-a716-446655440000",
   })
-  @IsUUID("4", { message: "Некорректный формат shopId" })
-  shopId: string;
+  @IsString()
+  ownerId: string;
+
+  @ApiPropertyOptional({
+    description: "Тип владельца",
+    enum: PublicUserOwnerType,
+    default: PublicUserOwnerType.USER,
+  })
+  @IsOptional()
+  @IsEnum(PublicUserOwnerType)
+  ownerType?: PublicUserOwnerType;
 
   @ApiProperty({
     description: "Email пользователя",
@@ -112,11 +149,20 @@ export class VerifyEmailDto {
 
 export class ResendVerificationEmailDto {
   @ApiProperty({
-    description: "ID магазина",
+    description: "ID владельца",
     example: "550e8400-e29b-41d4-a716-446655440000",
   })
-  @IsUUID("4", { message: "Некорректный формат shopId" })
-  shopId: string;
+  @IsString()
+  ownerId: string;
+
+  @ApiPropertyOptional({
+    description: "Тип владельца",
+    enum: PublicUserOwnerType,
+    default: PublicUserOwnerType.USER,
+  })
+  @IsOptional()
+  @IsEnum(PublicUserOwnerType)
+  ownerType?: PublicUserOwnerType;
 
   @ApiProperty({
     description: "Email пользователя",
@@ -128,11 +174,20 @@ export class ResendVerificationEmailDto {
 
 export class ForgotPasswordDto {
   @ApiProperty({
-    description: "ID магазина",
+    description: "ID владельца",
     example: "550e8400-e29b-41d4-a716-446655440000",
   })
-  @IsUUID("4", { message: "Некорректный формат shopId" })
-  shopId: string;
+  @IsString()
+  ownerId: string;
+
+  @ApiPropertyOptional({
+    description: "Тип владельца",
+    enum: PublicUserOwnerType,
+    default: PublicUserOwnerType.USER,
+  })
+  @IsOptional()
+  @IsEnum(PublicUserOwnerType)
+  ownerType?: PublicUserOwnerType;
 
   @ApiProperty({
     description: "Email пользователя",
@@ -144,11 +199,20 @@ export class ForgotPasswordDto {
 
 export class ResetPasswordDto {
   @ApiProperty({
-    description: "ID магазина",
+    description: "ID владельца",
     example: "550e8400-e29b-41d4-a716-446655440000",
   })
-  @IsUUID("4", { message: "Некорректный формат shopId" })
-  shopId: string;
+  @IsString()
+  ownerId: string;
+
+  @ApiPropertyOptional({
+    description: "Тип владельца",
+    enum: PublicUserOwnerType,
+    default: PublicUserOwnerType.USER,
+  })
+  @IsOptional()
+  @IsEnum(PublicUserOwnerType)
+  ownerType?: PublicUserOwnerType;
 
   @ApiProperty({
     description: "Токен сброса пароля",

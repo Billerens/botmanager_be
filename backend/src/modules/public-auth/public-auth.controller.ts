@@ -91,7 +91,8 @@ export class PublicAuthController {
   })
   async resendVerification(@Body() dto: ResendVerificationEmailDto) {
     return this.publicAuthService.resendVerificationEmail(
-      dto.shopId,
+      dto.ownerId,
+      dto.ownerType,
       dto.email
     );
   }

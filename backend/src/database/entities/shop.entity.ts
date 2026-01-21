@@ -16,7 +16,6 @@ import { Category } from "./category.entity";
 import { Order } from "./order.entity";
 import { Cart } from "./cart.entity";
 import { ShopPromocode } from "./shop-promocode.entity";
-import { PublicUser } from "./public-user.entity";
 import { SubdomainStatus } from "../../modules/custom-domains/enums/domain-status.enum";
 
 /**
@@ -142,9 +141,6 @@ export class Shop {
 
   @OneToMany(() => ShopPromocode, (promocode) => promocode.shop)
   promocodes: ShopPromocode[];
-
-  @OneToMany(() => PublicUser, (user) => user.shop)
-  publicUsers: PublicUser[];
 
   // Вычисляемые свойства
   get url(): string {

@@ -4,17 +4,27 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
   Index,
 } from "typeorm";
 import { Exclude } from "class-transformer";
-import { Shop } from "./shop.entity";
+
+/**
+ * Тип владельца публичного пользователя
+ * Определяет контекст, в котором зарегистрирован пользователь
+ */
+export enum PublicUserOwnerType {
+  /** Глобальный пользователь владельца аккаунта */
+  USER = "user",
+  /** Пользователь конкретного бота */
+  BOT = "bot",
+  /** Пользователь магазина */
+  SHOP = "shop",
+}
 
 @Entity("public_users")
-@Index(["email", "shopId"], { unique: true }) // Email уникален только в рамках одного магазина
-@Index(["shopId"])
-@Index(["shopId", "telegramId"]) // Для поиска по telegramId в рамках магазина
+@Index(["email", "ownerId", "ownerType"], { unique: true }) // Email уникален в рамках владельца
+@Index(["ownerId", "ownerType"])
+@Index(["ownerId", "ownerType", "telegramId"]) // Для поиска по telegramId в рамках владельца
 export class PublicUser {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -22,15 +32,21 @@ export class PublicUser {
   @Column()
   email: string;
 
-  // Связь с магазином
-  @ManyToOne(() => Shop, (shop) => shop.publicUsers, {
-    onDelete: "CASCADE",
-  })
-  @JoinColumn({ name: "shopId" })
-  shop: Shop;
-
+  /**
+   * ID владельца (userId, botId или shopId в зависимости от ownerType)
+   */
   @Column()
-  shopId: string;
+  ownerId: string;
+
+  /**
+   * Тип владельца
+   */
+  @Column({
+    type: "enum",
+    enum: PublicUserOwnerType,
+    default: PublicUserOwnerType.USER,
+  })
+  ownerType: PublicUserOwnerType;
 
   @Column()
   @Exclude()
