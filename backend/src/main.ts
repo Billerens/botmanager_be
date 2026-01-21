@@ -416,6 +416,7 @@ async function bootstrap() {
       "Accept",
       "Origin",
       "x-telegram-init-data",
+      "x-api-key",
     ],
     exposedHeaders: ["Authorization"],
     optionsSuccessStatus: 200,
