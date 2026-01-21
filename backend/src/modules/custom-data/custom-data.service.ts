@@ -227,9 +227,10 @@ export class CustomDataService {
       // Коллекция может не иметь схемы
     }
 
-    // Валидируем данные если есть схема
+    // Валидируем и очищаем данные если есть схема
+    let cleanedData = dto.data;
     if (schema) {
-      this.validateData(dto.data, schema.schema);
+      cleanedData = this.validateData(dto.data, schema.schema);
     }
 
     // Генерируем или используем переданный ключ
@@ -246,11 +247,11 @@ export class CustomDataService {
 
     // Извлекаем индексируемые данные
     const indexedData = schema
-      ? this.extractIndexedData(dto.data, schema.indexedFields)
+      ? this.extractIndexedData(cleanedData, schema.indexedFields)
       : null;
 
     // Извлекаем title
-    const title = schema?.titleField ? dto.data[schema.titleField] : null;
+    const title = schema?.titleField ? cleanedData[schema.titleField] : null;
 
     // Создаём запись
     const record = this.dataRepo.create({
@@ -259,7 +260,7 @@ export class CustomDataService {
       collection: collectionName,
       schemaId: schema?.id,
       key,
-      data: dto.data,
+      data: cleanedData,
       indexedData,
       metadata: dto.metadata,
       title,
@@ -572,17 +573,18 @@ export class CustomDataService {
       // Без схемы
     }
 
-    // Валидируем
+    // Валидируем и очищаем данные
+    let cleanedData = dto.data;
     if (schema) {
-      this.validateData(dto.data, schema.schema);
+      cleanedData = this.validateData(dto.data, schema.schema);
     }
 
     // Обновляем
-    record.data = dto.data;
+    record.data = cleanedData;
     record.indexedData = schema
-      ? this.extractIndexedData(dto.data, schema.indexedFields)
+      ? this.extractIndexedData(cleanedData, schema.indexedFields)
       : null;
-    record.title = schema?.titleField ? dto.data[schema.titleField] : null;
+    record.title = schema?.titleField ? cleanedData[schema.titleField] : null;
     record.metadata = dto.metadata ?? record.metadata;
     record.version += 1;
     record.updatedBy = userId;
@@ -612,18 +614,21 @@ export class CustomDataService {
     }
 
     // Мержим данные
+    let mergedData = record.data;
     if (dto.data) {
-      record.data = { ...record.data, ...dto.data };
+      mergedData = { ...record.data, ...dto.data };
     }
     if (dto.metadata) {
       record.metadata = { ...(record.metadata || {}), ...dto.metadata };
     }
 
-    // Валидируем
+    // Валидируем и очищаем данные
     if (schema) {
-      this.validateData(record.data, schema.schema);
+      record.data = this.validateData(mergedData, schema.schema);
       record.indexedData = this.extractIndexedData(record.data, schema.indexedFields);
       record.title = schema.titleField ? record.data[schema.titleField] : null;
+    } else {
+      record.data = mergedData;
     }
 
     record.version += 1;
@@ -740,9 +745,11 @@ export class CustomDataService {
 
   /**
    * Валидация данных по схеме
+   * Возвращает очищенные данные (без лишних полей, если additionalProperties !== true)
    */
-  private validateData(data: Record<string, any>, schema: CollectionSchemaDefinition): void {
+  private validateData(data: Record<string, any>, schema: CollectionSchemaDefinition): Record<string, any> {
     const errors: string[] = [];
+    let cleanedData = { ...data };
 
     // Проверяем обязательные поля
     for (const requiredField of schema.required || []) {
@@ -751,9 +758,18 @@ export class CustomDataService {
       }
     }
 
+    // Удаляем лишние поля (если additionalProperties !== true)
+    // По умолчанию дополнительные свойства удаляются
+    if (schema.additionalProperties !== true) {
+      const allowedFields = new Set(Object.keys(schema.properties));
+      cleanedData = Object.fromEntries(
+        Object.entries(data).filter(([field]) => allowedFields.has(field))
+      );
+    }
+
     // Проверяем типы и ограничения
     for (const [fieldName, fieldSchema] of Object.entries(schema.properties)) {
-      const value = data[fieldName];
+      const value = cleanedData[fieldName];
 
       if (value === undefined || value === null) continue;
 
@@ -805,6 +821,8 @@ export class CustomDataService {
     if (errors.length > 0) {
       throw new BadRequestException({ message: "Validation failed", errors });
     }
+
+    return cleanedData;
   }
 
   /**

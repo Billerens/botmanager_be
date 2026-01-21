@@ -12,6 +12,8 @@ import {
   CustomDataOwnerType,
   CollectionAccessSettings,
   RowLevelSecurityRules,
+  CollectionSchemaDefinition,
+  FieldType,
 } from "../../database/entities/custom-collection-schema.entity";
 import { CustomData } from "../../database/entities/custom-data.entity";
 import { ApiKeyContext } from "./public-api-key.service";
@@ -251,6 +253,9 @@ export class PublicCustomDataService {
       throw new ForbiddenException("Создание записи запрещено правилами безопасности");
     }
 
+    // Валидируем и очищаем данные по схеме коллекции
+    const cleanedData = this.validateData(dto.data, collection.schema);
+
     // Генерируем ключ если не указан
     const key = dto.key || this.generateKey();
 
@@ -271,7 +276,7 @@ export class PublicCustomDataService {
 
     // Добавляем информацию о создателе
     const dataWithCreator = {
-      ...dto.data,
+      ...cleanedData,
       createdBy: userContext.userId,
       createdByEmail: userContext.userEmail,
     };
@@ -325,10 +330,17 @@ export class PublicCustomDataService {
       throw new ForbiddenException("Обновление этой записи запрещено");
     }
 
-    // Обновляем данные, сохраняя информацию о создателе
-    record.data = {
+    // Валидируем и очищаем данные по схеме коллекции
+    // Объединяем с существующими данными для полной валидации
+    const mergedData = {
       ...record.data,
       ...dto.data,
+    };
+    const cleanedData = this.validateData(mergedData, collection.schema);
+
+    // Обновляем данные, сохраняя информацию о создателе
+    record.data = {
+      ...cleanedData,
       createdBy: record.data.createdBy,
       createdByEmail: record.data.createdByEmail,
       updatedBy: userContext.userId,
@@ -566,5 +578,123 @@ export class PublicCustomDataService {
    */
   private generateKey(): string {
     return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Валидация данных по схеме коллекции
+   * Возвращает очищенные данные (без лишних полей, если additionalProperties !== true)
+   */
+  private validateData(data: Record<string, any>, schema: CollectionSchemaDefinition): Record<string, any> {
+    const errors: string[] = [];
+    let cleanedData = { ...data };
+
+    // Проверяем обязательные поля
+    for (const requiredField of schema.required || []) {
+      if (data[requiredField] === undefined || data[requiredField] === null) {
+        errors.push(`Field "${requiredField}" is required`);
+      }
+    }
+
+    // Удаляем лишние поля (если additionalProperties !== true)
+    // По умолчанию дополнительные свойства удаляются
+    if (schema.additionalProperties !== true) {
+      const allowedFields = new Set(Object.keys(schema.properties));
+      // Служебные поля, которые добавляются автоматически
+      const systemFields = new Set(["createdBy", "createdByEmail", "updatedBy", "updatedAt"]);
+      cleanedData = Object.fromEntries(
+        Object.entries(data).filter(
+          ([field]) => allowedFields.has(field) || systemFields.has(field),
+        ),
+      );
+    }
+
+    // Проверяем типы и ограничения
+    for (const [fieldName, fieldSchema] of Object.entries(schema.properties)) {
+      const value = cleanedData[fieldName];
+
+      if (value === undefined || value === null) continue;
+
+      // Проверка типа
+      if (!this.checkType(value, fieldSchema.type)) {
+        errors.push(`Field "${fieldName}" must be of type ${fieldSchema.type}`);
+        continue;
+      }
+
+      // Проверки для строк
+      if (fieldSchema.type === FieldType.STRING || fieldSchema.type === FieldType.TEXT) {
+        if (fieldSchema.minLength && value.length < fieldSchema.minLength) {
+          errors.push(`Field "${fieldName}" must have at least ${fieldSchema.minLength} characters`);
+        }
+        if (fieldSchema.maxLength && value.length > fieldSchema.maxLength) {
+          errors.push(`Field "${fieldName}" must have at most ${fieldSchema.maxLength} characters`);
+        }
+        if (fieldSchema.pattern) {
+          const regex = new RegExp(fieldSchema.pattern);
+          if (!regex.test(value)) {
+            errors.push(`Field "${fieldName}" doesn't match pattern ${fieldSchema.pattern}`);
+          }
+        }
+      }
+
+      // Проверки для чисел
+      if (fieldSchema.type === FieldType.NUMBER) {
+        if (fieldSchema.minimum !== undefined && value < fieldSchema.minimum) {
+          errors.push(`Field "${fieldName}" must be >= ${fieldSchema.minimum}`);
+        }
+        if (fieldSchema.maximum !== undefined && value > fieldSchema.maximum) {
+          errors.push(`Field "${fieldName}" must be <= ${fieldSchema.maximum}`);
+        }
+      }
+
+      // Проверка enum (select/multiselect)
+      if (fieldSchema.options?.length) {
+        const validValues = fieldSchema.options.map((o) => o.value);
+        if (fieldSchema.type === FieldType.MULTISELECT) {
+          if (!Array.isArray(value) || !value.every((v) => validValues.includes(v))) {
+            errors.push(`Field "${fieldName}" contains invalid options`);
+          }
+        } else if (!validValues.includes(value)) {
+          errors.push(`Field "${fieldName}" must be one of: ${validValues.join(", ")}`);
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new BadRequestException({ message: "Validation failed", errors });
+    }
+
+    return cleanedData;
+  }
+
+  /**
+   * Проверка типа значения
+   */
+  private checkType(value: any, type: FieldType): boolean {
+    switch (type) {
+      case FieldType.STRING:
+      case FieldType.TEXT:
+      case FieldType.EMAIL:
+      case FieldType.URL:
+      case FieldType.PHONE:
+      case FieldType.FILE:
+      case FieldType.IMAGE:
+      case FieldType.SELECT:
+        return typeof value === "string";
+      case FieldType.NUMBER:
+        return typeof value === "number" && !isNaN(value);
+      case FieldType.BOOLEAN:
+        return typeof value === "boolean";
+      case FieldType.DATE:
+        return typeof value === "string" || value instanceof Date;
+      case FieldType.ARRAY:
+      case FieldType.MULTISELECT:
+        return Array.isArray(value);
+      case FieldType.OBJECT:
+        return typeof value === "object" && value !== null && !Array.isArray(value);
+      case FieldType.RELATION:
+        return typeof value === "string"; // ID связанной записи
+      default:
+        return true;
+    }
   }
 }
