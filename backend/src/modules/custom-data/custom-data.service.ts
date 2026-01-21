@@ -13,6 +13,8 @@ import {
   FieldType,
   CollectionSchemaDefinition,
   FieldSchema,
+  CollectionAccessSettings,
+  RowLevelSecurityRules,
 } from "../../database/entities/custom-collection-schema.entity";
 import { CustomData } from "../../database/entities/custom-data.entity";
 import { CustomLoggerService } from "../../common/logger.service";
@@ -139,8 +141,31 @@ export class CustomDataService {
     if (dto.titleField !== undefined) collection.titleField = dto.titleField;
     if (dto.relations !== undefined) collection.relations = dto.relations;
     if (dto.uiSettings !== undefined) collection.uiSettings = dto.uiSettings;
-    if (dto.accessSettings !== undefined) collection.accessSettings = dto.accessSettings;
-    if (dto.rowLevelSecurity !== undefined) collection.rowLevelSecurity = dto.rowLevelSecurity;
+    if (dto.accessSettings !== undefined) {
+      // Мержим с текущими значениями, заполняя недостающие поля
+      collection.accessSettings = {
+        public: {
+          read: dto.accessSettings.public?.read ?? collection.accessSettings.public.read,
+          list: dto.accessSettings.public?.list ?? collection.accessSettings.public.list,
+        },
+        authenticated: {
+          read: dto.accessSettings.authenticated?.read ?? collection.accessSettings.authenticated.read,
+          list: dto.accessSettings.authenticated?.list ?? collection.accessSettings.authenticated.list,
+          create: dto.accessSettings.authenticated?.create ?? collection.accessSettings.authenticated.create,
+          update: dto.accessSettings.authenticated?.update ?? collection.accessSettings.authenticated.update,
+          delete: dto.accessSettings.authenticated?.delete ?? collection.accessSettings.authenticated.delete,
+        },
+      } as CollectionAccessSettings;
+    }
+    if (dto.rowLevelSecurity !== undefined) {
+      // Мержим с текущими значениями, заполняя недостающие поля
+      collection.rowLevelSecurity = {
+        read: dto.rowLevelSecurity.read ?? collection.rowLevelSecurity.read,
+        create: dto.rowLevelSecurity.create ?? collection.rowLevelSecurity.create,
+        update: dto.rowLevelSecurity.update ?? collection.rowLevelSecurity.update,
+        delete: dto.rowLevelSecurity.delete ?? collection.rowLevelSecurity.delete,
+      } as RowLevelSecurityRules;
+    }
     if (dto.isActive !== undefined) collection.isActive = dto.isActive;
 
     return this.schemaRepo.save(collection);
