@@ -19,8 +19,6 @@ import {
   FieldSchema,
   CollectionSchemaDefinition,
   CollectionRelation,
-  CollectionAccessSettings,
-  RowLevelSecurityRules,
 } from "../../../database/entities/custom-collection-schema.entity";
 
 /**
@@ -204,7 +202,7 @@ export class AuthenticatedAccessDto {
 /**
  * DTO для настроек доступа к коллекции
  */
-export class CollectionAccessSettingsDto implements CollectionAccessSettings {
+export class CollectionAccessSettingsDto {
   @ApiPropertyOptional({ description: "Публичный доступ", type: PublicAccessDto })
   @IsOptional()
   @ValidateNested()
@@ -221,7 +219,7 @@ export class CollectionAccessSettingsDto implements CollectionAccessSettings {
 /**
  * DTO для правил Row-Level Security
  */
-export class RowLevelSecurityRulesDto implements RowLevelSecurityRules {
+export class RowLevelSecurityRulesDto {
   @ApiPropertyOptional({ description: "Условие для чтения записи" })
   @IsOptional()
   @IsString()
