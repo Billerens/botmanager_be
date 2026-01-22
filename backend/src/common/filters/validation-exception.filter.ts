@@ -39,10 +39,15 @@ export class ValidationExceptionFilter implements ExceptionFilter {
       ? exceptionResponse.message
       : [exceptionResponse.message || "Validation failed"];
 
+    // Детальные ошибки валидации (из custom-data и других сервисов)
+    const errors = exceptionResponse.errors || null;
+
     response.status(status).json({
       message,
       error: exceptionResponse.error || "Bad Request",
       statusCode: status,
+      // Добавляем детали ошибок валидации если они есть
+      ...(errors && { errors }),
     });
   }
 }
