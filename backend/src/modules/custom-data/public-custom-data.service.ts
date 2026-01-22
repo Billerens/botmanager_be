@@ -192,12 +192,12 @@ export class PublicCustomDataService {
   }
 
   /**
-   * Получить запись по ключу
+   * Получить запись по ключу или id
    */
   async getRecord(
     apiKeyContext: ApiKeyContext,
     collectionName: string,
-    key: string,
+    keyOrId: string,
     userContext: PublicUserContext,
   ): Promise<CustomData> {
     const collection = await this.getCollectionWithAccessCheck(
@@ -207,15 +207,29 @@ export class PublicCustomDataService {
       "read",
     );
 
-    const record = await this.dataRepository.findOne({
+    // Сначала ищем по key
+    let record = await this.dataRepository.findOne({
       where: {
         ownerId: apiKeyContext.ownerId,
         ownerType: apiKeyContext.ownerType,
         collection: collectionName,
-        key,
+        key: keyOrId,
         isDeleted: false,
       },
     });
+
+    // Если не нашли по key и keyOrId похож на UUID - ищем по id
+    if (!record && this.isUUID(keyOrId)) {
+      record = await this.dataRepository.findOne({
+        where: {
+          ownerId: apiKeyContext.ownerId,
+          ownerType: apiKeyContext.ownerType,
+          collection: collectionName,
+          id: keyOrId,
+          isDeleted: false,
+        },
+      });
+    }
 
     if (!record) {
       throw new NotFoundException("Запись не найдена");
@@ -298,7 +312,7 @@ export class PublicCustomDataService {
   async updateRecord(
     apiKeyContext: ApiKeyContext,
     collectionName: string,
-    key: string,
+    keyOrId: string,
     dto: PublicUpdateDto,
     userContext: PublicUserContext,
   ): Promise<CustomData> {
@@ -311,15 +325,29 @@ export class PublicCustomDataService {
       "update",
     );
 
-    const record = await this.dataRepository.findOne({
+    // Сначала ищем по key
+    let record = await this.dataRepository.findOne({
       where: {
         ownerId: apiKeyContext.ownerId,
         ownerType: apiKeyContext.ownerType,
         collection: collectionName,
-        key,
+        key: keyOrId,
         isDeleted: false,
       },
     });
+
+    // Если не нашли по key и keyOrId похож на UUID - ищем по id
+    if (!record && this.isUUID(keyOrId)) {
+      record = await this.dataRepository.findOne({
+        where: {
+          ownerId: apiKeyContext.ownerId,
+          ownerType: apiKeyContext.ownerType,
+          collection: collectionName,
+          id: keyOrId,
+          isDeleted: false,
+        },
+      });
+    }
 
     if (!record) {
       throw new NotFoundException("Запись не найдена");
@@ -357,7 +385,7 @@ export class PublicCustomDataService {
   async deleteRecord(
     apiKeyContext: ApiKeyContext,
     collectionName: string,
-    key: string,
+    keyOrId: string,
     userContext: PublicUserContext,
   ): Promise<void> {
     // Проверка прав доступа происходит в getCollectionWithAccessCheck
@@ -369,15 +397,29 @@ export class PublicCustomDataService {
       "delete",
     );
 
-    const record = await this.dataRepository.findOne({
+    // Сначала ищем по key
+    let record = await this.dataRepository.findOne({
       where: {
         ownerId: apiKeyContext.ownerId,
         ownerType: apiKeyContext.ownerType,
         collection: collectionName,
-        key,
+        key: keyOrId,
         isDeleted: false,
       },
     });
+
+    // Если не нашли по key и keyOrId похож на UUID - ищем по id
+    if (!record && this.isUUID(keyOrId)) {
+      record = await this.dataRepository.findOne({
+        where: {
+          ownerId: apiKeyContext.ownerId,
+          ownerType: apiKeyContext.ownerType,
+          collection: collectionName,
+          id: keyOrId,
+          isDeleted: false,
+        },
+      });
+    }
 
     if (!record) {
       throw new NotFoundException("Запись не найдена");
@@ -578,6 +620,14 @@ export class PublicCustomDataService {
    */
   private generateKey(): string {
     return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Проверка, является ли строка UUID
+   */
+  private isUUID(str: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
   }
 
   /**

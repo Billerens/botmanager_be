@@ -299,27 +299,46 @@ export class CustomDataService {
   }
 
   /**
-   * Получить запись по ключу
+   * Получить запись по ключу или id
+   * Сначала ищет по key, затем по id (если передан UUID)
    */
   async getRecord(
     ownerId: string,
     ownerType: CustomDataOwnerType,
     collectionName: string,
-    key: string,
+    keyOrId: string,
     includeDeleted = false,
   ): Promise<CustomData> {
-    const where: any = { ownerId, ownerType, collection: collectionName, key };
+    // Сначала пробуем найти по key
+    const whereByKey: any = { ownerId, ownerType, collection: collectionName, key: keyOrId };
     if (!includeDeleted) {
-      where.isDeleted = false;
+      whereByKey.isDeleted = false;
     }
 
-    const record = await this.dataRepo.findOne({ where });
+    let record = await this.dataRepo.findOne({ where: whereByKey });
+
+    // Если не нашли по key и keyOrId похож на UUID - пробуем найти по id
+    if (!record && this.isUUID(keyOrId)) {
+      const whereById: any = { ownerId, ownerType, collection: collectionName, id: keyOrId };
+      if (!includeDeleted) {
+        whereById.isDeleted = false;
+      }
+      record = await this.dataRepo.findOne({ where: whereById });
+    }
 
     if (!record) {
-      throw new NotFoundException(`Record with key "${key}" not found`);
+      throw new NotFoundException(`Record with key/id "${keyOrId}" not found`);
     }
 
     return record;
+  }
+
+  /**
+   * Проверка, является ли строка UUID
+   */
+  private isUUID(str: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
   }
 
   /**

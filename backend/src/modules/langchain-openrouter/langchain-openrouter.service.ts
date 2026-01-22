@@ -312,19 +312,13 @@ export class LangChainOpenRouterService {
 
       // Создаем поток
       const stream = await chatModel.stream(langchainMessages);
-      this.logger.debug('[Stream] Начинаем получение чанков от LangChain');
 
       // Стримим чанки
-      let chunkIndex = 0;
       for await (const chunk of stream) {
         if (chunk.content) {
-          chunkIndex++;
-          const preview = (chunk.content as string).substring(0, 50).replace(/\n/g, '\\n');
-          this.logger.debug(`[Stream] Chunk #${chunkIndex}: "${preview}${(chunk.content as string).length > 50 ? '...' : ''}"`);
           yield chunk.content as string;
         }
       }
-      this.logger.debug(`[Stream] Завершено. Всего чанков: ${chunkIndex}`);
     } catch (error) {
       this.logger.error(
         `Ошибка при потоковой генерации: ${error.message}`,
