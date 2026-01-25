@@ -710,7 +710,21 @@ export class AdminS3Service {
         // Файлы продуктов сохраняются как products/{uuid}.{ext}
         // Ищем продукт по URL изображения в массиве images
         const fileKey = file.key; // Например: "products/abc-123-def.webp"
-        const fileName = fileKey.split("/").pop() || ""; // Имя файла без пути
+        const fileName = fileKey.split("/").pop() || ""; // Имя файла без пути (например: "abc-123-def.webp")
+        
+        this.logger.debug(`Searching product for file: key=${fileKey}, url=${file.url}, fileName=${fileName}`);
+        
+        // Нормализуем URL для поиска (убираем параметры, trailing slash и т.д.)
+        const normalizeUrl = (url: string) => {
+          try {
+            const urlObj = new URL(url);
+            return `${urlObj.protocol}//${urlObj.host}${urlObj.pathname}`;
+          } catch {
+            return url.split("?")[0].split("#")[0]; // Убираем query и fragment
+          }
+        };
+        
+        const normalizedFileUrl = normalizeUrl(file.url);
         
         // Сначала пробуем точный поиск по полному URL
         let product = await this.productRepository
@@ -718,27 +732,55 @@ export class AdminS3Service {
           .where("product.images @> :url", { url: JSON.stringify([file.url]) })
           .getOne();
         
-        // Если не нашли, ищем по имени файла в URL (более гибкий поиск)
-        // Используем LIKE для поиска по части URL
+        // Если не нашли, пробуем поиск по нормализованному URL
+        if (!product) {
+          product = await this.productRepository
+            .createQueryBuilder("product")
+            .where("product.images IS NOT NULL")
+            .andWhere(
+              `EXISTS (
+                SELECT 1 FROM jsonb_array_elements_text(product.images) AS img_url 
+                WHERE :normalizedUrl = regexp_replace(img_url, '[?#].*', '')
+              )`,
+              { normalizedUrl: normalizedFileUrl }
+            )
+            .getOne();
+        }
+        
+        // Если не нашли, ищем по имени файла в URL (UUID уникален для каждого файла)
         if (!product && fileName) {
           product = await this.productRepository
             .createQueryBuilder("product")
             .where("product.images IS NOT NULL")
-            .andWhere("product.images::text LIKE :fileName", { 
-              fileName: `%${fileName}%` 
-            })
+            .andWhere(
+              `EXISTS (
+                SELECT 1 FROM jsonb_array_elements_text(product.images) AS img_url 
+                WHERE img_url LIKE :fileName
+              )`,
+              { fileName: `%${fileName}%` }
+            )
             .getOne();
         }
         
-        // Если все еще не нашли, пробуем поиск по ключу файла
+        // Если все еще не нашли, пробуем поиск по ключу файла (products/{uuid}.{ext})
         if (!product && fileKey) {
           product = await this.productRepository
             .createQueryBuilder("product")
             .where("product.images IS NOT NULL")
-            .andWhere("product.images::text LIKE :fileKey", { 
-              fileKey: `%${fileKey}%` 
-            })
+            .andWhere(
+              `EXISTS (
+                SELECT 1 FROM jsonb_array_elements_text(product.images) AS img_url 
+                WHERE img_url LIKE :fileKey
+              )`,
+              { fileKey: `%${fileKey}%` }
+            )
             .getOne();
+        }
+        
+        if (product) {
+          this.logger.debug(`Found product: ${product.id} for file: ${fileKey}`);
+        } else {
+          this.logger.warn(`Product not found for file: key=${fileKey}, url=${file.url}, normalizedUrl=${normalizedFileUrl}`);
         }
         
         if (product) {
