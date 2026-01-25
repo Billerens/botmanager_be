@@ -552,7 +552,17 @@ export class CustomPagesService {
       page.assets &&
       page.assets.length > 0
     ) {
-      await this.uploadService.deleteCustomPageBundle(page.assets);
+      this.logger.log(
+        `Removing ${page.assets.length} files from S3 for page ${id}`
+      );
+      await this.uploadService
+        .deleteCustomPageBundle(page.assets)
+        .catch((error) => {
+          this.logger.error(
+            `Failed to remove files from S3 for page ${id}: ${error.message}`
+          );
+          // Не прерываем процесс удаления страницы, даже если удаление файлов не удалось
+        });
     }
 
     // Отправляем уведомление
