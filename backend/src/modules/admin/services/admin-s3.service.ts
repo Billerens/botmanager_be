@@ -19,6 +19,7 @@ export interface FileInfo {
   folder: string;
   entityType?: "shop" | "customPage" | "product" | "category" | "booking" | "message" | "specialist" | "service";
   entityId?: string;
+  isFolder?: boolean; // Флаг для папок
 }
 
 export interface FileEntityInfo {
@@ -110,47 +111,76 @@ export class AdminS3Service {
       let files = result.files;
       const folders = result.folders;
 
+      // Преобразуем папки в FileInfo для отображения в таблице
+      const foldersAsFiles: FileInfo[] = folders.map((folderName) => {
+        // Формируем полный путь папки
+        const folderPath = prefix ? `${prefix}${folderName}` : folderName;
+        return {
+          key: folderPath,
+          url: "", // Папки не имеют URL
+          size: 0,
+          lastModified: new Date(), // Используем текущую дату для папок
+          contentType: "folder",
+          folder: prefix ? prefix.split("/")[0] : folderName,
+          isFolder: true,
+        };
+      });
+
+      // Объединяем файлы и папки
+      let allItems: FileInfo[] = [...foldersAsFiles, ...files];
+
       // Фильтруем по поисковому запросу
       if (search) {
-        files = files.filter((file) =>
-          file.key.toLowerCase().includes(search.toLowerCase())
+        allItems = allItems.filter((item) =>
+          item.key.toLowerCase().includes(search.toLowerCase())
         );
       }
 
-      // Определяем связанные сущности только если нужно
-      let filesWithEntities: FileInfo[];
+      // Определяем связанные сущности только если нужно (только для файлов)
+      let itemsWithEntities: FileInfo[];
       if (loadEntities) {
         // Загружаем entity только для файлов текущей страницы
         const startIndex = (page - 1) * limit;
         const endIndex = startIndex + limit;
-        const pageFiles = files.slice(startIndex, endIndex);
+        const pageItems = allItems.slice(startIndex, endIndex);
 
-        filesWithEntities = await Promise.all(
-          pageFiles.map((file) => this.enrichFileWithEntity(file))
+        itemsWithEntities = await Promise.all(
+          pageItems.map((item) => {
+            if (item.isFolder) {
+              return item; // Папки не имеют entity
+            }
+            return this.enrichFileWithEntity(item);
+          })
         );
       } else {
         // Без entity - просто преобразуем формат
-        filesWithEntities = files.map((file) => ({
-          key: file.key,
-          url: file.url,
-          size: file.size,
-          lastModified: file.lastModified,
-          contentType: file.contentType,
-          folder: file.folder,
+        itemsWithEntities = allItems.map((item) => ({
+          key: item.key,
+          url: item.url,
+          size: item.size,
+          lastModified: item.lastModified,
+          contentType: item.contentType,
+          folder: item.folder,
+          isFolder: item.isFolder,
         }));
       }
 
-      // Сортируем по дате изменения (новые первыми)
-      filesWithEntities.sort(
-        (a, b) => b.lastModified.getTime() - a.lastModified.getTime()
-      );
+      // Сортируем: сначала папки, потом файлы, внутри каждой группы по дате (новые первыми)
+      itemsWithEntities.sort((a, b) => {
+        // Папки всегда идут первыми
+        if (a.isFolder && !b.isFolder) return -1;
+        if (!a.isFolder && b.isFolder) return 1;
+        // Внутри группы сортируем по дате
+        return b.lastModified.getTime() - a.lastModified.getTime();
+      });
 
       // Пагинация
-      const total = files.length;
+      // Учитываем и файлы, и папки в total
+      const total = allItems.length;
       const totalPages = Math.ceil(total / limit);
       const startIndex = (page - 1) * limit;
       const endIndex = startIndex + limit;
-      const items = filesWithEntities.slice(0, limit); // Уже обрезано выше
+      const items = itemsWithEntities.slice(startIndex, endIndex);
 
       return {
         items,
