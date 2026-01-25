@@ -309,20 +309,15 @@ export class AdminS3Service {
       
       // Это файл - получаем метаданные и определяем связь
       // getFileMetadata может обработать как URL, так и ключ S3
-      // Но если это URL, извлекаем ключ напрямую для надежности
-      let fileKey = fileUrlOrPath;
-      if (isUrl) {
-        try {
-          // Извлекаем ключ из URL
-          const url = new URL(fileUrlOrPath);
-          fileKey = url.pathname.substring(1); // Убираем первый слеш
-        } catch (error) {
-          // Если не удалось распарсить URL, используем как есть
-          this.logger.warn(`Failed to parse URL, using as key: ${fileUrlOrPath}`);
-        }
+      // Если это URL, передаем его напрямую в getFileMetadata
+      // Если это ключ, нужно получить URL через getFileUrl
+      let fileUrlForMetadata = fileUrlOrPath;
+      if (!isUrl) {
+        // Если это ключ, получаем URL
+        fileUrlForMetadata = this.s3Service.getFileUrl(fileUrlOrPath);
       }
       
-      const fileMetadata = await this.s3Service.getFileMetadata(fileKey);
+      const fileMetadata = await this.s3Service.getFileMetadata(fileUrlForMetadata);
       const fileInfo: FileInfo = {
         key: fileMetadata.key,
         url: fileMetadata.url,

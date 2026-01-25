@@ -173,8 +173,24 @@ export class S3Service {
    * Извлекает имя файла из URL
    */
   private extractFileNameFromUrl(fileUrl: string): string {
-    const url = new URL(fileUrl);
-    return url.pathname.substring(1); // Убираем первый слеш
+    try {
+      const url = new URL(fileUrl);
+      return url.pathname.substring(1); // Убираем первый слеш
+    } catch (error) {
+      // Если не удалось распарсить как URL, возможно это уже ключ
+      // Или URL содержит специальные символы, которые нужно обработать
+      // Пытаемся извлечь путь вручную
+      if (fileUrl.includes("://")) {
+        // Это похоже на URL, но парсинг не удался
+        // Пытаемся извлечь путь после домена
+        const match = fileUrl.match(/:\/\/[^\/]+(\/.+)/);
+        if (match && match[1]) {
+          return match[1].substring(1); // Убираем первый слеш
+        }
+      }
+      // Если это не URL, возвращаем как есть (возможно, это уже ключ)
+      return fileUrl;
+    }
   }
 
   /**
@@ -332,7 +348,21 @@ export class S3Service {
     folder: string;
   }> {
     try {
-      const key = this.extractFileNameFromUrl(fileUrl);
+      let key: string;
+      
+      // Пытаемся извлечь ключ из URL
+      try {
+        key = this.extractFileNameFromUrl(fileUrl);
+      } catch (error) {
+        // Если не удалось распарсить как URL, возможно это уже ключ
+        // Проверяем, является ли это путем без протокола
+        if (fileUrl.includes("/") && !fileUrl.startsWith("http")) {
+          key = fileUrl;
+        } else {
+          throw new Error(`Invalid URL or key format: ${fileUrl}`);
+        }
+      }
+      
       const folder = key.split("/")[0] || "";
 
       const command = new HeadObjectCommand({
@@ -344,7 +374,7 @@ export class S3Service {
 
       return {
         key,
-        url: fileUrl,
+        url: fileUrl.startsWith("http") ? fileUrl : this.getFileUrl(key),
         size: response.ContentLength || 0,
         lastModified: response.LastModified || new Date(),
         contentType: response.ContentType || "application/octet-stream",
