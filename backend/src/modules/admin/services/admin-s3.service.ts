@@ -28,6 +28,13 @@ export interface FileEntityInfo {
   entity: any;
 }
 
+type EntityType = "shop" | "customPage" | "product" | "category" | "booking" | "message" | "specialist" | "service";
+
+type FolderEntityInfo = {
+  entityType: EntityType;
+  entityId: string;
+};
+
 export interface S3Stats {
   folders: string[];
 }
@@ -532,7 +539,7 @@ export class AdminS3Service {
   /**
    * Определяет связь папки с сущностью по пути папки
    */
-  private async getFolderEntity(folderPath: string): Promise<FileEntityInfo | null> {
+  private async getFolderEntity(folderPath: string): Promise<FolderEntityInfo | null> {
     try {
       // Извлекаем название папки из пути
       const pathParts = folderPath.split("/").filter(Boolean);
@@ -551,7 +558,6 @@ export class AdminS3Service {
           return {
             entityType: "customPage",
             entityId: page.id,
-            entity: null, // Будет загружено в getFileEntity
           };
         }
       } else if (folderName === "products" && subPath) {
@@ -563,7 +569,6 @@ export class AdminS3Service {
           return {
             entityType: "product",
             entityId: product.id,
-            entity: null, // Будет загружено в getFileEntity
           };
         }
       } else if (folderName === "shop-logos") {
