@@ -646,17 +646,11 @@ export class AdminS3Service {
             entityId: page.id,
           };
         }
-      } else if (folderName === "products" && subPath) {
-        // products/{productId} -> product
-        const product = await this.productRepository.findOne({
-          where: { id: subPath },
-        });
-        if (product) {
-          return {
-            entityType: "product",
-            entityId: product.id,
-          };
-        }
+      } else if (folderName === "products") {
+        // Папка products не связана с конкретным продуктом
+        // Файлы продуктов сохраняются как products/{uuid}.{ext} без подпапок
+        // Поэтому папка products сама по себе не имеет связи с сущностью
+        return null;
       } else if (folderName === "shop-logos") {
         // shop-logos -> может быть несколько магазинов, возвращаем null
         return null;
@@ -719,9 +713,9 @@ export class AdminS3Service {
         }
       } else if (folder === "products") {
         // Файлы продуктов сохраняются как products/{uuid}.{ext}
-        // Ищем продукт по ключу файла в массиве images
-        // Используем поиск по ключу (products/{uuid}.{ext}), так как URL могут отличаться (разные домены)
+        // Ищем продукт по URL изображения в массиве images
         const fileKey = file.key; // Например: "products/abc-123-def.webp"
+        const fileName = fileKey.split("/").pop() || ""; // Имя файла без пути
         
         // Сначала пробуем точный поиск по полному URL
         let product = await this.productRepository
@@ -729,19 +723,27 @@ export class AdminS3Service {
           .where("product.images @> :url", { url: JSON.stringify([file.url]) })
           .getOne();
         
-        // Если не нашли, ищем по ключу файла в URL (более гибкий поиск)
-        if (!product) {
-          const allProducts = await this.productRepository.find({
-            where: {},
-          });
-          
-          // Ищем продукт, у которого в массиве images есть URL, содержащий ключ файла
-          product = allProducts.find((p) => 
-            p.images && p.images.some((imgUrl) => {
-              // Проверяем, содержит ли URL ключ файла
-              return imgUrl.includes(fileKey) || imgUrl.endsWith(fileKey.split("/").pop() || "");
+        // Если не нашли, ищем по имени файла в URL (более гибкий поиск)
+        // Используем LIKE для поиска по части URL
+        if (!product && fileName) {
+          product = await this.productRepository
+            .createQueryBuilder("product")
+            .where("product.images IS NOT NULL")
+            .andWhere("product.images::text LIKE :fileName", { 
+              fileName: `%${fileName}%` 
             })
-          ) || null;
+            .getOne();
+        }
+        
+        // Если все еще не нашли, пробуем поиск по ключу файла
+        if (!product && fileKey) {
+          product = await this.productRepository
+            .createQueryBuilder("product")
+            .where("product.images IS NOT NULL")
+            .andWhere("product.images::text LIKE :fileKey", { 
+              fileKey: `%${fileKey}%` 
+            })
+            .getOne();
         }
         
         if (product) {
