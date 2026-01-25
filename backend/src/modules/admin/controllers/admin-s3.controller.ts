@@ -81,6 +81,9 @@ export class AdminS3Controller {
   async getFileEntity(
     @Param("fileUrl") fileUrl: string
   ): Promise<FileEntityInfo | null> {
+    if (!fileUrl || fileUrl.trim() === "") {
+      return null;
+    }
     const decodedFileUrl = decodeURIComponent(fileUrl);
     return await this.adminS3Service.getFileEntity(decodedFileUrl);
   }

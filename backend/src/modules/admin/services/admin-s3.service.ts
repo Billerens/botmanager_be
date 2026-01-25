@@ -280,8 +280,11 @@ export class AdminS3Service {
    */
   async getFileEntity(fileUrlOrPath: string): Promise<FileEntityInfo | null> {
     try {
-      // Если это путь папки (не содержит расширение файла или заканчивается на /), проверяем как папку
-      const isFolder = !fileUrlOrPath.match(/\.\w+$/) || fileUrlOrPath.endsWith("/");
+      // Определяем, является ли входная строка URL или путем
+      const isUrl = fileUrlOrPath.startsWith("http://") || fileUrlOrPath.startsWith("https://");
+      
+      // Если это путь папки (не URL и не содержит расширение файла или заканчивается на /), проверяем как папку
+      const isFolder = !isUrl && ((!fileUrlOrPath.match(/\.\w+$/) && !fileUrlOrPath.includes(".")) || fileUrlOrPath.endsWith("/"));
       
       if (isFolder) {
         // Это папка - определяем связь по пути
@@ -305,7 +308,21 @@ export class AdminS3Service {
       }
       
       // Это файл - получаем метаданные и определяем связь
-      const fileMetadata = await this.s3Service.getFileMetadata(fileUrlOrPath);
+      // getFileMetadata может обработать как URL, так и ключ S3
+      // Но если это URL, извлекаем ключ напрямую для надежности
+      let fileKey = fileUrlOrPath;
+      if (isUrl) {
+        try {
+          // Извлекаем ключ из URL
+          const url = new URL(fileUrlOrPath);
+          fileKey = url.pathname.substring(1); // Убираем первый слеш
+        } catch (error) {
+          // Если не удалось распарсить URL, используем как есть
+          this.logger.warn(`Failed to parse URL, using as key: ${fileUrlOrPath}`);
+        }
+      }
+      
+      const fileMetadata = await this.s3Service.getFileMetadata(fileKey);
       const fileInfo: FileInfo = {
         key: fileMetadata.key,
         url: fileMetadata.url,
