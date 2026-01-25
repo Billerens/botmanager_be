@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Delete,
   Query,
   Param,
   UseGuards,
@@ -102,5 +103,17 @@ export class AdminS3Controller {
       entityId
     );
     return { files };
+  }
+
+  /**
+   * Удаляет файл или папку из S3
+   * DELETE /admin/s3/files/:fileKeyOrUrl
+   */
+  @Delete("files/:fileKeyOrUrl")
+  async deleteFileOrFolder(
+    @Param("fileKeyOrUrl") fileKeyOrUrl: string
+  ): Promise<{ deleted: boolean; message: string }> {
+    const decoded = decodeURIComponent(fileKeyOrUrl);
+    return await this.adminS3Service.deleteFileOrFolder(decoded);
   }
 }

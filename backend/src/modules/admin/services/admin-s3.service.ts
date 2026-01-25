@@ -360,6 +360,75 @@ export class AdminS3Service {
   }
 
   /**
+   * Удаляет файл или папку из S3
+   */
+  async deleteFileOrFolder(fileKeyOrUrl: string): Promise<{ deleted: boolean; message: string }> {
+    try {
+      // Определяем, является ли это URL или ключом
+      const isUrl = fileKeyOrUrl.startsWith("http://") || fileKeyOrUrl.startsWith("https://");
+      let fileKey = fileKeyOrUrl;
+      
+      if (isUrl) {
+        // Извлекаем ключ из URL
+        try {
+          const url = new URL(fileKeyOrUrl);
+          fileKey = url.pathname.substring(1);
+        } catch (error) {
+          this.logger.warn(`Failed to parse URL, using as key: ${fileKeyOrUrl}`);
+        }
+      }
+      
+      // Проверяем, является ли это папкой (заканчивается на / или не имеет расширения)
+      const isFolder = fileKey.endsWith("/") || (!fileKey.match(/\.\w+$/) && !isUrl);
+      
+      if (isFolder) {
+        // Удаляем все файлы в папке
+        const prefix = fileKey.endsWith("/") ? fileKey : `${fileKey}/`;
+        let deletedCount = 0;
+        let continuationToken: string | undefined;
+        
+        do {
+          const result = await this.s3Service.listFiles(prefix, 1000, continuationToken, false);
+          
+          // Удаляем все файлы
+          if (result.files.length > 0) {
+            const fileUrls = result.files.map((f) => f.url);
+            await this.s3Service.deleteMultipleFiles(fileUrls);
+            deletedCount += result.files.length;
+          }
+          
+          continuationToken = result.isTruncated ? result.nextContinuationToken : undefined;
+        } while (continuationToken);
+        
+        this.logger.log(`Deleted folder ${fileKey} with ${deletedCount} files`);
+        return {
+          deleted: true,
+          message: `Папка удалена. Удалено файлов: ${deletedCount}`,
+        };
+      } else {
+        // Удаляем один файл
+        if (isUrl) {
+          await this.s3Service.deleteFile(fileKeyOrUrl);
+        } else {
+          // Если это ключ, нужно получить URL через getFileUrl
+          // Используем публичный метод getFileUrl из S3Service
+          const fileUrl = this.s3Service.getFileUrl(fileKey);
+          await this.s3Service.deleteFile(fileUrl);
+        }
+        
+        this.logger.log(`Deleted file ${fileKey}`);
+        return {
+          deleted: true,
+          message: "Файл удален",
+        };
+      }
+    } catch (error) {
+      this.logger.error(`Error deleting file or folder: ${error.message}`);
+      throw new Error(`Ошибка удаления: ${error.message}`);
+    }
+  }
+
+  /**
    * Получает файлы, связанные с сущностью
    */
   async getEntityFiles(
