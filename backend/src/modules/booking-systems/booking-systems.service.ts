@@ -29,9 +29,11 @@ import {
 } from "../../database/entities/activity-log.entity";
 import { TelegramService } from "../telegram/telegram.service";
 import { SubdomainService } from "../custom-domains/services/subdomain.service";
+import { CustomDomainsService } from "../custom-domains/services/custom-domains.service";
 import {
   SubdomainStatus,
   SubdomainType,
+  DomainTargetType,
 } from "../custom-domains/enums/domain-status.enum";
 
 export interface BookingSystemFilters {
@@ -60,7 +62,9 @@ export class BookingSystemsService {
     @Inject(forwardRef(() => TelegramService))
     private readonly telegramService: TelegramService,
     @Inject(forwardRef(() => SubdomainService))
-    private readonly subdomainService: SubdomainService
+    private readonly subdomainService: SubdomainService,
+    @Inject(forwardRef(() => CustomDomainsService))
+    private readonly customDomainsService: CustomDomainsService
   ) {}
 
   /**
@@ -711,6 +715,31 @@ export class BookingSystemsService {
             `Failed to remove subdomain for booking system ${id}: ${error.message}`
           );
         });
+    }
+
+    // Удаляем связанные кастомные домены
+    try {
+      const customDomains = await this.customDomainsService.getDomainsByTarget(
+        userId,
+        DomainTargetType.BOOKING,
+        id
+      );
+      for (const domain of customDomains) {
+        this.logger.log(
+          `Removing custom domain ${domain.domain} for booking system ${id}`
+        );
+        await this.customDomainsService
+          .deleteDomain(domain.id, userId)
+          .catch((error) => {
+            this.logger.error(
+              `Failed to remove custom domain ${domain.domain} for booking system ${id}: ${error.message}`
+            );
+          });
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error removing custom domains for booking system ${id}: ${error.message}`
+      );
     }
 
     await this.bookingSystemRepository.remove(bookingSystem);

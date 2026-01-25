@@ -32,9 +32,11 @@ import { TelegramService } from "../../telegram/telegram.service";
 import { NotificationService } from "../../websocket/services/notification.service";
 import { NotificationType } from "../../websocket/interfaces/notification.interface";
 import { SubdomainService } from "../../custom-domains/services/subdomain.service";
+import { CustomDomainsService } from "../../custom-domains/services/custom-domains.service";
 import {
   SubdomainStatus,
   SubdomainType,
+  DomainTargetType,
 } from "../../custom-domains/enums/domain-status.enum";
 
 @Injectable()
@@ -55,7 +57,9 @@ export class CustomPagesService {
     private readonly telegramService: TelegramService,
     private readonly notificationService: NotificationService,
     @Inject(forwardRef(() => SubdomainService))
-    private readonly subdomainService: SubdomainService
+    private readonly subdomainService: SubdomainService,
+    @Inject(forwardRef(() => CustomDomainsService))
+    private readonly customDomainsService: CustomDomainsService
   ) {}
 
   // ============================================================
@@ -501,6 +505,46 @@ export class CustomPagesService {
 
     const hadBotCommand = !!page.botCommand;
     const botId = page.botId;
+    const pageSlug = page.slug;
+
+    // Удаляем субдомен если есть
+    if (pageSlug) {
+      this.logger.log(
+        `Removing subdomain before deleting page ${id}: ${pageSlug}.pages`
+      );
+      await this.subdomainService
+        .remove(pageSlug, SubdomainType.PAGE)
+        .catch((error) => {
+          this.logger.error(
+            `Failed to remove subdomain for page ${id}: ${error.message}`
+          );
+        });
+    }
+
+    // Удаляем связанные кастомные домены
+    try {
+      const customDomains = await this.customDomainsService.getDomainsByTarget(
+        userId,
+        DomainTargetType.CUSTOM_PAGE,
+        id
+      );
+      for (const domain of customDomains) {
+        this.logger.log(
+          `Removing custom domain ${domain.domain} for page ${id}`
+        );
+        await this.customDomainsService
+          .deleteDomain(domain.id, userId)
+          .catch((error) => {
+            this.logger.error(
+              `Failed to remove custom domain ${domain.domain} for page ${id}: ${error.message}`
+            );
+          });
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error removing custom domains for page ${id}: ${error.message}`
+      );
+    }
 
     // Удаляем файлы из S3 если это static страница
     if (
