@@ -714,6 +714,9 @@ export class AdminS3Service {
         
         this.logger.debug(`Searching product for file: key=${fileKey}, url=${file.url}, fileName=${fileName}`);
         
+        // Поле images имеет тип json, а не jsonb, поэтому нужно приводить к jsonb для операций
+        // Или использовать json_array_elements для работы с json
+        
         // Нормализуем URL для поиска (убираем параметры, trailing slash и т.д.)
         const normalizeUrl = (url: string) => {
           try {
@@ -726,10 +729,10 @@ export class AdminS3Service {
         
         const normalizedFileUrl = normalizeUrl(file.url);
         
-        // Сначала пробуем точный поиск по полному URL
+        // Сначала пробуем точный поиск по полному URL (приводим json к jsonb)
         let product = await this.productRepository
           .createQueryBuilder("product")
-          .where("product.images @> :url", { url: JSON.stringify([file.url]) })
+          .where("product.images::jsonb @> :url", { url: JSON.stringify([file.url]) })
           .getOne();
         
         // Если не нашли, пробуем поиск по нормализованному URL
@@ -739,8 +742,8 @@ export class AdminS3Service {
             .where("product.images IS NOT NULL")
             .andWhere(
               `EXISTS (
-                SELECT 1 FROM jsonb_array_elements_text(product.images) AS img_url 
-                WHERE :normalizedUrl = regexp_replace(img_url, '[?#].*', '')
+                SELECT 1 FROM json_array_elements_text(product.images::json) AS img_url 
+                WHERE :normalizedUrl = regexp_replace(img_url::text, '[?#].*', '')
               )`,
               { normalizedUrl: normalizedFileUrl }
             )
@@ -754,8 +757,8 @@ export class AdminS3Service {
             .where("product.images IS NOT NULL")
             .andWhere(
               `EXISTS (
-                SELECT 1 FROM jsonb_array_elements_text(product.images) AS img_url 
-                WHERE img_url LIKE :fileName
+                SELECT 1 FROM json_array_elements_text(product.images::json) AS img_url 
+                WHERE img_url::text LIKE :fileName
               )`,
               { fileName: `%${fileName}%` }
             )
@@ -769,8 +772,8 @@ export class AdminS3Service {
             .where("product.images IS NOT NULL")
             .andWhere(
               `EXISTS (
-                SELECT 1 FROM jsonb_array_elements_text(product.images) AS img_url 
-                WHERE img_url LIKE :fileKey
+                SELECT 1 FROM json_array_elements_text(product.images::json) AS img_url 
+                WHERE img_url::text LIKE :fileKey
               )`,
               { fileKey: `%${fileKey}%` }
             )
