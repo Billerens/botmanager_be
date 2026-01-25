@@ -28,22 +28,15 @@ export interface FileEntityInfo {
 }
 
 export interface S3Stats {
-  totalFiles: number;
-  totalSize: number;
-  byFolder: Record<
-    string,
-    {
-      count: number;
-      size: number;
-    }
-  >;
-  byType: Record<
-    string,
-    {
-      count: number;
-      size: number;
-    }
-  >;
+  folders: string[];
+}
+
+export interface FolderItem {
+  name: string;
+  path: string;
+  isFolder: boolean;
+  size?: number;
+  lastModified?: Date;
 }
 
 @Injectable()
@@ -69,61 +62,83 @@ export class AdminS3Service {
   ) {}
 
   /**
-   * Получает список файлов с пагинацией и фильтрами
+   * Получает список папок верхнего уровня
+   */
+  async getFolders(): Promise<string[]> {
+    try {
+      return await this.s3Service.getTopLevelFolders();
+    } catch (error) {
+      this.logger.error(`Error getting folders: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Получает содержимое папки (файлы и подпапки) с пагинацией
+   * Оптимизированная версия - загружает только текущую папку
    */
   async getFiles(params: {
     page?: number;
     limit?: number;
     prefix?: string;
     search?: string;
+    loadEntities?: boolean; // Ленивая загрузка entity
   }): Promise<{
     items: FileInfo[];
+    folders: string[];
     total: number;
     page: number;
     limit: number;
     totalPages: number;
+    hasMore: boolean;
   }> {
     try {
       const page = params.page || 1;
       const limit = params.limit || 50;
-      const prefix = params.prefix;
+      const prefix = params.prefix ? `${params.prefix}/` : undefined;
       const search = params.search;
+      const loadEntities = params.loadEntities !== false; // По умолчанию true для обратной совместимости
 
-      // Получаем файлы из S3
-      let allFiles: FileInfo[] = [];
-      let continuationToken: string | undefined;
-      let hasMore = true;
-      const maxFilesToFetch = 10000; // Ограничение для безопасности
+      // Получаем файлы только из текущей папки с пагинацией на стороне S3
+      const result = await this.s3Service.listFiles(
+        prefix,
+        limit * 2, // Берем немного больше для фильтрации
+        undefined,
+        true // Включаем папки
+      );
 
-      while (hasMore && allFiles.length < maxFilesToFetch) {
-        const result = await this.s3Service.listFiles(
-          prefix,
-          1000,
-          continuationToken
-        );
-
-        allFiles = allFiles.concat(result.files);
-
-        hasMore = result.isTruncated;
-        continuationToken = result.nextContinuationToken;
-
-        // Если указан префикс, не нужно получать все файлы
-        if (prefix) {
-          break;
-        }
-      }
+      let files = result.files;
+      const folders = result.folders;
 
       // Фильтруем по поисковому запросу
       if (search) {
-        allFiles = allFiles.filter((file) =>
+        files = files.filter((file) =>
           file.key.toLowerCase().includes(search.toLowerCase())
         );
       }
 
-      // Определяем связанные сущности для каждого файла
-      const filesWithEntities = await Promise.all(
-        allFiles.map((file) => this.enrichFileWithEntity(file))
-      );
+      // Определяем связанные сущности только если нужно
+      let filesWithEntities: FileInfo[];
+      if (loadEntities) {
+        // Загружаем entity только для файлов текущей страницы
+        const startIndex = (page - 1) * limit;
+        const endIndex = startIndex + limit;
+        const pageFiles = files.slice(startIndex, endIndex);
+
+        filesWithEntities = await Promise.all(
+          pageFiles.map((file) => this.enrichFileWithEntity(file))
+        );
+      } else {
+        // Без entity - просто преобразуем формат
+        filesWithEntities = files.map((file) => ({
+          key: file.key,
+          url: file.url,
+          size: file.size,
+          lastModified: file.lastModified,
+          contentType: file.contentType,
+          folder: file.folder,
+        }));
+      }
 
       // Сортируем по дате изменения (новые первыми)
       filesWithEntities.sort(
@@ -131,18 +146,20 @@ export class AdminS3Service {
       );
 
       // Пагинация
-      const total = filesWithEntities.length;
+      const total = files.length;
       const totalPages = Math.ceil(total / limit);
       const startIndex = (page - 1) * limit;
       const endIndex = startIndex + limit;
-      const items = filesWithEntities.slice(startIndex, endIndex);
+      const items = filesWithEntities.slice(0, limit); // Уже обрезано выше
 
       return {
         items,
+        folders,
         total,
         page,
         limit,
         totalPages,
+        hasMore: result.isTruncated,
       };
     } catch (error) {
       this.logger.error(`Error getting files: ${error.message}`);

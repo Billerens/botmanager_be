@@ -17,21 +17,33 @@ export class AdminS3Controller {
   constructor(private readonly adminS3Service: AdminS3Service) {}
 
   /**
-   * Получает список файлов с пагинацией и фильтрами
-   * GET /admin/s3/files?page=1&limit=50&prefix=products&search=image
+   * Получает список папок верхнего уровня
+   * GET /admin/s3/folders
+   */
+  @Get("folders")
+  async getFolders(): Promise<{ folders: string[] }> {
+    const folders = await this.adminS3Service.getFolders();
+    return { folders };
+  }
+
+  /**
+   * Получает содержимое папки (файлы и подпапки) с пагинацией
+   * GET /admin/s3/files?page=1&limit=50&prefix=products&search=image&loadEntities=false
    */
   @Get("files")
   async getFiles(
     @Query("page", new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query("limit", new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query("prefix") prefix?: string,
-    @Query("search") search?: string
+    @Query("search") search?: string,
+    @Query("loadEntities", new DefaultValuePipe(true)) loadEntities?: boolean
   ) {
     return await this.adminS3Service.getFiles({
       page,
       limit,
       prefix,
       search,
+      loadEntities: loadEntities !== false,
     });
   }
 

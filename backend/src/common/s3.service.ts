@@ -239,16 +239,18 @@ export class S3Service {
   }
 
   /**
-   * Получает список файлов из S3 bucket
+   * Получает список файлов и папок в указанной папке
    * @param prefix Префикс для фильтрации (например, "products/", "shop-logos/")
    * @param maxKeys Максимальное количество файлов для возврата
    * @param continuationToken Токен для пагинации
-   * @returns Список файлов с метаданными
+   * @param includeFolders Включить ли подпапки в результат
+   * @returns Список файлов и папок с метаданными
    */
   async listFiles(
     prefix?: string,
     maxKeys: number = 1000,
-    continuationToken?: string
+    continuationToken?: string,
+    includeFolders: boolean = false
   ): Promise<{
     files: Array<{
       key: string;
@@ -257,7 +259,9 @@ export class S3Service {
       lastModified: Date;
       contentType?: string;
       folder: string;
+      isFolder?: boolean;
     }>;
+    folders: string[];
     isTruncated: boolean;
     nextContinuationToken?: string;
     keyCount: number;
@@ -266,6 +270,7 @@ export class S3Service {
       const command = new ListObjectsV2Command({
         Bucket: this.bucket,
         Prefix: prefix,
+        Delimiter: includeFolders ? "/" : undefined,
         MaxKeys: maxKeys,
         ContinuationToken: continuationToken,
       });
@@ -284,11 +289,25 @@ export class S3Service {
             lastModified: object.LastModified || new Date(),
             contentType: undefined, // ContentType не возвращается в ListObjectsV2
             folder,
+            isFolder: false,
           };
         }) || [];
 
+      // Если запрашиваем папки, получаем их из CommonPrefixes
+      const folders =
+        response.CommonPrefixes?.map((commonPrefix) => {
+          const folderPath = commonPrefix.Prefix || "";
+          // Убираем текущий prefix и слеш в конце
+          let relativePath = folderPath;
+          if (prefix && folderPath.startsWith(prefix)) {
+            relativePath = folderPath.substring(prefix.length);
+          }
+          return relativePath.replace(/\/$/, ""); // Убираем слеш в конце
+        }).filter((folder) => folder.length > 0) || [];
+
       return {
         files,
+        folders,
         isTruncated: response.IsTruncated || false,
         nextContinuationToken: response.NextContinuationToken,
         keyCount: response.KeyCount || 0,
@@ -338,80 +357,48 @@ export class S3Service {
   }
 
   /**
-   * Получает статистику хранилища по папкам
-   * @returns Статистика по папкам
+   * Получает список папок верхнего уровня (быстро, без подсчета файлов)
+   * Использует Delimiter для получения только структуры папок
+   * @returns Список папок
+   */
+  async getTopLevelFolders(): Promise<string[]> {
+    try {
+      const command = new ListObjectsV2Command({
+        Bucket: this.bucket,
+        Delimiter: "/",
+        MaxKeys: 1000,
+      });
+
+      const response = await this.s3Client.send(command);
+
+      // CommonPrefixes содержит папки верхнего уровня
+      const folders =
+        response.CommonPrefixes?.map((prefix) => {
+          const folder = prefix.Prefix || "";
+          return folder.replace("/", ""); // Убираем слеш в конце
+        }).filter((folder) => folder.length > 0) || [];
+
+      return folders;
+    } catch (error) {
+      this.logger.error(`Error getting top level folders: ${error.message}`);
+      throw new Error(`Failed to get folders: ${error.message}`);
+    }
+  }
+
+  /**
+   * Получает упрощенную статистику хранилища (только структура папок)
+   * Быстрая версия без подсчета всех файлов
+   * @returns Упрощенная статистика
    */
   async getStorageStats(): Promise<{
-    totalFiles: number;
-    totalSize: number;
-    byFolder: Record<
-      string,
-      {
-        count: number;
-        size: number;
-      }
-    >;
-    byType: Record<
-      string,
-      {
-        count: number;
-        size: number;
-      }
-    >;
+    folders: string[];
   }> {
     try {
-      const stats = {
-        totalFiles: 0,
-        totalSize: 0,
-        byFolder: {} as Record<
-          string,
-          {
-            count: number;
-            size: number;
-          }
-        >,
-        byType: {} as Record<
-          string,
-          {
-            count: number;
-            size: number;
-          }
-        >,
+      const folders = await this.getTopLevelFolders();
+
+      return {
+        folders,
       };
-
-      let continuationToken: string | undefined;
-      let hasMore = true;
-
-      // Получаем все файлы по частям (пагинация)
-      while (hasMore) {
-        const result = await this.listFiles(undefined, 1000, continuationToken);
-
-        for (const file of result.files) {
-          stats.totalFiles++;
-          stats.totalSize += file.size;
-
-          // Статистика по папкам
-          if (!stats.byFolder[file.folder]) {
-            stats.byFolder[file.folder] = { count: 0, size: 0 };
-          }
-          stats.byFolder[file.folder].count++;
-          stats.byFolder[file.folder].size += file.size;
-
-          // Статистика по типам (определяем по расширению)
-          const extension = file.key.split(".").pop()?.toLowerCase() || "unknown";
-          const type = this.getFileTypeByExtension(extension);
-          if (!stats.byType[type]) {
-            stats.byType[type] = { count: 0, size: 0 };
-          }
-          stats.byType[type].count++;
-          stats.byType[type].size += file.size;
-        }
-
-        hasMore = result.isTruncated;
-        continuationToken = result.nextContinuationToken;
-      }
-
-      return stats;
     } catch (error) {
       this.logger.error(`Error getting storage stats: ${error.message}`);
       throw new Error(`Failed to get storage stats: ${error.message}`);
