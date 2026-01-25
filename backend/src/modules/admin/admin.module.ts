@@ -15,12 +15,18 @@ import { Order } from "../../database/entities/order.entity";
 import { Lead } from "../../database/entities/lead.entity";
 import { CustomPage } from "../../database/entities/custom-page.entity";
 import { BookingSystem } from "../../database/entities/booking-system.entity";
+import { Product } from "../../database/entities/product.entity";
+import { Category } from "../../database/entities/category.entity";
+import { Specialist } from "../../database/entities/specialist.entity";
+import { Service } from "../../database/entities/service.entity";
 
 // Services
 import { AdminAuthService } from "./services/admin-auth.service";
 import { AdminActionLogService } from "./services/admin-action-log.service";
 import { PasswordRotationService } from "./services/password-rotation.service";
 import { AdminTelegramService } from "./services/admin-telegram.service";
+import { AdminS3Service } from "./services/admin-s3.service";
+import { S3Service } from "../../common/s3.service";
 
 // Controllers
 import { AdminAuthController } from "./controllers/admin-auth.controller";
@@ -32,6 +38,7 @@ import { AdminLeadsController } from "./controllers/admin-leads.controller";
 import { AdminLogsController } from "./controllers/admin-logs.controller";
 import { AdminDashboardController } from "./controllers/admin-dashboard.controller";
 import { AdminRedeployController } from "./controllers/admin-redeploy.controller";
+import { AdminS3Controller } from "./controllers/admin-s3.controller";
 
 // Guards & Strategies
 import { AdminJwtGuard } from "./guards/admin-jwt.guard";
@@ -40,6 +47,7 @@ import { AdminJwtStrategy } from "./strategies/admin-jwt.strategy";
 
 // Config
 import adminConfig from "../../config/admin.config";
+import s3Config from "../../config/s3.config";
 
 // Common services
 import { TelegramValidationService } from "../../common/telegram-validation.service";
@@ -50,6 +58,7 @@ import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
 @Module({
   imports: [
     ConfigModule.forFeature(adminConfig),
+    ConfigModule.forFeature(s3Config),
     TypeOrmModule.forFeature([
       Admin,
       AdminActionLog,
@@ -61,6 +70,10 @@ import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
       Lead,
       CustomPage,
       BookingSystem,
+      Product,
+      Category,
+      Specialist,
+      Service,
     ]),
     PassportModule.register({ defaultStrategy: "admin-jwt" }),
     forwardRef(() => CustomDomainsModule),
@@ -88,6 +101,7 @@ import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
     AdminLogsController,
     AdminDashboardController,
     AdminRedeployController,
+    AdminS3Controller,
   ],
   providers: [
     AdminAuthService,
@@ -98,6 +112,8 @@ import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
     AdminJwtGuard,
     AdminRolesGuard,
     TelegramValidationService,
+    S3Service,
+    AdminS3Service,
   ],
   exports: [
     AdminAuthService,
