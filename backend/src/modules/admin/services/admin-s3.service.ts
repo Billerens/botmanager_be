@@ -75,6 +75,56 @@ export class AdminS3Service {
   }
 
   /**
+   * Получает подпапки для указанной папки с ограничением
+   * Оптимизированная версия для дерева - загружает только первые N папок
+   */
+  async getSubfolders(params: {
+    prefix: string;
+    limit?: number;
+    search?: string;
+  }): Promise<{
+    folders: string[];
+    total: number;
+    hasMore: boolean;
+  }> {
+    try {
+      const limit = params.limit || 200; // По умолчанию 200 папок
+      const prefix = params.prefix ? `${params.prefix}/` : undefined;
+      const search = params.search;
+
+      // Получаем папки с ограничением
+      const result = await this.s3Service.listFiles(
+        prefix,
+        limit + 1, // Берем на 1 больше, чтобы определить, есть ли еще
+        undefined,
+        true // Включаем папки
+      );
+
+      let folders = result.folders || [];
+
+      // Фильтруем по поисковому запросу
+      if (search) {
+        folders = folders.filter((folder) =>
+          folder.toLowerCase().includes(search.toLowerCase())
+        );
+      }
+
+      // Определяем, есть ли еще папки
+      const hasMore = result.isTruncated || folders.length > limit;
+      const limitedFolders = folders.slice(0, limit);
+
+      return {
+        folders: limitedFolders,
+        total: folders.length, // Примерное количество (может быть больше)
+        hasMore,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting subfolders: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Получает содержимое папки (файлы и подпапки) с пагинацией
    * Оптимизированная версия - загружает только текущую папку
    */

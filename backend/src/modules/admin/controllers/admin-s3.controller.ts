@@ -27,6 +27,23 @@ export class AdminS3Controller {
   }
 
   /**
+   * Получает подпапки для указанной папки (оптимизированная версия для дерева)
+   * GET /admin/s3/subfolders?prefix=products&limit=200&search=test
+   */
+  @Get("subfolders")
+  async getSubfolders(
+    @Query("prefix") prefix: string,
+    @Query("limit", new DefaultValuePipe(200), ParseIntPipe) limit: number,
+    @Query("search") search?: string
+  ) {
+    return await this.adminS3Service.getSubfolders({
+      prefix,
+      limit,
+      search,
+    });
+  }
+
+  /**
    * Получает содержимое папки (файлы и подпапки) с пагинацией
    * GET /admin/s3/files?page=1&limit=50&prefix=products&search=image&loadEntities=false
    */
