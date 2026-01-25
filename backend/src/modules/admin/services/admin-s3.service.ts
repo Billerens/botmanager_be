@@ -649,11 +649,32 @@ export class AdminS3Service {
           }
         }
       } else if (folder === "products") {
-        // Ищем продукт по URL изображения в массиве images
-        const product = await this.productRepository
+        // Файлы продуктов сохраняются как products/{uuid}.{ext}
+        // Ищем продукт по ключу файла в массиве images
+        // Используем поиск по ключу (products/{uuid}.{ext}), так как URL могут отличаться (разные домены)
+        const fileKey = file.key; // Например: "products/abc-123-def.webp"
+        
+        // Сначала пробуем точный поиск по полному URL
+        let product = await this.productRepository
           .createQueryBuilder("product")
           .where("product.images @> :url", { url: JSON.stringify([file.url]) })
           .getOne();
+        
+        // Если не нашли, ищем по ключу файла в URL (более гибкий поиск)
+        if (!product) {
+          const allProducts = await this.productRepository.find({
+            where: {},
+          });
+          
+          // Ищем продукт, у которого в массиве images есть URL, содержащий ключ файла
+          product = allProducts.find((p) => 
+            p.images && p.images.some((imgUrl) => {
+              // Проверяем, содержит ли URL ключ файла
+              return imgUrl.includes(fileKey) || imgUrl.endsWith(fileKey.split("/").pop() || "");
+            })
+          ) || null;
+        }
+        
         if (product) {
           return {
             ...file,
