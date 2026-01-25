@@ -170,12 +170,31 @@ export class S3Service {
   }
 
   /**
-   * Извлекает имя файла из URL
+   * Извлекает имя файла (ключ) из URL
+   * Учитывает, что URL может иметь формат: endpoint/bucket/key или endpoint/key
    */
   private extractFileNameFromUrl(fileUrl: string): string {
     try {
       const url = new URL(fileUrl);
-      return url.pathname.substring(1); // Убираем первый слеш
+      let pathname = url.pathname;
+      
+      // Убираем первый слеш
+      if (pathname.startsWith("/")) {
+        pathname = pathname.substring(1);
+      }
+      
+      // Если URL содержит bucket в пути (формат: endpoint/bucket/key),
+      // нужно убрать bucket из пути
+      // Проверяем, совпадает ли первая часть пути с bucket
+      const pathParts = pathname.split("/");
+      if (pathParts.length > 0 && pathParts[0] === this.bucket) {
+        // Убираем bucket из пути
+        return pathParts.slice(1).join("/");
+      }
+      
+      // Если bucket не найден в начале пути, возвращаем весь путь
+      // (возможно, это другой формат URL или bucket уже не включен)
+      return pathname;
     } catch (error) {
       // Если не удалось распарсить как URL, возможно это уже ключ
       // Или URL содержит специальные символы, которые нужно обработать
@@ -185,7 +204,16 @@ export class S3Service {
         // Пытаемся извлечь путь после домена
         const match = fileUrl.match(/:\/\/[^\/]+(\/.+)/);
         if (match && match[1]) {
-          return match[1].substring(1); // Убираем первый слеш
+          let pathname = match[1].substring(1); // Убираем первый слеш
+          
+          // Проверяем, совпадает ли первая часть пути с bucket
+          const pathParts = pathname.split("/");
+          if (pathParts.length > 0 && pathParts[0] === this.bucket) {
+            // Убираем bucket из пути
+            return pathParts.slice(1).join("/");
+          }
+          
+          return pathname;
         }
       }
       // Если это не URL, возвращаем как есть (возможно, это уже ключ)
@@ -353,17 +381,31 @@ export class S3Service {
       // Пытаемся извлечь ключ из URL
       try {
         key = this.extractFileNameFromUrl(fileUrl);
+        this.logger.debug(`Extracted key from URL: ${key} (from URL: ${fileUrl})`);
       } catch (error) {
         // Если не удалось распарсить как URL, возможно это уже ключ
         // Проверяем, является ли это путем без протокола
         if (fileUrl.includes("/") && !fileUrl.startsWith("http")) {
           key = fileUrl;
+          this.logger.debug(`Using fileUrl as key directly: ${key}`);
         } else {
+          this.logger.error(`Failed to extract key from URL: ${fileUrl}, error: ${error.message}`);
           throw new Error(`Invalid URL or key format: ${fileUrl}`);
         }
       }
       
+      if (!key || key.trim() === "") {
+        throw new Error(`Empty key extracted from URL: ${fileUrl}`);
+      }
+      
+      // Проверяем, что ключ не равен bucket (это может произойти, если URL имеет нестандартный формат)
+      if (key === this.bucket) {
+        throw new Error(`Extracted key equals bucket name. URL format may be incorrect: ${fileUrl}`);
+      }
+      
       const folder = key.split("/")[0] || "";
+
+      this.logger.debug(`Getting metadata for key: ${key}, bucket: ${this.bucket}`);
 
       const command = new HeadObjectCommand({
         Bucket: this.bucket,
@@ -381,8 +423,22 @@ export class S3Service {
         folder,
       };
     } catch (error) {
-      this.logger.error(`Error getting file metadata: ${error.message}`);
-      throw new Error(`Failed to get file metadata: ${error.message}`);
+      // Улучшаем обработку ошибок AWS SDK
+      let errorMessage = error.message || "UnknownError";
+      
+      // Если это ошибка AWS SDK, извлекаем более подробную информацию
+      if (error.name === "NotFound" || error.$metadata?.httpStatusCode === 404) {
+        errorMessage = `File not found: ${fileUrl}`;
+      } else if (error.name === "Forbidden" || error.$metadata?.httpStatusCode === 403) {
+        errorMessage = `Access denied: ${fileUrl}`;
+      } else if (error.$metadata) {
+        // Логируем метаданные ошибки для отладки
+        this.logger.error(`AWS SDK error details: ${JSON.stringify(error.$metadata)}`);
+        errorMessage = `${error.name || "S3Error"}: ${error.message || "Unknown error"}`;
+      }
+      
+      this.logger.error(`Error getting file metadata for ${fileUrl}: ${errorMessage}`, error.stack);
+      throw new Error(`Failed to get file metadata: ${errorMessage}`);
     }
   }
 
