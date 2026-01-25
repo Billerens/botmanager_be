@@ -195,9 +195,18 @@ export class AdminS3Service {
         const pageItems = allItems.slice(startIndex, endIndex);
 
         itemsWithEntities = await Promise.all(
-          pageItems.map((item) => {
+          pageItems.map(async (item) => {
             if (item.isFolder) {
-              return item; // Папки не имеют entity
+              // Для папок тоже определяем связь
+              const folderEntity = await this.getFolderEntity(item.key);
+              if (folderEntity) {
+                return {
+                  ...item,
+                  entityType: folderEntity.entityType,
+                  entityId: folderEntity.entityId,
+                };
+              }
+              return item;
             }
             return this.enrichFileWithEntity(item);
           })
@@ -260,11 +269,36 @@ export class AdminS3Service {
   }
 
   /**
-   * Определяет связанную сущность по файлу
+   * Определяет связанную сущность по файлу или папке
    */
-  async getFileEntity(fileUrl: string): Promise<FileEntityInfo | null> {
+  async getFileEntity(fileUrlOrPath: string): Promise<FileEntityInfo | null> {
     try {
-      const fileMetadata = await this.s3Service.getFileMetadata(fileUrl);
+      // Если это путь папки (не содержит расширение файла или заканчивается на /), проверяем как папку
+      const isFolder = !fileUrlOrPath.match(/\.\w+$/) || fileUrlOrPath.endsWith("/");
+      
+      if (isFolder) {
+        // Это папка - определяем связь по пути
+        const folderEntity = await this.getFolderEntity(fileUrlOrPath);
+        if (folderEntity) {
+          // Получаем полную информацию о сущности
+          const entity = await this.getEntityById(
+            folderEntity.entityType,
+            folderEntity.entityId
+          );
+          
+          if (entity) {
+            return {
+              entityType: folderEntity.entityType,
+              entityId: folderEntity.entityId,
+              entity,
+            };
+          }
+        }
+        return null;
+      }
+      
+      // Это файл - получаем метаданные и определяем связь
+      const fileMetadata = await this.s3Service.getFileMetadata(fileUrlOrPath);
       const fileInfo: FileInfo = {
         key: fileMetadata.key,
         url: fileMetadata.url,
@@ -492,6 +526,67 @@ export class AdminS3Service {
     } catch (error) {
       this.logger.error(`Error getting entity files: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Определяет связь папки с сущностью по пути папки
+   */
+  private async getFolderEntity(folderPath: string): Promise<FileEntityInfo | null> {
+    try {
+      // Извлекаем название папки из пути
+      const pathParts = folderPath.split("/").filter(Boolean);
+      if (pathParts.length === 0) return null;
+
+      const folderName = pathParts[0];
+      const subPath = pathParts.length > 1 ? pathParts[1] : null;
+
+      // Определяем тип сущности по названию папки
+      if (folderName === "custom-pages" && subPath) {
+        // custom-pages/{pageId} -> customPage
+        const page = await this.customPageRepository.findOne({
+          where: { id: subPath },
+        });
+        if (page) {
+          return {
+            entityType: "customPage",
+            entityId: page.id,
+            entity: null, // Будет загружено в getFileEntity
+          };
+        }
+      } else if (folderName === "products" && subPath) {
+        // products/{productId} -> product
+        const product = await this.productRepository.findOne({
+          where: { id: subPath },
+        });
+        if (product) {
+          return {
+            entityType: "product",
+            entityId: product.id,
+            entity: null, // Будет загружено в getFileEntity
+          };
+        }
+      } else if (folderName === "shop-logos") {
+        // shop-logos -> может быть несколько магазинов, возвращаем null
+        return null;
+      } else if (folderName === "category-images") {
+        // category-images -> может быть несколько категорий
+        return null;
+      } else if (folderName === "booking-logos") {
+        // booking-logos -> может быть несколько систем
+        return null;
+      } else if (folderName === "specialist-avatars") {
+        // specialist-avatars -> может быть несколько специалистов
+        return null;
+      } else if (folderName === "service-images") {
+        // service-images -> может быть несколько услуг
+        return null;
+      }
+
+      return null;
+    } catch (error) {
+      this.logger.warn(`Error determining folder entity: ${error.message}`);
+      return null;
     }
   }
 
