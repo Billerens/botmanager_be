@@ -109,7 +109,26 @@ export class S3Service {
   }
 
   /**
-   * Удаляет файл из S3
+   * Удаляет файл из S3 по ключу (предпочтительный метод)
+   */
+  async deleteFileByKey(fileKey: string): Promise<void> {
+    try {
+      this.logger.debug(`Attempting to delete file by key: ${fileKey}`);
+      const command = new DeleteObjectCommand({
+        Bucket: this.bucket,
+        Key: fileKey,
+      });
+
+      const response = await this.s3Client.send(command);
+      this.logger.log(`File deleted successfully by key: ${fileKey} (Response: ${JSON.stringify(response.$metadata || {})})`);
+    } catch (error) {
+      this.logger.error(`Error deleting file by key ${fileKey}: ${error.message}`, error.stack);
+      throw new Error(`Failed to delete file: ${error.message}`);
+    }
+  }
+
+  /**
+   * Удаляет файл из S3 по URL
    */
   async deleteFile(fileUrl: string): Promise<void> {
     try {
@@ -275,7 +294,15 @@ export class S3Service {
   }
 
   /**
-   * Удаляет несколько файлов
+   * Удаляет несколько файлов по ключам (предпочтительный метод)
+   */
+  async deleteMultipleFilesByKeys(fileKeys: string[]): Promise<void> {
+    const deletePromises = fileKeys.map((key) => this.deleteFileByKey(key));
+    await Promise.all(deletePromises);
+  }
+
+  /**
+   * Удаляет несколько файлов по URL
    */
   async deleteMultipleFiles(fileUrls: string[]): Promise<void> {
     const deletePromises = fileUrls.map((url) => this.deleteFile(url));

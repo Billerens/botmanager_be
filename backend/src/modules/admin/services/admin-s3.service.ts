@@ -389,7 +389,12 @@ export class AdminS3Service {
         let continuationToken: string | undefined;
         let iteration = 0;
         
-        do {
+        // Удаляем все файлы рекурсивно, продолжая до тех пор, пока не останется файлов
+        let hasMoreFiles = true;
+        let maxIterations = 100; // Ограничение для безопасности
+        let consecutiveEmptyIterations = 0;
+        
+        while (hasMoreFiles && iteration < maxIterations) {
           iteration++;
           // Используем includeFolders: false для рекурсивного получения всех файлов
           // Когда Delimiter не установлен (undefined), S3 возвращает все объекты рекурсивно
@@ -398,22 +403,69 @@ export class AdminS3Service {
           this.logger.debug(`Iteration ${iteration}: Found ${result.files.length} files, isTruncated: ${result.isTruncated}`);
           
           // Удаляем все файлы (включая файлы из подпапок)
+          // Используем ключи напрямую, чтобы избежать проблем с кодированием URL
           if (result.files.length > 0) {
-            const fileUrls = result.files.map((f) => f.url);
-            await this.s3Service.deleteMultipleFiles(fileUrls);
+            const fileKeys = result.files.map((f) => f.key);
+            this.logger.debug(`Deleting ${fileKeys.length} files by keys: ${fileKeys.slice(0, 3).join(", ")}${fileKeys.length > 3 ? "..." : ""}`);
+            await this.s3Service.deleteMultipleFilesByKeys(fileKeys);
             deletedCount += result.files.length;
             this.logger.debug(`Deleted ${result.files.length} files from folder ${fileKey}, total: ${deletedCount}`);
+            consecutiveEmptyIterations = 0; // Сбрасываем счетчик пустых итераций
+            
+            // Небольшая задержка для eventual consistency S3
+            if (result.files.length > 0) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+          } else {
+            consecutiveEmptyIterations++;
+            // Если несколько итераций подряд не нашли файлов, прекращаем
+            if (consecutiveEmptyIterations >= 2) {
+              this.logger.debug(`No files found for ${consecutiveEmptyIterations} consecutive iterations, stopping`);
+              break;
+            }
           }
           
           // Продолжаем пагинацию, если есть еще файлы
-          continuationToken = result.isTruncated ? result.nextContinuationToken : undefined;
-          
-          // Защита от бесконечного цикла
-          if (iteration > 1000) {
-            this.logger.warn(`Too many iterations (${iteration}), breaking loop`);
-            break;
+          if (result.isTruncated && result.nextContinuationToken) {
+            continuationToken = result.nextContinuationToken;
+            hasMoreFiles = true;
+          } else {
+            // Если пагинация закончилась, проверяем еще раз, не осталось ли файлов
+            // Это важно, так как S3 может не вернуть все файлы за один запрос
+            continuationToken = undefined;
+            if (result.files.length === 0) {
+              // Делаем еще одну проверку, чтобы убедиться, что все файлы удалены
+              const verifyResult = await this.s3Service.listFiles(prefix, 1000, undefined, false);
+              if (verifyResult.files.length === 0) {
+                hasMoreFiles = false;
+                this.logger.debug(`Verification: No more files found in folder ${fileKey}`);
+              } else {
+                this.logger.debug(`Verification: Found ${verifyResult.files.length} more files, continuing deletion`);
+                hasMoreFiles = true;
+                continuationToken = undefined; // Начинаем заново
+              }
+            } else {
+              hasMoreFiles = false;
+            }
           }
-        } while (continuationToken);
+        }
+        
+        if (iteration >= maxIterations) {
+          this.logger.warn(`Reached maximum iterations (${maxIterations}), stopping deletion`);
+        }
+        
+        // Финальная проверка после всех удалений (для eventual consistency S3)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const finalCheck = await this.s3Service.listFiles(prefix, 1000, undefined, false);
+        if (finalCheck.files.length > 0) {
+          this.logger.warn(`Final check: Still found ${finalCheck.files.length} files in folder ${fileKey} after deletion`);
+          // Пытаемся удалить оставшиеся файлы
+          const remainingKeys = finalCheck.files.map((f) => f.key);
+          this.logger.debug(`Attempting to delete remaining ${remainingKeys.length} files: ${remainingKeys.slice(0, 3).join(", ")}${remainingKeys.length > 3 ? "..." : ""}`);
+          await this.s3Service.deleteMultipleFilesByKeys(remainingKeys);
+          deletedCount += remainingKeys.length;
+          this.logger.log(`Deleted additional ${remainingKeys.length} files in final check`);
+        }
         
         this.logger.log(`Deleted folder ${fileKey} with ${deletedCount} files in ${iteration} iteration(s)`);
         return {
