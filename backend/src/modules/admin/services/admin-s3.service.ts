@@ -374,28 +374,48 @@ export class AdminS3Service {
       }
       
       // Проверяем, является ли это папкой (заканчивается на / или не имеет расширения)
-      const isFolder = fileKey.endsWith("/") || (!fileKey.match(/\.\w+$/) && !isUrl);
+      // Также проверяем, есть ли в пути слеши, что может указывать на папку
+      const hasFileExtension = fileKey.match(/\.\w+$/);
+      const isFolder = fileKey.endsWith("/") || (!hasFileExtension && !isUrl && fileKey.includes("/"));
       
       if (isFolder) {
-        // Удаляем все файлы в папке
-        const prefix = fileKey.endsWith("/") ? fileKey : `${fileKey}/`;
+        // Удаляем все файлы в папке рекурсивно (включая файлы из подпапок)
+        // Нормализуем prefix: убираем trailing slash если есть, затем добавляем его обратно
+        let normalizedKey = fileKey.endsWith("/") ? fileKey.slice(0, -1) : fileKey;
+        const prefix = `${normalizedKey}/`;
+        
+        this.logger.log(`Deleting folder with prefix: ${prefix}`);
         let deletedCount = 0;
         let continuationToken: string | undefined;
+        let iteration = 0;
         
         do {
+          iteration++;
+          // Используем includeFolders: false для рекурсивного получения всех файлов
+          // Когда Delimiter не установлен (undefined), S3 возвращает все объекты рекурсивно
           const result = await this.s3Service.listFiles(prefix, 1000, continuationToken, false);
           
-          // Удаляем все файлы
+          this.logger.debug(`Iteration ${iteration}: Found ${result.files.length} files, isTruncated: ${result.isTruncated}`);
+          
+          // Удаляем все файлы (включая файлы из подпапок)
           if (result.files.length > 0) {
             const fileUrls = result.files.map((f) => f.url);
             await this.s3Service.deleteMultipleFiles(fileUrls);
             deletedCount += result.files.length;
+            this.logger.debug(`Deleted ${result.files.length} files from folder ${fileKey}, total: ${deletedCount}`);
           }
           
+          // Продолжаем пагинацию, если есть еще файлы
           continuationToken = result.isTruncated ? result.nextContinuationToken : undefined;
+          
+          // Защита от бесконечного цикла
+          if (iteration > 1000) {
+            this.logger.warn(`Too many iterations (${iteration}), breaking loop`);
+            break;
+          }
         } while (continuationToken);
         
-        this.logger.log(`Deleted folder ${fileKey} with ${deletedCount} files`);
+        this.logger.log(`Deleted folder ${fileKey} with ${deletedCount} files in ${iteration} iteration(s)`);
         return {
           deleted: true,
           message: `Папка удалена. Удалено файлов: ${deletedCount}`,
