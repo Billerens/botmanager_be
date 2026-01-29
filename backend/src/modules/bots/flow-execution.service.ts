@@ -132,7 +132,7 @@ export class FlowExecutionService implements OnModuleInit {
     private readonly aiSingleNodeHandler: AiSingleNodeHandler,
     private readonly aiChatNodeHandler: AiChatNodeHandler,
     // Payment handler
-    private readonly paymentNodeHandler: PaymentNodeHandler
+    private readonly paymentNodeHandler: PaymentNodeHandler,
   ) {
     // Регистрируем все обработчики
     this.registerNodeHandlers();
@@ -144,7 +144,7 @@ export class FlowExecutionService implements OnModuleInit {
       () => {
         this.cleanupSessions();
       },
-      24 * 60 * 60 * 1000
+      24 * 60 * 60 * 1000,
     );
   }
 
@@ -153,75 +153,75 @@ export class FlowExecutionService implements OnModuleInit {
     this.nodeHandlerService.registerHandler("message", this.messageNodeHandler);
     this.nodeHandlerService.registerHandler(
       "keyboard",
-      this.keyboardNodeHandler
+      this.keyboardNodeHandler,
     );
     this.nodeHandlerService.registerHandler(
       "condition",
-      this.conditionNodeHandler
+      this.conditionNodeHandler,
     );
     this.nodeHandlerService.registerHandler("end", this.endNodeHandler);
     this.nodeHandlerService.registerHandler("form", this.formNodeHandler);
     this.nodeHandlerService.registerHandler("delay", this.delayNodeHandler);
     this.nodeHandlerService.registerHandler(
       "variable",
-      this.variableNodeHandler
+      this.variableNodeHandler,
     );
     this.nodeHandlerService.registerHandler("file", this.fileNodeHandler);
     this.nodeHandlerService.registerHandler("random", this.randomNodeHandler);
     this.nodeHandlerService.registerHandler("webhook", this.webhookNodeHandler);
     this.nodeHandlerService.registerHandler(
       "integration",
-      this.integrationNodeHandler
+      this.integrationNodeHandler,
     );
     this.nodeHandlerService.registerHandler(
       "new_message",
-      this.newMessageNodeHandler
+      this.newMessageNodeHandler,
     );
     this.nodeHandlerService.registerHandler(
       "endpoint",
-      this.endpointNodeHandler
+      this.endpointNodeHandler,
     );
     this.nodeHandlerService.registerHandler(
       "broadcast",
-      this.broadcastNodeHandler
+      this.broadcastNodeHandler,
     );
     this.nodeHandlerService.registerHandler(
       "database",
-      this.databaseNodeHandler
+      this.databaseNodeHandler,
     );
     this.nodeHandlerService.registerHandler(
       "location",
-      this.locationNodeHandler
+      this.locationNodeHandler,
     );
     this.nodeHandlerService.registerHandler(
       "calculator",
-      this.calculatorNodeHandler
+      this.calculatorNodeHandler,
     );
     this.nodeHandlerService.registerHandler(
       "transform",
-      this.transformNodeHandler
+      this.transformNodeHandler,
     );
     // Group handlers
     this.nodeHandlerService.registerHandler(
       "group_create",
-      this.groupCreateNodeHandler
+      this.groupCreateNodeHandler,
     );
     this.nodeHandlerService.registerHandler(
       "group_join",
-      this.groupJoinNodeHandler
+      this.groupJoinNodeHandler,
     );
     this.nodeHandlerService.registerHandler(
       "group_action",
-      this.groupActionNodeHandler
+      this.groupActionNodeHandler,
     );
     this.nodeHandlerService.registerHandler(
       "group_leave",
-      this.groupLeaveNodeHandler
+      this.groupLeaveNodeHandler,
     );
     // AI handlers
     this.nodeHandlerService.registerHandler(
       "ai_single",
-      this.aiSingleNodeHandler
+      this.aiSingleNodeHandler,
     );
     this.nodeHandlerService.registerHandler("ai_chat", this.aiChatNodeHandler);
 
@@ -280,7 +280,7 @@ export class FlowExecutionService implements OnModuleInit {
       // Получаем или создаем сессию пользователя
       let sessionData = await this.sessionStorageService.getSession(
         bot.id,
-        userId
+        userId,
       );
       let session: UserSession;
 
@@ -303,10 +303,10 @@ export class FlowExecutionService implements OnModuleInit {
         await this.sessionStorageService.saveSession(sessionData);
       } else {
         this.logger.log(
-          `Найдена существующая сессия для пользователя ${userId}`
+          `Найдена существующая сессия для пользователя ${userId}`,
         );
         this.logger.log(
-          `Текущий узел: ${sessionData.currentNodeId || "не установлен"}`
+          `Текущий узел: ${sessionData.currentNodeId || "не установлен"}`,
         );
         session = {
           userId: sessionData.userId,
@@ -335,7 +335,7 @@ export class FlowExecutionService implements OnModuleInit {
       this.logger.log(`Flow содержит ${activeFlow.nodes.length} узлов:`);
       activeFlow.nodes.forEach((node, index) => {
         this.logger.log(
-          `  ${index + 1}. ID: ${node.nodeId}, Type: "${node.type}", Name: "${node.name}"`
+          `  ${index + 1}. ID: ${node.nodeId}, Type: "${node.type}", Name: "${node.name}"`,
         );
       });
 
@@ -343,7 +343,7 @@ export class FlowExecutionService implements OnModuleInit {
       let groupSession = null;
       if (session.lobbyData?.groupSessionId) {
         groupSession = await this.groupSessionService.findById(
-          session.lobbyData.groupSessionId
+          session.lobbyData.groupSessionId,
         );
       }
 
@@ -368,7 +368,7 @@ export class FlowExecutionService implements OnModuleInit {
         if (message.text === "/start") {
           this.logger.log(`Сообщение "/start" - ищем START узел`);
           const startNode = activeFlow.nodes.find(
-            (node) => node.type === "start"
+            (node) => node.type === "start",
           );
           if (startNode) {
             this.logger.log(`Найден START узел: ${startNode.nodeId}`);
@@ -385,14 +385,14 @@ export class FlowExecutionService implements OnModuleInit {
           });
 
           this.logger.log(
-            `Получена команда "/shop". Shop привязан: ${!!shop}, buttonTypes=${JSON.stringify(shop?.buttonTypes)}`
+            `Получена команда "/shop". Shop привязан: ${!!shop}, buttonTypes=${JSON.stringify(shop?.buttonTypes)}`,
           );
 
           if (!shop) {
             this.logger.warn(`У бота ${bot.id} нет привязанного магазина`);
           } else if (!shop.buttonTypes?.includes("command")) {
             this.logger.warn(
-              `В настройках магазина ${shop.id} не включена команда /shop. buttonTypes=${JSON.stringify(shop.buttonTypes)}`
+              `В настройках магазина ${shop.id} не включена команда /shop. buttonTypes=${JSON.stringify(shop.buttonTypes)}`,
             );
           } else {
             // Все условия выполнены - открываем магазин
@@ -408,39 +408,43 @@ export class FlowExecutionService implements OnModuleInit {
           });
 
           this.logger.log(
-            `Получена команда "/booking". BookingSystem привязан: ${!!bookingSystem}, buttonTypes=${JSON.stringify(bookingSystem?.buttonTypes)}`
+            `Получена команда "/booking". BookingSystem привязан: ${!!bookingSystem}, buttonTypes=${JSON.stringify(bookingSystem?.buttonTypes)}`,
           );
 
           if (!bookingSystem) {
-            this.logger.warn(`У бота ${bot.id} нет привязанной системы бронирования`);
+            this.logger.warn(
+              `У бота ${bot.id} нет привязанной системы бронирования`,
+            );
           } else if (!bookingSystem.buttonTypes?.includes("command")) {
             this.logger.warn(
-              `В настройках системы бронирования ${bookingSystem.id} не включена команда /booking. buttonTypes=${JSON.stringify(bookingSystem.buttonTypes)}`
+              `В настройках системы бронирования ${bookingSystem.id} не включена команда /booking. buttonTypes=${JSON.stringify(bookingSystem.buttonTypes)}`,
             );
           } else {
             // Все условия выполнены - открываем бронирование
-            this.logger.log(`Команда "/booking" - открываем бронирование ${bookingSystem.id}`);
+            this.logger.log(
+              `Команда "/booking" - открываем бронирование ${bookingSystem.id}`,
+            );
             await this.handleBookingCommand(bot, bookingSystem, message);
             return; // Не обрабатываем через flow
           }
         } else if (message.text && message.text.startsWith("/")) {
           // Проверяем, является ли это командой custom page
           this.logger.log(
-            `Получена команда "${message.text}". Проверяем, является ли это командой custom page`
+            `Получена команда "${message.text}". Проверяем, является ли это командой custom page`,
           );
           const pageUrl = await this.customPagesBotService.getPageUrlByCommand(
             bot.id,
-            message.text
+            message.text,
           );
           if (pageUrl) {
             this.logger.log(
-              `Найдена custom page для команды "${message.text}": ${pageUrl}`
+              `Найдена custom page для команды "${message.text}": ${pageUrl}`,
             );
             await this.handleCustomPageCommand(bot, message, pageUrl);
             return; // Не обрабатываем через flow
           } else {
             this.logger.log(
-              `Команда "${message.text}" не является командой custom page`
+              `Команда "${message.text}" не является командой custom page`,
             );
           }
         } else {
@@ -448,11 +452,11 @@ export class FlowExecutionService implements OnModuleInit {
           // Для других сообщений ищем подходящий NEW_MESSAGE узел
           const newMessageNode = await this.findMatchingNewMessageNode(
             activeFlow,
-            message
+            message,
           );
           if (newMessageNode) {
             this.logger.log(
-              `Найден подходящий NEW_MESSAGE узел: ${newMessageNode.nodeId}`
+              `Найден подходящий NEW_MESSAGE узел: ${newMessageNode.nodeId}`,
             );
             context.currentNode = newMessageNode;
             session.currentNodeId = newMessageNode.nodeId;
@@ -464,22 +468,22 @@ export class FlowExecutionService implements OnModuleInit {
         this.logger.log(`Продолжаем с текущего узла: ${session.currentNodeId}`);
         // Продолжаем с текущего узла
         context.currentNode = activeFlow.nodes.find(
-          (node) => node.nodeId === session.currentNodeId
+          (node) => node.nodeId === session.currentNodeId,
         );
         if (context.currentNode) {
           this.logger.log(
-            `Найден текущий узел: ${context.currentNode.nodeId}, тип: "${context.currentNode.type}"`
+            `Найден текущий узел: ${context.currentNode.nodeId}, тип: "${context.currentNode.type}"`,
           );
         } else {
           this.logger.error(
-            `Текущий узел ${session.currentNodeId} не найден в flow!`
+            `Текущий узел ${session.currentNodeId} не найден в flow!`,
           );
         }
       }
 
       if (!context.currentNode) {
         this.logger.warn(
-          `Не найден узел для выполнения в flow ${activeFlow.id}`
+          `Не найден узел для выполнения в flow ${activeFlow.id}`,
         );
         return;
       }
@@ -498,7 +502,7 @@ export class FlowExecutionService implements OnModuleInit {
     if (!currentNode) return;
 
     this.logger.log(
-      `Выполняем узел ${currentNode.type} (${currentNode.nodeId})`
+      `Выполняем узел ${currentNode.type} (${currentNode.nodeId})`,
     );
 
     try {
@@ -532,17 +536,17 @@ export class FlowExecutionService implements OnModuleInit {
   // Поиск подходящего NEW_MESSAGE узла
   private async findMatchingNewMessageNode(
     flow: BotFlow,
-    message: any
+    message: any,
   ): Promise<BotFlowNode | null> {
     this.logger.log(`Ищем NEW_MESSAGE узлы для сообщения: "${message.text}"`);
 
     const newMessageNodes = flow.nodes.filter(
-      (node) => node.type === "new_message"
+      (node) => node.type === "new_message",
     );
 
     const executionStatus = await this.getFlowExecutionStatus(
       flow.botId,
-      message.from.id
+      message.from.id,
     );
     if (executionStatus.isExecuting) {
       return null;
@@ -553,11 +557,11 @@ export class FlowExecutionService implements OnModuleInit {
     // Фильтруем только те узлы, которые являются начальным условием своей ветки
     // (не имеют входящих связей от других узлов, кроме START)
     const startNodes = newMessageNodes.filter((node) =>
-      this.isBranchStartNode(flow, node)
+      this.isBranchStartNode(flow, node),
     );
 
     this.logger.log(
-      `Найдено ${startNodes.length} NEW_MESSAGE узлов, являющихся начальными условиями веток`
+      `Найдено ${startNodes.length} NEW_MESSAGE узлов, являющихся начальными условиями веток`,
     );
 
     // Сначала ищем узлы с точным соответствием текста
@@ -566,7 +570,7 @@ export class FlowExecutionService implements OnModuleInit {
 
     for (const node of startNodes) {
       this.logger.log(
-        `Проверяем узел ${node.nodeId}: ${JSON.stringify(node.data?.newMessage)}`
+        `Проверяем узел ${node.nodeId}: ${JSON.stringify(node.data?.newMessage)}`,
       );
 
       const newMessageData = node.data?.newMessage;
@@ -580,7 +584,7 @@ export class FlowExecutionService implements OnModuleInit {
       let isExactMatch = false;
 
       this.logger.log(
-        `Фильтр узла: text="${text}", contentType="${contentType}", caseSensitive=${caseSensitive}`
+        `Фильтр узла: text="${text}", contentType="${contentType}", caseSensitive=${caseSensitive}`,
       );
 
       // Проверяем текст сообщения
@@ -606,7 +610,7 @@ export class FlowExecutionService implements OnModuleInit {
       if (contentType && contentType !== "text") {
         const messageContentType = this.getMessageContentType(message);
         this.logger.log(
-          `Сравнение типа контента: "${messageContentType}" vs "${contentType}"`
+          `Сравнение типа контента: "${messageContentType}" vs "${contentType}"`,
         );
 
         if (messageContentType !== contentType) {
@@ -619,17 +623,17 @@ export class FlowExecutionService implements OnModuleInit {
         if (isExactMatch) {
           exactMatches.push(node);
           this.logger.log(
-            `Узел ${node.nodeId} - точное совпадение для сообщения "${message.text}"`
+            `Узел ${node.nodeId} - точное совпадение для сообщения "${message.text}"`,
           );
         } else {
           fallbackMatches.push(node);
           this.logger.log(
-            `Узел ${node.nodeId} - общий узел для сообщения "${message.text}"`
+            `Узел ${node.nodeId} - общий узел для сообщения "${message.text}"`,
           );
         }
       } else {
         this.logger.log(
-          `Узел ${node.nodeId} не подходит для сообщения "${message.text}"`
+          `Узел ${node.nodeId} не подходит для сообщения "${message.text}"`,
         );
       }
     }
@@ -637,7 +641,7 @@ export class FlowExecutionService implements OnModuleInit {
     // Приоритет: сначала точные совпадения, потом общие
     if (exactMatches.length > 0) {
       this.logger.log(
-        `Выбран узел с точным совпадением: ${exactMatches[0].nodeId}`
+        `Выбран узел с точным совпадением: ${exactMatches[0].nodeId}`,
       );
       return exactMatches[0];
     } else if (fallbackMatches.length > 0) {
@@ -646,7 +650,7 @@ export class FlowExecutionService implements OnModuleInit {
     }
 
     this.logger.log(
-      `Не найден подходящий NEW_MESSAGE узел для сообщения "${message.text}"`
+      `Не найден подходящий NEW_MESSAGE узел для сообщения "${message.text}"`,
     );
     return null;
   }
@@ -689,7 +693,7 @@ export class FlowExecutionService implements OnModuleInit {
       for (const sessionData of activeSessions) {
         await this.sessionStorageService.deleteSession(
           botId,
-          sessionData.userId
+          sessionData.userId,
         );
         deletedCount++;
       }
@@ -706,7 +710,7 @@ export class FlowExecutionService implements OnModuleInit {
   saveEndpointData(
     botId: string,
     nodeId: string,
-    data: Record<string, any>
+    data: Record<string, any>,
   ): void {
     const key = `${botId}-${nodeId}`;
     const existingData = this.endpointDataStore.get(key);
@@ -718,7 +722,7 @@ export class FlowExecutionService implements OnModuleInit {
     });
 
     this.logger.log(
-      `Данные эндпоинта сохранены в глобальное хранилище: ${key}`
+      `Данные эндпоинта сохранены в глобальное хранилище: ${key}`,
     );
   }
 
@@ -738,7 +742,7 @@ export class FlowExecutionService implements OnModuleInit {
    */
   async getFlowExecutionStatus(
     botId: string,
-    userId: string
+    userId: string,
   ): Promise<{
     isExecuting: boolean;
     currentNodeId?: string;
@@ -781,7 +785,7 @@ export class FlowExecutionService implements OnModuleInit {
     }
 
     const currentNode = activeFlow.nodes.find(
-      (node) => node.nodeId === session.currentNodeId
+      (node) => node.nodeId === session.currentNodeId,
     );
 
     if (!currentNode) {
@@ -812,11 +816,11 @@ export class FlowExecutionService implements OnModuleInit {
    */
   async getUserSession(
     botId: string,
-    userId: string
+    userId: string,
   ): Promise<UserSession | undefined> {
     const sessionData = await this.sessionStorageService.getSession(
       botId,
-      userId
+      userId,
     );
     if (!sessionData) return undefined;
 
@@ -837,17 +841,17 @@ export class FlowExecutionService implements OnModuleInit {
   async continueFlowFromEndpoint(
     botId: string,
     userId: string,
-    nodeId: string
+    nodeId: string,
   ): Promise<void> {
     try {
       const sessionData = await this.sessionStorageService.getSession(
         botId,
-        userId
+        userId,
       );
 
       if (!sessionData) {
         this.logger.warn(
-          `Сессия не найдена для продолжения flow: ${botId}-${userId}`
+          `Сессия не найдена для продолжения flow: ${botId}-${userId}`,
         );
         return;
       }
@@ -855,12 +859,12 @@ export class FlowExecutionService implements OnModuleInit {
       // Проверяем, что текущая нода - это endpoint нода, на которой остановился flow
       if (sessionData.currentNodeId !== nodeId) {
         this.logger.warn(
-          `Текущая нода ${sessionData.currentNodeId} не совпадает с endpoint нодой ${nodeId}`
+          `Текущая нода ${sessionData.currentNodeId} не совпадает с endpoint нодой ${nodeId}`,
         );
       }
 
       this.logger.log(
-        `Продолжение flow для пользователя ${userId} с ноды ${nodeId}`
+        `Продолжение flow для пользователя ${userId} с ноды ${nodeId}`,
       );
 
       // Создаем объект session для совместимости
@@ -887,7 +891,7 @@ export class FlowExecutionService implements OnModuleInit {
 
       // Находим текущую ноду
       const currentNode = activeFlow.nodes.find(
-        (node) => node.nodeId === nodeId
+        (node) => node.nodeId === nodeId,
       );
 
       if (!currentNode) {
@@ -929,12 +933,12 @@ export class FlowExecutionService implements OnModuleInit {
       await handler.execute(context);
 
       this.logger.log(
-        `Flow успешно продолжен для пользователя ${userId} с ноды ${nodeId}`
+        `Flow успешно продолжен для пользователя ${userId} с ноды ${nodeId}`,
       );
     } catch (error) {
       this.logger.error(
         `Ошибка при продолжении flow с endpoint ноды: ${error.message}`,
-        error.stack
+        error.stack,
       );
     }
   }
@@ -952,7 +956,7 @@ export class FlowExecutionService implements OnModuleInit {
     // Если нет входящих связей - узел является начальным условием ветки
     if (incomingEdges.length === 0) {
       this.logger.log(
-        `Узел ${node.nodeId} не имеет входящих связей - является начальным условием ветки`
+        `Узел ${node.nodeId} не имеет входящих связей - является начальным условием ветки`,
       );
       return true;
     }
@@ -964,7 +968,7 @@ export class FlowExecutionService implements OnModuleInit {
 
       if (!isFromStart) {
         this.logger.log(
-          `Узел ${node.nodeId} имеет входящую связь от узла ${edge.source} типа "${sourceNode?.type}" - не является начальным условием ветки`
+          `Узел ${node.nodeId} имеет входящую связь от узла ${edge.source} типа "${sourceNode?.type}" - не является начальным условием ветки`,
         );
       }
 
@@ -973,7 +977,7 @@ export class FlowExecutionService implements OnModuleInit {
 
     if (allFromStart) {
       this.logger.log(
-        `Узел ${node.nodeId} имеет входящие связи только от START узлов - является начальным условием ветки`
+        `Узел ${node.nodeId} имеет входящие связи только от START узлов - является начальным условием ветки`,
       );
     }
 
@@ -999,12 +1003,12 @@ export class FlowExecutionService implements OnModuleInit {
   private async handleShopCommand(
     bot: any,
     shop: Shop,
-    message: any
+    message: any,
   ): Promise<void> {
     try {
       const shopUrl =
         shop.url ||
-        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/shop/${shop.id}`;
+        `${process.env.EXTERNAL_FRONTEND_URL || "https://uforge.online"}/shop/${shop.id}`;
 
       // Расшифровываем токен бота
       const decryptedToken = this.botsService.decryptToken(bot.token);
@@ -1035,11 +1039,11 @@ export class FlowExecutionService implements OnModuleInit {
         decryptedToken,
         message.chat.id.toString(),
         messageText,
-        { reply_markup: keyboard }
+        { reply_markup: keyboard },
       );
 
       this.logger.log(
-        `Отправлено сообщение с магазином ${shop.id} для пользователя ${message.from.id}`
+        `Отправлено сообщение с магазином ${shop.id} для пользователя ${message.from.id}`,
       );
     } catch (error) {
       this.logger.error(`Ошибка при обработке команды /shop: ${error.message}`);
@@ -1049,11 +1053,15 @@ export class FlowExecutionService implements OnModuleInit {
   /**
    * Обрабатывает команду /booking для открытия системы бронирования
    */
-  private async handleBookingCommand(bot: any, bookingSystem: BookingSystem, message: any): Promise<void> {
+  private async handleBookingCommand(
+    bot: any,
+    bookingSystem: BookingSystem,
+    message: any,
+  ): Promise<void> {
     try {
       const bookingUrl =
         bookingSystem.url ||
-        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/booking-system/${bookingSystem.id}`;
+        `${process.env.EXTERNAL_FRONTEND_URL || "https://uforge.online"}/booking/${bookingSystem.id}`;
 
       // Расшифровываем токен бота
       const decryptedToken = this.botsService.decryptToken(bot.token);
@@ -1084,15 +1092,15 @@ export class FlowExecutionService implements OnModuleInit {
         decryptedToken,
         message.chat.id.toString(),
         messageText,
-        { reply_markup: keyboard }
+        { reply_markup: keyboard },
       );
 
       this.logger.log(
-        `Отправлено сообщение с бронированием для пользователя ${message.from.id}`
+        `Отправлено сообщение с бронированием для пользователя ${message.from.id}`,
       );
     } catch (error) {
       this.logger.error(
-        `Ошибка при обработке команды /booking: ${error.message}`
+        `Ошибка при обработке команды /booking: ${error.message}`,
       );
     }
   }
@@ -1103,7 +1111,7 @@ export class FlowExecutionService implements OnModuleInit {
   private async handleCustomPageCommand(
     bot: any,
     message: any,
-    pageUrl: string
+    pageUrl: string,
   ): Promise<void> {
     try {
       // Расшифровываем токен бота
@@ -1129,15 +1137,15 @@ export class FlowExecutionService implements OnModuleInit {
         decryptedToken,
         message.chat.id.toString(),
         messageText,
-        { reply_markup: keyboard }
+        { reply_markup: keyboard },
       );
 
       this.logger.log(
-        `Отправлено сообщение с custom page для пользователя ${message.from.id}: ${pageUrl}`
+        `Отправлено сообщение с custom page для пользователя ${message.from.id}: ${pageUrl}`,
       );
     } catch (error) {
       this.logger.error(
-        `Ошибка при обработке команды custom page: ${error.message}`
+        `Ошибка при обработке команды custom page: ${error.message}`,
       );
     }
   }

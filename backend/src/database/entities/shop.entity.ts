@@ -144,9 +144,9 @@ export class Shop {
 
   // Вычисляемые свойства
   get url(): string {
-    const frontendUrl =
-      process.env.FRONTEND_URL || "https://botmanagertest.online";
-    return `${frontendUrl}/shop/${this.id}`;
+    const externalFrontendUrl =
+      process.env.EXTERNAL_FRONTEND_URL || "https://uforge.online";
+    return `${externalFrontendUrl}/shop/${this.id}`;
   }
 
   /**

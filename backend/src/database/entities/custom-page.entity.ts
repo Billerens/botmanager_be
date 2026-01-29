@@ -165,10 +165,10 @@ export class CustomPage {
    * URL страницы - по slug (если есть) или по ID
    */
   get url(): string {
-    const frontendUrl =
-      process.env.FRONTEND_URL || "https://botmanagertest.online";
+    const externalFrontendUrl =
+      process.env.EXTERNAL_FRONTEND_URL || "https://uforge.online";
     const identifier = this.slug || this.id;
-    return `${frontendUrl}/pages/${identifier}`;
+    return `${externalFrontendUrl}/pages/${identifier}`;
   }
 
   /**

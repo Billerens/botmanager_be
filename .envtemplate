@@ -88,8 +88,11 @@ LOKI_HOST=http://localhost:3100
 # ===========================================
 # ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ
 # ===========================================
-# URL фронтенда для WebSocket соединений
+# URL фронтенда для WebSocket соединений (основной админ-панель)
 FRONTEND_URL=http://localhost:3001
+
+# URL внешнего фронтенда для shop, booking и custom pages (Next.js проект)
+EXTERNAL_FRONTEND_URL=http://localhost:3002
 
 # Хост для привязки сервера (опционально)
 HOST=localhost
@@ -135,7 +138,7 @@ TIMEWEB_API_TOKEN=
 # REDIS_PASSWORD=your-production-redis-password
 # JWT_SECRET=your-production-jwt-secret-min-32-characters-long
 # JWT_REFRESH_SECRET=your-production-refresh-secret-min-32-characters-long
-# CORS_ORIGIN=https://yourdomain.com,https://www.yourdomain.com
+# CORS_ORIGIN=https://app.yourdomain.com,https://ext.yourdomain.com
 # WEBHOOK_BASE_URL=https://api.yourdomain.com
 # ENCRYPTION_KEY=your-production-32-character-encryption-key
 # SMTP_HOST=your-smtp-server.com
@@ -144,4 +147,5 @@ TIMEWEB_API_TOKEN=
 # SMTP_PASS=your-smtp-password
 # SMTP_FROM=noreply@yourdomain.com
 # LOG_LEVEL=info
-# FRONTEND_URL=https://yourdomain.com
+# FRONTEND_URL=https://app.yourdomain.com
+# EXTERNAL_FRONTEND_URL=https://uforge.yourdomain.com

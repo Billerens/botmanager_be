@@ -74,11 +74,11 @@ export class TelegramService {
 
   constructor(
     private configService: ConfigService,
-    private customPagesBotService: CustomPagesBotService
+    private customPagesBotService: CustomPagesBotService,
   ) {
     this.baseUrl = this.configService.get<string>(
       "TELEGRAM_BOT_API_URL",
-      "https://api.telegram.org/bot"
+      "https://api.telegram.org/bot",
     );
   }
 
@@ -90,11 +90,11 @@ export class TelegramService {
       console.error("Ошибка получения информации о боте:", error.message);
       console.error(
         "Ошибка получения информации о боте:",
-        error.response?.data
+        error.response?.data,
       );
       console.error(
         "Ошибка получения информации о боте:",
-        `${this.baseUrl}${token}/getMe`
+        `${this.baseUrl}${token}/getMe`,
       );
 
       return null;
@@ -119,7 +119,7 @@ export class TelegramService {
         webhookUrl: `${this.configService.get("app.webhookBaseUrl")}/telegram/webhook/${botId}`,
       });
       throw new BadRequestException(
-        `Ошибка установки webhook: ${error.response?.data?.description || error.message}`
+        `Ошибка установки webhook: ${error.response?.data?.description || error.message}`,
       );
     }
   }
@@ -127,7 +127,7 @@ export class TelegramService {
   async deleteWebhook(token: string): Promise<boolean> {
     try {
       const response = await axios.post(
-        `${this.baseUrl}${token}/deleteWebhook`
+        `${this.baseUrl}${token}/deleteWebhook`,
       );
       return response.data.ok;
     } catch (error) {
@@ -140,7 +140,7 @@ export class TelegramService {
     token: string,
     bot: Bot,
     shop: Shop | null = null,
-    bookingSystem: BookingSystem | null = null
+    bookingSystem: BookingSystem | null = null,
   ): Promise<boolean> {
     try {
       const commands = [
@@ -179,7 +179,7 @@ export class TelegramService {
       } catch (error) {
         console.error(
           `Ошибка при добавлении команд custom pages для бота ${bot.id}:`,
-          error.message
+          error.message,
         );
       }
 
@@ -188,7 +188,7 @@ export class TelegramService {
         {
           commands: commands,
           scope: { type: "default" },
-        }
+        },
       );
 
       // Определяем, какой Menu Button должен быть активен
@@ -231,7 +231,7 @@ export class TelegramService {
 
       const shopUrl =
         shop.url ||
-        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/shop/${shop.id}`;
+        `${process.env.EXTERNAL_FRONTEND_URL || "https://uforge.online"}/shop/${shop.id}`;
 
       await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {
         menu_button: {
@@ -252,12 +252,12 @@ export class TelegramService {
    */
   private async setBookingSystemMenuButton(
     token: string,
-    bookingSystem: BookingSystem
+    bookingSystem: BookingSystem,
   ): Promise<void> {
     try {
       if (!token || token.trim() === "") {
         console.error(
-          "Ошибка установки BookingSystem Menu Button: пустой токен"
+          "Ошибка установки BookingSystem Menu Button: пустой токен",
         );
         return;
       }
@@ -267,7 +267,7 @@ export class TelegramService {
 
       const bookingUrl =
         bookingSystem.url ||
-        `${process.env.FRONTEND_URL || "https://botmanagertest.online"}/booking-system/${bookingSystem.id}`;
+        `${process.env.EXTERNAL_FRONTEND_URL || "https://uforge.online"}/booking/${bookingSystem.id}`;
 
       await axios.post(`${this.baseUrl}${token}/setChatMenuButton`, {
         menu_button: {
@@ -281,7 +281,7 @@ export class TelegramService {
     } catch (error) {
       console.error(
         "Ошибка установки BookingSystem Menu Button:",
-        error.message
+        error.message,
       );
     }
   }
@@ -313,7 +313,7 @@ export class TelegramService {
       reply_markup?: any;
       reply_to_message_id?: number;
       disable_web_page_preview?: boolean;
-    } = {}
+    } = {},
   ): Promise<any> {
     try {
       // Очищаем HTML если используется HTML parse_mode
@@ -343,7 +343,7 @@ export class TelegramService {
           token,
           chatId,
           text,
-          plainOptions
+          plainOptions,
         );
         return results.length > 0 ? results[0] : null;
       }
@@ -363,7 +363,7 @@ export class TelegramService {
 
       console.error(
         "Ошибка отправки сообщения:",
-        error.response?.data?.description || error.message
+        error.response?.data?.description || error.message,
       );
       return null;
     }
@@ -382,7 +382,7 @@ export class TelegramService {
       reply_markup?: any;
       reply_to_message_id?: number;
       disable_web_page_preview?: boolean;
-    } = {}
+    } = {},
   ): Promise<any[]> {
     // Очищаем HTML если используется HTML parse_mode
     let processedText = text;
@@ -400,7 +400,7 @@ export class TelegramService {
         token,
         chatId,
         processedText,
-        options
+        options,
       );
       return result ? [result] : [];
     }
@@ -463,7 +463,7 @@ export class TelegramService {
     // Удаляем все неподдерживаемые теги, но сохраняем их содержимое
     sanitized = sanitized.replace(
       /<\/?(?!\/?(b|i|u|s|a|code|pre)\b)[^>]*>/gi,
-      ""
+      "",
     );
 
     // Удаляем лишние пробелы в начале и конце
@@ -517,7 +517,7 @@ export class TelegramService {
       parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
       reply_markup?: any;
       reply_to_message_id?: number;
-    } = {}
+    } = {},
   ): Promise<any> {
     try {
       const formData = new FormData();
@@ -554,7 +554,7 @@ export class TelegramService {
       if (options.reply_to_message_id) {
         formData.append(
           "reply_to_message_id",
-          options.reply_to_message_id.toString()
+          options.reply_to_message_id.toString(),
         );
       }
 
@@ -565,7 +565,7 @@ export class TelegramService {
           headers: {
             ...formData.getHeaders(),
           },
-        }
+        },
       );
 
       return response.data.ok ? response.data.result : null;
@@ -588,7 +588,7 @@ export class TelegramService {
       parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
       reply_markup?: any;
       reply_to_message_id?: number;
-    } = {}
+    } = {},
   ): Promise<any> {
     try {
       const formData = new FormData();
@@ -612,7 +612,7 @@ export class TelegramService {
       if (options.reply_to_message_id) {
         formData.append(
           "reply_to_message_id",
-          options.reply_to_message_id.toString()
+          options.reply_to_message_id.toString(),
         );
       }
 
@@ -623,7 +623,7 @@ export class TelegramService {
           headers: {
             ...formData.getHeaders(),
           },
-        }
+        },
       );
 
       return response.data.ok ? response.data.result : null;
@@ -650,7 +650,7 @@ export class TelegramService {
       | "upload_document"
       | "find_location"
       | "record_video_note"
-      | "upload_video_note"
+      | "upload_video_note",
   ): Promise<boolean> {
     try {
       const response = await axios.post(
@@ -658,7 +658,7 @@ export class TelegramService {
         {
           chat_id: chatId,
           action,
-        }
+        },
       );
       return response.data.ok;
     } catch (error) {
@@ -675,7 +675,7 @@ export class TelegramService {
       show_alert?: boolean;
       url?: string;
       cache_time?: number;
-    } = {}
+    } = {},
   ): Promise<boolean> {
     try {
       const response = await axios.post(
@@ -683,7 +683,7 @@ export class TelegramService {
         {
           callback_query_id: callbackQueryId,
           ...options,
-        }
+        },
       );
 
       return response.data.ok;
@@ -701,7 +701,7 @@ export class TelegramService {
     options: {
       parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
       reply_markup?: any;
-    } = {}
+    } = {},
   ): Promise<boolean> {
     try {
       const response = await axios.post(
@@ -711,7 +711,7 @@ export class TelegramService {
           message_id: messageId,
           text,
           ...options,
-        }
+        },
       );
 
       return response.data.ok;
@@ -724,7 +724,7 @@ export class TelegramService {
   async deleteMessage(
     token: string,
     chatId: string,
-    messageId: number
+    messageId: number,
   ): Promise<boolean> {
     try {
       const response = await axios.post(
@@ -732,7 +732,7 @@ export class TelegramService {
         {
           chat_id: chatId,
           message_id: messageId,
-        }
+        },
       );
 
       return response.data.ok;
@@ -744,11 +744,11 @@ export class TelegramService {
 
   async getFile(
     token: string,
-    fileId: string
+    fileId: string,
   ): Promise<{ file_path: string } | null> {
     try {
       const response = await axios.get(
-        `${this.baseUrl}${token}/getFile?file_id=${fileId}`
+        `${this.baseUrl}${token}/getFile?file_id=${fileId}`,
       );
       return response.data.result;
     } catch (error) {
@@ -763,7 +763,7 @@ export class TelegramService {
         `https://api.telegram.org/file/bot${token}/${filePath}`,
         {
           responseType: "arraybuffer",
-        }
+        },
       );
       return Buffer.from(response.data);
     } catch (error) {

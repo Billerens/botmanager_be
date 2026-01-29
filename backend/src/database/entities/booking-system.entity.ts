@@ -158,9 +158,9 @@ export class BookingSystem {
 
   // Вычисляемые свойства
   get url(): string {
-    const frontendUrl =
-      process.env.FRONTEND_URL || "https://botmanagertest.online";
-    return `${frontendUrl}/booking-system/${this.id}`;
+    const externalFrontendUrl =
+      process.env.EXTERNAL_FRONTEND_URL || "https://uforge.online";
+    return `${externalFrontendUrl}/booking/${this.id}`;
   }
 
   /**
