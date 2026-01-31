@@ -157,7 +157,19 @@ export class BookingSystemsService {
       }
     }
 
-    return queryBuilder.getMany();
+    const list = await queryBuilder.getMany();
+    // Добавляем значения геттеров (геттеры не сериализуются в JSON при ответе API)
+    return list.map((bs) => ({
+      ...bs,
+      url: bs.url,
+      publicUrl: bs.publicUrl,
+      isActive: bs.isActive,
+      hasBot: bs.hasBot,
+      displayName: bs.displayName,
+      hasActiveSubdomain: bs.hasActiveSubdomain,
+      isSubdomainPending: bs.isSubdomainPending,
+      defaultSettings: bs.defaultSettings,
+    })) as BookingSystem[];
   }
 
   /**
