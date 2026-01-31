@@ -169,6 +169,12 @@ export class CustomPageResponseDto {
     example: "https://botmanagertest.online/pages/contacts",
   })
   url: string;
+
+  @ApiPropertyOptional({
+    description: "URL субдомена (если настроен и активен)",
+    example: "contacts.pages.botmanagertest.online",
+  })
+  subdomainUrl?: string;
 }
 
 export class PublicCustomPageResponseDto {

@@ -1102,6 +1102,7 @@ export class CustomPagesService {
       createdAt: page.createdAt,
       updatedAt: page.updatedAt,
       url: page.url,
+      subdomainUrl: page.subdomainUrl ?? undefined,
     };
   }
 
