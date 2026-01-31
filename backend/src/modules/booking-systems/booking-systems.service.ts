@@ -158,7 +158,15 @@ export class BookingSystemsService {
     }
 
     const list = await queryBuilder.getMany();
-    // Добавляем значения геттеров (геттеры не сериализуются в JSON при ответе API)
+    const domainMap =
+      list.length > 0
+        ? await this.customDomainsService.getDomainsByTargetIds(
+            userId,
+            DomainTargetType.BOOKING,
+            list.map((bs) => bs.id),
+          )
+        : new Map();
+    // Добавляем значения геттеров и кастомные домены (геттеры не сериализуются в JSON)
     return list.map((bs) => ({
       ...bs,
       url: bs.url,
@@ -169,7 +177,8 @@ export class BookingSystemsService {
       hasActiveSubdomain: bs.hasActiveSubdomain,
       isSubdomainPending: bs.isSubdomainPending,
       defaultSettings: bs.defaultSettings,
-    })) as BookingSystem[];
+      customDomains: domainMap.get(bs.id) ?? [],
+    })) as (BookingSystem & { customDomains: { domain: string; url: string; status: string }[] })[];
   }
 
   /**

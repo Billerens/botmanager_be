@@ -175,6 +175,20 @@ export class CustomPageResponseDto {
     example: "contacts.pages.botmanagertest.online",
   })
   subdomainUrl?: string;
+
+  @ApiPropertyOptional({
+    description: "Кастомные домены страницы (домен, URL, статус)",
+    type: "array",
+    items: {
+      type: "object",
+      properties: {
+        domain: { type: "string", example: "page.example.com" },
+        url: { type: "string", example: "https://page.example.com" },
+        status: { type: "string", example: "active" },
+      },
+    },
+  })
+  customDomains?: { domain: string; url: string; status: string }[];
 }
 
 export class PublicCustomPageResponseDto {

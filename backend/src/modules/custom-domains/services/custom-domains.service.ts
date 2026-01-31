@@ -100,6 +100,56 @@ export class CustomDomainsService {
   }
 
   /**
+   * Получить кастомные домены для нескольких сущностей одного типа (батч для списков).
+   * Возвращает Map<targetId, { domain, url, status }[]>.
+   */
+  async getDomainsByTargetIds(
+    userId: string,
+    targetType: DomainTargetType,
+    targetIds: string[],
+  ): Promise<Map<string, { domain: string; url: string; status: string }[]>> {
+    const map = new Map<
+      string,
+      { domain: string; url: string; status: string }[]
+    >();
+    if (targetIds.length === 0) return map;
+
+    let whereClause: Record<string, any> = { userId };
+    switch (targetType) {
+      case DomainTargetType.SHOP:
+        whereClause.shopId = In(targetIds);
+        break;
+      case DomainTargetType.BOOKING:
+        whereClause.bookingId = In(targetIds);
+        break;
+      case DomainTargetType.CUSTOM_PAGE:
+        whereClause.customPageId = In(targetIds);
+        break;
+      default:
+        return map;
+    }
+
+    const domains = await this.domainsRepo.find({
+      where: whereClause,
+      select: ["domain", "status", "shopId", "bookingId", "customPageId"],
+    });
+
+    for (const d of domains) {
+      const targetId =
+        d.shopId ?? d.bookingId ?? d.customPageId ?? null;
+      if (!targetId) continue;
+      const list = map.get(targetId) ?? [];
+      list.push({
+        domain: d.domain,
+        url: `https://${d.domain}`,
+        status: d.status,
+      });
+      map.set(targetId, list);
+    }
+    return map;
+  }
+
+  /**
    * Получить домен по ID
    */
   async getDomainById(id: string, userId: string): Promise<DomainResponseDto> {

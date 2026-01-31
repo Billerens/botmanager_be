@@ -21,6 +21,8 @@ import {
 } from "@nestjs/swagger";
 
 import { ShopsService } from "./shops.service";
+import { CustomDomainsService } from "../custom-domains/services/custom-domains.service";
+import { DomainTargetType } from "../custom-domains/enums/domain-status.enum";
 import { ProductsService } from "../products/products.service";
 import { CategoriesService } from "../categories/categories.service";
 import { OrdersService } from "../orders/orders.service";
@@ -60,6 +62,7 @@ import { OrderStatus } from "../../database/entities/order.entity";
 export class ShopsController {
   constructor(
     private readonly shopsService: ShopsService,
+    private readonly customDomainsService: CustomDomainsService,
     private readonly productsService: ProductsService,
     private readonly categoriesService: CategoriesService,
     private readonly ordersService: OrdersService,
@@ -103,7 +106,18 @@ export class ShopsController {
   })
   async findAll(@Request() req, @Query() filters: ShopFiltersDto) {
     const shops = await this.shopsService.findAll(req.user.id, filters);
-    return shops.map((shop) => this.formatShopResponse(shop));
+    const domainMap =
+      shops.length > 0
+        ? await this.customDomainsService.getDomainsByTargetIds(
+            req.user.id,
+            DomainTargetType.SHOP,
+            shops.map((s) => s.id),
+          )
+        : new Map();
+    return shops.map((shop) => ({
+      ...this.formatShopResponse(shop),
+      customDomains: domainMap.get(shop.id) ?? [],
+    }));
   }
 
   @Get("by-bot/:botId")

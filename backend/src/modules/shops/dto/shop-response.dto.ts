@@ -162,6 +162,20 @@ export class ShopResponseDto {
     type: SubdomainInfoDto,
   })
   subdomain?: SubdomainInfoDto;
+
+  @ApiPropertyOptional({
+    description: "Кастомные домены магазина (домен, URL, статус)",
+    type: "array",
+    items: {
+      type: "object",
+      properties: {
+        domain: { type: "string" },
+        url: { type: "string" },
+        status: { type: "string" },
+      },
+    },
+  })
+  customDomains?: { domain: string; url: string; status: string }[];
 }
 
 /**

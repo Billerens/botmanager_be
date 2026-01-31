@@ -216,7 +216,19 @@ export class CustomPagesService {
       order: { createdAt: "DESC" },
     });
 
-    return pages.map((page) => this.toResponseDto(page));
+    const domainMap =
+      pages.length > 0
+        ? await this.customDomainsService.getDomainsByTargetIds(
+            userId,
+            DomainTargetType.CUSTOM_PAGE,
+            pages.map((p) => p.id),
+          )
+        : new Map();
+
+    return pages.map((page) => ({
+      ...this.toResponseDto(page),
+      customDomains: domainMap.get(page.id) ?? [],
+    }));
   }
 
   /**
@@ -241,7 +253,19 @@ export class CustomPagesService {
       order: { createdAt: "DESC" },
     });
 
-    return pages.map((page) => this.toResponseDto(page));
+    const domainMap =
+      pages.length > 0
+        ? await this.customDomainsService.getDomainsByTargetIds(
+            userId,
+            DomainTargetType.CUSTOM_PAGE,
+            pages.map((p) => p.id),
+          )
+        : new Map();
+
+    return pages.map((page) => ({
+      ...this.toResponseDto(page),
+      customDomains: domainMap.get(page.id) ?? [],
+    }));
   }
 
   /**
@@ -266,7 +290,19 @@ export class CustomPagesService {
       order: { createdAt: "DESC" },
     });
 
-    return pages.map((page) => this.toResponseDto(page));
+    const domainMap =
+      pages.length > 0
+        ? await this.customDomainsService.getDomainsByTargetIds(
+            userId,
+            DomainTargetType.CUSTOM_PAGE,
+            pages.map((p) => p.id),
+          )
+        : new Map();
+
+    return pages.map((page) => ({
+      ...this.toResponseDto(page),
+      customDomains: domainMap.get(page.id) ?? [],
+    }));
   }
 
   /**
