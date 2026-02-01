@@ -5,7 +5,7 @@ setlocal enabledelayedexpansion
 :main
 cls
 echo ========================================
-echo   BotManager Development Environment
+echo   UForge Development Environment
 echo ========================================
 echo.
 echo Выберите конфигурацию для запуска:

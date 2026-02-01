@@ -13,7 +13,7 @@ import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { AssistantBotService, TelegramUpdate } from "./assistant-bot.service";
 
 /**
- * Контроллер для бота-ассистента BotManager
+ * Контроллер для бота-ассистента UForge
  * Обрабатывает webhook'и от Telegram для бота-помощника
  */
 @ApiTags("Assistant Bot")
@@ -32,7 +32,7 @@ export class AssistantBotController {
       ok: true,
       message: "Assistant Bot webhook endpoint is accessible",
       timestamp: new Date().toISOString(),
-      service: "BotManager Assistant Bot",
+      service: "UForge Assistant Bot",
     };
   }
 

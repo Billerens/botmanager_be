@@ -442,7 +442,7 @@ async function bootstrap() {
 
   // Swagger документация
   const config = new DocumentBuilder()
-    .setTitle("BotManager API")
+    .setTitle("UForge API")
     .setDescription("API для управления Telegram-ботами")
     .setVersion("1.0")
     .addBearerAuth()
@@ -541,7 +541,7 @@ async function bootstrap() {
   const port = configService.get("app.port") || process.env.PORT || 3000;
   await app.listen(port, "0.0.0.0");
 
-  console.log(`🚀 BotManager API запущен на порту ${port}`);
+  console.log(`🚀 UForge API запущен на порту ${port}`);
   console.log(
     `📚 Swagger документация: http://${configService.get("app.host") || process.env.HOST || "localhost"}:${port}/api/docs`
   );

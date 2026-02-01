@@ -58,7 +58,9 @@ export class AdminAuthService {
     loginDto: AdminLoginDto,
     ipAddress?: string,
     userAgent?: string
-  ): Promise<AdminLoginResponseDto | { requiresTwoFactor: boolean; adminId: string }> {
+  ): Promise<
+    AdminLoginResponseDto | { requiresTwoFactor: boolean; adminId: string }
+  > {
     const { username, password, twoFactorCode } = loginDto;
 
     // Проверяем блокировку по IP
@@ -92,7 +94,9 @@ export class AdminAuthService {
       const isCodeValid = this.verifyTwoFactorCode(admin, twoFactorCode);
       if (!isCodeValid) {
         await this.recordFailedLogin(username, ipAddress, userAgent, admin.id);
-        throw new UnauthorizedException("Неверный код двухфакторной аутентификации");
+        throw new UnauthorizedException(
+          "Неверный код двухфакторной аутентификации"
+        );
       }
     }
 
@@ -142,7 +146,11 @@ export class AdminAuthService {
     };
   }
 
-  async logout(admin: Admin, ipAddress?: string, userAgent?: string): Promise<void> {
+  async logout(
+    admin: Admin,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<void> {
     await this.actionLogService.create({
       adminId: admin.id,
       actionType: AdminActionType.LOGOUT,
@@ -159,7 +167,9 @@ export class AdminAuthService {
   ): Promise<Admin> {
     // Проверяем права (только superadmin может создавать админов)
     if (createdBy.role !== AdminRole.SUPERADMIN) {
-      throw new ForbiddenException("Только суперадмин может создавать администраторов");
+      throw new ForbiddenException(
+        "Только суперадмин может создавать администраторов"
+      );
     }
 
     // Проверяем уникальность username
@@ -167,7 +177,9 @@ export class AdminAuthService {
       where: { username: createDto.username },
     });
     if (existingByUsername) {
-      throw new ConflictException("Администратор с таким username уже существует");
+      throw new ConflictException(
+        "Администратор с таким username уже существует"
+      );
     }
 
     // Проверяем уникальность telegramId
@@ -175,7 +187,9 @@ export class AdminAuthService {
       where: { telegramId: createDto.telegramId },
     });
     if (existingByTelegram) {
-      throw new ConflictException("Администратор с таким Telegram ID уже существует");
+      throw new ConflictException(
+        "Администратор с таким Telegram ID уже существует"
+      );
     }
 
     // Создаем админа
@@ -210,7 +224,9 @@ export class AdminAuthService {
     updateDto: UpdateAdminDto,
     updatedBy: Admin
   ): Promise<Admin> {
-    const admin = await this.adminRepository.findOne({ where: { id: adminId } });
+    const admin = await this.adminRepository.findOne({
+      where: { id: adminId },
+    });
     if (!admin) {
       throw new BadRequestException("Администратор не найден");
     }
@@ -290,15 +306,14 @@ export class AdminAuthService {
     });
   }
 
-  async resetAdminPassword(
-    adminId: string,
-    resetBy: Admin
-  ): Promise<string> {
+  async resetAdminPassword(adminId: string, resetBy: Admin): Promise<string> {
     if (resetBy.role !== AdminRole.SUPERADMIN) {
       throw new ForbiddenException("Только суперадмин может сбрасывать пароли");
     }
 
-    const admin = await this.adminRepository.findOne({ where: { id: adminId } });
+    const admin = await this.adminRepository.findOne({
+      where: { id: adminId },
+    });
     if (!admin) {
       throw new BadRequestException("Администратор не найден");
     }
@@ -331,7 +346,7 @@ export class AdminAuthService {
   async setupTwoFactor(admin: Admin): Promise<TwoFactorSetupResponseDto> {
     // Генерируем секрет
     const secret = speakeasy.generateSecret({
-      name: `BotManager Admin (${admin.username})`,
+      name: `UForge Admin (${admin.username})`,
       length: 32,
     });
 
@@ -427,10 +442,14 @@ export class AdminAuthService {
 
   async deleteAdmin(adminId: string, deletedBy: Admin): Promise<void> {
     if (deletedBy.role !== AdminRole.SUPERADMIN) {
-      throw new ForbiddenException("Только суперадмин может удалять администраторов");
+      throw new ForbiddenException(
+        "Только суперадмин может удалять администраторов"
+      );
     }
 
-    const admin = await this.adminRepository.findOne({ where: { id: adminId } });
+    const admin = await this.adminRepository.findOne({
+      where: { id: adminId },
+    });
     if (!admin) {
       throw new BadRequestException("Администратор не найден");
     }
@@ -569,4 +588,3 @@ export class AdminAuthService {
     });
   }
 }
-

@@ -13,7 +13,7 @@ export class HealthController {
   getRoot() {
     return {
       status: "ok",
-      message: "BotManager API is running",
+      message: "UForge API is running",
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
     };
@@ -28,7 +28,7 @@ export class HealthController {
   getHealth() {
     return {
       status: "ok",
-      message: "BotManager API is healthy",
+      message: "UForge API is healthy",
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       environment: process.env.NODE_ENV || "development",
@@ -45,4 +45,3 @@ export class HealthController {
     return { message: "pong" };
   }
 }
-

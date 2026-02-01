@@ -28,7 +28,7 @@ export class TelegramValidationService {
     }
 
     try {
-      const message = `🔐 Код подтверждения для BotManager\n\nВаш код: <b>${code}</b>\n\nКод действителен 1 минуту.`;
+      const message = `🔐 Код подтверждения для UForge\n\nВаш код: <b>${code}</b>\n\nКод действителен 1 минуту.`;
 
       const response = await axios.post(
         `https://api.telegram.org/bot${this.botToken}/sendMessage`,
@@ -82,7 +82,9 @@ export class TelegramValidationService {
       );
 
       if (response.data.ok) {
-        this.logger.log(`Сообщение отправлено в Telegram для ID: ${telegramId}`);
+        this.logger.log(
+          `Сообщение отправлено в Telegram для ID: ${telegramId}`
+        );
         return true;
       } else {
         this.logger.error(
@@ -109,7 +111,7 @@ export class TelegramValidationService {
 
     try {
       const greeting = firstName ? `, ${firstName}` : "";
-      const message = `🎉 Добро пожаловать в BotManager${greeting}!\n\nВаш аккаунт успешно подтвержден. Теперь вы можете создавать и управлять своими Telegram ботами.`;
+      const message = `🎉 Добро пожаловать в UForge${greeting}!\n\nВаш аккаунт успешно подтвержден. Теперь вы можете создавать и управлять своими Telegram ботами.`;
 
       const response = await axios.post(
         `https://api.telegram.org/bot${this.botToken}/sendMessage`,

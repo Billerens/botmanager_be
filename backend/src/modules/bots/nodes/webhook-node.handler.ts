@@ -88,7 +88,7 @@ export class WebhookNodeHandler extends BaseNodeHandler {
         timeout: (timeout || 30) * 1000, // Конвертируем секунды в миллисекунды
         headers: {
           "Content-Type": "application/json",
-          "User-Agent": "BotManager-Webhook/1.0",
+          "User-Agent": "UForge-Webhook/1.0",
           ...processedHeaders,
         },
         validateStatus: (status) => status < 500, // Не выбрасывать ошибку для 4xx статусов

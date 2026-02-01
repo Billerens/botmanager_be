@@ -9,7 +9,7 @@ import { AuthModule } from "../auth/auth.module";
 import { AdminModule } from "../admin/admin.module";
 
 /**
- * Модуль бота-ассистента BotManager
+ * Модуль бота-ассистента UForge
  *
  * Этот модуль отвечает за нашего СОБСТВЕННОГО бота,
  * который помогает пользователям регистрироваться в системе.

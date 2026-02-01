@@ -11,7 +11,7 @@ NC='\033[0m' # No Color
 show_menu() {
     clear
     echo -e "${BLUE}========================================"
-    echo "   BotManager Development Environment"
+    echo "   UForge Development Environment"
     echo "========================================${NC}"
     echo
     echo "Выберите конфигурацию для запуска:"

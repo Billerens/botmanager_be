@@ -1,8 +1,8 @@
 {
   "name": "botmanager-backend",
   "version": "1.0.0",
-  "description": "BotManager Backend API",
-  "author": "BotManager Team",
+  "description": "UForge Backend API",
+  "author": "UForge Team",
   "private": true,
   "license": "MIT",
   "scripts": {

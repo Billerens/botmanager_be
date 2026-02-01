@@ -28,8 +28,8 @@ export class TwoFactorService {
    */
   generateGoogleAuthenticatorSecret(userId: string): string {
     const secret = speakeasy.generateSecret({
-      name: `BotManager`,
-      issuer: "BotManager",
+      name: `UForge`,
+      issuer: "UForge",
       length: 32,
     });
     return secret.base32;
