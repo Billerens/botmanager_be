@@ -11,7 +11,11 @@ export { Lead } from "./lead.entity";
 export { Subscription } from "./subscription.entity";
 export { BotFlow } from "./bot-flow.entity";
 export { BotFlowNode, NodeType } from "./bot-flow-node.entity";
-export { ActivityLog, ActivityType, ActivityLevel } from "./activity-log.entity";
+export {
+  ActivityLog,
+  ActivityType,
+  ActivityLevel,
+} from "./activity-log.entity";
 export { Product } from "./product.entity";
 export { Category } from "./category.entity";
 export { Specialist } from "./specialist.entity";
@@ -24,22 +28,48 @@ export { ShopPromocode } from "./shop-promocode.entity";
 export { UserSession } from "./user-session.entity";
 export { BotCustomData } from "./bot-custom-data.entity";
 export { CustomPage } from "./custom-page.entity";
+export { CustomPageUser } from "./custom-page-user.entity";
+export {
+  CustomPageUserPermission,
+  CustomPageEntity,
+} from "./custom-page-user-permission.entity";
+export {
+  CustomPageInvitation,
+  CustomPageInvitationStatus,
+} from "./custom-page-invitation.entity";
 export { BotUser } from "./bot-user.entity";
 export { BotUserPermission } from "./bot-user-permission.entity";
 export { BotInvitation } from "./bot-invitation.entity";
 export { GroupSession } from "./group-session.entity";
 export { PublicUser, PublicUserOwnerType } from "./public-user.entity";
 export { Shop } from "./shop.entity";
+export { ShopUser } from "./shop-user.entity";
+export { ShopUserPermission, ShopEntity } from "./shop-user-permission.entity";
+export { ShopInvitation, ShopInvitationStatus } from "./shop-invitation.entity";
 export { Admin } from "./admin.entity";
 export { AdminActionLog } from "./admin-action-log.entity";
 export { CustomDomain } from "./custom-domain.entity";
 export { BookingSystem } from "./booking-system.entity";
+export { BookingSystemUser } from "./booking-system-user.entity";
+export {
+  BookingSystemUserPermission,
+  BookingEntity,
+} from "./booking-system-user-permission.entity";
+export {
+  BookingSystemInvitation,
+  BookingSystemInvitationStatus,
+} from "./booking-system-invitation.entity";
 export { PaymentConfig, PaymentEntityType } from "./payment-config.entity";
-export { Payment, PaymentStatus, PaymentTargetType, EntityPaymentStatus } from "./payment.entity";
-export { 
-  CustomCollectionSchema, 
-  CustomDataOwnerType, 
-  FieldType, 
+export {
+  Payment,
+  PaymentStatus,
+  PaymentTargetType,
+  EntityPaymentStatus,
+} from "./payment.entity";
+export {
+  CustomCollectionSchema,
+  CustomDataOwnerType,
+  FieldType,
   RelationType,
   DEFAULT_ACCESS_SETTINGS,
   DEFAULT_RLS_RULES,
@@ -76,16 +106,25 @@ import { ShopPromocode } from "./shop-promocode.entity";
 import { UserSession } from "./user-session.entity";
 import { BotCustomData } from "./bot-custom-data.entity";
 import { CustomPage } from "./custom-page.entity";
+import { CustomPageUser } from "./custom-page-user.entity";
+import { CustomPageUserPermission } from "./custom-page-user-permission.entity";
+import { CustomPageInvitation } from "./custom-page-invitation.entity";
 import { BotUser } from "./bot-user.entity";
 import { BotUserPermission } from "./bot-user-permission.entity";
 import { BotInvitation } from "./bot-invitation.entity";
 import { GroupSession } from "./group-session.entity";
 import { PublicUser } from "./public-user.entity";
 import { Shop } from "./shop.entity";
+import { ShopUser } from "./shop-user.entity";
+import { ShopUserPermission } from "./shop-user-permission.entity";
+import { ShopInvitation } from "./shop-invitation.entity";
 import { Admin } from "./admin.entity";
 import { AdminActionLog } from "./admin-action-log.entity";
 import { CustomDomain } from "./custom-domain.entity";
 import { BookingSystem } from "./booking-system.entity";
+import { BookingSystemUser } from "./booking-system-user.entity";
+import { BookingSystemUserPermission } from "./booking-system-user-permission.entity";
+import { BookingSystemInvitation } from "./booking-system-invitation.entity";
 import { PaymentConfig } from "./payment-config.entity";
 import { Payment } from "./payment.entity";
 import { CustomCollectionSchema } from "./custom-collection-schema.entity";
@@ -113,20 +152,28 @@ export const ALL_ENTITIES = [
   UserSession,
   BotCustomData,
   CustomPage,
+  CustomPageUser,
+  CustomPageUserPermission,
+  CustomPageInvitation,
   BotUser,
   BotUserPermission,
   BotInvitation,
   GroupSession,
   PublicUser,
   Shop,
+  ShopUser,
+  ShopUserPermission,
+  ShopInvitation,
   Admin,
   AdminActionLog,
   CustomDomain,
   BookingSystem,
+  BookingSystemUser,
+  BookingSystemUserPermission,
+  BookingSystemInvitation,
   PaymentConfig,
   Payment,
   CustomCollectionSchema,
   CustomData,
   PublicApiKey,
 ];
-

@@ -17,24 +17,18 @@ export enum PermissionAction {
   DELETE = "delete",
 }
 
+/**
+ * Сущности бота, на которые выдаются права приглашённым.
+ * Права магазина, букинга и custom page выносятся в отдельные модели (ShopEntity, BookingEntity, CustomPageEntity).
+ */
 export enum BotEntity {
   BOT_SETTINGS = "bot_settings",
   FLOWS = "flows",
   MESSAGES = "messages",
   LEADS = "leads",
-  PRODUCTS = "products",
-  CATEGORIES = "categories",
-  ORDERS = "orders",
-  CARTS = "carts",
-  SPECIALISTS = "specialists",
-  BOOKINGS = "bookings",
   ANALYTICS = "analytics",
-  SHOP_SETTINGS = "shop_settings",
-  BOOKING_SETTINGS = "booking_settings",
-  CUSTOM_PAGES = "custom_pages",
-  SHOP_PROMOCODES = "shop_promocodes",
   BOT_USERS = "bot_users",
-  CUSTOM_DATA = "custom_data", // Права на кастомные данные (новая система)
+  CUSTOM_DATA = "custom_data",
 }
 
 @Entity("bot_user_permissions")

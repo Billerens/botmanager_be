@@ -24,20 +24,34 @@ import {
   ApiParam,
   ApiQuery,
 } from "@nestjs/swagger";
-import { JwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
+import { JwtAuthGuard, Public } from "../../auth/guards/jwt-auth.guard";
 import { CustomPagesService } from "../services/custom-pages.service";
+import { CustomPagePermissionsService } from "../custom-page-permissions.service";
+import { CustomPageInvitationsService } from "../custom-page-invitations.service";
 import {
   CreateCustomPageDto,
   UpdateCustomPageDto,
 } from "../dto/custom-page.dto";
 import { CustomPageResponseDto } from "../dto/custom-page-response.dto";
+import {
+  CreateCustomPageInvitationDto,
+  AcceptCustomPageInvitationDto,
+} from "../dto/custom-page-invitation.dto";
+import { CustomPagePermissionGuard } from "../guards/custom-page-permission.guard";
+import { CustomPagePermission } from "../decorators/custom-page-permission.decorator";
+import { CustomPageEntity } from "../../../database/entities/custom-page-user-permission.entity";
+import { PermissionAction } from "../../../database/entities/bot-user-permission.entity";
 
 @ApiTags("Кастомные страницы")
 @Controller("custom-pages")
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class CustomPagesController {
-  constructor(private readonly customPagesService: CustomPagesService) {}
+  constructor(
+    private readonly customPagesService: CustomPagesService,
+    private readonly customPagePermissionsService: CustomPagePermissionsService,
+    private readonly customPageInvitationsService: CustomPageInvitationsService
+  ) {}
 
   // ============================================================
   // CRUD операции
@@ -136,6 +150,201 @@ export class CustomPagesController {
     @Request() req: any
   ): Promise<CustomPageResponseDto[]> {
     return this.customPagesService.findAllByShop(shopId, req.user.id);
+  }
+
+  // ============================================================
+  // Приглашения (глобальные — до :id)
+  // ============================================================
+
+  @Get("invitations/me")
+  @ApiOperation({ summary: "Получить свои приглашения на кастомные страницы" })
+  @ApiResponse({ status: 200, description: "Список приглашений" })
+  async getMyInvitations(@Request() req: any) {
+    return this.customPageInvitationsService.getUserInvitations(req.user.id);
+  }
+
+  @Get("invitations/by-token/:token")
+  @Public()
+  @ApiOperation({
+    summary: "Получить информацию о приглашении по токену (публично)",
+  })
+  @ApiParam({ name: "token", description: "Токен приглашения" })
+  @ApiResponse({ status: 200, description: "Информация о приглашении" })
+  async getInvitationByToken(@Param("token") token: string) {
+    return this.customPageInvitationsService.getInvitationByToken(token);
+  }
+
+  @Post("invitations/accept")
+  @ApiOperation({ summary: "Принять приглашение" })
+  @ApiResponse({ status: 200, description: "Приглашение принято" })
+  @ApiResponse({
+    status: 400,
+    description: "Приглашение уже обработано или истекло",
+  })
+  async acceptInvitation(
+    @Request() req: any,
+    @Body() dto: AcceptCustomPageInvitationDto
+  ) {
+    await this.customPageInvitationsService.acceptInvitation(
+      dto.token,
+      req.user.id
+    );
+    return { message: "Приглашение принято" };
+  }
+
+  @Post("invitations/decline")
+  @ApiOperation({ summary: "Отклонить приглашение" })
+  @ApiResponse({ status: 200, description: "Приглашение отклонено" })
+  async declineInvitation(
+    @Request() req: any,
+    @Body() dto: AcceptCustomPageInvitationDto
+  ) {
+    await this.customPageInvitationsService.declineInvitation(
+      dto.token,
+      req.user.id
+    );
+    return { message: "Приглашение отклонено" };
+  }
+
+  // ============================================================
+  // Пользователи и приглашения страницы (:id/users, :id/invitations)
+  // ============================================================
+
+  @Get(":id/users")
+  @UseGuards(CustomPagePermissionGuard)
+  @CustomPagePermission(
+    CustomPageEntity.CUSTOM_PAGE_USERS,
+    PermissionAction.READ
+  )
+  @ApiOperation({ summary: "Список пользователей страницы" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiResponse({ status: 200, description: "Список пользователей" })
+  @ApiResponse({ status: 403, description: "Нет прав" })
+  async getPageUsers(@Param("id") id: string) {
+    return this.customPagePermissionsService.getCustomPageUsers(id);
+  }
+
+  @Post(":id/users")
+  @UseGuards(CustomPagePermissionGuard)
+  @CustomPagePermission(
+    CustomPageEntity.CUSTOM_PAGE_USERS,
+    PermissionAction.CREATE
+  )
+  @ApiOperation({ summary: "Добавить пользователя к странице" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: {
+        userId: { type: "string" },
+        displayName: { type: "string", nullable: true },
+        permissions: { type: "object", nullable: true },
+      },
+      required: ["userId"],
+    },
+  })
+  @ApiResponse({ status: 201, description: "Пользователь добавлен" })
+  @ApiResponse({ status: 403, description: "Нет прав" })
+  async addPageUser(
+    @Param("id") id: string,
+    @Body()
+    body: {
+      userId: string;
+      displayName?: string;
+      permissions?: Record<string, PermissionAction[]>;
+    }
+  ) {
+    return this.customPagePermissionsService.addUserToCustomPage(
+      id,
+      body.userId,
+      body.displayName,
+      body.permissions as any
+    );
+  }
+
+  @Delete(":id/users/:userId")
+  @UseGuards(CustomPagePermissionGuard)
+  @CustomPagePermission(
+    CustomPageEntity.CUSTOM_PAGE_USERS,
+    PermissionAction.DELETE
+  )
+  @ApiOperation({ summary: "Удалить пользователя со страницы" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiParam({ name: "userId", description: "ID пользователя" })
+  @ApiResponse({ status: 200, description: "Пользователь удалён" })
+  @ApiResponse({ status: 403, description: "Нет прав" })
+  async removePageUser(
+    @Param("id") id: string,
+    @Param("userId") userId: string
+  ) {
+    await this.customPagePermissionsService.removeUserFromCustomPage(
+      id,
+      userId
+    );
+  }
+
+  @Get(":id/invitations")
+  @UseGuards(CustomPagePermissionGuard)
+  @CustomPagePermission(
+    CustomPageEntity.CUSTOM_PAGE_USERS,
+    PermissionAction.READ
+  )
+  @ApiOperation({ summary: "Список приглашений страницы" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiResponse({ status: 200, description: "Список приглашений" })
+  @ApiResponse({ status: 403, description: "Нет прав" })
+  async getPageInvitations(@Param("id") id: string, @Request() req: any) {
+    return this.customPageInvitationsService.getPageInvitations(
+      id,
+      req.user.id
+    );
+  }
+
+  @Post(":id/invitations")
+  @UseGuards(CustomPagePermissionGuard)
+  @CustomPagePermission(
+    CustomPageEntity.CUSTOM_PAGE_USERS,
+    PermissionAction.CREATE
+  )
+  @ApiOperation({ summary: "Создать приглашение на страницу" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiResponse({ status: 201, description: "Приглашение создано" })
+  @ApiResponse({ status: 403, description: "Нет прав" })
+  async createPageInvitation(
+    @Param("id") id: string,
+    @Request() req: any,
+    @Body() dto: CreateCustomPageInvitationDto
+  ) {
+    return this.customPageInvitationsService.createInvitation(
+      id,
+      dto.telegramId,
+      dto.permissions,
+      req.user.id,
+      dto.message
+    );
+  }
+
+  @Delete(":id/invitations/:invitationId")
+  @UseGuards(CustomPagePermissionGuard)
+  @CustomPagePermission(
+    CustomPageEntity.CUSTOM_PAGE_USERS,
+    PermissionAction.DELETE
+  )
+  @ApiOperation({ summary: "Отменить приглашение" })
+  @ApiParam({ name: "id", description: "ID страницы" })
+  @ApiParam({ name: "invitationId", description: "ID приглашения" })
+  @ApiResponse({ status: 200, description: "Приглашение отменено" })
+  @ApiResponse({ status: 403, description: "Нет прав" })
+  async cancelPageInvitation(
+    @Param("id") id: string,
+    @Param("invitationId") invitationId: string,
+    @Request() req: any
+  ) {
+    await this.customPageInvitationsService.cancelInvitation(
+      id,
+      invitationId,
+      req.user.id
+    );
   }
 
   @Get(":id")
@@ -332,7 +541,9 @@ export class CustomPagesController {
   // ============================================================
 
   @Get(":id/subdomain/check/:slug")
-  @ApiOperation({ summary: "Проверить доступность slug для страницы (в контексте субдомена)" })
+  @ApiOperation({
+    summary: "Проверить доступность slug для страницы (в контексте субдомена)",
+  })
   @ApiParam({ name: "id", description: "ID страницы" })
   @ApiParam({ name: "slug", description: "Проверяемый slug" })
   @ApiResponse({
@@ -363,7 +574,11 @@ export class CustomPagesController {
     schema: {
       type: "object",
       properties: {
-        slug: { type: "string", nullable: true, description: "Новый slug или null для удаления" },
+        slug: {
+          type: "string",
+          nullable: true,
+          description: "Новый slug или null для удаления",
+        },
       },
     },
   })
@@ -401,10 +616,7 @@ export class CustomPagesController {
     },
   })
   @ApiResponse({ status: 404, description: "Страница не найдена" })
-  async getSubdomainStatus(
-    @Param("id") pageId: string,
-    @Request() req: any
-  ) {
+  async getSubdomainStatus(@Param("id") pageId: string, @Request() req: any) {
     return this.customPagesService.getSubdomainStatus(pageId, req.user.id);
   }
 
@@ -416,13 +628,19 @@ export class CustomPagesController {
     description: "Активация субдомена перезапущена",
     type: CustomPageResponseDto,
   })
-  @ApiResponse({ status: 400, description: "Субдомен уже активен или нет slug" })
+  @ApiResponse({
+    status: 400,
+    description: "Субдомен уже активен или нет slug",
+  })
   @ApiResponse({ status: 404, description: "Страница не найдена" })
   async retrySubdomainActivation(
     @Param("id") pageId: string,
     @Request() req: any
   ): Promise<CustomPageResponseDto> {
-    return this.customPagesService.retrySubdomainActivation(pageId, req.user.id);
+    return this.customPagesService.retrySubdomainActivation(
+      pageId,
+      req.user.id
+    );
   }
 
   @Delete(":id/subdomain")

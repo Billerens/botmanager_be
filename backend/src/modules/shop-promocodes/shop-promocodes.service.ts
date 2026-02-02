@@ -28,6 +28,7 @@ import {
   ActivityType,
   ActivityLevel,
 } from "../../database/entities/activity-log.entity";
+import { ShopPermissionsService } from "../shops/shop-permissions.service";
 
 @Injectable()
 export class ShopPromocodesService {
@@ -43,7 +44,8 @@ export class ShopPromocodesService {
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     private readonly notificationService: NotificationService,
-    private readonly activityLogService: ActivityLogService
+    private readonly activityLogService: ActivityLogService,
+    private readonly shopPermissionsService: ShopPermissionsService
   ) {}
 
   // =====================================================
@@ -66,10 +68,16 @@ export class ShopPromocodesService {
       throw new NotFoundException("Магазин не найден");
     }
 
-    if (shop.ownerId !== userId) {
+    if (shop.ownerId === userId) {
+      return shop;
+    }
+    const hasAccess = await this.shopPermissionsService.hasAccessToShop(
+      userId,
+      shopId
+    );
+    if (!hasAccess) {
       throw new ForbiddenException("Нет доступа к этому магазину");
     }
-
     return shop;
   }
 

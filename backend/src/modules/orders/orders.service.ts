@@ -34,6 +34,7 @@ import {
   PaymentTargetType,
 } from "../../database/entities/payment.entity";
 import { PaymentEvent } from "../payments/services/payment-transaction.service";
+import { ShopPermissionsService } from "../shops/shop-permissions.service";
 
 /**
  * Идентификатор пользователя для заказов
@@ -67,7 +68,8 @@ export class OrdersService {
     private readonly cartService: CartService,
     private readonly activityLogService: ActivityLogService,
     @Inject(forwardRef(() => PaymentConfigService))
-    private readonly paymentConfigService: PaymentConfigService
+    private readonly paymentConfigService: PaymentConfigService,
+    private readonly shopPermissionsService: ShopPermissionsService
   ) {}
 
   // =====================================================
@@ -184,10 +186,16 @@ export class OrdersService {
       throw new NotFoundException("Магазин не найден");
     }
 
-    if (shop.ownerId !== userId) {
+    if (shop.ownerId === userId) {
+      return shop;
+    }
+    const hasAccess = await this.shopPermissionsService.hasAccessToShop(
+      userId,
+      shopId
+    );
+    if (!hasAccess) {
       throw new ForbiddenException("Нет доступа к этому магазину");
     }
-
     return shop;
   }
 

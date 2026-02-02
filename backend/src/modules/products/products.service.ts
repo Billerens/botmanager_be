@@ -18,6 +18,7 @@ import { UploadService } from "../upload/upload.service";
 import { NotificationService } from "../websocket/services/notification.service";
 import { NotificationType } from "../websocket/interfaces/notification.interface";
 import { ActivityLogService } from "../activity-log/activity-log.service";
+import { ShopPermissionsService } from "../shops/shop-permissions.service";
 import {
   ActivityType,
   ActivityLevel,
@@ -44,7 +45,8 @@ export class ProductsService {
     private readonly shopRepository: Repository<Shop>,
     private readonly uploadService: UploadService,
     private readonly notificationService: NotificationService,
-    private readonly activityLogService: ActivityLogService
+    private readonly activityLogService: ActivityLogService,
+    private readonly shopPermissionsService: ShopPermissionsService
   ) {}
 
   // =====================================================
@@ -453,10 +455,16 @@ export class ProductsService {
       throw new NotFoundException("Магазин не найден");
     }
 
-    if (shop.ownerId !== userId) {
+    if (shop.ownerId === userId) {
+      return shop;
+    }
+    const hasAccess = await this.shopPermissionsService.hasAccessToShop(
+      userId,
+      shopId
+    );
+    if (!hasAccess) {
       throw new ForbiddenException("Нет доступа к этому магазину");
     }
-
     return shop;
   }
 

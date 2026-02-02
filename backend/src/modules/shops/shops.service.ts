@@ -41,6 +41,7 @@ import {
   SubdomainType,
   DomainTargetType,
 } from "../custom-domains/enums/domain-status.enum";
+import { ShopPermissionsService } from "./shop-permissions.service";
 
 @Injectable()
 export class ShopsService {
@@ -70,13 +71,14 @@ export class ShopsService {
     private readonly subdomainService: SubdomainService,
     @Inject(forwardRef(() => CustomDomainsService))
     private readonly customDomainsService: CustomDomainsService,
+    private readonly shopPermissionsService: ShopPermissionsService
   ) {}
 
   /**
    * Получить связанную систему бронирования по botId
    */
   private async getLinkedBookingSystemByBotId(
-    botId: string,
+    botId: string
   ): Promise<BookingSystem | null> {
     return this.bookingSystemRepository.findOne({
       where: { botId },
@@ -144,7 +146,7 @@ export class ShopsService {
     if (filters?.search) {
       queryBuilder.andWhere(
         "(shop.name ILIKE :search OR shop.title ILIKE :search)",
-        { search: `%${filters.search}%` },
+        { search: `%${filters.search}%` }
       );
     }
 
@@ -172,11 +174,17 @@ export class ShopsService {
       throw new NotFoundException("Магазин не найден");
     }
 
-    // Проверяем права доступа
-    if (shop.ownerId !== userId) {
+    // Владелец или приглашённый с доступом к магазину
+    if (shop.ownerId === userId) {
+      return shop;
+    }
+    const hasAccess = await this.shopPermissionsService.hasAccessToShop(
+      userId,
+      id
+    );
+    if (!hasAccess) {
       throw new ForbiddenException("Нет доступа к этому магазину");
     }
-
     return shop;
   }
 
@@ -239,7 +247,7 @@ export class ShopsService {
    */
   async checkSlugAvailability(
     slug: string,
-    excludeId?: string,
+    excludeId?: string
   ): Promise<{ available: boolean; slug: string; message?: string }> {
     // Нормализуем slug
     const normalizedSlug = this.normalizeSlug(slug);
@@ -300,7 +308,7 @@ export class ShopsService {
   async update(
     id: string,
     updateShopDto: UpdateShopDto,
-    userId: string,
+    userId: string
   ): Promise<Shop> {
     const shop = await this.findOne(id, userId);
 
@@ -344,7 +352,7 @@ export class ShopsService {
   async updateSlug(
     id: string,
     newSlug: string | null,
-    userId: string,
+    userId: string
   ): Promise<Shop> {
     const shop = await this.findOne(id, userId);
     const oldSlug = shop.slug;
@@ -365,14 +373,14 @@ export class ShopsService {
       // Если был старый slug - удаляем старый субдомен
       if (oldSlug) {
         this.logger.log(
-          `Removing old subdomain for shop ${id}: ${oldSlug}.shops`,
+          `Removing old subdomain for shop ${id}: ${oldSlug}.shops`
         );
         await this.subdomainService.remove(oldSlug, SubdomainType.SHOP);
       }
 
       // Регистрируем новый субдомен
       this.logger.log(
-        `Registering new subdomain for shop ${id}: ${newSlug}.shops`,
+        `Registering new subdomain for shop ${id}: ${newSlug}.shops`
       );
 
       shop.slug = availability.slug; // Нормализованный slug
@@ -416,7 +424,7 @@ export class ShopsService {
       // Удаляем субдомен
       const removed = await this.subdomainService.remove(
         oldSlug,
-        SubdomainType.SHOP,
+        SubdomainType.SHOP
       );
 
       shop.subdomainStatus = null;
@@ -477,14 +485,14 @@ export class ShopsService {
         shop.subdomainStatus = result.status;
         shop.subdomainError = result.error;
         this.logger.error(
-          `Failed to register subdomain for shop ${shop.id}: ${result.error}`,
+          `Failed to register subdomain for shop ${shop.id}: ${result.error}`
         );
       }
 
       await this.shopRepository.save(shop);
     } catch (error) {
       this.logger.error(
-        `Error registering subdomain for shop ${shop.id}: ${error.message}`,
+        `Error registering subdomain for shop ${shop.id}: ${error.message}`
       );
       shop.subdomainStatus = SubdomainStatus.ERROR;
       shop.subdomainError = error.message;
@@ -500,7 +508,7 @@ export class ShopsService {
       const activated = await this.subdomainService.waitForActivation(
         shop.slug,
         SubdomainType.SHOP,
-        120000, // 2 минуты
+        120000 // 2 минуты
       );
 
       if (activated) {
@@ -508,20 +516,20 @@ export class ShopsService {
         shop.subdomainActivatedAt = new Date();
         shop.subdomainError = null;
         this.logger.log(
-          `Subdomain activated for shop ${shop.id}: ${shop.subdomainUrl}`,
+          `Subdomain activated for shop ${shop.id}: ${shop.subdomainUrl}`
         );
       } else {
         // Домен ещё не доступен, ждём DNS propagation + SSL от Timeweb
         shop.subdomainStatus = SubdomainStatus.ACTIVATING;
         this.logger.warn(
-          `Subdomain not ready for shop ${shop.id}, waiting for DNS propagation and SSL`,
+          `Subdomain not ready for shop ${shop.id}, waiting for DNS propagation and SSL`
         );
       }
 
       await this.shopRepository.save(shop);
     } catch (error) {
       this.logger.error(
-        `Error waiting for subdomain activation for shop ${shop.id}: ${error.message}`,
+        `Error waiting for subdomain activation for shop ${shop.id}: ${error.message}`
       );
     }
   }
@@ -574,21 +582,21 @@ export class ShopsService {
   async updateSettings(
     id: string,
     settings: UpdateShopSettingsDto,
-    userId: string,
+    userId: string
   ): Promise<Shop> {
     const shop = await this.findOne(id, userId);
 
     // Валидация: проверяем конфликт menu_button с системой бронирования
     if (settings.buttonTypes?.includes("menu_button") && shop.botId) {
       const linkedBookingSystem = await this.getLinkedBookingSystemByBotId(
-        shop.botId,
+        shop.botId
       );
       if (
         linkedBookingSystem &&
         linkedBookingSystem.buttonTypes?.includes("menu_button")
       ) {
         throw new BadRequestException(
-          "Menu Button уже используется в системе бронирования. Отключите его там перед включением в магазине.",
+          "Menu Button уже используется в системе бронирования. Отключите его там перед включением в магазине."
         );
       }
     }
@@ -613,28 +621,28 @@ export class ShopsService {
           const token = this.decryptToken(bot.token);
           // Получаем связанную систему бронирования для корректного обновления всех команд
           const linkedBookingSystem = await this.getLinkedBookingSystemByBotId(
-            updatedShop.botId,
+            updatedShop.botId
           );
           const success = await this.telegramService.setBotCommands(
             token,
             bot,
             updatedShop,
-            linkedBookingSystem,
+            linkedBookingSystem
           );
           if (success) {
             this.logger.log(
-              `Bot commands updated after shop settings change for shop ${updatedShop.id}`,
+              `Bot commands updated after shop settings change for shop ${updatedShop.id}`
             );
           } else {
             this.logger.error(
-              `Failed to update bot commands for shop ${updatedShop.id}`,
+              `Failed to update bot commands for shop ${updatedShop.id}`
             );
           }
         }
       } catch (error) {
         this.logger.error(
           "Ошибка обновления команд бота после изменения настроек:",
-          error.message,
+          error.message
         );
         // Не выбрасываем ошибку, чтобы не блокировать сохранение настроек
       }
@@ -670,13 +678,13 @@ export class ShopsService {
     // Удаляем субдомен если есть
     if (shopSlug) {
       this.logger.log(
-        `Removing subdomain before deleting shop ${id}: ${shopSlug}.shops`,
+        `Removing subdomain before deleting shop ${id}: ${shopSlug}.shops`
       );
       await this.subdomainService
         .remove(shopSlug, SubdomainType.SHOP)
         .catch((error) => {
           this.logger.error(
-            `Failed to remove subdomain for shop ${id}: ${error.message}`,
+            `Failed to remove subdomain for shop ${id}: ${error.message}`
           );
         });
     }
@@ -686,23 +694,23 @@ export class ShopsService {
       const customDomains = await this.customDomainsService.getDomainsByTarget(
         userId,
         DomainTargetType.SHOP,
-        id,
+        id
       );
       for (const domain of customDomains) {
         this.logger.log(
-          `Removing custom domain ${domain.domain} for shop ${id}`,
+          `Removing custom domain ${domain.domain} for shop ${id}`
         );
         await this.customDomainsService
           .deleteDomain(domain.id, userId)
           .catch((error) => {
             this.logger.error(
-              `Failed to remove custom domain ${domain.domain} for shop ${id}: ${error.message}`,
+              `Failed to remove custom domain ${domain.domain} for shop ${id}: ${error.message}`
             );
           });
       }
     } catch (error) {
       this.logger.error(
-        `Error removing custom domains for shop ${id}: ${error.message}`,
+        `Error removing custom domains for shop ${id}: ${error.message}`
       );
     }
 
@@ -757,7 +765,7 @@ export class ShopsService {
     // Если к магазину уже привязан другой бот, отвязываем его
     if (shop.botId && shop.botId !== botId) {
       this.logger.log(
-        `Unlinking previous bot ${shop.botId} from shop ${shopId}`,
+        `Unlinking previous bot ${shop.botId} from shop ${shopId}`
       );
     }
 
@@ -775,7 +783,7 @@ export class ShopsService {
         token,
         bot,
         updatedShop,
-        linkedBookingSystem,
+        linkedBookingSystem
       );
       this.logger.log(`Bot commands updated after linking shop ${shopId}`);
     } catch (error) {
@@ -832,10 +840,10 @@ export class ShopsService {
           token,
           previousBot,
           null,
-          linkedBookingSystem,
+          linkedBookingSystem
         );
         this.logger.log(
-          `Bot commands updated after unlinking from shop ${shopId}`,
+          `Bot commands updated after unlinking from shop ${shopId}`
         );
       } catch (error) {
         this.logger.error("Ошибка обновления команд бота:", error.message);
@@ -867,7 +875,7 @@ export class ShopsService {
    */
   async getStats(
     shopId: string,
-    userId: string,
+    userId: string
   ): Promise<{
     productsCount: number;
     categoriesCount: number;
@@ -971,7 +979,7 @@ export class ShopsService {
     categoryId?: string,
     inStock?: boolean,
     search?: string,
-    sortBy?: "name-asc" | "name-desc" | "price-asc" | "price-desc",
+    sortBy?: "name-asc" | "name-desc" | "price-asc" | "price-desc"
   ): Promise<{
     products: Product[];
     pagination: {
@@ -1004,7 +1012,7 @@ export class ShopsService {
       // Получаем все ID подкатегорий
       const subcategoryIds = await this.getAllSubcategoryIds(
         categoryId,
-        shopId,
+        shopId
       );
       const allCategoryIds = [categoryId, ...subcategoryIds];
 
@@ -1057,7 +1065,7 @@ export class ShopsService {
    */
   private async getAllSubcategoryIds(
     categoryId: string,
-    shopId: string,
+    shopId: string
   ): Promise<string[]> {
     const subcategoryIds: string[] = [];
     const queue: string[] = [categoryId];

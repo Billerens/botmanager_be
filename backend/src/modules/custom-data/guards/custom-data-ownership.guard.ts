@@ -14,7 +14,11 @@ import { BookingSystem } from "../../../database/entities/booking-system.entity"
 import { CustomPage } from "../../../database/entities/custom-page.entity";
 import { CustomDataOwnerType } from "../../../database/entities/custom-collection-schema.entity";
 import { BotPermissionsService } from "../../bots/bot-permissions.service";
-import { PermissionAction, BotEntity } from "../../../database/entities/bot-user-permission.entity";
+import { CustomPagePermissionsService } from "../../custom-pages/custom-page-permissions.service";
+import {
+  PermissionAction,
+  BotEntity,
+} from "../../../database/entities/bot-user-permission.entity";
 
 /**
  * Guard для проверки владения сущностью перед доступом к кастомным данным.
@@ -35,6 +39,7 @@ export class CustomDataOwnershipGuard implements CanActivate {
     @InjectRepository(CustomPage)
     private readonly customPageRepository: Repository<CustomPage>,
     private readonly botPermissionsService: BotPermissionsService,
+    private readonly customPagePermissionsService: CustomPagePermissionsService
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -54,7 +59,7 @@ export class CustomDataOwnershipGuard implements CanActivate {
     const userId = user.id;
 
     this.logger.debug(
-      `Checking ownership: user=${userId}, ownerType=${ownerType}, ownerId=${ownerId}`,
+      `Checking ownership: user=${userId}, ownerType=${ownerType}, ownerId=${ownerId}`
     );
 
     try {
@@ -76,13 +81,21 @@ export class CustomDataOwnershipGuard implements CanActivate {
           throw new ForbiddenException("Custom App пока не поддерживается");
 
         default:
-          throw new ForbiddenException(`Неизвестный тип владельца: ${ownerType}`);
+          throw new ForbiddenException(
+            `Неизвестный тип владельца: ${ownerType}`
+          );
       }
     } catch (error) {
-      if (error instanceof ForbiddenException || error instanceof NotFoundException) {
+      if (
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException
+      ) {
         throw error;
       }
-      this.logger.error(`Error checking ownership: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error checking ownership: ${error.message}`,
+        error.stack
+      );
       throw new ForbiddenException("Ошибка проверки прав доступа");
     }
   }
@@ -91,7 +104,10 @@ export class CustomDataOwnershipGuard implements CanActivate {
    * Проверка владения ботом.
    * Пользователь должен быть владельцем бота или иметь права доступа.
    */
-  private async checkBotOwnership(userId: string, botId: string): Promise<boolean> {
+  private async checkBotOwnership(
+    userId: string,
+    botId: string
+  ): Promise<boolean> {
     const bot = await this.botRepository.findOne({ where: { id: botId } });
 
     if (!bot) {
@@ -108,7 +124,7 @@ export class CustomDataOwnershipGuard implements CanActivate {
       userId,
       botId,
       BotEntity.CUSTOM_DATA,
-      PermissionAction.READ,
+      PermissionAction.READ
     );
 
     if (!hasPermission) {
@@ -122,7 +138,10 @@ export class CustomDataOwnershipGuard implements CanActivate {
    * Проверка владения магазином.
    * Пользователь должен быть владельцем магазина или связанного бота.
    */
-  private async checkShopOwnership(userId: string, shopId: string): Promise<boolean> {
+  private async checkShopOwnership(
+    userId: string,
+    shopId: string
+  ): Promise<boolean> {
     const shop = await this.shopRepository.findOne({
       where: { id: shopId },
       relations: ["bot"],
@@ -148,7 +167,7 @@ export class CustomDataOwnershipGuard implements CanActivate {
         userId,
         shop.botId,
         BotEntity.CUSTOM_DATA,
-        PermissionAction.READ,
+        PermissionAction.READ
       );
 
       if (hasPermission) {
@@ -165,7 +184,7 @@ export class CustomDataOwnershipGuard implements CanActivate {
    */
   private async checkBookingSystemOwnership(
     userId: string,
-    bookingSystemId: string,
+    bookingSystemId: string
   ): Promise<boolean> {
     const bookingSystem = await this.bookingSystemRepository.findOne({
       where: { id: bookingSystemId },
@@ -192,7 +211,7 @@ export class CustomDataOwnershipGuard implements CanActivate {
         userId,
         bookingSystem.botId,
         BotEntity.CUSTOM_DATA,
-        PermissionAction.READ,
+        PermissionAction.READ
       );
 
       if (hasPermission) {
@@ -209,7 +228,7 @@ export class CustomDataOwnershipGuard implements CanActivate {
    */
   private async checkCustomPageOwnership(
     userId: string,
-    pageId: string,
+    pageId: string
   ): Promise<boolean> {
     const page = await this.customPageRepository.findOne({
       where: { id: pageId },
@@ -235,18 +254,14 @@ export class CustomDataOwnershipGuard implements CanActivate {
       return true;
     }
 
-    // Проверяем права через систему разрешений бота
-    if (page.botId) {
-      const hasPermission = await this.botPermissionsService.hasPermission(
+    // Проверяем доступ приглашённых пользователей через CustomPagePermissionsService
+    const hasAccess =
+      await this.customPagePermissionsService.hasAccessToCustomPage(
         userId,
-        page.botId,
-        BotEntity.CUSTOM_PAGES,
-        PermissionAction.READ,
+        pageId
       );
-
-      if (hasPermission) {
-        return true;
-      }
+    if (hasAccess) {
+      return true;
     }
 
     throw new ForbiddenException("Нет доступа к этой кастомной странице");

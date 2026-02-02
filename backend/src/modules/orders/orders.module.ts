@@ -16,6 +16,7 @@ import { ShopPromocodesModule } from "../shop-promocodes/shop-promocodes.module"
 import { CartModule } from "../cart/cart.module";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
 import { PaymentsModule } from "../payments/payments.module";
+import { ShopPermissionsModule } from "../shops/shop-permissions.module";
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { PaymentsModule } from "../payments/payments.module";
     forwardRef(() => CartModule),
     ActivityLogModule,
     forwardRef(() => PaymentsModule),
+    ShopPermissionsModule,
   ],
   controllers: [],
   providers: [OrdersService],

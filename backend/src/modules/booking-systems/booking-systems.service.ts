@@ -35,6 +35,7 @@ import {
   SubdomainType,
   DomainTargetType,
 } from "../custom-domains/enums/domain-status.enum";
+import { BookingSystemPermissionsService } from "./booking-system-permissions.service";
 
 export interface BookingSystemFilters {
   search?: string;
@@ -65,6 +66,7 @@ export class BookingSystemsService {
     private readonly subdomainService: SubdomainService,
     @Inject(forwardRef(() => CustomDomainsService))
     private readonly customDomainsService: CustomDomainsService,
+    private readonly bookingSystemPermissionsService: BookingSystemPermissionsService
   ) {}
 
   /**
@@ -98,7 +100,7 @@ export class BookingSystemsService {
    */
   async create(
     createDto: CreateBookingSystemDto,
-    userId: string,
+    userId: string
   ): Promise<BookingSystem> {
     const bookingSystem = this.bookingSystemRepository.create({
       ...createDto,
@@ -122,7 +124,7 @@ export class BookingSystemsService {
       .catch((error) => {
         this.logger.error(
           "Ошибка логирования создания системы бронирования:",
-          error,
+          error
         );
       });
 
@@ -134,18 +136,25 @@ export class BookingSystemsService {
    */
   async findAll(
     userId: string,
-    filters?: BookingSystemFilters,
+    filters?: BookingSystemFilters
   ): Promise<BookingSystem[]> {
     const queryBuilder = this.bookingSystemRepository
       .createQueryBuilder("bookingSystem")
       .leftJoinAndSelect("bookingSystem.bot", "bot")
-      .where("bookingSystem.ownerId = :userId", { userId })
+      .leftJoin(
+        "booking_system_users",
+        "bsu",
+        'bsu."bookingSystemId" = bookingSystem.id AND bsu."userId" = :userId'
+      )
+      .where("(bookingSystem.ownerId = :userId OR bsu.id IS NOT NULL)", {
+        userId,
+      })
       .orderBy("bookingSystem.updatedAt", "DESC");
 
     if (filters?.search) {
       queryBuilder.andWhere(
         "(bookingSystem.name ILIKE :search OR bookingSystem.title ILIKE :search)",
-        { search: `%${filters.search}%` },
+        { search: `%${filters.search}%` }
       );
     }
 
@@ -163,7 +172,7 @@ export class BookingSystemsService {
         ? await this.customDomainsService.getDomainsByTargetIds(
             userId,
             DomainTargetType.BOOKING,
-            list.map((bs) => bs.id),
+            list.map((bs) => bs.id)
           )
         : new Map();
     // Добавляем значения геттеров и кастомные домены (геттеры не сериализуются в JSON)
@@ -178,7 +187,9 @@ export class BookingSystemsService {
       isSubdomainPending: bs.isSubdomainPending,
       defaultSettings: bs.defaultSettings,
       customDomains: domainMap.get(bs.id) ?? [],
-    })) as (BookingSystem & { customDomains: { domain: string; url: string; status: string }[] })[];
+    })) as (BookingSystem & {
+      customDomains: { domain: string; url: string; status: string }[];
+    })[];
   }
 
   /**
@@ -194,10 +205,17 @@ export class BookingSystemsService {
       throw new NotFoundException("Система бронирования не найдена");
     }
 
-    if (bookingSystem.ownerId !== userId) {
+    if (bookingSystem.ownerId === userId) {
+      return bookingSystem;
+    }
+    const hasAccess =
+      await this.bookingSystemPermissionsService.hasAccessToBookingSystem(
+        userId,
+        id
+      );
+    if (!hasAccess) {
       throw new ForbiddenException("Нет доступа к этой системе бронирования");
     }
-
     return bookingSystem;
   }
 
@@ -206,7 +224,7 @@ export class BookingSystemsService {
    */
   async findByBotId(
     botId: string,
-    userId?: string,
+    userId?: string
   ): Promise<BookingSystem | null> {
     const whereCondition: any = { botId };
     if (userId) {
@@ -248,7 +266,7 @@ export class BookingSystemsService {
 
     if (!bookingSystem) {
       throw new NotFoundException(
-        `Система бронирования с slug "${slug}" не найдена`,
+        `Система бронирования с slug "${slug}" не найдена`
       );
     }
 
@@ -260,7 +278,7 @@ export class BookingSystemsService {
    */
   async checkSlugAvailability(
     slug: string,
-    excludeId?: string,
+    excludeId?: string
   ): Promise<{ available: boolean; slug: string; message?: string }> {
     const normalizedSlug = this.normalizeSlug(slug);
 
@@ -309,7 +327,7 @@ export class BookingSystemsService {
   async update(
     id: string,
     updateDto: UpdateBookingSystemDto,
-    userId: string,
+    userId: string
   ): Promise<BookingSystem> {
     const bookingSystem = await this.findOne(id, userId);
 
@@ -332,7 +350,7 @@ export class BookingSystemsService {
       .catch((error) => {
         this.logger.error(
           "Ошибка логирования обновления системы бронирования:",
-          error,
+          error
         );
       });
 
@@ -345,7 +363,7 @@ export class BookingSystemsService {
   async updateSlug(
     id: string,
     newSlug: string | null,
-    userId: string,
+    userId: string
   ): Promise<BookingSystem> {
     const bookingSystem = await this.findOne(id, userId);
     const oldSlug = bookingSystem.slug;
@@ -362,13 +380,13 @@ export class BookingSystemsService {
 
       if (oldSlug) {
         this.logger.log(
-          `Removing old subdomain for booking system ${id}: ${oldSlug}.booking`,
+          `Removing old subdomain for booking system ${id}: ${oldSlug}.booking`
         );
         await this.subdomainService.remove(oldSlug, SubdomainType.BOOKING);
       }
 
       this.logger.log(
-        `Registering new subdomain for booking system ${id}: ${newSlug}.booking`,
+        `Registering new subdomain for booking system ${id}: ${newSlug}.booking`
       );
 
       bookingSystem.slug = availability.slug;
@@ -398,7 +416,7 @@ export class BookingSystemsService {
         });
     } else if (oldSlug) {
       this.logger.log(
-        `Removing subdomain for booking system ${id}: ${oldSlug}.booking`,
+        `Removing subdomain for booking system ${id}: ${oldSlug}.booking`
       );
 
       bookingSystem.slug = null;
@@ -438,7 +456,7 @@ export class BookingSystemsService {
   }
 
   private async registerSubdomainAsync(
-    bookingSystem: BookingSystem,
+    bookingSystem: BookingSystem
   ): Promise<void> {
     try {
       bookingSystem.subdomainStatus = SubdomainStatus.DNS_CREATING;
@@ -458,14 +476,14 @@ export class BookingSystemsService {
         bookingSystem.subdomainStatus = result.status;
         bookingSystem.subdomainError = result.error;
         this.logger.error(
-          `Failed to register subdomain for booking system ${bookingSystem.id}: ${result.error}`,
+          `Failed to register subdomain for booking system ${bookingSystem.id}: ${result.error}`
         );
       }
 
       await this.bookingSystemRepository.save(bookingSystem);
     } catch (error) {
       this.logger.error(
-        `Error registering subdomain for booking system ${bookingSystem.id}: ${error.message}`,
+        `Error registering subdomain for booking system ${bookingSystem.id}: ${error.message}`
       );
       bookingSystem.subdomainStatus = SubdomainStatus.ERROR;
       bookingSystem.subdomainError = error.message;
@@ -474,13 +492,13 @@ export class BookingSystemsService {
   }
 
   private async waitForSubdomainActivation(
-    bookingSystem: BookingSystem,
+    bookingSystem: BookingSystem
   ): Promise<void> {
     try {
       const activated = await this.subdomainService.waitForActivation(
         bookingSystem.slug,
         SubdomainType.BOOKING,
-        120000,
+        120000
       );
 
       if (activated) {
@@ -488,19 +506,19 @@ export class BookingSystemsService {
         bookingSystem.subdomainActivatedAt = new Date();
         bookingSystem.subdomainError = null;
         this.logger.log(
-          `Subdomain activated for booking system ${bookingSystem.id}: ${bookingSystem.subdomainUrl}`,
+          `Subdomain activated for booking system ${bookingSystem.id}: ${bookingSystem.subdomainUrl}`
         );
       } else {
         bookingSystem.subdomainStatus = SubdomainStatus.ACTIVATING;
         this.logger.warn(
-          `Subdomain not ready for booking system ${bookingSystem.id}, waiting for DNS propagation and SSL`,
+          `Subdomain not ready for booking system ${bookingSystem.id}, waiting for DNS propagation and SSL`
         );
       }
 
       await this.bookingSystemRepository.save(bookingSystem);
     } catch (error) {
       this.logger.error(
-        `Error waiting for subdomain activation for booking system ${bookingSystem.id}: ${error.message}`,
+        `Error waiting for subdomain activation for booking system ${bookingSystem.id}: ${error.message}`
       );
     }
   }
@@ -527,13 +545,13 @@ export class BookingSystemsService {
    */
   async retrySubdomainRegistration(
     id: string,
-    userId: string,
+    userId: string
   ): Promise<BookingSystem> {
     const bookingSystem = await this.findOne(id, userId);
 
     if (!bookingSystem.slug) {
       throw new BadRequestException(
-        "У системы бронирования не установлен slug",
+        "У системы бронирования не установлен slug"
       );
     }
 
@@ -558,7 +576,7 @@ export class BookingSystemsService {
 
     if (!bookingSystem.slug) {
       throw new BadRequestException(
-        "У системы бронирования не установлен субдомен",
+        "У системы бронирования не установлен субдомен"
       );
     }
 
@@ -609,7 +627,7 @@ export class BookingSystemsService {
   async updateSettings(
     id: string,
     settingsDto: UpdateBookingSystemSettingsDto,
-    userId: string,
+    userId: string
   ): Promise<BookingSystem> {
     const bookingSystem = await this.findOne(id, userId);
 
@@ -621,7 +639,7 @@ export class BookingSystemsService {
       const linkedShop = await this.getLinkedShopByBotId(bookingSystem.botId);
       if (linkedShop && linkedShop.buttonTypes?.includes("menu_button")) {
         throw new BadRequestException(
-          "Menu Button уже используется в магазине. Отключите его там перед включением в системе бронирования.",
+          "Menu Button уже используется в магазине. Отключите его там перед включением в системе бронирования."
         );
       }
     }
@@ -678,22 +696,22 @@ export class BookingSystemsService {
             token,
             bot,
             linkedShop,
-            updated,
+            updated
           );
           if (success) {
             this.logger.log(
-              `Bot commands updated after booking system settings change for ${updated.id}`,
+              `Bot commands updated after booking system settings change for ${updated.id}`
             );
           } else {
             this.logger.error(
-              `Failed to update bot commands for booking system ${updated.id}`,
+              `Failed to update bot commands for booking system ${updated.id}`
             );
           }
         }
       } catch (error) {
         this.logger.error(
           "Ошибка обновления команд бота после изменения настроек:",
-          error.message,
+          error.message
         );
         // Не выбрасываем ошибку, чтобы не блокировать сохранение настроек
       }
@@ -729,13 +747,13 @@ export class BookingSystemsService {
     // Удаляем субдомен если есть
     if (slug) {
       this.logger.log(
-        `Removing subdomain before deleting booking system ${id}: ${slug}.booking`,
+        `Removing subdomain before deleting booking system ${id}: ${slug}.booking`
       );
       await this.subdomainService
         .remove(slug, SubdomainType.BOOKING)
         .catch((error) => {
           this.logger.error(
-            `Failed to remove subdomain for booking system ${id}: ${error.message}`,
+            `Failed to remove subdomain for booking system ${id}: ${error.message}`
           );
         });
     }
@@ -745,23 +763,23 @@ export class BookingSystemsService {
       const customDomains = await this.customDomainsService.getDomainsByTarget(
         userId,
         DomainTargetType.BOOKING,
-        id,
+        id
       );
       for (const domain of customDomains) {
         this.logger.log(
-          `Removing custom domain ${domain.domain} for booking system ${id}`,
+          `Removing custom domain ${domain.domain} for booking system ${id}`
         );
         await this.customDomainsService
           .deleteDomain(domain.id, userId)
           .catch((error) => {
             this.logger.error(
-              `Failed to remove custom domain ${domain.domain} for booking system ${id}: ${error.message}`,
+              `Failed to remove custom domain ${domain.domain} for booking system ${id}: ${error.message}`
             );
           });
       }
     } catch (error) {
       this.logger.error(
-        `Error removing custom domains for booking system ${id}: ${error.message}`,
+        `Error removing custom domains for booking system ${id}: ${error.message}`
       );
     }
 
@@ -783,7 +801,7 @@ export class BookingSystemsService {
       .catch((error) => {
         this.logger.error(
           "Ошибка логирования удаления системы бронирования:",
-          error,
+          error
         );
       });
   }
@@ -794,7 +812,7 @@ export class BookingSystemsService {
   async linkBot(
     bookingSystemId: string,
     botId: string,
-    userId: string,
+    userId: string
   ): Promise<BookingSystem> {
     const bookingSystem = await this.findOne(bookingSystemId, userId);
 
@@ -817,14 +835,14 @@ export class BookingSystemsService {
 
     if (existingBookingSystem && existingBookingSystem.id !== bookingSystemId) {
       throw new ConflictException(
-        "Этот бот уже привязан к другой системе бронирования",
+        "Этот бот уже привязан к другой системе бронирования"
       );
     }
 
     // Если к системе уже привязан другой бот, отвязываем его
     if (bookingSystem.botId && bookingSystem.botId !== botId) {
       this.logger.log(
-        `Unlinking previous bot ${bookingSystem.botId} from booking system ${bookingSystemId}`,
+        `Unlinking previous bot ${bookingSystem.botId} from booking system ${bookingSystemId}`
       );
     }
 
@@ -841,10 +859,10 @@ export class BookingSystemsService {
         token,
         bot,
         linkedShop,
-        updated,
+        updated
       );
       this.logger.log(
-        `Bot commands updated after linking booking system ${bookingSystemId}`,
+        `Bot commands updated after linking booking system ${bookingSystemId}`
       );
     } catch (error) {
       this.logger.error("Ошибка обновления команд бота:", error.message);
@@ -875,7 +893,7 @@ export class BookingSystemsService {
    */
   async unlinkBot(
     bookingSystemId: string,
-    userId: string,
+    userId: string
   ): Promise<BookingSystem> {
     const bookingSystem = await this.findOne(bookingSystemId, userId);
 
@@ -902,10 +920,10 @@ export class BookingSystemsService {
           token,
           previousBot,
           linkedShop,
-          null,
+          null
         );
         this.logger.log(
-          `Bot commands updated after unlinking from booking system ${bookingSystemId}`,
+          `Bot commands updated after unlinking from booking system ${bookingSystemId}`
         );
       } catch (error) {
         this.logger.error("Ошибка обновления команд бота:", error.message);
@@ -937,7 +955,7 @@ export class BookingSystemsService {
    */
   async getStats(
     bookingSystemId: string,
-    userId: string,
+    userId: string
   ): Promise<{
     specialistsCount: number;
     servicesCount: number;
@@ -1051,7 +1069,7 @@ export class BookingSystemsService {
    */
   async getBookingById(
     bookingSystemId: string,
-    bookingId: string,
+    bookingId: string
   ): Promise<Booking | null> {
     const booking = await this.bookingRepository.findOne({
       where: { id: bookingId },

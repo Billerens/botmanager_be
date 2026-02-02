@@ -3,9 +3,13 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { JwtModule } from "@nestjs/jwt";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { ShopsService } from "./shops.service";
+import { ShopInvitationsService } from "./shop-invitations.service";
 import { ShopsController } from "./shops.controller";
 import { PublicShopsController } from "./public-shops.controller";
+import { ShopPermissionsModule } from "./shop-permissions.module";
 import { Shop } from "../../database/entities/shop.entity";
+import { ShopInvitation } from "../../database/entities/shop-invitation.entity";
+import { User } from "../../database/entities/user.entity";
 import { Bot } from "../../database/entities/bot.entity";
 import { BookingSystem } from "../../database/entities/booking-system.entity";
 import { Product } from "../../database/entities/product.entity";
@@ -29,6 +33,8 @@ import { PaymentsModule } from "../payments/payments.module";
   imports: [
     TypeOrmModule.forFeature([
       Shop,
+      ShopInvitation,
+      User,
       Bot,
       BookingSystem,
       Product,
@@ -46,6 +52,7 @@ import { PaymentsModule } from "../payments/payments.module";
       inject: [ConfigService],
     }),
     ActivityLogModule,
+    ShopPermissionsModule,
     forwardRef(() => ProductsModule),
     forwardRef(() => CategoriesModule),
     forwardRef(() => CartModule),
@@ -58,8 +65,7 @@ import { PaymentsModule } from "../payments/payments.module";
     forwardRef(() => PaymentsModule),
   ],
   controllers: [ShopsController, PublicShopsController],
-  providers: [ShopsService],
+  providers: [ShopsService, ShopInvitationsService],
   exports: [ShopsService],
 })
 export class ShopsModule {}
-

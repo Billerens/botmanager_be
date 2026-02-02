@@ -38,6 +38,7 @@ import {
   SubdomainType,
   DomainTargetType,
 } from "../../custom-domains/enums/domain-status.enum";
+import { CustomPagePermissionsService } from "../custom-page-permissions.service";
 
 @Injectable()
 export class CustomPagesService {
@@ -59,8 +60,35 @@ export class CustomPagesService {
     @Inject(forwardRef(() => SubdomainService))
     private readonly subdomainService: SubdomainService,
     @Inject(forwardRef(() => CustomDomainsService))
-    private readonly customDomainsService: CustomDomainsService
+    private readonly customDomainsService: CustomDomainsService,
+    private readonly customPagePermissionsService: CustomPagePermissionsService
   ) {}
+
+  /**
+   * Проверяет доступ к кастомной странице (владелец или приглашённый).
+   */
+  private async ensureAccessToPage(
+    pageId: string,
+    userId: string
+  ): Promise<CustomPage> {
+    const page = await this.customPageRepository.findOne({
+      where: { id: pageId },
+      relations: ["bot", "shop"],
+    });
+    if (!page) {
+      throw new NotFoundException(`Страница с ID ${pageId} не найдена`);
+    }
+    if (page.ownerId === userId) return page;
+    const hasAccess =
+      await this.customPagePermissionsService.hasAccessToCustomPage(
+        userId,
+        pageId
+      );
+    if (!hasAccess) {
+      throw new ForbiddenException("Нет прав доступа к этой странице");
+    }
+    return page;
+  }
 
   // ============================================================
   // CRUD операции
@@ -221,7 +249,7 @@ export class CustomPagesService {
         ? await this.customDomainsService.getDomainsByTargetIds(
             userId,
             DomainTargetType.CUSTOM_PAGE,
-            pages.map((p) => p.id),
+            pages.map((p) => p.id)
           )
         : new Map();
 
@@ -258,7 +286,7 @@ export class CustomPagesService {
         ? await this.customDomainsService.getDomainsByTargetIds(
             userId,
             DomainTargetType.CUSTOM_PAGE,
-            pages.map((p) => p.id),
+            pages.map((p) => p.id)
           )
         : new Map();
 
@@ -295,7 +323,7 @@ export class CustomPagesService {
         ? await this.customDomainsService.getDomainsByTargetIds(
             userId,
             DomainTargetType.CUSTOM_PAGE,
-            pages.map((p) => p.id),
+            pages.map((p) => p.id)
           )
         : new Map();
 
@@ -309,19 +337,7 @@ export class CustomPagesService {
    * Получить страницу по ID
    */
   async findOne(id: string, userId: string): Promise<CustomPageResponseDto> {
-    const page = await this.customPageRepository.findOne({
-      where: { id },
-      relations: ["bot", "shop"],
-    });
-
-    if (!page) {
-      throw new NotFoundException(`Страница с ID ${id} не найдена`);
-    }
-
-    if (page.ownerId !== userId) {
-      throw new ForbiddenException("Нет прав доступа к этой странице");
-    }
-
+    const page = await this.ensureAccessToPage(id, userId);
     return this.toResponseDto(page);
   }
 
@@ -333,18 +349,7 @@ export class CustomPagesService {
     userId: string,
     updateDto: UpdateCustomPageDto
   ): Promise<CustomPageResponseDto> {
-    const page = await this.customPageRepository.findOne({
-      where: { id },
-      relations: ["bot", "shop"],
-    });
-
-    if (!page) {
-      throw new NotFoundException(`Страница с ID ${id} не найдена`);
-    }
-
-    if (page.ownerId !== userId) {
-      throw new ForbiddenException("Нет прав доступа к этой странице");
-    }
+    const page = await this.ensureAccessToPage(id, userId);
 
     // Проверяем глобальную уникальность slug при изменении
     if (updateDto.slug !== undefined && updateDto.slug !== page.slug) {
@@ -527,18 +532,7 @@ export class CustomPagesService {
    * Удалить страницу
    */
   async remove(id: string, userId: string): Promise<void> {
-    const page = await this.customPageRepository.findOne({
-      where: { id },
-    });
-
-    if (!page) {
-      throw new NotFoundException(`Страница с ID ${id} не найдена`);
-    }
-
-    if (page.ownerId !== userId) {
-      throw new ForbiddenException("Нет прав доступа к этой странице");
-    }
-
+    const page = await this.ensureAccessToPage(id, userId);
     const hadBotCommand = !!page.botCommand;
     const botId = page.botId;
     const pageSlug = page.slug;
@@ -630,19 +624,7 @@ export class CustomPagesService {
     userId: string,
     zipBuffer: Buffer
   ): Promise<CustomPageResponseDto> {
-    const page = await this.customPageRepository.findOne({
-      where: { id: pageId },
-      relations: ["bot", "shop"],
-    });
-
-    if (!page) {
-      throw new NotFoundException(`Страница с ID ${pageId} не найдена`);
-    }
-
-    if (page.ownerId !== userId) {
-      throw new ForbiddenException("Нет прав доступа к этой странице");
-    }
-
+    const page = await this.ensureAccessToPage(pageId, userId);
     // Если у страницы уже есть бандл, удаляем его
     if (page.assets && page.assets.length > 0) {
       await this.uploadService.deleteCustomPageBundle(page.assets);
@@ -681,19 +663,7 @@ export class CustomPagesService {
     botId: string,
     userId: string
   ): Promise<CustomPageResponseDto> {
-    const page = await this.customPageRepository.findOne({
-      where: { id: pageId },
-      relations: ["bot", "shop"],
-    });
-
-    if (!page) {
-      throw new NotFoundException(`Страница с ID ${pageId} не найдена`);
-    }
-
-    if (page.ownerId !== userId) {
-      throw new ForbiddenException("Нет прав доступа к этой странице");
-    }
-
+    const page = await this.ensureAccessToPage(pageId, userId);
     const { botId: newBotId, shopId: newShopId } = await this.resolveBindings(
       botId,
       null,
@@ -743,19 +713,7 @@ export class CustomPagesService {
     shopId: string,
     userId: string
   ): Promise<CustomPageResponseDto> {
-    const page = await this.customPageRepository.findOne({
-      where: { id: pageId },
-      relations: ["bot", "shop"],
-    });
-
-    if (!page) {
-      throw new NotFoundException(`Страница с ID ${pageId} не найдена`);
-    }
-
-    if (page.ownerId !== userId) {
-      throw new ForbiddenException("Нет прав доступа к этой странице");
-    }
-
+    const page = await this.ensureAccessToPage(pageId, userId);
     const { botId: newBotId, shopId: newShopId } = await this.resolveBindings(
       null,
       shopId,
@@ -804,19 +762,7 @@ export class CustomPagesService {
     pageId: string,
     userId: string
   ): Promise<CustomPageResponseDto> {
-    const page = await this.customPageRepository.findOne({
-      where: { id: pageId },
-      relations: ["bot", "shop"],
-    });
-
-    if (!page) {
-      throw new NotFoundException(`Страница с ID ${pageId} не найдена`);
-    }
-
-    if (page.ownerId !== userId) {
-      throw new ForbiddenException("Нет прав доступа к этой странице");
-    }
-
+    const page = await this.ensureAccessToPage(pageId, userId);
     const oldBotId = page.botId;
 
     await this.customPageRepository.update(pageId, {
@@ -843,19 +789,7 @@ export class CustomPagesService {
     pageId: string,
     userId: string
   ): Promise<CustomPageResponseDto> {
-    const page = await this.customPageRepository.findOne({
-      where: { id: pageId },
-      relations: ["bot", "shop"],
-    });
-
-    if (!page) {
-      throw new NotFoundException(`Страница с ID ${pageId} не найдена`);
-    }
-
-    if (page.ownerId !== userId) {
-      throw new ForbiddenException("Нет прав доступа к этой странице");
-    }
-
+    await this.ensureAccessToPage(pageId, userId);
     await this.customPageRepository.update(pageId, {
       shopId: null,
     });
@@ -1177,15 +1111,7 @@ export class CustomPagesService {
     newSlug: string | null,
     userId: string
   ): Promise<CustomPageResponseDto> {
-    const page = await this.customPageRepository.findOne({
-      where: { id: pageId, ownerId: userId },
-      relations: ["bot", "shop"],
-    });
-
-    if (!page) {
-      throw new NotFoundException("Страница не найдена");
-    }
-
+    const page = await this.ensureAccessToPage(pageId, userId);
     const oldSlug = page.slug;
 
     // Если slug не изменился - ничего не делаем
@@ -1342,14 +1268,7 @@ export class CustomPagesService {
    * Включает информацию о времени до следующего редеплоя для активации SSL.
    */
   async getSubdomainStatus(pageId: string, userId: string) {
-    const page = await this.customPageRepository.findOne({
-      where: { id: pageId, ownerId: userId },
-    });
-
-    if (!page) {
-      throw new NotFoundException("Страница не найдена");
-    }
-
+    const page = await this.ensureAccessToPage(pageId, userId);
     return this.subdomainService.buildStatusData({
       slug: page.slug || null,
       status: page.subdomainStatus || null,
@@ -1366,15 +1285,7 @@ export class CustomPagesService {
     pageId: string,
     userId: string
   ): Promise<CustomPageResponseDto> {
-    const page = await this.customPageRepository.findOne({
-      where: { id: pageId, ownerId: userId },
-      relations: ["bot", "shop"],
-    });
-
-    if (!page) {
-      throw new NotFoundException("Страница не найдена");
-    }
-
+    const page = await this.ensureAccessToPage(pageId, userId);
     if (!page.slug) {
       throw new BadRequestException("У страницы не установлен slug");
     }

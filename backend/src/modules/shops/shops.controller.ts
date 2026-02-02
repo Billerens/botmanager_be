@@ -17,6 +17,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
+  ApiParam,
+  ApiBody,
   getSchemaPath,
 } from "@nestjs/swagger";
 
@@ -28,7 +30,17 @@ import { CategoriesService } from "../categories/categories.service";
 import { OrdersService } from "../orders/orders.service";
 import { ShopPromocodesService } from "../shop-promocodes/shop-promocodes.service";
 import { CartService } from "../cart/cart.service";
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { JwtAuthGuard, Public } from "../auth/guards/jwt-auth.guard";
+import { ShopPermissionGuard } from "./guards/shop-permission.guard";
+import { ShopPermission } from "./decorators/shop-permission.decorator";
+import { ShopEntity } from "../../database/entities/shop-user-permission.entity";
+import { PermissionAction } from "../../database/entities/bot-user-permission.entity";
+import { ShopPermissionsService } from "./shop-permissions.service";
+import { ShopInvitationsService } from "./shop-invitations.service";
+import {
+  CreateShopInvitationDto,
+  AcceptInvitationDto,
+} from "./dto/shop-invitation.dto";
 import {
   CreateShopDto,
   UpdateShopDto,
@@ -67,7 +79,9 @@ export class ShopsController {
     private readonly categoriesService: CategoriesService,
     private readonly ordersService: OrdersService,
     private readonly promoCodesService: ShopPromocodesService,
-    private readonly cartService: CartService
+    private readonly cartService: CartService,
+    private readonly shopPermissionsService: ShopPermissionsService,
+    private readonly shopInvitationsService: ShopInvitationsService
   ) {}
 
   @Post()
@@ -111,7 +125,7 @@ export class ShopsController {
         ? await this.customDomainsService.getDomainsByTargetIds(
             req.user.id,
             DomainTargetType.SHOP,
-            shops.map((s) => s.id),
+            shops.map((s) => s.id)
           )
         : new Map();
     return shops.map((shop) => ({
@@ -166,7 +180,152 @@ export class ShopsController {
     return this.shopsService.checkSlugAvailability(slug, excludeId);
   }
 
+  // ========== Приглашения (глобальные) ==========
+  @Get("invitations/me")
+  @ApiOperation({ summary: "Получить свои приглашения в магазины" })
+  @ApiResponse({ status: 200, description: "Список приглашений" })
+  async getMyInvitations(@Request() req) {
+    return this.shopInvitationsService.getUserInvitations(req.user.id);
+  }
+
+  @Get("invitations/by-token/:token")
+  @Public()
+  @ApiOperation({
+    summary: "Получить информацию о приглашении по токену (публично)",
+  })
+  @ApiParam({ name: "token", description: "Токен приглашения" })
+  @ApiResponse({ status: 200, description: "Информация о приглашении" })
+  async getInvitationByToken(@Param("token") token: string) {
+    return this.shopInvitationsService.getInvitationByToken(token);
+  }
+
+  @Post("invitations/accept")
+  @ApiOperation({ summary: "Принять приглашение в магазин" })
+  @ApiResponse({ status: 200, description: "Приглашение принято" })
+  async acceptInvitation(@Request() req, @Body() dto: AcceptInvitationDto) {
+    await this.shopInvitationsService.acceptInvitation(dto.token, req.user.id);
+    return { message: "Приглашение принято" };
+  }
+
+  @Post("invitations/decline")
+  @ApiOperation({ summary: "Отклонить приглашение в магазин" })
+  @ApiResponse({ status: 200, description: "Приглашение отклонено" })
+  async declineInvitation(@Request() req, @Body() dto: AcceptInvitationDto) {
+    await this.shopInvitationsService.declineInvitation(dto.token, req.user.id);
+    return { message: "Приглашение отклонено" };
+  }
+
+  // ========== Пользователи и приглашения магазина (:id/users, :id/invitations) ==========
+  @Get(":id/users")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.SHOP_USERS, PermissionAction.READ)
+  @ApiOperation({ summary: "Список пользователей магазина" })
+  @ApiParam({ name: "id", description: "ID магазина" })
+  @ApiResponse({ status: 200, description: "Список пользователей" })
+  async getShopUsers(@Param("id") id: string) {
+    return this.shopPermissionsService.getShopUsers(id);
+  }
+
+  @Post(":id/users")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.SHOP_USERS, PermissionAction.CREATE)
+  @ApiOperation({ summary: "Добавить пользователя в магазин" })
+  @ApiParam({ name: "id", description: "ID магазина" })
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: {
+        userId: { type: "string" },
+        displayName: { type: "string", nullable: true },
+        permissions: { type: "object", nullable: true },
+      },
+      required: ["userId"],
+    },
+  })
+  @ApiResponse({ status: 201, description: "Пользователь добавлен" })
+  async addShopUser(
+    @Param("id") id: string,
+    @Body()
+    body: {
+      userId: string;
+      displayName?: string;
+      permissions?: Record<ShopEntity, PermissionAction[]>;
+    }
+  ) {
+    return this.shopPermissionsService.addUserToShop(
+      id,
+      body.userId,
+      body.displayName,
+      body.permissions
+    );
+  }
+
+  @Delete(":id/users/:userId")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.SHOP_USERS, PermissionAction.DELETE)
+  @ApiOperation({ summary: "Удалить пользователя из магазина" })
+  @ApiParam({ name: "id", description: "ID магазина" })
+  @ApiParam({ name: "userId", description: "ID пользователя" })
+  @ApiResponse({ status: 200, description: "Пользователь удалён" })
+  async removeShopUser(
+    @Param("id") id: string,
+    @Param("userId") userId: string
+  ) {
+    await this.shopPermissionsService.removeUserFromShop(id, userId);
+  }
+
+  @Get(":id/invitations")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.SHOP_USERS, PermissionAction.READ)
+  @ApiOperation({ summary: "Список приглашений магазина" })
+  @ApiParam({ name: "id", description: "ID магазина" })
+  @ApiResponse({ status: 200, description: "Список приглашений" })
+  async getShopInvitations(@Param("id") id: string, @Request() req) {
+    return this.shopInvitationsService.getShopInvitations(id, req.user.id);
+  }
+
+  @Post(":id/invitations")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.SHOP_USERS, PermissionAction.CREATE)
+  @ApiOperation({ summary: "Создать приглашение в магазин" })
+  @ApiParam({ name: "id", description: "ID магазина" })
+  @ApiResponse({ status: 201, description: "Приглашение создано" })
+  async createShopInvitation(
+    @Param("id") id: string,
+    @Request() req,
+    @Body() dto: CreateShopInvitationDto
+  ) {
+    return this.shopInvitationsService.createInvitation(
+      id,
+      dto.telegramId,
+      dto.permissions,
+      req.user.id,
+      dto.message
+    );
+  }
+
+  @Delete(":id/invitations/:invitationId")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.SHOP_USERS, PermissionAction.DELETE)
+  @ApiOperation({ summary: "Отменить приглашение" })
+  @ApiParam({ name: "id", description: "ID магазина" })
+  @ApiParam({ name: "invitationId", description: "ID приглашения" })
+  @ApiResponse({ status: 200, description: "Приглашение отменено" })
+  async cancelShopInvitation(
+    @Param("id") id: string,
+    @Param("invitationId") invitationId: string,
+    @Request() req
+  ) {
+    await this.shopInvitationsService.cancelInvitation(
+      id,
+      invitationId,
+      req.user.id
+    );
+  }
+
   @Get(":id")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.SHOP_SETTINGS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить магазин по ID" })
   @ApiResponse({
     status: 200,
@@ -180,6 +339,8 @@ export class ShopsController {
   }
 
   @Patch(":id")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.SHOP_SETTINGS, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Обновить магазин" })
   @ApiResponse({
     status: 200,
@@ -218,6 +379,8 @@ export class ShopsController {
   }
 
   @Delete(":id")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.SHOP_SETTINGS, PermissionAction.DELETE)
   @ApiOperation({ summary: "Удалить магазин" })
   @ApiResponse({ status: 200, description: "Магазин удален" })
   @ApiResponse({ status: 404, description: "Магазин не найден" })
@@ -252,6 +415,8 @@ export class ShopsController {
   }
 
   @Delete(":id/unlink-bot")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.SHOP_SETTINGS, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Отвязать бота от магазина" })
   @ApiResponse({
     status: 200,
@@ -266,6 +431,8 @@ export class ShopsController {
   }
 
   @Get(":id/stats")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.ORDERS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить статистику магазина" })
   @ApiResponse({
     status: 200,
@@ -363,6 +530,8 @@ export class ShopsController {
   }
 
   @Put(":id/subdomain")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.SHOP_SETTINGS, PermissionAction.UPDATE)
   @ApiOperation({
     summary: "Установить или изменить slug (субдомен) магазина",
     description:
@@ -385,6 +554,8 @@ export class ShopsController {
   }
 
   @Post(":id/subdomain/retry")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.SHOP_SETTINGS, PermissionAction.UPDATE)
   @ApiOperation({
     summary: "Повторить регистрацию субдомена после ошибки",
     description:
@@ -427,6 +598,8 @@ export class ShopsController {
   // =====================================================
 
   @Get(":id/products")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.PRODUCTS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить товары магазина" })
   @ApiResponse({ status: 200, description: "Товары получены" })
   async getProducts(
@@ -449,6 +622,8 @@ export class ShopsController {
   }
 
   @Get(":id/products/:productId")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.PRODUCTS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить товар по ID" })
   @ApiResponse({ status: 200, description: "Товар найден" })
   async getProduct(
@@ -460,6 +635,8 @@ export class ShopsController {
   }
 
   @Patch(":id/products/:productId")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.PRODUCTS, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Обновить товар" })
   @ApiResponse({ status: 200, description: "Товар обновлен" })
   async updateProduct(
@@ -477,6 +654,8 @@ export class ShopsController {
   }
 
   @Delete(":id/products/:productId")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.PRODUCTS, PermissionAction.DELETE)
   @ApiOperation({ summary: "Удалить товар" })
   @ApiResponse({ status: 200, description: "Товар удален" })
   async deleteProduct(
@@ -489,6 +668,8 @@ export class ShopsController {
   }
 
   @Get(":id/products-stats")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.PRODUCTS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить статистику товаров магазина" })
   @ApiResponse({ status: 200, description: "Статистика получена" })
   async getProductStats(@Param("id") id: string, @Request() req) {
@@ -500,6 +681,8 @@ export class ShopsController {
   // =====================================================
 
   @Get(":id/categories")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.CATEGORIES, PermissionAction.READ)
   @ApiOperation({ summary: "Получить категории магазина" })
   @ApiResponse({ status: 200, description: "Категории получены" })
   async getCategories(
@@ -511,6 +694,8 @@ export class ShopsController {
   }
 
   @Post(":id/categories")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.CATEGORIES, PermissionAction.CREATE)
   @ApiOperation({ summary: "Создать категорию в магазине" })
   @ApiResponse({ status: 201, description: "Категория создана" })
   async createCategory(
@@ -533,6 +718,8 @@ export class ShopsController {
   }
 
   @Patch(":id/categories/:categoryId")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.CATEGORIES, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Обновить категорию" })
   @ApiResponse({ status: 200, description: "Категория обновлена" })
   async updateCategory(
@@ -562,6 +749,8 @@ export class ShopsController {
   }
 
   @Get(":id/categories-tree")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.CATEGORIES, PermissionAction.READ)
   @ApiOperation({ summary: "Получить дерево категорий" })
   @ApiResponse({ status: 200, description: "Дерево категорий получено" })
   async getCategoriesTree(@Param("id") id: string, @Request() req) {
@@ -593,6 +782,8 @@ export class ShopsController {
   }
 
   @Get(":id/orders/:orderId")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.ORDERS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить заказ по ID" })
   @ApiResponse({ status: 200, description: "Заказ найден" })
   async getOrder(
@@ -625,6 +816,8 @@ export class ShopsController {
   // =====================================================
 
   @Get(":id/carts")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.CARTS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить корзины магазина" })
   @ApiQuery({ name: "hideEmpty", required: false, type: Boolean })
   @ApiQuery({ name: "search", required: false })
@@ -658,6 +851,8 @@ export class ShopsController {
   }
 
   @Patch(":id/carts/:cartId/items/:productId")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.CARTS, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Обновить количество товара в корзине" })
   @ApiResponse({ status: 200, description: "Товар обновлен" })
   async updateCartItem(
@@ -694,6 +889,8 @@ export class ShopsController {
   // =====================================================
 
   @Get(":id/promocodes")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.PROMOCODES, PermissionAction.READ)
   @ApiOperation({ summary: "Получить промокоды магазина" })
   @ApiResponse({ status: 200, description: "Промокоды получены" })
   async getPromocodes(
@@ -705,6 +902,8 @@ export class ShopsController {
   }
 
   @Post(":id/promocodes")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.PROMOCODES, PermissionAction.CREATE)
   @ApiOperation({ summary: "Создать промокод в магазине" })
   @ApiResponse({ status: 201, description: "Промокод создан" })
   async createPromocode(
@@ -716,6 +915,8 @@ export class ShopsController {
   }
 
   @Get(":id/promocodes/:promocodeId")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.PROMOCODES, PermissionAction.READ)
   @ApiOperation({ summary: "Получить промокод по ID" })
   @ApiResponse({ status: 200, description: "Промокод найден" })
   async getPromocode(
@@ -744,6 +945,8 @@ export class ShopsController {
   }
 
   @Delete(":id/promocodes/:promocodeId")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.PROMOCODES, PermissionAction.DELETE)
   @ApiOperation({ summary: "Удалить промокод" })
   @ApiResponse({ status: 200, description: "Промокод удален" })
   async deletePromocode(

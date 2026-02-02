@@ -17,6 +17,7 @@ import { CustomLoggerService } from "../../common/logger.service";
 import { CustomDataOwnershipGuard } from "./guards/custom-data-ownership.guard";
 import { PublicApiKeyGuard } from "./guards/public-api-key.guard";
 import { BotsModule } from "../bots/bots.module";
+import { CustomPagePermissionsModule } from "../custom-pages/custom-page-permissions.module";
 import { PublicAuthModule } from "../public-auth/public-auth.module";
 
 @Module({
@@ -31,6 +32,7 @@ import { PublicAuthModule } from "../public-auth/public-auth.module";
       CustomPage,
     ]),
     forwardRef(() => BotsModule), // Для BotPermissionsService
+    CustomPagePermissionsModule, // Для CustomPagePermissionsService в guard
     PublicAuthModule, // Для JwtService (браузерная аутентификация)
   ],
   controllers: [

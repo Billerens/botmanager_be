@@ -35,17 +35,15 @@ import {
   DeleteResponseDto,
 } from "./dto/product-response.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
-import { BotPermissionGuard } from "../bots/guards/bot-permission.guard";
-import { BotPermission } from "../bots/decorators/bot-permission.decorator";
-import {
-  BotEntity,
-  PermissionAction,
-} from "../../database/entities/bot-user-permission.entity";
+import { ShopPermissionGuard } from "../shops/guards/shop-permission.guard";
+import { ShopPermission } from "../shops/decorators/shop-permission.decorator";
+import { PermissionAction } from "../../database/entities/bot-user-permission.entity";
+import { ShopEntity } from "../../database/entities/shop-user-permission.entity";
 
 @ApiTags("Продукты")
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, BotPermissionGuard)
-@Controller("bots/:botId/products")
+@UseGuards(JwtAuthGuard, ShopPermissionGuard)
+@Controller("shops/:shopId/products")
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
@@ -60,17 +58,17 @@ export class ProductsController {
   })
   @ApiResponse({
     status: 404,
-    description: "Бот не найден",
+    description: "Магазин не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
-  @BotPermission(BotEntity.PRODUCTS, PermissionAction.CREATE)
+  @ShopPermission(ShopEntity.PRODUCTS, PermissionAction.CREATE)
   create(
-    @Param("botId") botId: string,
+    @Param("shopId") shopId: string,
     @Request() req: any,
     @Body(new ValidationPipe({ transform: true }))
     createProductDto: CreateProductDto
   ) {
-    return this.productsService.create(botId, req.user.id, createProductDto);
+    return this.productsService.create(shopId, req.user.id, createProductDto);
   }
 
   @Get()
@@ -85,13 +83,13 @@ export class ProductsController {
       },
     },
   })
-  @BotPermission(BotEntity.PRODUCTS, PermissionAction.READ)
+  @ShopPermission(ShopEntity.PRODUCTS, PermissionAction.READ)
   findAll(
-    @Param("botId") botId: string,
+    @Param("shopId") shopId: string,
     @Request() req: any,
     @Query(new ValidationPipe({ transform: true })) filters: ProductFiltersDto
   ) {
-    return this.productsService.findAll(botId, req.user.id, filters);
+    return this.productsService.findAll(shopId, req.user.id, filters);
   }
 
   @Get("stats")
@@ -103,9 +101,9 @@ export class ProductsController {
       $ref: getSchemaPath(ProductStatsResponseDto),
     },
   })
-  getStats(@Param("botId") botId: string, @Request() req: any) {
-    // botId теперь интерпретируется как shopId
-    return this.productsService.getProductStats(botId, req.user.id);
+  @ShopPermission(ShopEntity.PRODUCTS, PermissionAction.READ)
+  getStats(@Param("shopId") shopId: string, @Request() req: any) {
+    return this.productsService.getProductStats(shopId, req.user.id);
   }
 
   @Get(":id")
@@ -122,13 +120,13 @@ export class ProductsController {
     description: "Товар не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
-  @BotPermission(BotEntity.PRODUCTS, PermissionAction.READ)
+  @ShopPermission(ShopEntity.PRODUCTS, PermissionAction.READ)
   findOne(
-    @Param("botId") botId: string,
+    @Param("shopId") shopId: string,
     @Param("id") id: string,
     @Request() req: any
   ) {
-    return this.productsService.findOne(id, botId, req.user.id);
+    return this.productsService.findOne(id, shopId, req.user.id);
   }
 
   @Patch(":id")
@@ -145,9 +143,9 @@ export class ProductsController {
     description: "Товар не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
-  @BotPermission(BotEntity.PRODUCTS, PermissionAction.UPDATE)
+  @ShopPermission(ShopEntity.PRODUCTS, PermissionAction.UPDATE)
   update(
-    @Param("botId") botId: string,
+    @Param("shopId") shopId: string,
     @Param("id") id: string,
     @Request() req: any,
     @Body(new ValidationPipe({ transform: true }))
@@ -155,7 +153,7 @@ export class ProductsController {
   ) {
     return this.productsService.update(
       id,
-      botId,
+      shopId,
       req.user.id,
       updateProductDto
     );
@@ -175,16 +173,16 @@ export class ProductsController {
     description: "Товар не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
-  @BotPermission(BotEntity.PRODUCTS, PermissionAction.UPDATE)
+  @ShopPermission(ShopEntity.PRODUCTS, PermissionAction.UPDATE)
   updateStock(
-    @Param("botId") botId: string,
+    @Param("shopId") shopId: string,
     @Param("id") id: string,
     @Request() req: any,
     @Body() body: { quantity: number }
   ) {
     return this.productsService.updateStock(
       id,
-      botId,
+      shopId,
       req.user.id,
       body.quantity
     );
@@ -204,13 +202,13 @@ export class ProductsController {
     description: "Товар не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
-  @BotPermission(BotEntity.PRODUCTS, PermissionAction.UPDATE)
+  @ShopPermission(ShopEntity.PRODUCTS, PermissionAction.UPDATE)
   toggleActive(
-    @Param("botId") botId: string,
+    @Param("shopId") shopId: string,
     @Param("id") id: string,
     @Request() req: any
   ) {
-    return this.productsService.toggleActive(id, botId, req.user.id);
+    return this.productsService.toggleActive(id, shopId, req.user.id);
   }
 
   @Delete(":id")
@@ -228,12 +226,12 @@ export class ProductsController {
     description: "Товар не найден",
     schema: { $ref: getSchemaPath(ErrorResponseDto) },
   })
-  @BotPermission(BotEntity.PRODUCTS, PermissionAction.DELETE)
+  @ShopPermission(ShopEntity.PRODUCTS, PermissionAction.DELETE)
   remove(
-    @Param("botId") botId: string,
+    @Param("shopId") shopId: string,
     @Param("id") id: string,
     @Request() req: any
   ) {
-    return this.productsService.remove(id, botId, req.user.id);
+    return this.productsService.remove(id, shopId, req.user.id);
   }
 }

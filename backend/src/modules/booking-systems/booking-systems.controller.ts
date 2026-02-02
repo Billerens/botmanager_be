@@ -17,6 +17,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
+  ApiParam,
+  ApiBody,
   getSchemaPath,
 } from "@nestjs/swagger";
 import {
@@ -35,7 +37,17 @@ import {
   ErrorResponseDto,
   DeleteResponseDto,
 } from "./dto/booking-system-response.dto";
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { JwtAuthGuard, Public } from "../auth/guards/jwt-auth.guard";
+import { BookingSystemPermissionGuard } from "./guards/booking-system-permission.guard";
+import { BookingSystemPermission } from "./decorators/booking-system-permission.decorator";
+import { BookingEntity } from "../../database/entities/booking-system-user-permission.entity";
+import { PermissionAction } from "../../database/entities/bot-user-permission.entity";
+import { BookingSystemPermissionsService } from "./booking-system-permissions.service";
+import { BookingSystemInvitationsService } from "./booking-system-invitations.service";
+import {
+  CreateBookingSystemInvitationDto,
+  AcceptBookingSystemInvitationDto,
+} from "./dto/booking-system-invitation.dto";
 import { SpecialistsService } from "../booking/services/specialists.service";
 import { ServicesService } from "../booking/services/services.service";
 import { TimeSlotsService } from "../booking/services/time-slots.service";
@@ -62,7 +74,9 @@ export class BookingSystemsController {
     private readonly specialistsService: SpecialistsService,
     private readonly servicesService: ServicesService,
     private readonly timeSlotsService: TimeSlotsService,
-    private readonly bookingsService: BookingsService
+    private readonly bookingsService: BookingsService,
+    private readonly bookingSystemPermissionsService: BookingSystemPermissionsService,
+    private readonly bookingSystemInvitationsService: BookingSystemInvitationsService
   ) {}
 
   @Post()
@@ -156,7 +170,191 @@ export class BookingSystemsController {
     return this.bookingSystemsService.findByBotId(botId, req.user.id);
   }
 
+  // ========== Приглашения (глобальные) ==========
+  @Get("invitations/me")
+  @ApiOperation({ summary: "Получить свои приглашения в системы бронирования" })
+  @ApiResponse({ status: 200, description: "Список приглашений" })
+  async getMyInvitations(@Request() req) {
+    return this.bookingSystemInvitationsService.getUserInvitations(req.user.id);
+  }
+
+  @Get("invitations/by-token/:token")
+  @Public()
+  @ApiOperation({
+    summary: "Получить информацию о приглашении по токену (публично)",
+  })
+  @ApiParam({ name: "token", description: "Токен приглашения" })
+  @ApiResponse({ status: 200, description: "Информация о приглашении" })
+  async getInvitationByToken(@Param("token") token: string) {
+    return this.bookingSystemInvitationsService.getInvitationByToken(token);
+  }
+
+  @Post("invitations/accept")
+  @ApiOperation({ summary: "Принять приглашение в систему бронирования" })
+  @ApiResponse({ status: 200, description: "Приглашение принято" })
+  async acceptInvitation(
+    @Request() req,
+    @Body() dto: AcceptBookingSystemInvitationDto
+  ) {
+    await this.bookingSystemInvitationsService.acceptInvitation(
+      dto.token,
+      req.user.id
+    );
+    return { message: "Приглашение принято" };
+  }
+
+  @Post("invitations/decline")
+  @ApiOperation({ summary: "Отклонить приглашение в систему бронирования" })
+  @ApiResponse({ status: 200, description: "Приглашение отклонено" })
+  async declineInvitation(
+    @Request() req,
+    @Body() dto: AcceptBookingSystemInvitationDto
+  ) {
+    await this.bookingSystemInvitationsService.declineInvitation(
+      dto.token,
+      req.user.id
+    );
+    return { message: "Приглашение отклонено" };
+  }
+
+  // ========== Пользователи и приглашения системы (:id/users, :id/invitations) ==========
+  @Get(":id/users")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SYSTEM_USERS,
+    PermissionAction.READ
+  )
+  @ApiOperation({ summary: "Список пользователей системы бронирования" })
+  @ApiParam({ name: "id", description: "ID системы бронирования" })
+  @ApiResponse({ status: 200, description: "Список пользователей" })
+  async getBookingSystemUsers(@Param("id") id: string) {
+    return this.bookingSystemPermissionsService.getBookingSystemUsers(id);
+  }
+
+  @Post(":id/users")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SYSTEM_USERS,
+    PermissionAction.CREATE
+  )
+  @ApiOperation({ summary: "Добавить пользователя в систему бронирования" })
+  @ApiParam({ name: "id", description: "ID системы бронирования" })
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: {
+        userId: { type: "string" },
+        displayName: { type: "string", nullable: true },
+        permissions: { type: "object", nullable: true },
+      },
+      required: ["userId"],
+    },
+  })
+  @ApiResponse({ status: 201, description: "Пользователь добавлен" })
+  async addBookingSystemUser(
+    @Param("id") id: string,
+    @Body()
+    body: {
+      userId: string;
+      displayName?: string;
+      permissions?: Record<BookingEntity, PermissionAction[]>;
+    }
+  ) {
+    return this.bookingSystemPermissionsService.addUserToBookingSystem(
+      id,
+      body.userId,
+      body.displayName,
+      body.permissions
+    );
+  }
+
+  @Delete(":id/users/:userId")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SYSTEM_USERS,
+    PermissionAction.DELETE
+  )
+  @ApiOperation({ summary: "Удалить пользователя из системы бронирования" })
+  @ApiParam({ name: "id", description: "ID системы бронирования" })
+  @ApiParam({ name: "userId", description: "ID пользователя" })
+  @ApiResponse({ status: 200, description: "Пользователь удалён" })
+  async removeBookingSystemUser(
+    @Param("id") id: string,
+    @Param("userId") userId: string
+  ) {
+    await this.bookingSystemPermissionsService.removeUserFromBookingSystem(
+      id,
+      userId
+    );
+  }
+
+  @Get(":id/invitations")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SYSTEM_USERS,
+    PermissionAction.READ
+  )
+  @ApiOperation({ summary: "Список приглашений системы бронирования" })
+  @ApiParam({ name: "id", description: "ID системы бронирования" })
+  @ApiResponse({ status: 200, description: "Список приглашений" })
+  async getBookingSystemInvitations(@Param("id") id: string, @Request() req) {
+    return this.bookingSystemInvitationsService.getBookingSystemInvitations(
+      id,
+      req.user.id
+    );
+  }
+
+  @Post(":id/invitations")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SYSTEM_USERS,
+    PermissionAction.CREATE
+  )
+  @ApiOperation({ summary: "Создать приглашение в систему бронирования" })
+  @ApiParam({ name: "id", description: "ID системы бронирования" })
+  @ApiResponse({ status: 201, description: "Приглашение создано" })
+  async createBookingSystemInvitation(
+    @Param("id") id: string,
+    @Request() req,
+    @Body() dto: CreateBookingSystemInvitationDto
+  ) {
+    return this.bookingSystemInvitationsService.createInvitation(
+      id,
+      dto.telegramId,
+      dto.permissions,
+      req.user.id,
+      dto.message
+    );
+  }
+
+  @Delete(":id/invitations/:invitationId")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SYSTEM_USERS,
+    PermissionAction.DELETE
+  )
+  @ApiOperation({ summary: "Отменить приглашение" })
+  @ApiParam({ name: "id", description: "ID системы бронирования" })
+  @ApiParam({ name: "invitationId", description: "ID приглашения" })
+  @ApiResponse({ status: 200, description: "Приглашение отменено" })
+  async cancelBookingSystemInvitation(
+    @Param("id") id: string,
+    @Param("invitationId") invitationId: string,
+    @Request() req
+  ) {
+    await this.bookingSystemInvitationsService.cancelInvitation(
+      id,
+      invitationId,
+      req.user.id
+    );
+  }
+
   @Get(":id")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SETTINGS,
+    PermissionAction.READ
+  )
   @ApiOperation({ summary: "Получить систему бронирования по ID" })
   @ApiResponse({
     status: 200,
@@ -193,6 +391,11 @@ export class BookingSystemsController {
   }
 
   @Patch(":id/settings")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SETTINGS,
+    PermissionAction.UPDATE
+  )
   @ApiOperation({ summary: "Обновить настройки системы бронирования" })
   @ApiResponse({
     status: 200,
@@ -225,6 +428,11 @@ export class BookingSystemsController {
   }
 
   @Patch(":id/link-bot")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SETTINGS,
+    PermissionAction.UPDATE
+  )
   @ApiOperation({ summary: "Привязать бота к системе бронирования" })
   @ApiResponse({
     status: 200,
@@ -254,6 +462,11 @@ export class BookingSystemsController {
   }
 
   @Delete(":id/unlink-bot")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SETTINGS,
+    PermissionAction.UPDATE
+  )
   @ApiOperation({ summary: "Отвязать бота от системы бронирования" })
   @ApiResponse({
     status: 200,
@@ -270,6 +483,8 @@ export class BookingSystemsController {
   }
 
   @Get(":id/stats")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.BOOKINGS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить статистику системы бронирования" })
   @ApiResponse({
     status: 200,
@@ -281,6 +496,11 @@ export class BookingSystemsController {
   }
 
   @Get(":id/subdomain/status")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SETTINGS,
+    PermissionAction.READ
+  )
   @ApiOperation({ summary: "Получить статус субдомена" })
   @ApiResponse({
     status: 200,
@@ -291,6 +511,11 @@ export class BookingSystemsController {
   }
 
   @Put(":id/subdomain")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SETTINGS,
+    PermissionAction.UPDATE
+  )
   @ApiOperation({ summary: "Обновить slug/субдомен системы бронирования" })
   @ApiResponse({
     status: 200,
@@ -306,6 +531,11 @@ export class BookingSystemsController {
   }
 
   @Post(":id/subdomain/retry")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SETTINGS,
+    PermissionAction.UPDATE
+  )
   @ApiOperation({ summary: "Повторить регистрацию субдомена" })
   @ApiResponse({
     status: 200,
@@ -320,6 +550,11 @@ export class BookingSystemsController {
   }
 
   @Delete(":id/subdomain")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(
+    BookingEntity.BOOKING_SETTINGS,
+    PermissionAction.UPDATE
+  )
   @ApiOperation({ summary: "Удалить субдомен системы бронирования" })
   @ApiResponse({
     status: 200,
@@ -335,12 +570,16 @@ export class BookingSystemsController {
   // =====================================================
 
   @Get(":id/specialists")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.SPECIALISTS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить специалистов системы бронирования" })
   async getSpecialists(@Param("id") id: string, @Request() req) {
     return this.specialistsService.findAllByBookingSystem(id, req.user.id);
   }
 
   @Post(":id/specialists")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.SPECIALISTS, PermissionAction.CREATE)
   @ApiOperation({ summary: "Создать специалиста" })
   async createSpecialist(
     @Param("id") id: string,
@@ -365,6 +604,8 @@ export class BookingSystemsController {
   }
 
   @Patch(":id/specialists/:specialistId")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.SPECIALISTS, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Обновить специалиста" })
   async updateSpecialist(
     @Param("id") id: string,
@@ -396,6 +637,8 @@ export class BookingSystemsController {
   }
 
   @Get(":id/specialists/:specialistId/working-hours")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.SPECIALISTS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить рабочие часы специалиста" })
   async getSpecialistWorkingHours(
     @Param("id") id: string,
@@ -410,6 +653,8 @@ export class BookingSystemsController {
   }
 
   @Patch(":id/specialists/:specialistId/working-hours")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.SPECIALISTS, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Обновить рабочие часы специалиста" })
   async updateSpecialistWorkingHours(
     @Param("id") id: string,
@@ -430,12 +675,16 @@ export class BookingSystemsController {
   // =====================================================
 
   @Get(":id/services")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.SERVICES, PermissionAction.READ)
   @ApiOperation({ summary: "Получить услуги системы бронирования" })
   async getServices(@Param("id") id: string, @Request() req) {
     return this.servicesService.findAllByBookingSystem(id, req.user.id);
   }
 
   @Post(":id/services")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.SERVICES, PermissionAction.CREATE)
   @ApiOperation({ summary: "Создать услугу" })
   async createService(
     @Param("id") id: string,
@@ -460,6 +709,8 @@ export class BookingSystemsController {
   }
 
   @Patch(":id/services/:serviceId")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.SERVICES, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Обновить услугу" })
   async updateService(
     @Param("id") id: string,
@@ -476,6 +727,8 @@ export class BookingSystemsController {
   }
 
   @Delete(":id/services/:serviceId")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.SERVICES, PermissionAction.DELETE)
   @ApiOperation({ summary: "Удалить услугу" })
   async deleteService(
     @Param("id") id: string,
@@ -495,12 +748,16 @@ export class BookingSystemsController {
   // =====================================================
 
   @Get(":id/time-slots")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.BOOKINGS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить таймслоты системы бронирования" })
   async getTimeSlots(@Param("id") id: string, @Request() req) {
     return this.timeSlotsService.findAllByBookingSystem(id, req.user.id);
   }
 
   @Post(":id/time-slots")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.BOOKINGS, PermissionAction.CREATE)
   @ApiOperation({ summary: "Создать таймслот" })
   async createTimeSlot(
     @Param("id") id: string,
@@ -525,6 +782,8 @@ export class BookingSystemsController {
   }
 
   @Get(":id/time-slots/available")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.BOOKINGS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить доступные таймслоты" })
   @ApiQuery({ name: "specialistId", required: true })
   @ApiQuery({ name: "serviceId", required: false })
@@ -543,6 +802,8 @@ export class BookingSystemsController {
   }
 
   @Delete(":id/time-slots/:slotId")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.BOOKINGS, PermissionAction.DELETE)
   @ApiOperation({ summary: "Удалить таймслот" })
   async deleteTimeSlot(
     @Param("id") id: string,
@@ -564,12 +825,16 @@ export class BookingSystemsController {
   }
 
   @Get(":id/bookings/statistics")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.BOOKINGS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить статистику бронирований" })
   async getBookingsStatistics(@Param("id") id: string, @Request() req) {
     return this.bookingsService.getStatisticsByBookingSystem(id, req.user.id);
   }
 
   @Get(":id/bookings/:bookingId")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.BOOKINGS, PermissionAction.READ)
   @ApiOperation({ summary: "Получить бронирование по ID" })
   async getBooking(
     @Param("id") id: string,
@@ -584,6 +849,8 @@ export class BookingSystemsController {
   }
 
   @Patch(":id/bookings/:bookingId")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.BOOKINGS, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Обновить бронирование" })
   async updateBooking(
     @Param("id") id: string,
@@ -600,6 +867,8 @@ export class BookingSystemsController {
   }
 
   @Patch(":id/bookings/:bookingId/status")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.BOOKINGS, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Обновить статус бронирования" })
   async updateBookingStatus(
     @Param("id") id: string,
@@ -629,6 +898,8 @@ export class BookingSystemsController {
   }
 
   @Post(":id/bookings/:bookingId/cancel")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.BOOKINGS, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Отменить бронирование" })
   async cancelBooking(
     @Param("id") id: string,
@@ -645,6 +916,8 @@ export class BookingSystemsController {
   }
 
   @Post(":id/bookings/:bookingId/complete")
+  @UseGuards(BookingSystemPermissionGuard)
+  @BookingSystemPermission(BookingEntity.BOOKINGS, PermissionAction.UPDATE)
   @ApiOperation({ summary: "Завершить бронирование" })
   async completeBooking(
     @Param("id") id: string,
