@@ -108,7 +108,9 @@ export class CustomPagesController {
   }
 
   @Get()
-  @ApiOperation({ summary: "Получить все страницы пользователя" })
+  @ApiOperation({
+    summary: "Получить все свои страницы пользователя (только владелец)",
+  })
   @ApiResponse({
     status: 200,
     description: "Список страниц",
@@ -116,6 +118,19 @@ export class CustomPagesController {
   })
   async findAll(@Request() req: any): Promise<CustomPageResponseDto[]> {
     return this.customPagesService.findAllByOwner(req.user.id);
+  }
+
+  @Get("shared")
+  @ApiOperation({
+    summary: "Получить кастомные страницы в управлении (свои + приглашённые)",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Список страниц",
+    type: [CustomPageResponseDto],
+  })
+  async findAllShared(@Request() req: any): Promise<CustomPageResponseDto[]> {
+    return this.customPagesService.findAllForUser(req.user.id);
   }
 
   @Get("by-bot/:botId")

@@ -134,13 +134,48 @@ export class ShopsService {
   }
 
   /**
-   * Получить все магазины пользователя
+   * Получить все магазины пользователя (только владелец)
    */
   async findAll(userId: string, filters?: ShopFiltersDto): Promise<Shop[]> {
     const queryBuilder = this.shopRepository
       .createQueryBuilder("shop")
       .leftJoinAndSelect("shop.bot", "bot")
       .where("shop.ownerId = :userId", { userId })
+      .orderBy("shop.updatedAt", "DESC");
+
+    if (filters?.search) {
+      queryBuilder.andWhere(
+        "(shop.name ILIKE :search OR shop.title ILIKE :search)",
+        { search: `%${filters.search}%` }
+      );
+    }
+
+    if (filters?.hasBot !== undefined) {
+      if (filters.hasBot) {
+        queryBuilder.andWhere("shop.botId IS NOT NULL");
+      } else {
+        queryBuilder.andWhere("shop.botId IS NULL");
+      }
+    }
+
+    return queryBuilder.getMany();
+  }
+
+  /**
+   * Получить все магазины в управлении пользователя (владелец + приглашённые)
+   */
+  async findAllForUser(
+    userId: string,
+    filters?: ShopFiltersDto
+  ): Promise<Shop[]> {
+    const shopIds = await this.shopPermissionsService.getShopIdsForUser(userId);
+    if (shopIds.length === 0) {
+      return [];
+    }
+    const queryBuilder = this.shopRepository
+      .createQueryBuilder("shop")
+      .leftJoinAndSelect("shop.bot", "bot")
+      .where("shop.id IN (:...shopIds)", { shopIds })
       .orderBy("shop.updatedAt", "DESC");
 
     if (filters?.search) {

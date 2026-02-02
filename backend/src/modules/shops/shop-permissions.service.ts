@@ -268,6 +268,25 @@ export class ShopPermissionsService {
     });
   }
 
+  /**
+   * Получить ID магазинов, доступных пользователю (владелец или приглашённый)
+   */
+  async getShopIdsForUser(userId: string): Promise<string[]> {
+    const owned = await this.shopRepository.find({
+      where: { ownerId: userId },
+      select: ["id"],
+    });
+    const shared = await this.shopUserRepository.find({
+      where: { userId },
+      select: ["shopId"],
+    });
+    const ids = new Set<string>([
+      ...owned.map((s) => s.id),
+      ...shared.map((su) => su.shopId),
+    ]);
+    return Array.from(ids);
+  }
+
   private async updateShopUserPermissions(
     shopId: string,
     userId: string,

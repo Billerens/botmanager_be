@@ -9,7 +9,7 @@ import {
   forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, IsNull } from "typeorm";
+import { Repository, IsNull, In } from "typeorm";
 import * as crypto from "crypto";
 import {
   CustomPage,
@@ -235,11 +235,41 @@ export class CustomPagesService {
   }
 
   /**
-   * Получить все страницы пользователя
+   * Получить все страницы пользователя (только владелец)
    */
   async findAllByOwner(userId: string): Promise<CustomPageResponseDto[]> {
     const pages = await this.customPageRepository.find({
       where: { ownerId: userId },
+      relations: ["bot", "shop"],
+      order: { createdAt: "DESC" },
+    });
+
+    const domainMap =
+      pages.length > 0
+        ? await this.customDomainsService.getDomainsByTargetIds(
+            userId,
+            DomainTargetType.CUSTOM_PAGE,
+            pages.map((p) => p.id)
+          )
+        : new Map();
+
+    return pages.map((page) => ({
+      ...this.toResponseDto(page),
+      customDomains: domainMap.get(page.id) ?? [],
+    }));
+  }
+
+  /**
+   * Получить все кастомные страницы в управлении (свои + приглашённые)
+   */
+  async findAllForUser(userId: string): Promise<CustomPageResponseDto[]> {
+    const pageIds =
+      await this.customPagePermissionsService.getCustomPageIdsForUser(userId);
+    if (pageIds.length === 0) {
+      return [];
+    }
+    const pages = await this.customPageRepository.find({
+      where: { id: In(pageIds) },
       relations: ["bot", "shop"],
       order: { createdAt: "DESC" },
     });

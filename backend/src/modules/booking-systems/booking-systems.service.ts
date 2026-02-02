@@ -132,7 +132,60 @@ export class BookingSystemsService {
   }
 
   /**
-   * Получить все системы бронирования пользователя
+   * Получить только свои системы бронирования (владелец)
+   */
+  async findOwned(
+    userId: string,
+    filters?: BookingSystemFilters
+  ): Promise<BookingSystem[]> {
+    const queryBuilder = this.bookingSystemRepository
+      .createQueryBuilder("bookingSystem")
+      .leftJoinAndSelect("bookingSystem.bot", "bot")
+      .where("bookingSystem.ownerId = :userId", { userId })
+      .orderBy("bookingSystem.updatedAt", "DESC");
+
+    if (filters?.search) {
+      queryBuilder.andWhere(
+        "(bookingSystem.name ILIKE :search OR bookingSystem.title ILIKE :search)",
+        { search: `%${filters.search}%` }
+      );
+    }
+
+    if (filters?.hasBot !== undefined) {
+      if (filters.hasBot) {
+        queryBuilder.andWhere("bookingSystem.botId IS NOT NULL");
+      } else {
+        queryBuilder.andWhere("bookingSystem.botId IS NULL");
+      }
+    }
+
+    const list = await queryBuilder.getMany();
+    const domainMap =
+      list.length > 0
+        ? await this.customDomainsService.getDomainsByTargetIds(
+            userId,
+            DomainTargetType.BOOKING,
+            list.map((bs) => bs.id)
+          )
+        : new Map();
+    return list.map((bs) => ({
+      ...bs,
+      url: bs.url,
+      publicUrl: bs.publicUrl,
+      isActive: bs.isActive,
+      hasBot: bs.hasBot,
+      displayName: bs.displayName,
+      hasActiveSubdomain: bs.hasActiveSubdomain,
+      isSubdomainPending: bs.isSubdomainPending,
+      defaultSettings: bs.defaultSettings,
+      customDomains: domainMap.get(bs.id) ?? [],
+    })) as (BookingSystem & {
+      customDomains: { domain: string; url: string; status: string }[];
+    })[];
+  }
+
+  /**
+   * Получить все системы бронирования в управлении (свои + приглашённые)
    */
   async findAll(
     userId: string,

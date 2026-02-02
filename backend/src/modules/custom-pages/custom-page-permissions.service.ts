@@ -42,6 +42,25 @@ export class CustomPagePermissionsService {
     return !!pageUser;
   }
 
+  /**
+   * Получить ID кастомных страниц, доступных пользователю (владелец или приглашённый)
+   */
+  async getCustomPageIdsForUser(userId: string): Promise<string[]> {
+    const owned = await this.customPageRepository.find({
+      where: { ownerId: userId },
+      select: ["id"],
+    });
+    const shared = await this.customPageUserRepository.find({
+      where: { userId },
+      select: ["customPageId"],
+    });
+    const ids = new Set<string>([
+      ...owned.map((p) => p.id),
+      ...shared.map((pu) => pu.customPageId),
+    ]);
+    return Array.from(ids);
+  }
+
   async hasPermission(
     userId: string,
     customPageId: string,

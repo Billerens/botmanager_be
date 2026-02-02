@@ -134,6 +134,45 @@ export class ShopsController {
     }));
   }
 
+  @Get("shared")
+  @ApiOperation({
+    summary: "Получить магазины в управлении (свои + приглашённые)",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Список магазинов получен",
+    schema: {
+      type: "array",
+      items: { $ref: getSchemaPath(ShopResponseDto) },
+    },
+  })
+  @ApiQuery({
+    name: "search",
+    required: false,
+    description: "Поиск по названию",
+  })
+  @ApiQuery({
+    name: "hasBot",
+    required: false,
+    type: Boolean,
+    description: "Фильтр по наличию бота",
+  })
+  async findAllShared(@Request() req, @Query() filters: ShopFiltersDto) {
+    const shops = await this.shopsService.findAllForUser(req.user.id, filters);
+    const domainMap =
+      shops.length > 0
+        ? await this.customDomainsService.getDomainsByTargetIds(
+            req.user.id,
+            DomainTargetType.SHOP,
+            shops.map((s) => s.id)
+          )
+        : new Map();
+    return shops.map((shop) => ({
+      ...this.formatShopResponse(shop),
+      customDomains: domainMap.get(shop.id) ?? [],
+    }));
+  }
+
   @Get("by-bot/:botId")
   @ApiOperation({ summary: "Получить магазин по ID бота" })
   @ApiResponse({

@@ -96,7 +96,9 @@ export class BookingSystemsController {
   }
 
   @Get()
-  @ApiOperation({ summary: "Получить список систем бронирования пользователя" })
+  @ApiOperation({
+    summary: "Получить список своих систем бронирования (только владелец)",
+  })
   @ApiQuery({
     name: "search",
     required: false,
@@ -116,7 +118,42 @@ export class BookingSystemsController {
       items: { $ref: getSchemaPath(BookingSystemResponseDto) },
     },
   })
-  async findAll(
+  async findOwned(
+    @Query("search") search?: string,
+    @Query("hasBot") hasBot?: string,
+    @Request() req?
+  ) {
+    const filters: BookingSystemFilters = {
+      search,
+      hasBot: hasBot === "true" ? true : hasBot === "false" ? false : undefined,
+    };
+    return this.bookingSystemsService.findOwned(req.user.id, filters);
+  }
+
+  @Get("shared")
+  @ApiOperation({
+    summary: "Получить системы бронирования в управлении (свои + приглашённые)",
+  })
+  @ApiQuery({
+    name: "search",
+    required: false,
+    description: "Поиск по названию",
+  })
+  @ApiQuery({
+    name: "hasBot",
+    required: false,
+    type: Boolean,
+    description: "Фильтр по наличию привязанного бота",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Список систем бронирования",
+    schema: {
+      type: "array",
+      items: { $ref: getSchemaPath(BookingSystemResponseDto) },
+    },
+  })
+  async findAllShared(
     @Query("search") search?: string,
     @Query("hasBot") hasBot?: string,
     @Request() req?
