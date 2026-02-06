@@ -17,6 +17,7 @@ import {
 } from "./dto/langchain-chat.dto";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import axios from "axios";
+import { OpenRouterAgentSettingsService } from "../openrouter/openrouter-agent-settings.service";
 
 /**
  * Сервис для работы с OpenRouter через LangChain
@@ -38,7 +39,10 @@ export class LangChainOpenRouterService {
   private proxyAvailable: boolean = false;
   private proxyAgent?: HttpsProxyAgent<string>;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly openRouterAgentSettingsService: OpenRouterAgentSettingsService
+  ) {
     // Получаем конфигурацию OpenRouter
     this.apiKey = this.configService.get<string>("openrouter.apiKey");
     this.baseUrl = this.configService.get<string>("openrouter.baseUrl");
@@ -217,6 +221,18 @@ export class LangChainOpenRouterService {
         );
       }
 
+      // Проверка, что модель не заблокирована для ИИ-агентов
+      if (request.model) {
+        const allowed = await this.openRouterAgentSettingsService.isModelAllowedForAgents(
+          request.model
+        );
+        if (!allowed) {
+          throw new BadRequestException(
+            `Модель ${request.model} недоступна для ИИ-агентов (отключена или превышает лимит по стоимости).`
+          );
+        }
+      }
+
       // Создаем модель
       const chatModel = this.createChatModel(request.model, request.parameters);
 
@@ -301,6 +317,18 @@ export class LangChainOpenRouterService {
   async *chatStream(
     request: LangChainChatRequestDto
   ): AsyncGenerator<string, void, unknown> {
+    // Проверка, что модель не заблокирована для ИИ-агентов
+    if (request.model) {
+      const allowed = await this.openRouterAgentSettingsService.isModelAllowedForAgents(
+        request.model
+      );
+      if (!allowed) {
+        throw new BadRequestException(
+          `Модель ${request.model} недоступна для ИИ-агентов (отключена или превышает лимит по стоимости).`
+        );
+      }
+    }
+
     try {
       // Создаем модель
       const chatModel = this.createChatModel(request.model, request.parameters);
@@ -335,6 +363,17 @@ export class LangChainOpenRouterService {
   async executeChain(
     request: LangChainChatRequestDto
   ): Promise<LangChainChatResponseDto> {
+    if (request.model) {
+      const allowed = await this.openRouterAgentSettingsService.isModelAllowedForAgents(
+        request.model
+      );
+      if (!allowed) {
+        throw new BadRequestException(
+          `Модель ${request.model} недоступна для ИИ-агентов (отключена или превышает лимит по стоимости).`
+        );
+      }
+    }
+
     const startTime = Date.now();
 
     try {

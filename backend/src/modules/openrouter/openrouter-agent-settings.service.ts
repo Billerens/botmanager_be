@@ -2,6 +2,8 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { OpenRouterAgentSettings } from "../../database/entities/openrouter-agent-settings.entity";
+import { OpenRouterService } from "../../common/openrouter.service";
+import { OpenRouterModelDto } from "../../common/dto/openrouter.dto";
 
 export interface OpenRouterAgentSettingsDto {
   disabledModelIds: string[];
@@ -12,7 +14,8 @@ export interface OpenRouterAgentSettingsDto {
 export class OpenRouterAgentSettingsService {
   constructor(
     @InjectRepository(OpenRouterAgentSettings)
-    private readonly repo: Repository<OpenRouterAgentSettings>
+    private readonly repo: Repository<OpenRouterAgentSettings>,
+    private readonly openRouterService: OpenRouterService
   ) {}
 
   private normalizeIds(ids: string[] | undefined): string[] {
@@ -61,5 +64,49 @@ export class OpenRouterAgentSettingsService {
     }
     await this.repo.save(row);
     return this.getSettings();
+  }
+
+  /**
+   * Фильтрует модели по настройкам агентов (отключённые и выше лимита по стоимости).
+   */
+  private filterModelsForAgents(
+    models: OpenRouterModelDto[],
+    disabledIds: string[],
+    maxCostPerMillion: number | null
+  ): OpenRouterModelDto[] {
+    const disabledSet = new Set(disabledIds);
+    return models.filter((m) => {
+      if (disabledSet.has(m.id)) return false;
+      if (maxCostPerMillion != null && m.pricing) {
+        const promptPerMillion =
+          parseFloat(String(m.pricing.prompt || 0)) * 1e6;
+        const completionPerMillion =
+          parseFloat(String(m.pricing.completion || 0)) * 1e6;
+        if (
+          promptPerMillion > maxCostPerMillion ||
+          completionPerMillion > maxCostPerMillion
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  /**
+   * Проверяет, разрешена ли модель для ИИ-агентов (не отключена и не выше лимита по стоимости).
+   */
+  async isModelAllowedForAgents(modelId: string): Promise<boolean> {
+    if (!modelId || !modelId.trim()) return true;
+    const [settings, paidResult] = await Promise.all([
+      this.getSettings(),
+      this.openRouterService.getPaidModels(),
+    ]);
+    const allowed = this.filterModelsForAgents(
+      paidResult.data,
+      settings.disabledModelIds,
+      settings.maxCostPerMillion
+    );
+    return allowed.some((m) => m.id === modelId);
   }
 }
