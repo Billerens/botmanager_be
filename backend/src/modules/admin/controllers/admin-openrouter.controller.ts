@@ -5,10 +5,16 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiProperty,
+  ApiPropertyOptional,
 } from "@nestjs/swagger";
-import { IsArray, IsString } from "class-validator";
+import { IsArray, IsString, IsNumber, IsOptional } from "class-validator";
+import { Type } from "class-transformer";
 import { OpenRouterService } from "../../../common/openrouter.service";
 import { OpenRouterFeaturedService } from "../../openrouter/openrouter-featured.service";
+import {
+  OpenRouterAgentSettingsService,
+  OpenRouterAgentSettingsDto,
+} from "../../openrouter/openrouter-agent-settings.service";
 import { AdminJwtGuard } from "../guards/admin-jwt.guard";
 import { AdminRolesGuard } from "../guards/admin-roles.guard";
 import { ModelsListResponseDto } from "../../../common/dto/openrouter.dto";
@@ -24,6 +30,29 @@ export class SetFeaturedModelsDto {
   modelIds: string[];
 }
 
+export class SetAgentSettingsDto {
+  @ApiPropertyOptional({
+    description: "ID моделей, отключённых для ИИ-агентов (не показывать в списке и не принимать в запросах)",
+    example: ["anthropic/claude-3-opus"],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  disabledModelIds?: string[];
+
+  @ApiPropertyOptional({
+    description:
+      "Макс. цена за 1M токенов ($). Модели с ценой prompt или completion выше — не отображать. null или не передавать = без лимита",
+    example: 10,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  maxCostPerMillion?: number | null;
+}
+
 @ApiTags("Admin OpenRouter")
 @Controller("admin/openrouter")
 @UseGuards(AdminJwtGuard, AdminRolesGuard)
@@ -31,7 +60,8 @@ export class SetFeaturedModelsDto {
 export class AdminOpenRouterController {
   constructor(
     private readonly openRouterService: OpenRouterService,
-    private readonly openRouterFeaturedService: OpenRouterFeaturedService
+    private readonly openRouterFeaturedService: OpenRouterFeaturedService,
+    private readonly openRouterAgentSettingsService: OpenRouterAgentSettingsService
   ) {}
 
   @Get("models")
@@ -66,5 +96,30 @@ export class AdminOpenRouterController {
     const modelIds = Array.isArray(body.modelIds) ? body.modelIds : [];
     await this.openRouterFeaturedService.setFeaturedModels(modelIds);
     return { modelIds };
+  }
+
+  @Get("agent-settings")
+  @ApiOperation({
+    summary: "Настройки выдачи моделей для ИИ-агентов",
+    description:
+      "Список отключённых моделей и лимит по стоимости за 1M токенов (модели дороже — не отображать)",
+  })
+  @ApiResponse({ status: 200, description: "Настройки агентов" })
+  async getAgentSettings(): Promise<OpenRouterAgentSettingsDto> {
+    return this.openRouterAgentSettingsService.getSettings();
+  }
+
+  @Put("agent-settings")
+  @ApiOperation({
+    summary: "Обновить настройки выдачи моделей для ИИ-агентов",
+  })
+  @ApiResponse({ status: 200, description: "Обновлённые настройки" })
+  async setAgentSettings(
+    @Body() body: SetAgentSettingsDto
+  ): Promise<OpenRouterAgentSettingsDto> {
+    return this.openRouterAgentSettingsService.setSettings({
+      disabledModelIds: body.disabledModelIds,
+      maxCostPerMillion: body.maxCostPerMillion,
+    });
   }
 }

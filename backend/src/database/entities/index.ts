@@ -82,6 +82,7 @@ export {
 export { CustomData } from "./custom-data.entity";
 export { PublicApiKey, generateApiKey } from "./public-api-key.entity";
 export { OpenRouterFeaturedModel } from "./openrouter-featured-model.entity";
+export { OpenRouterAgentSettings } from "./openrouter-agent-settings.entity";
 
 /**
  * Массив всех entity классов для TypeORM
@@ -132,6 +133,7 @@ import { CustomCollectionSchema } from "./custom-collection-schema.entity";
 import { CustomData } from "./custom-data.entity";
 import { PublicApiKey } from "./public-api-key.entity";
 import { OpenRouterFeaturedModel } from "./openrouter-featured-model.entity";
+import { OpenRouterAgentSettings } from "./openrouter-agent-settings.entity";
 
 export const ALL_ENTITIES = [
   User,
@@ -179,4 +181,5 @@ export const ALL_ENTITIES = [
   CustomData,
   PublicApiKey,
   OpenRouterFeaturedModel,
+  OpenRouterAgentSettings,
 ];

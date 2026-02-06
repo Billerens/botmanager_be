@@ -13,12 +13,14 @@ import { Response } from "express";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger";
 import { OpenRouterService } from "../../common/openrouter.service";
 import { OpenRouterFeaturedService } from "./openrouter-featured.service";
+import { OpenRouterAgentSettingsService } from "./openrouter-agent-settings.service";
 import {
   OpenRouterChatRequestDto,
   OpenRouterResponseDto,
   OpenRouterErrorResponseDto,
   GenerationStatsDto,
   ModelsListResponseDto,
+  OpenRouterModelDto,
 } from "../../common/dto/openrouter.dto";
 
 /**
@@ -57,8 +59,36 @@ export class OpenRouterPaidController {
 
   constructor(
     private readonly openRouterService: OpenRouterService,
-    private readonly openRouterFeaturedService: OpenRouterFeaturedService
+    private readonly openRouterFeaturedService: OpenRouterFeaturedService,
+    private readonly openRouterAgentSettingsService: OpenRouterAgentSettingsService
   ) {}
+
+  /**
+   * Фильтрует модели по настройкам агентов: отключённые и выше лимита по стоимости.
+   * Цена в OpenRouter — за токен; за 1M токенов = price * 1e6.
+   */
+  private filterModelsForAgents(
+    models: OpenRouterModelDto[],
+    disabledIds: string[],
+    maxCostPerMillion: number | null
+  ): OpenRouterModelDto[] {
+    const disabledSet = new Set(disabledIds);
+    return models.filter((m) => {
+      if (disabledSet.has(m.id)) return false;
+      if (maxCostPerMillion != null && m.pricing) {
+        const promptPerMillion = parseFloat(String(m.pricing.prompt || 0)) * 1e6;
+        const completionPerMillion =
+          parseFloat(String(m.pricing.completion || 0)) * 1e6;
+        if (
+          promptPerMillion > maxCostPerMillion ||
+          completionPerMillion > maxCostPerMillion
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
 
   /**
    * Chat completions endpoint для платных моделей
@@ -90,22 +120,29 @@ export class OpenRouterPaidController {
       `Paid chat completions request: model=${request.model || "default"}, messages=${request.messages.length}, stream=${request.stream || false}`
     );
 
-    // Валидация модели (если указана)
-    // Если OPENROUTER_ALLOWED_MODELS не задан, валидация пропускает все модели
+    // Валидация модели (если указана): базовая разрешённость + настройки агентов
     if (request.model) {
-      const paidModels = await this.openRouterService.getPaidModels();
-      const isModelAllowed = paidModels.data.some(
+      const [paidResult, agentSettings] = await Promise.all([
+        this.openRouterService.getPaidModels(),
+        this.openRouterAgentSettingsService.getSettings(),
+      ]);
+      const allowedForAgents = this.filterModelsForAgents(
+        paidResult.data,
+        agentSettings.disabledModelIds,
+        agentSettings.maxCostPerMillion
+      );
+      const isModelAllowed = allowedForAgents.some(
         (model) => model.id === request.model
       );
 
       if (!isModelAllowed) {
         this.logger.warn(
-          `Model ${request.model} is not in the allowed paid models list`
+          `Model ${request.model} is not in the allowed paid models list for agents`
         );
         res.status(HttpStatus.BAD_REQUEST).json({
           error: {
             status: 400,
-            message: `Model ${request.model} is not in the allowed paid models list. Use GET /api/v1/openrouter-paid/models to see available models.`,
+            message: `Model ${request.model} is not available for AI agents. It may be disabled or exceed the cost limit. Use GET /api/v1/openrouter-paid/models to see available models.`,
           },
         });
         return;
@@ -357,13 +394,19 @@ export class OpenRouterPaidController {
     this.logger.debug("Get paid models request received");
 
     try {
-      const [result, featuredIds] = await Promise.all([
+      const [result, featuredIds, agentSettings] = await Promise.all([
         this.openRouterService.getPaidModels(),
         this.openRouterFeaturedService.getFeaturedModelIds(),
+        this.openRouterAgentSettingsService.getSettings(),
       ]);
+      const filtered = this.filterModelsForAgents(
+        result.data,
+        agentSettings.disabledModelIds,
+        agentSettings.maxCostPerMillion
+      );
       const featuredSet = new Set(featuredIds);
       return {
-        data: result.data.map((m) => ({
+        data: filtered.map((m) => ({
           ...m,
           platform_choice: featuredSet.has(m.id),
         })),
