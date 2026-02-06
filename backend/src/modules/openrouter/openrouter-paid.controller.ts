@@ -12,6 +12,7 @@ import {
 import { Response } from "express";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger";
 import { OpenRouterService } from "../../common/openrouter.service";
+import { OpenRouterFeaturedService } from "./openrouter-featured.service";
 import {
   OpenRouterChatRequestDto,
   OpenRouterResponseDto,
@@ -54,7 +55,10 @@ import {
 export class OpenRouterPaidController {
   private readonly logger = new Logger(OpenRouterPaidController.name);
 
-  constructor(private readonly openRouterService: OpenRouterService) {}
+  constructor(
+    private readonly openRouterService: OpenRouterService,
+    private readonly openRouterFeaturedService: OpenRouterFeaturedService
+  ) {}
 
   /**
    * Chat completions endpoint для платных моделей
@@ -353,7 +357,17 @@ export class OpenRouterPaidController {
     this.logger.debug("Get paid models request received");
 
     try {
-      return await this.openRouterService.getPaidModels();
+      const [result, featuredIds] = await Promise.all([
+        this.openRouterService.getPaidModels(),
+        this.openRouterFeaturedService.getFeaturedModelIds(),
+      ]);
+      const featuredSet = new Set(featuredIds);
+      return {
+        data: result.data.map((m) => ({
+          ...m,
+          platform_choice: featuredSet.has(m.id),
+        })),
+      };
     } catch (error: any) {
       this.logger.error(
         `Error getting paid models: ${error.message}`,

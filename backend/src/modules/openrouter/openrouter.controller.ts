@@ -12,6 +12,7 @@ import {
 import { Response } from "express";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger";
 import { OpenRouterService } from "../../common/openrouter.service";
+import { OpenRouterFeaturedService } from "./openrouter-featured.service";
 import {
   OpenRouterChatRequestDto,
   OpenRouterResponseDto,
@@ -74,7 +75,10 @@ import {
 export class OpenRouterController {
   private readonly logger = new Logger(OpenRouterController.name);
 
-  constructor(private readonly openRouterService: OpenRouterService) {}
+  constructor(
+    private readonly openRouterService: OpenRouterService,
+    private readonly openRouterFeaturedService: OpenRouterFeaturedService
+  ) {}
 
   /**
    * Chat completions endpoint
@@ -347,7 +351,17 @@ export class OpenRouterController {
     this.logger.debug("Get free models request received");
 
     try {
-      return await this.openRouterService.getFreeModels();
+      const [result, featuredIds] = await Promise.all([
+        this.openRouterService.getFreeModels(),
+        this.openRouterFeaturedService.getFeaturedModelIds(),
+      ]);
+      const featuredSet = new Set(featuredIds);
+      return {
+        data: result.data.map((m) => ({
+          ...m,
+          platform_choice: featuredSet.has(m.id),
+        })),
+      };
     } catch (error: any) {
       this.logger.error(
         `Error getting free models: ${error.message}`,

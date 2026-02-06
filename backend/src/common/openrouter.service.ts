@@ -368,9 +368,8 @@ export class OpenRouterService {
 
   /**
    * Получает список бесплатных моделей OpenRouter
-   * Фильтрует модели, где pricing.prompt === "0" и pricing.completion === "0"
-   * Автоматически фильтрует модели с количеством параметров > 27b
-   * @returns Список бесплатных моделей с параметрами > 27b
+   * Фильтрует модели, где pricing.prompt === "0" и pricing.completion === "0".
+   * Включает модели с параметрами > 27b или с неопределённым количеством параметров.
    */
   async getFreeModels(): Promise<ModelsListResponseDto> {
     try {
@@ -378,7 +377,7 @@ export class OpenRouterService {
 
       const allModels = await this.getModels();
 
-      // Фильтруем только бесплатные модели с параметрами > 27b
+      // Фильтруем только бесплатные модели; с параметрами > 27b или с неопределённым количеством
       const freeModels = allModels.data.filter((model) => {
         const isPromptFree =
           model.pricing?.prompt === "0" || model.pricing?.prompt === "0.0";
@@ -390,29 +389,14 @@ export class OpenRouterService {
           return false;
         }
 
-        // Проверяем количество параметров
         const params = this.extractParametersFromModel(model);
-
         if (params === null) {
-          this.logger.debug(
-            `Skipping free model ${model.id}: unable to determine parameter count`
-          );
-          return false;
+          return true; // Включаем модели с неопределённым количеством параметров
         }
-
-        const meetsMinParams = params > this.MIN_PARAMETERS;
-        if (!meetsMinParams) {
-          this.logger.debug(
-            `Skipping free model ${model.id}: ${params / 1_000_000_000}B < ${this.MIN_PARAMETERS / 1_000_000_000}B minimum`
-          );
-        }
-
-        return meetsMinParams;
+        return params > this.MIN_PARAMETERS;
       });
 
-      this.logger.debug(
-        `Found ${freeModels.length} free models with parameters > ${this.MIN_PARAMETERS / 1_000_000_000}B`
-      );
+      this.logger.debug(`Found ${freeModels.length} free models`);
 
       // Сортируем по имени для удобства
       freeModels.sort((a, b) => a.name.localeCompare(b.name));
@@ -432,10 +416,9 @@ export class OpenRouterService {
   }
 
   /**
-   * Получает список платных моделей OpenRouter
-   * Автоматически фильтрует модели с количеством параметров > 27b
-   * Если OPENROUTER_ALLOWED_MODELS задан, дополнительно фильтрует по этому списку
-   * @returns Список платных моделей с параметрами > 27b
+   * Получает список платных моделей OpenRouter.
+   * Включает модели с параметрами > 27b или с неопределённым количеством параметров.
+   * Если OPENROUTER_ALLOWED_MODELS задан, дополнительно фильтрует по этому списку.
    */
   async getPaidModels(): Promise<ModelsListResponseDto> {
     try {
@@ -443,31 +426,16 @@ export class OpenRouterService {
 
       const allModels = await this.getModels();
 
-      // Фильтруем модели по количеству параметров > 27b
+      // Фильтруем модели: параметры > 27b или неопределённое количество параметров
       let filteredModels = allModels.data.filter((model) => {
         const params = this.extractParametersFromModel(model);
-
-        // Если не удалось определить количество параметров, пропускаем модель
         if (params === null) {
-          this.logger.debug(
-            `Skipping model ${model.id}: unable to determine parameter count`
-          );
-          return false;
+          return true; // Включаем модели с неопределённым количеством параметров
         }
-
-        const meetsMinParams = params > this.MIN_PARAMETERS;
-        if (!meetsMinParams) {
-          this.logger.debug(
-            `Skipping model ${model.id}: ${params / 1_000_000_000}B < ${this.MIN_PARAMETERS / 1_000_000_000}B minimum`
-          );
-        }
-
-        return meetsMinParams;
+        return params > this.MIN_PARAMETERS;
       });
 
-      this.logger.debug(
-        `Found ${filteredModels.length} models with parameters > ${this.MIN_PARAMETERS / 1_000_000_000}B`
-      );
+      this.logger.debug(`Found ${filteredModels.length} paid models`);
 
       // Если список разрешенных моделей задан, дополнительно фильтруем
       if (this.allowedModels && this.allowedModels.length > 0) {

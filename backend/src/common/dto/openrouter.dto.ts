@@ -645,6 +645,13 @@ export class OpenRouterModelDto {
     description: "Количество параметров модели",
   })
   num_parameters?: number;
+
+  @ApiPropertyOptional({
+    example: true,
+    description:
+      "Модель отмечена как «выбор платформы», отображается вверху списка со звёздочкой",
+  })
+  platform_choice?: boolean;
 }
 
 /**
