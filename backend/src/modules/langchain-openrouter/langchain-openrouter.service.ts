@@ -245,17 +245,24 @@ export class LangChainOpenRouterService {
       // Выполняем запрос
       const response = await chatModel.invoke(langchainMessages);
 
-      // Логируем сырой ответ для отладки (content может быть массивом блоков)
-      const rawContentType = typeof response.content;
-      this.logger.debug(
-        `LangChain chat: raw response.content type=${rawContentType}, ` +
-          `keys=${response && typeof response === "object" ? Object.keys(response).join(",") : "n/a"}`,
-      );
-      if (rawContentType !== "string" && Array.isArray(response.content)) {
-        this.logger.debug(
-          `LangChain chat: response.content is array, length=${response.content.length}, ` +
-            `first item keys=${response.content[0] && typeof response.content[0] === "object" ? Object.keys(response.content[0]).join(",") : "n/a"}`,
+      // Логируем сырой ответ (уровень log) — content может быть пустой строкой при непустом usage
+      const rawKeys = response && typeof response === "object" ? Object.keys(response) : [];
+      const rawPayload: Record<string, unknown> = {
+        content: response.content,
+        contentType: typeof response.content,
+        contentLength: typeof response.content === "string" ? response.content.length : (response.content as any)?.length,
+        response_metadata: (response as any).response_metadata,
+        usage_metadata: (response as any).usage_metadata,
+        additional_kwargs: (response as any).additional_kwargs,
+      };
+      try {
+        const rawSerialized = JSON.stringify(rawPayload, null, 2);
+        const maxLen = 2000;
+        this.logger.log(
+          `LangChain chat: сырой ответ (keys: ${rawKeys.join(",")}): ${rawSerialized.length <= maxLen ? rawSerialized : rawSerialized.slice(0, maxLen) + "..."}`,
         );
+      } catch (e) {
+        this.logger.warn(`LangChain chat: не удалось сериализовать сырой ответ: ${(e as Error).message}`);
       }
 
       const endTime = Date.now();
