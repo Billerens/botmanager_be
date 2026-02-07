@@ -20,8 +20,8 @@ export interface AiModelInfo {
  * Сервис выбора AI модели OpenRouter для узлов Bot Flow (AI Single, AI Chat).
  * Использует список платных моделей (getPaidModels); выбор ограничивается
  * настройкой allowedForBotFlowModelIds в админке (если задана — только эти модели).
- * При пустом списке «Разрешить в Bot Flow» берутся модели из «выбор платформы» (featured),
- * отсортированные по возрастанию стоимости за 1M токенов.
+ * При пустом списке «Разрешить в Bot Flow» первой пробуется модель openrouter/free,
+ * при ошибке — фоллбэк на «выбор платформы» (featured) по возрастанию стоимости.
  *
  * Приоритеты моделей:
  * 1. grok - приоритет 1 (наивысший)
@@ -36,6 +36,9 @@ export interface AiModelInfo {
 @Injectable()
 export class AiModelSelectorService {
   private readonly logger = new Logger(AiModelSelectorService.name);
+
+  /** Модель по умолчанию при пустом списке «Разрешить в Bot Flow» (пробуем первой, при ошибке — фоллбэк на featured) */
+  private static readonly DEFAULT_FREE_MODEL_ID = "openrouter/free";
 
   // Кэш моделей
   private cachedModels: AiModelInfo[] = [];
@@ -60,9 +63,11 @@ export class AiModelSelectorService {
     private readonly configService: ConfigService,
     private readonly openRouterAgentSettings: OpenRouterAgentSettingsService,
     private readonly openRouterFeaturedService: OpenRouterFeaturedService,
-    private readonly openRouterService: OpenRouterService
+    private readonly openRouterService: OpenRouterService,
   ) {
-    this.logger.log("AiModelSelectorService инициализирован (источник: платные модели)");
+    this.logger.log(
+      "AiModelSelectorService инициализирован (источник: платные модели)",
+    );
   }
 
   /** Стоимость за 1M токенов (prompt + completion) для сортировки по возрастанию цены */
@@ -89,14 +94,14 @@ export class AiModelSelectorService {
     if (models.length === 0) {
       const defaultId = this.getDefaultModelId();
       this.logger.warn(
-        `Нет доступных платных моделей для Bot Flow, fallback: ${defaultId}`
+        `Нет доступных платных моделей для Bot Flow, fallback: ${defaultId}`,
       );
       return defaultId;
     }
 
     const selectedModel = models[0];
     this.logger.log(
-      `Выбрана модель: ${selectedModel.id} (приоритет: ${selectedModel.priority}, ~${selectedModel.parametersEstimate}B параметров)`
+      `Выбрана модель: ${selectedModel.id} (приоритет: ${selectedModel.priority}, ~${selectedModel.parametersEstimate}B параметров)`,
     );
 
     return selectedModel.id;
@@ -113,7 +118,7 @@ export class AiModelSelectorService {
       now - this.cacheTimestamp < this.cacheTtl
     ) {
       this.logger.debug(
-        `Используем кэшированный список моделей (${this.cachedModels.length} моделей)`
+        `Используем кэшированный список моделей (${this.cachedModels.length} моделей)`,
       );
       return this.cachedModels;
     }
@@ -140,17 +145,17 @@ export class AiModelSelectorService {
         const missingInApi = allowedFlowIds.filter((id) => !paidIds.has(id));
         if (missingInApi.length > 0) {
           this.logger.warn(
-            `Модели из «Разрешить в Bot Flow» отсутствуют в API OpenRouter (игнорируются): ${missingInApi.join(", ")}`
+            `Модели из «Разрешить в Bot Flow» отсутствуют в API OpenRouter (игнорируются): ${missingInApi.join(", ")}`,
           );
         }
         modelsForFlow = modelsForFlow.filter((m) => allowedSet.has(m.id));
         this.logger.debug(
-          `После фильтра «разрешено для Bot Flow»: ${modelsForFlow.length} из ${paidResult.data?.length || 0} платных моделей`
+          `После фильтра «разрешено для Bot Flow»: ${modelsForFlow.length} из ${paidResult.data?.length || 0} платных моделей`,
         );
       } else {
         modelsForFlow = modelsForFlow.filter((m) => featuredSet.has(m.id));
         this.logger.debug(
-          `Список «Разрешить в Bot Flow» пуст: используем «выбор платформы» (${modelsForFlow.length} моделей)`
+          `Список «Разрешить в Bot Flow» пуст: используем «выбор платформы» (${modelsForFlow.length} моделей)`,
         );
       }
 
@@ -176,7 +181,7 @@ export class AiModelSelectorService {
       // При пустом списке «Разрешить в Bot Flow» сортируем по возрастанию стоимости (минимальная по стоимости первой)
       if (allowedFlowIds.length === 0) {
         modelsForFlow.sort(
-          (a, b) => this.getCostPer1M(a) - this.getCostPer1M(b)
+          (a, b) => this.getCostPer1M(a) - this.getCostPer1M(b),
         );
       }
 
@@ -203,20 +208,32 @@ export class AiModelSelectorService {
           }
           return b.parametersEstimate - a.parametersEstimate;
         });
+      } else {
+        // При пустом списке первой пробуем openrouter/free, при ошибке — фоллбэк на featured по стоимости
+        processedModels.unshift({
+          id: AiModelSelectorService.DEFAULT_FREE_MODEL_ID,
+          name: "OpenRouter Free",
+          contextLength: 0,
+          priority: 0,
+          parametersEstimate: 0,
+        });
+        this.logger.debug(
+          "Список «Разрешить в Bot Flow» пуст: первой пробуем openrouter/free, при ошибке — featured по стоимости",
+        );
       }
 
       this.cachedModels = processedModels;
       this.cacheTimestamp = now;
 
       this.logger.log(
-        `Доступно ${this.cachedModels.length} платных моделей для Bot Flow`
+        `Доступно ${this.cachedModels.length} платных моделей для Bot Flow`,
       );
       if (this.cachedModels.length > 0) {
         this.logger.log(
           `Топ-3 модели: ${this.cachedModels
             .slice(0, 3)
             .map((m) => m.id)
-            .join(", ")}`
+            .join(", ")}`,
         );
       }
 
@@ -239,13 +256,15 @@ export class AiModelSelectorService {
    */
   async executeWithFallback<T>(
     action: (modelId: string) => Promise<T>,
-    maxRetries: number = 3
+    maxRetries: number = 3,
   ): Promise<{ result: T; modelId: string; modelName: string }> {
     const models = await this.getAvailableModels();
 
     if (models.length === 0) {
       const defaultModelId = this.getDefaultModelId();
-      this.logger.warn(`Нет кэшированных моделей для Bot Flow, пробуем: ${defaultModelId}`);
+      this.logger.warn(
+        `Нет кэшированных моделей для Bot Flow, пробуем: ${defaultModelId}`,
+      );
       const result = await action(defaultModelId);
       return {
         result,
@@ -276,7 +295,7 @@ export class AiModelSelectorService {
     // Если все модели из списка не сработали, пробуем fallback
     if (lastError) {
       this.logger.error(
-        `Все ${modelsToTry.length} модели недоступны, последняя ошибка: ${lastError.message}`
+        `Все ${modelsToTry.length} модели недоступны, последняя ошибка: ${lastError.message}`,
       );
       throw lastError;
     }
@@ -290,7 +309,7 @@ export class AiModelSelectorService {
    */
   async executeStreamingWithFallback(
     createStream: (modelId: string) => AsyncGenerator<string, void, unknown>,
-    maxRetries: number = 3
+    maxRetries: number = 3,
   ): Promise<{
     stream: AsyncGenerator<string, void, unknown>;
     modelId: string;
@@ -300,7 +319,9 @@ export class AiModelSelectorService {
 
     if (models.length === 0) {
       const defaultModelId = this.getDefaultModelId();
-      this.logger.warn(`Нет кэшированных моделей для Bot Flow, пробуем: ${defaultModelId}`);
+      this.logger.warn(
+        `Нет кэшированных моделей для Bot Flow, пробуем: ${defaultModelId}`,
+      );
       return {
         stream: createStream(defaultModelId),
         modelId: defaultModelId,
@@ -328,7 +349,7 @@ export class AiModelSelectorService {
         };
       } catch (error) {
         this.logger.warn(
-          `Streaming модель ${model.id} недоступна: ${error.message}`
+          `Streaming модель ${model.id} недоступна: ${error.message}`,
         );
         lastError = error;
         continue;
@@ -337,7 +358,7 @@ export class AiModelSelectorService {
 
     if (lastError) {
       this.logger.error(
-        `Все ${modelsToTry.length} streaming модели недоступны`
+        `Все ${modelsToTry.length} streaming модели недоступны`,
       );
       throw lastError;
     }
@@ -350,7 +371,7 @@ export class AiModelSelectorService {
    */
   private async *createValidatingStream(
     stream: AsyncGenerator<string, void, unknown>,
-    modelId: string
+    modelId: string,
   ): AsyncGenerator<string, void, unknown> {
     try {
       for await (const chunk of stream) {
