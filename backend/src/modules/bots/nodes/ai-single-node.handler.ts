@@ -123,10 +123,32 @@ export class AiSingleNodeHandler extends BaseNodeHandler {
         });
       });
 
-      // Сохраняем ответ в переменную сессии
-      const aiResponse = response.content || "";
+      // Логируем объект ответа для отладки (content может быть строкой или массивом блоков)
+      const contentType = typeof response.content;
+      this.logger.log(
+        `AI Single: response.content type=${contentType}, length=${typeof response.content === "string" ? response.content.length : (response.content as any)?.length ?? "n/a"}`
+      );
+      if (contentType !== "string") {
+        try {
+          const contentPreview = JSON.stringify(response.content).slice(0, 500);
+          this.logger.log(`AI Single: response.content (preview): ${contentPreview}${contentPreview.length >= 500 ? "..." : ""}`);
+        } catch (e) {
+          this.logger.warn(`AI Single: не удалось сериализовать content: ${e.message}`);
+        }
+      }
+      this.logger.debug(
+        `AI Single: полный объект ответа: ${JSON.stringify({ content: response.content, metadata: response.metadata }).slice(0, 1000)}`
+      );
+
+      // Извлекаем текст: content может быть строкой или массивом (multimodal)
+      const aiResponse = typeof response.content === "string"
+        ? response.content
+        : Array.isArray(response.content)
+          ? (response.content as { type?: string; text?: string; content?: string }[])
+              .map((block) => (typeof block === "string" ? block : block?.text ?? block?.content ?? ""))
+              .join("")
+          : String(response.content ?? "");
       session.variables[outputVariable] = aiResponse;
-      // Сохраняем информацию о модели (временно для отладки)
       session.variables[`${outputVariable}_model`] = modelName;
       session.variables[`${outputVariable}_model_id`] = modelId;
 
@@ -138,7 +160,6 @@ export class AiSingleNodeHandler extends BaseNodeHandler {
       );
       this.logger.log(`AI Single: Длина ответа: ${aiResponse.length} символов`);
 
-      // Логируем использование токенов, если доступно
       if (response.metadata?.usage) {
         this.logger.log(
           `AI Single: Токены - prompt: ${response.metadata.usage.promptTokens}, completion: ${response.metadata.usage.completionTokens}`

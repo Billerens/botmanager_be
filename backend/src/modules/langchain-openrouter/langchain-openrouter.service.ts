@@ -41,13 +41,13 @@ export class LangChainOpenRouterService {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly openRouterAgentSettingsService: OpenRouterAgentSettingsService
+    private readonly openRouterAgentSettingsService: OpenRouterAgentSettingsService,
   ) {
     // Получаем конфигурацию OpenRouter
     this.apiKey = this.configService.get<string>("openrouter.apiKey");
     this.baseUrl = this.configService.get<string>("openrouter.baseUrl");
     this.defaultModel = this.configService.get<string>(
-      "openrouter.defaultModel"
+      "openrouter.defaultModel",
     );
     this.httpReferer = this.configService.get<string>("openrouter.httpReferer");
     this.xTitle = this.configService.get<string>("openrouter.xTitle");
@@ -59,7 +59,7 @@ export class LangChainOpenRouterService {
 
     if (!this.apiKey) {
       this.logger.warn(
-        "OpenRouter API key не настроен. Проверьте переменную OPENROUTER_API_KEY"
+        "OpenRouter API key не настроен. Проверьте переменную OPENROUTER_API_KEY",
       );
     }
 
@@ -199,7 +199,7 @@ export class LangChainOpenRouterService {
         return new AIMessage(message.content);
       default:
         this.logger.warn(
-          `Неизвестная роль сообщения: ${message.role}, используется как HumanMessage`
+          `Неизвестная роль сообщения: ${message.role}, используется как HumanMessage`,
         );
         return new HumanMessage(message.content);
     }
@@ -209,7 +209,7 @@ export class LangChainOpenRouterService {
    * Основной метод для работы с чатом через LangChain
    */
   async chat(
-    request: LangChainChatRequestDto
+    request: LangChainChatRequestDto,
   ): Promise<LangChainChatResponseDto> {
     const startTime = Date.now();
 
@@ -217,18 +217,19 @@ export class LangChainOpenRouterService {
       // Валидация
       if (!request.messages || request.messages.length === 0) {
         throw new BadRequestException(
-          "Необходимо предоставить хотя бы одно сообщение"
+          "Необходимо предоставить хотя бы одно сообщение",
         );
       }
 
       // Проверка, что модель не заблокирована для ИИ-агентов
       if (request.model) {
-        const allowed = await this.openRouterAgentSettingsService.isModelAllowedForAgents(
-          request.model
-        );
+        const allowed =
+          await this.openRouterAgentSettingsService.isModelAllowedForAgents(
+            request.model,
+          );
         if (!allowed) {
           throw new BadRequestException(
-            `Модель ${request.model} недоступна для ИИ-агентов (отключена или превышает лимит по стоимости).`
+            `Модель ${request.model} недоступна для ИИ-агентов (отключена или превышает лимит по стоимости).`,
           );
         }
       }
@@ -238,11 +239,24 @@ export class LangChainOpenRouterService {
 
       // Конвертируем сообщения
       const langchainMessages = request.messages.map((msg) =>
-        this.convertToLangChainMessage(msg)
+        this.convertToLangChainMessage(msg),
       );
 
       // Выполняем запрос
       const response = await chatModel.invoke(langchainMessages);
+
+      // Логируем сырой ответ для отладки (content может быть массивом блоков)
+      const rawContentType = typeof response.content;
+      this.logger.debug(
+        `LangChain chat: raw response.content type=${rawContentType}, ` +
+          `keys=${response && typeof response === "object" ? Object.keys(response).join(",") : "n/a"}`,
+      );
+      if (rawContentType !== "string" && Array.isArray(response.content)) {
+        this.logger.debug(
+          `LangChain chat: response.content is array, length=${response.content.length}, ` +
+            `first item keys=${response.content[0] && typeof response.content[0] === "object" ? Object.keys(response.content[0]).join(",") : "n/a"}`,
+        );
+      }
 
       const endTime = Date.now();
       const generationTime = (endTime - startTime) / 1000;
@@ -266,8 +280,23 @@ export class LangChainOpenRouterService {
         additionalMetadata: response.response_metadata,
       };
 
+      // Нормализуем content: у провайдера может быть массив блоков (multimodal)
+      let contentStr: string;
+      if (typeof response.content === "string") {
+        contentStr = response.content;
+      } else if (Array.isArray(response.content)) {
+        contentStr = (response.content as { type?: string; text?: string; content?: string }[])
+          .map((block) =>
+            typeof block === "string" ? block : block?.text ?? (block as any)?.content ?? "",
+          )
+          .filter(Boolean)
+          .join("");
+      } else {
+        contentStr = response.content != null ? String(response.content) : "";
+      }
+
       return {
-        content: response.content as string,
+        content: contentStr,
         metadata,
         sessionId: request.sessionId,
         timestamp: new Date().toISOString(),
@@ -275,7 +304,7 @@ export class LangChainOpenRouterService {
     } catch (error) {
       this.logger.error(
         `Ошибка при обработке запроса чата: ${error.message}`,
-        error.stack
+        error.stack,
       );
       throw error;
     }
@@ -285,7 +314,7 @@ export class LangChainOpenRouterService {
    * Упрощенный метод для быстрых текстовых запросов
    */
   async simplePrompt(
-    request: SimpleTextRequestDto
+    request: SimpleTextRequestDto,
   ): Promise<LangChainChatResponseDto> {
     // Формируем сообщения
     const messages: ChatMessageDto[] = [];
@@ -315,16 +344,17 @@ export class LangChainOpenRouterService {
    * Потоковая генерация ответа
    */
   async *chatStream(
-    request: LangChainChatRequestDto
+    request: LangChainChatRequestDto,
   ): AsyncGenerator<string, void, unknown> {
     // Проверка, что модель не заблокирована для ИИ-агентов
     if (request.model) {
-      const allowed = await this.openRouterAgentSettingsService.isModelAllowedForAgents(
-        request.model
-      );
+      const allowed =
+        await this.openRouterAgentSettingsService.isModelAllowedForAgents(
+          request.model,
+        );
       if (!allowed) {
         throw new BadRequestException(
-          `Модель ${request.model} недоступна для ИИ-агентов (отключена или превышает лимит по стоимости).`
+          `Модель ${request.model} недоступна для ИИ-агентов (отключена или превышает лимит по стоимости).`,
         );
       }
     }
@@ -335,7 +365,7 @@ export class LangChainOpenRouterService {
 
       // Конвертируем сообщения
       const langchainMessages = request.messages.map((msg) =>
-        this.convertToLangChainMessage(msg)
+        this.convertToLangChainMessage(msg),
       );
 
       // Создаем поток
@@ -350,7 +380,7 @@ export class LangChainOpenRouterService {
     } catch (error) {
       this.logger.error(
         `Ошибка при потоковой генерации: ${error.message}`,
-        error.stack
+        error.stack,
       );
       throw error;
     }
@@ -361,15 +391,16 @@ export class LangChainOpenRouterService {
    * Позволяет создавать более сложные сценарии обработки
    */
   async executeChain(
-    request: LangChainChatRequestDto
+    request: LangChainChatRequestDto,
   ): Promise<LangChainChatResponseDto> {
     if (request.model) {
-      const allowed = await this.openRouterAgentSettingsService.isModelAllowedForAgents(
-        request.model
-      );
+      const allowed =
+        await this.openRouterAgentSettingsService.isModelAllowedForAgents(
+          request.model,
+        );
       if (!allowed) {
         throw new BadRequestException(
-          `Модель ${request.model} недоступна для ИИ-агентов (отключена или превышает лимит по стоимости).`
+          `Модель ${request.model} недоступна для ИИ-агентов (отключена или превышает лимит по стоимости).`,
         );
       }
     }
@@ -382,7 +413,7 @@ export class LangChainOpenRouterService {
 
       // Конвертируем сообщения
       const langchainMessages = request.messages.map((msg) =>
-        this.convertToLangChainMessage(msg)
+        this.convertToLangChainMessage(msg),
       );
 
       // Выполняем через модель напрямую
@@ -413,7 +444,7 @@ export class LangChainOpenRouterService {
     } catch (error) {
       this.logger.error(
         `Ошибка при выполнении цепочки: ${error.message}`,
-        error.stack
+        error.stack,
       );
       throw error;
     }
@@ -423,7 +454,7 @@ export class LangChainOpenRouterService {
    * Батч-обработка нескольких запросов
    */
   async batchProcess(
-    requests: LangChainChatRequestDto[]
+    requests: LangChainChatRequestDto[],
   ): Promise<LangChainChatResponseDto[]> {
     try {
       // Обрабатываем запросы последовательно
@@ -438,7 +469,7 @@ export class LangChainOpenRouterService {
     } catch (error) {
       this.logger.error(
         `Ошибка при батч-обработке: ${error.message}`,
-        error.stack
+        error.stack,
       );
       throw error;
     }
