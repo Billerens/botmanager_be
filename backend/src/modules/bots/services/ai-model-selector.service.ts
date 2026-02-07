@@ -1,6 +1,9 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import axios from "axios";
+import { OpenRouterAgentSettingsService } from "../../openrouter/openrouter-agent-settings.service";
+import { OpenRouterFeaturedService } from "../../openrouter/openrouter-featured.service";
+import { OpenRouterService } from "../../../common/openrouter.service";
+import { OpenRouterModelDto } from "../../../common/dto/openrouter.dto";
 
 /**
  * Информация о модели AI
@@ -14,25 +17,25 @@ export interface AiModelInfo {
 }
 
 /**
- * Сервис для автоматического выбора бесплатной AI модели OpenRouter
+ * Сервис выбора AI модели OpenRouter для узлов Bot Flow (AI Single, AI Chat).
+ * Использует список платных моделей (getPaidModels); выбор ограничивается
+ * настройкой allowedForBotFlowModelIds в админке (если задана — только эти модели).
+ * При пустом списке «Разрешить в Bot Flow» берутся модели из «выбор платформы» (featured),
+ * отсортированные по возрастанию стоимости за 1M токенов.
  *
  * Приоритеты моделей:
  * 1. grok - приоритет 1 (наивысший)
- * 2. gemini - приоритет 2
- * 3. deepseek - приоритет 3
+ * 2. deepseek - приоритет 2
+ * 3. llama - приоритет 3
  * 4. gpt - приоритет 4
- * 5. llama - приоритет 5
+ * 5. gemini - приоритет 5
  * 6. qwen - приоритет 6
- * 7. остальные - приоритет 7
- *
- * Критерии отбора:
- * - Модель бесплатная (pricing.prompt === "0" и pricing.completion === "0")
- * - Количество параметров >= 20B (парсинг из названия/ID)
+ * 7. gemma - приоритет 7
+ * 8. остальные - приоритет 8
  */
 @Injectable()
 export class AiModelSelectorService {
   private readonly logger = new Logger(AiModelSelectorService.name);
-  private readonly baseUrl: string;
 
   // Кэш моделей
   private cachedModels: AiModelInfo[] = [];
@@ -53,14 +56,28 @@ export class AiModelSelectorService {
     default: 8,
   };
 
-  // Минимальное количество параметров (в миллиардах)
-  private readonly minParameters = 20;
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly openRouterAgentSettings: OpenRouterAgentSettingsService,
+    private readonly openRouterFeaturedService: OpenRouterFeaturedService,
+    private readonly openRouterService: OpenRouterService
+  ) {
+    this.logger.log("AiModelSelectorService инициализирован (источник: платные модели)");
+  }
 
-  constructor(private readonly configService: ConfigService) {
-    this.baseUrl =
-      this.configService.get<string>("openrouter.baseUrl") ||
-      "https://openrouter.ai/api/v1";
-    this.logger.log("AiModelSelectorService инициализирован");
+  /** Стоимость за 1M токенов (prompt + completion) для сортировки по возрастанию цены */
+  private getCostPer1M(model: OpenRouterModelDto): number {
+    if (!model.pricing) return 0;
+    const prompt = parseFloat(String(model.pricing.prompt || 0)) * 1e6;
+    const completion = parseFloat(String(model.pricing.completion || 0)) * 1e6;
+    return prompt + completion;
+  }
+
+  private getDefaultModelId(): string {
+    return (
+      this.configService.get<string>("openrouter.defaultModel") ||
+      "meta-llama/llama-3.3-70b-instruct"
+    );
   }
 
   /**
@@ -70,12 +87,13 @@ export class AiModelSelectorService {
     const models = await this.getAvailableModels();
 
     if (models.length === 0) {
-      this.logger.warn("Нет доступных бесплатных моделей с >= 20B параметров");
-      // Fallback к дефолтной модели
-      return "meta-llama/llama-3.3-70b-instruct:free";
+      const defaultId = this.getDefaultModelId();
+      this.logger.warn(
+        `Нет доступных платных моделей для Bot Flow, fallback: ${defaultId}`
+      );
+      return defaultId;
     }
 
-    // Возвращаем первую модель (уже отсортированы по приоритету)
     const selectedModel = models[0];
     this.logger.log(
       `Выбрана модель: ${selectedModel.id} (приоритет: ${selectedModel.priority}, ~${selectedModel.parametersEstimate}B параметров)`
@@ -85,10 +103,10 @@ export class AiModelSelectorService {
   }
 
   /**
-   * Получает список доступных бесплатных моделей с >= 30B параметров
+   * Получает список доступных для Bot Flow моделей (платные модели OpenRouter,
+   * при необходимости отфильтрованные по allowedForBotFlowModelIds).
    */
   async getAvailableModels(): Promise<AiModelInfo[]> {
-    // Проверяем кэш
     const now = Date.now();
     if (
       this.cachedModels.length > 0 &&
@@ -101,85 +119,111 @@ export class AiModelSelectorService {
     }
 
     try {
-      this.logger.debug("Загружаем список моделей из OpenRouter API");
+      this.logger.debug("Загружаем список платных моделей для Bot Flow");
 
-      const response = await axios.get(`${this.baseUrl}/models`, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-        timeout: 10000,
-      });
+      const [paidResult, settings, featuredIds] = await Promise.all([
+        this.openRouterService.getPaidModels(),
+        this.openRouterAgentSettings.getSettings(),
+        this.openRouterFeaturedService.getFeaturedModelIds(),
+      ]);
 
-      const allModels = response.data?.data || [];
-      this.logger.debug(`Получено ${allModels.length} моделей из OpenRouter`);
+      let modelsForFlow: OpenRouterModelDto[] = paidResult.data || [];
+      const allowedFlowIds = settings.allowedForBotFlowModelIds || [];
+      const disabledModelIds = settings.disabledModelIds || [];
+      const maxCostPerMillion = settings.maxCostPerMillion;
+      const featuredSet = new Set(featuredIds || []);
 
-      // Фильтруем бесплатные модели
-      const freeModels = allModels.filter((model: any) => {
-        const isPromptFree =
-          model.pricing?.prompt === "0" || model.pricing?.prompt === "0.0";
-        const isCompletionFree =
-          model.pricing?.completion === "0" ||
-          model.pricing?.completion === "0.0";
-        return isPromptFree && isCompletionFree;
-      });
-
-      this.logger.debug(`Найдено ${freeModels.length} бесплатных моделей`);
-
-      // Преобразуем и фильтруем по количеству параметров
-      const processedModels: AiModelInfo[] = [];
-
-      for (const model of freeModels) {
-        const parametersEstimate = this.estimateParameters(
-          model.id,
-          model.name
-        );
-
-        if (parametersEstimate >= this.minParameters) {
-          const priority = this.getModelPriority(model.id, model.name);
-
-          processedModels.push({
-            id: model.id,
-            name: model.name,
-            contextLength: model.context_length || 0,
-            priority,
-            parametersEstimate,
-          });
+      // Фильтр по «разрешено для Bot Flow»: если список задан — только эти модели; иначе — только «выбор платформы» (featured)
+      if (allowedFlowIds.length > 0) {
+        const allowedSet = new Set(allowedFlowIds);
+        const paidIds = new Set((paidResult.data || []).map((m) => m.id));
+        const missingInApi = allowedFlowIds.filter((id) => !paidIds.has(id));
+        if (missingInApi.length > 0) {
+          this.logger.warn(
+            `Модели из «Разрешить в Bot Flow» отсутствуют в API OpenRouter (игнорируются): ${missingInApi.join(", ")}`
+          );
         }
+        modelsForFlow = modelsForFlow.filter((m) => allowedSet.has(m.id));
+        this.logger.debug(
+          `После фильтра «разрешено для Bot Flow»: ${modelsForFlow.length} из ${paidResult.data?.length || 0} платных моделей`
+        );
+      } else {
+        modelsForFlow = modelsForFlow.filter((m) => featuredSet.has(m.id));
+        this.logger.debug(
+          `Список «Разрешить в Bot Flow» пуст: используем «выбор платформы» (${modelsForFlow.length} моделей)`
+        );
       }
 
-      this.logger.debug(
-        `После фильтрации по параметрам (>= ${this.minParameters}B): ${processedModels.length} моделей`
-      );
-
-      // Сортируем по приоритету (меньше = лучше) и затем по количеству параметров (больше = лучше)
-      processedModels.sort((a, b) => {
-        if (a.priority !== b.priority) {
-          return a.priority - b.priority;
+      // Та же фильтрация, что и для агентов: отключённые модели и лимит по стоимости за 1M токенов
+      const disabledSet = new Set(disabledModelIds);
+      modelsForFlow = modelsForFlow.filter((m) => {
+        if (disabledSet.has(m.id)) return false;
+        if (maxCostPerMillion != null && m.pricing) {
+          const promptPerMillion =
+            parseFloat(String(m.pricing.prompt || 0)) * 1e6;
+          const completionPerMillion =
+            parseFloat(String(m.pricing.completion || 0)) * 1e6;
+          if (
+            promptPerMillion > maxCostPerMillion ||
+            completionPerMillion > maxCostPerMillion
+          ) {
+            return false;
+          }
         }
-        return b.parametersEstimate - a.parametersEstimate;
+        return true;
       });
 
-      // Обновляем кэш
+      // При пустом списке «Разрешить в Bot Flow» сортируем по возрастанию стоимости (минимальная по стоимости первой)
+      if (allowedFlowIds.length === 0) {
+        modelsForFlow.sort(
+          (a, b) => this.getCostPer1M(a) - this.getCostPer1M(b)
+        );
+      }
+
+      const processedModels: AiModelInfo[] = modelsForFlow.map((model) => {
+        const parametersEstimate =
+          model.num_parameters != null
+            ? model.num_parameters / 1e9
+            : this.estimateParameters(model.id, model.name);
+        const priority = this.getModelPriority(model.id, model.name);
+        return {
+          id: model.id,
+          name: model.name,
+          contextLength: model.context_length || 0,
+          priority,
+          parametersEstimate,
+        };
+      });
+
+      // Сортировка: при явном списке «Разрешить в Bot Flow» — по приоритету и параметрам; при пустом — уже по стоимости
+      if (allowedFlowIds.length > 0) {
+        processedModels.sort((a, b) => {
+          if (a.priority !== b.priority) {
+            return a.priority - b.priority;
+          }
+          return b.parametersEstimate - a.parametersEstimate;
+        });
+      }
+
       this.cachedModels = processedModels;
       this.cacheTimestamp = now;
 
       this.logger.log(
-        `Доступно ${processedModels.length} бесплатных моделей с >= ${this.minParameters}B параметров`
+        `Доступно ${this.cachedModels.length} платных моделей для Bot Flow`
       );
-      if (processedModels.length > 0) {
+      if (this.cachedModels.length > 0) {
         this.logger.log(
-          `Топ-3 модели: ${processedModels
+          `Топ-3 модели: ${this.cachedModels
             .slice(0, 3)
             .map((m) => m.id)
             .join(", ")}`
         );
       }
 
-      return processedModels;
+      return this.cachedModels;
     } catch (error) {
       this.logger.error(`Ошибка загрузки списка моделей: ${error.message}`);
 
-      // Возвращаем кэш, если есть
       if (this.cachedModels.length > 0) {
         this.logger.warn("Используем устаревший кэш моделей");
         return this.cachedModels;
@@ -200,14 +244,13 @@ export class AiModelSelectorService {
     const models = await this.getAvailableModels();
 
     if (models.length === 0) {
-      // Пробуем дефолтную модель
-      this.logger.warn("Нет кэшированных моделей, пробуем дефолтную");
-      const defaultModelId = "meta-llama/llama-3.3-70b-instruct:free";
+      const defaultModelId = this.getDefaultModelId();
+      this.logger.warn(`Нет кэшированных моделей для Bot Flow, пробуем: ${defaultModelId}`);
       const result = await action(defaultModelId);
       return {
         result,
         modelId: defaultModelId,
-        modelName: "Meta Llama 3.3 70B (free)",
+        modelName: defaultModelId,
       };
     }
 
@@ -256,12 +299,12 @@ export class AiModelSelectorService {
     const models = await this.getAvailableModels();
 
     if (models.length === 0) {
-      const defaultModelId = "meta-llama/llama-3.3-70b-instruct:free";
-      this.logger.warn("Нет кэшированных моделей, пробуем дефолтную");
+      const defaultModelId = this.getDefaultModelId();
+      this.logger.warn(`Нет кэшированных моделей для Bot Flow, пробуем: ${defaultModelId}`);
       return {
         stream: createStream(defaultModelId),
         modelId: defaultModelId,
-        modelName: "Meta Llama 3.3 70B (free)",
+        modelName: defaultModelId,
       };
     }
 
@@ -326,9 +369,10 @@ export class AiModelSelectorService {
     const models = await this.getAvailableModels();
 
     if (models.length === 0) {
+      const defaultModelId = this.getDefaultModelId();
       return {
-        modelId: "meta-llama/llama-3.3-70b-instruct:free",
-        modelName: "Meta Llama 3.3 70B (free)",
+        modelId: defaultModelId,
+        modelName: defaultModelId,
       };
     }
 
@@ -412,12 +456,12 @@ export class AiModelSelectorService {
   getServiceInfo() {
     return {
       service: "AiModelSelectorService",
+      source: "paid",
       cachedModelsCount: this.cachedModels.length,
       cacheAge:
         this.cacheTimestamp > 0
           ? Math.floor((Date.now() - this.cacheTimestamp) / 1000) + "s"
           : "empty",
-      minParameters: this.minParameters,
       priorities: this.modelPriorities,
     };
   }

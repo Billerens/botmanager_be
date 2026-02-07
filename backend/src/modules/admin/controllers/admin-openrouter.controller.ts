@@ -51,6 +51,17 @@ export class SetAgentSettingsDto {
   @IsNumber()
   @Type(() => Number)
   maxCostPerMillion?: number | null;
+
+  @ApiPropertyOptional({
+    description:
+      "ID моделей, разрешённых для использования в узлах Bot Flow (AI Single, AI Chat). Пусто = все бесплатные модели",
+    example: ["meta-llama/llama-3.3-70b-instruct:free"],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  allowedForBotFlowModelIds?: string[];
 }
 
 @ApiTags("Admin OpenRouter")
@@ -120,6 +131,7 @@ export class AdminOpenRouterController {
     return this.openRouterAgentSettingsService.setSettings({
       disabledModelIds: body.disabledModelIds,
       maxCostPerMillion: body.maxCostPerMillion,
+      allowedForBotFlowModelIds: body.allowedForBotFlowModelIds,
     });
   }
 }

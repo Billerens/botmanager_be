@@ -42,6 +42,7 @@ import { CustomPagesModule } from "../custom-pages/custom-pages.module";
 import { AssistantBotModule } from "../assistant-bot/assistant-bot.module";
 import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
 import { LangChainOpenRouterModule } from "../langchain-openrouter/langchain-openrouter.module";
+import { OpenRouterModule } from "../openrouter/openrouter.module";
 import { PaymentsModule } from "../payments/payments.module";
 import { CustomDataModule } from "../custom-data/custom-data.module";
 import { CustomLoggerService } from "../../common/logger.service";
@@ -125,6 +126,7 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
     CustomPagesModule,
     AssistantBotModule,
     LangChainOpenRouterModule,
+    OpenRouterModule,
     forwardRef(() => CustomDomainsModule),
     forwardRef(() => PaymentsModule),
     forwardRef(() => CustomDataModule),

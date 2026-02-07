@@ -8,6 +8,8 @@ import { OpenRouterModelDto } from "../../common/dto/openrouter.dto";
 export interface OpenRouterAgentSettingsDto {
   disabledModelIds: string[];
   maxCostPerMillion: number | null;
+  /** ID моделей, разрешённых для Bot Flow (AI Single, AI Chat). Пусто = все бесплатные модели */
+  allowedForBotFlowModelIds: string[];
 }
 
 @Injectable()
@@ -32,15 +34,20 @@ export class OpenRouterAgentSettingsService {
       row = this.repo.create({
         disabledModelIds: [],
         maxCostPerMillion: null,
+        allowedForBotFlowModelIds: [],
       });
       await this.repo.save(row);
     }
     const ids = Array.isArray(row.disabledModelIds)
       ? row.disabledModelIds
       : (row.disabledModelIds as unknown as string)?.split(",").filter(Boolean) ?? [];
+    const allowedFlowIds = Array.isArray(row.allowedForBotFlowModelIds)
+      ? row.allowedForBotFlowModelIds
+      : (row.allowedForBotFlowModelIds as unknown as string)?.split(",").filter(Boolean) ?? [];
     return {
       disabledModelIds: this.normalizeIds(ids),
       maxCostPerMillion: row.maxCostPerMillion != null ? Number(row.maxCostPerMillion) : null,
+      allowedForBotFlowModelIds: this.normalizeIds(allowedFlowIds),
     };
   }
 
@@ -53,6 +60,7 @@ export class OpenRouterAgentSettingsService {
       row = this.repo.create({
         disabledModelIds: [],
         maxCostPerMillion: null,
+        allowedForBotFlowModelIds: [],
       });
       await this.repo.save(row);
     }
@@ -61,6 +69,9 @@ export class OpenRouterAgentSettingsService {
     }
     if (dto.maxCostPerMillion !== undefined) {
       row.maxCostPerMillion = dto.maxCostPerMillion;
+    }
+    if (dto.allowedForBotFlowModelIds !== undefined) {
+      row.allowedForBotFlowModelIds = this.normalizeIds(dto.allowedForBotFlowModelIds) as any;
     }
     await this.repo.save(row);
     return this.getSettings();

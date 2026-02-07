@@ -27,6 +27,10 @@ export class OpenRouterAgentSettings {
   })
   maxCostPerMillion: number | null;
 
+  /** ID моделей, разрешённых для использования в узлах Bot Flow (AI Single, AI Chat). Пусто = все бесплатные модели по умолчанию */
+  @Column("simple-array", { default: "" })
+  allowedForBotFlowModelIds: string[];
+
   @UpdateDateColumn()
   updatedAt: Date;
 }
