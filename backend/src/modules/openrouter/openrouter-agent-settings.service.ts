@@ -106,13 +106,20 @@ export class OpenRouterAgentSettingsService {
 
   /**
    * Проверяет, разрешена ли модель для ИИ-агентов (не отключена и не выше лимита по стоимости).
+   * Модели из «Разрешить в Bot Flow» (allowedForBotFlowModelIds) считаются разрешёнными для запросов
+   * из Bot Flow даже если не проходят фильтр платных >27B (например, 13B).
    */
   async isModelAllowedForAgents(modelId: string): Promise<boolean> {
     if (!modelId || !modelId.trim()) return true;
-    const [settings, paidResult] = await Promise.all([
-      this.getSettings(),
-      this.openRouterService.getPaidModels(),
-    ]);
+    const settings = await this.getSettings();
+    const disabledSet = new Set(settings.disabledModelIds || []);
+    const allowedForBotFlowSet = new Set(
+      settings.allowedForBotFlowModelIds || [],
+    );
+    if (allowedForBotFlowSet.has(modelId) && !disabledSet.has(modelId)) {
+      return true;
+    }
+    const paidResult = await this.openRouterService.getPaidModels();
     const allowed = this.filterModelsForAgents(
       paidResult.data,
       settings.disabledModelIds,
