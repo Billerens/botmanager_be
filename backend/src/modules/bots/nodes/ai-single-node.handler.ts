@@ -123,26 +123,6 @@ export class AiSingleNodeHandler extends BaseNodeHandler {
         });
       });
 
-      // Логируем полный объект ответа (уровень log, чтобы видеть без включения debug)
-      const contentType = typeof response.content;
-      this.logger.log(
-        `AI Single: response.content type=${contentType}, length=${typeof response.content === "string" ? response.content.length : (response.content as any)?.length ?? "n/a"}`
-      );
-      try {
-        const payload: Record<string, unknown> = {
-          content: response.content,
-          contentLength: typeof response.content === "string" ? response.content.length : undefined,
-          metadata: response.metadata,
-        };
-        const serialized = JSON.stringify(payload, null, 2);
-        const maxLen = 2500;
-        this.logger.log(
-          `AI Single: объект ответа: ${serialized.length <= maxLen ? serialized : serialized.slice(0, maxLen) + "..."}`
-        );
-      } catch (e) {
-        this.logger.warn(`AI Single: не удалось сериализовать ответ: ${(e as Error).message}`);
-      }
-
       // Извлекаем текст: content может быть строкой или массивом (multimodal)
       const aiResponse = typeof response.content === "string"
         ? response.content
