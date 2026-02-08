@@ -138,34 +138,41 @@ export class AiModelSelectorService {
     }
 
     try {
-      this.logger.debug("Загружаем список платных моделей для Bot Flow");
-
-      const [paidResult, featuredIds] = await Promise.all([
-        this.openRouterService.getPaidModels(),
-        this.openRouterFeaturedService.getFeaturedModelIds(),
-      ]);
-
-      let modelsForFlow: OpenRouterModelDto[] = paidResult.data || [];
       const disabledModelIds = settings.disabledModelIds || [];
       const maxCostPerMillion = settings.maxCostPerMillion;
-      const featuredSet = new Set(featuredIds || []);
 
-      // Фильтр по «разрешено для Bot Flow»: если список задан — только эти модели; иначе — только «выбор платформы» (featured)
+      // Если задан список «Разрешить в Bot Flow» — берём полный список моделей API (getModels),
+      // чтобы включить модели любого размера (в т.ч. 7B, 13B). Иначе — платные >27B (getPaidModels) + featured.
+      let modelsForFlow: OpenRouterModelDto[];
       if (allowedFlowIds.length > 0) {
+        this.logger.debug(
+          "Загружаем полный список моделей OpenRouter для Bot Flow (по явному списку разрешённых)",
+        );
+        const allModelsResult = await this.openRouterService.getModels();
         const allowedSet = new Set(allowedFlowIds);
-        const paidIds = new Set((paidResult.data || []).map((m) => m.id));
-        const missingInApi = allowedFlowIds.filter((id) => !paidIds.has(id));
+        const allIds = new Set((allModelsResult.data || []).map((m) => m.id));
+        const missingInApi = allowedFlowIds.filter((id) => !allIds.has(id));
         if (missingInApi.length > 0) {
           this.logger.warn(
             `Модели из «Разрешить в Bot Flow» отсутствуют в API OpenRouter (игнорируются): ${missingInApi.join(", ")}`,
           );
         }
-        modelsForFlow = modelsForFlow.filter((m) => allowedSet.has(m.id));
+        modelsForFlow = (allModelsResult.data || []).filter((m) =>
+          allowedSet.has(m.id),
+        );
         this.logger.debug(
-          `После фильтра «разрешено для Bot Flow»: ${modelsForFlow.length} из ${paidResult.data?.length || 0} платных моделей`,
+          `После фильтра «разрешено для Bot Flow»: ${modelsForFlow.length} из ${allModelsResult.data?.length || 0} моделей API`,
         );
       } else {
-        modelsForFlow = modelsForFlow.filter((m) => featuredSet.has(m.id));
+        this.logger.debug("Загружаем список платных моделей для Bot Flow");
+        const [paidResult, featuredIds] = await Promise.all([
+          this.openRouterService.getPaidModels(),
+          this.openRouterFeaturedService.getFeaturedModelIds(),
+        ]);
+        const featuredSet = new Set(featuredIds || []);
+        modelsForFlow = (paidResult.data || []).filter((m) =>
+          featuredSet.has(m.id),
+        );
         this.logger.debug(
           `Список «Разрешить в Bot Flow» пуст: используем «выбор платформы» (${modelsForFlow.length} моделей)`,
         );
