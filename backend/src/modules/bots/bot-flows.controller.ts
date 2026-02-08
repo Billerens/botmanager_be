@@ -25,13 +25,17 @@ import {
   BotEntity,
   PermissionAction,
 } from "../../database/entities/bot-user-permission.entity";
+import { AiModelSelectorService } from "./services/ai-model-selector.service";
 
 @ApiTags("Диалоги бота")
 @Controller("bots/:botId/flows")
 @UseGuards(JwtAuthGuard, BotPermissionGuard)
 @ApiBearerAuth()
 export class BotFlowsController {
-  constructor(private readonly botFlowsService: BotFlowsService) {}
+  constructor(
+    private readonly botFlowsService: BotFlowsService,
+    private readonly aiModelSelector: AiModelSelectorService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: "Создать новый диалог" })
@@ -57,6 +61,19 @@ export class BotFlowsController {
     @Request() req: any
   ) {
     return this.botFlowsService.findAllFlows(botId, req.user.id);
+  }
+
+  @Get("available-ai-models")
+  @ApiOperation({
+    summary: "Список моделей, доступных для узлов AI в диалогах (Bot Flow)",
+  })
+  @ApiResponse({ status: 200, description: "Список { id, name }" })
+  @BotPermission(BotEntity.FLOWS, PermissionAction.READ)
+  async getAvailableFlowAiModels(@Param("botId", ParseUUIDPipe) _botId: string) {
+    const models = await this.aiModelSelector.getAvailableModels();
+    return {
+      models: models.map((m) => ({ id: m.id, name: m.name })),
+    };
   }
 
   @Get(":flowId")

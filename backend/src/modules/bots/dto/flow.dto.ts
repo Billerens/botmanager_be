@@ -408,6 +408,8 @@ export class FlowNodeDataDto {
     outputVariable: string;
     maxTokens?: number;
     temperature?: number;
+    /** Опционально: предпочтительная модель (из списка доступных для Bot Flow). Если не задано — выбор автоматический */
+    preferredModelId?: string;
   };
 
   @IsOptional()
@@ -418,6 +420,8 @@ export class FlowNodeDataDto {
     maxHistoryTokens?: number;
     temperature?: number;
     exitKeywords?: string[];
+    /** Опционально: предпочтительная модель (из списка доступных для Bot Flow). Если не задано — выбор автоматический */
+    preferredModelId?: string;
   };
 
   // Платёжный узел

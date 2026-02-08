@@ -27,6 +27,7 @@ interface AiChatNodeData {
   maxHistoryTokens?: number; // Лимит токенов истории (default: 10000)
   temperature?: number; // Температура (default: 0.7)
   exitKeywords?: string[]; // Слова для выхода из чата (например: ["стоп", "выход"])
+  preferredModelId?: string; // Опционально: конкретная модель из списка для Bot Flow
 }
 
 /**
@@ -120,6 +121,7 @@ export class AiChatNodeHandler extends BaseNodeHandler {
       maxHistoryTokens = 10000,
       temperature = 0.7,
       exitKeywords = ["стоп", "выход", "конец", "/stop", "/exit"],
+      preferredModelId,
     } = nodeData;
 
     // Ключ для хранения сессии AI чата
@@ -247,10 +249,30 @@ export class AiChatNodeHandler extends BaseNodeHandler {
       const chatId = message.chat.id.toString();
       const decryptedToken = this.botsService.decryptToken(bot.token);
 
-      // Получаем модель для streaming
-      const { modelId, modelName } =
-        await this.aiModelSelector.getStreamingModel();
-      this.logger.log(`AI Chat: Используем streaming модель ${modelId}`);
+      // Модель: предпочтительная из узла или автоматический выбор
+      let modelId: string;
+      let modelName: string;
+      if (preferredModelId?.trim()) {
+        const available = await this.aiModelSelector.getAvailableModels();
+        const preferred = available.find((m) => m.id === preferredModelId.trim());
+        if (preferred) {
+          modelId = preferred.id;
+          modelName = preferred.name;
+          this.logger.log(`AI Chat: Используем выбранную модель ${modelId}`);
+        } else {
+          this.logger.warn(
+            `AI Chat: предпочтительная модель "${preferredModelId}" не в списке, выбор автоматический`
+          );
+          const streaming = await this.aiModelSelector.getStreamingModel();
+          modelId = streaming.modelId;
+          modelName = streaming.modelName;
+        }
+      } else {
+        const streaming = await this.aiModelSelector.getStreamingModel();
+        modelId = streaming.modelId;
+        modelName = streaming.modelName;
+      }
+      this.logger.log(`AI Chat: Используем модель ${modelId}`);
 
       // Пытаемся использовать streaming
       let aiResponse = "";
@@ -308,25 +330,45 @@ export class AiChatNodeHandler extends BaseNodeHandler {
         );
 
         try {
-          const {
-            result: response,
-            modelId: fallbackModelId,
-            modelName: fallbackModelName,
-          } = await this.aiModelSelector.executeWithFallback(
-            async (modelId) => {
-              return this.langChainService.chat({
-                messages,
-                model: modelId,
-                parameters: {
-                  maxTokens: 1000,
-                  temperature,
-                },
-              });
+          // При предпочтительной модели пробуем только её; иначе fallback по списку
+          const doChat = (mid: string) =>
+            this.langChainService.chat({
+              messages,
+              model: mid,
+              parameters: { maxTokens: 1000, temperature },
+            });
+          let response: Awaited<ReturnType<typeof doChat>>;
+          let fallbackModelId: string;
+          let fallbackModelName: string;
+          if (preferredModelId?.trim()) {
+            const available = await this.aiModelSelector.getAvailableModels();
+            const preferred = available.find((m) => m.id === preferredModelId.trim());
+            if (preferred) {
+              response = await doChat(preferred.id);
+              fallbackModelId = preferred.id;
+              fallbackModelName = preferred.name;
+            } else {
+              const fallback = await this.aiModelSelector.executeWithFallback(doChat);
+              response = fallback.result;
+              fallbackModelId = fallback.modelId;
+              fallbackModelName = fallback.modelName;
             }
-          );
+          } else {
+            const fallback = await this.aiModelSelector.executeWithFallback(doChat);
+            response = fallback.result;
+            fallbackModelId = fallback.modelId;
+            fallbackModelName = fallback.modelName;
+          }
 
           aiResponse =
-            response.content || "Извините, не удалось сформировать ответ.";
+            typeof response.content === "string"
+              ? response.content
+              : Array.isArray(response.content)
+                ? (response.content as { text?: string; content?: string }[])
+                    .map((b) => (typeof b === "string" ? b : b?.text ?? b?.content ?? ""))
+                    .join("")
+                : String(response.content ?? "");
+          if (!aiResponse) aiResponse = "Извините, не удалось сформировать ответ.";
 
           // Отправляем обычным способом
           const messageWithModelInfo = `🤖 [${fallbackModelName}]\n\n${aiResponse}`;

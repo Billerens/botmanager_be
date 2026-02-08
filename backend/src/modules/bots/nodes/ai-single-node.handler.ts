@@ -22,6 +22,7 @@ interface AiSingleNodeData {
   outputVariable: string; // Куда сохранить ответ
   maxTokens?: number; // Лимит токенов ответа (default: 500)
   temperature?: number; // Температура (default: 0.7)
+  preferredModelId?: string; // Опционально: конкретная модель из списка для Bot Flow
 }
 
 /**
@@ -72,7 +73,7 @@ export class AiSingleNodeHandler extends BaseNodeHandler {
     this.logger.log(`Узел ID: ${currentNode.nodeId}`);
     this.logger.log(`Пользователь: ${session.userId}`);
 
-    const nodeData = currentNode.data.aiSingle;
+    const nodeData = currentNode.data.aiSingle as AiSingleNodeData | undefined;
 
     if (!nodeData || !nodeData.prompt) {
       this.logger.warn("AI Single: Промпт не задан в узле");
@@ -85,6 +86,7 @@ export class AiSingleNodeHandler extends BaseNodeHandler {
       outputVariable = "ai_response",
       maxTokens = 500,
       temperature = 0.7,
+      preferredModelId,
     } = nodeData;
 
     // Подставляем переменные в промпт
@@ -95,33 +97,44 @@ export class AiSingleNodeHandler extends BaseNodeHandler {
     );
     this.logger.log(`AI Single: Выходная переменная: ${outputVariable}`);
 
-    try {
-      // Получаем ответ от AI с автоматическим fallback
-      const {
-        result: response,
-        modelId,
-        modelName,
-      } = await this.aiModelSelector.executeWithFallback(async (modelId) => {
-        this.logger.log(`AI Single: Используем модель ${modelId}`);
-
-        return this.langChainService.chat({
-          messages: [
-            {
-              role: MessageRole.SYSTEM,
-              content: this.systemPrompt,
-            },
-            {
-              role: MessageRole.HUMAN,
-              content: processedPrompt,
-            },
-          ],
-          model: modelId,
-          parameters: {
-            maxTokens,
-            temperature,
-          },
-        });
+    const doChat = (modelId: string) =>
+      this.langChainService.chat({
+        messages: [
+          { role: MessageRole.SYSTEM, content: this.systemPrompt },
+          { role: MessageRole.HUMAN, content: processedPrompt },
+        ],
+        model: modelId,
+        parameters: { maxTokens, temperature },
       });
+
+    try {
+      let response: Awaited<ReturnType<typeof doChat>>;
+      let modelId: string;
+      let modelName: string;
+
+      if (preferredModelId?.trim()) {
+        const available = await this.aiModelSelector.getAvailableModels();
+        const preferred = available.find((m) => m.id === preferredModelId.trim());
+        if (preferred) {
+          this.logger.log(`AI Single: Используем выбранную модель ${preferred.id}`);
+          response = await doChat(preferred.id);
+          modelId = preferred.id;
+          modelName = preferred.name;
+        } else {
+          this.logger.warn(
+            `AI Single: предпочтительная модель "${preferredModelId}" не в списке доступных, выбор автоматический`
+          );
+          const fallback = await this.aiModelSelector.executeWithFallback(doChat);
+          response = fallback.result;
+          modelId = fallback.modelId;
+          modelName = fallback.modelName;
+        }
+      } else {
+        const fallback = await this.aiModelSelector.executeWithFallback(doChat);
+        response = fallback.result;
+        modelId = fallback.modelId;
+        modelName = fallback.modelName;
+      }
 
       // Извлекаем текст: content может быть строкой или массивом (multimodal)
       const aiResponse = typeof response.content === "string"

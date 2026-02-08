@@ -357,6 +357,7 @@ export class BotFlowNode {
       outputVariable: string; // Имя переменной для сохранения результата
       maxTokens?: number; // Максимальное количество токенов
       temperature?: number; // Температура генерации (0-1)
+      preferredModelId?: string; // Предпочтительная модель из списка для Bot Flow
     };
 
     // Для AI_CHAT нод
@@ -366,6 +367,7 @@ export class BotFlowNode {
       maxHistoryTokens?: number; // Максимальное количество токенов в истории
       temperature?: number; // Температура генерации (0-1)
       exitKeywords?: string[]; // Ключевые слова для выхода из чата
+      preferredModelId?: string; // Предпочтительная модель из списка для Bot Flow
     };
 
     // Для PAYMENT нод
