@@ -477,6 +477,17 @@ export class AiModelSelectorService {
   }
 
   /**
+   * Сбрасывает кэш списка моделей (после сохранения allowedForBotFlowModelIds в админке).
+   * Следующий вызов getAvailableModels() загрузит актуальные настройки и пересоберёт список.
+   */
+  invalidateCache(): void {
+    this.cachedModels = [];
+    this.cacheTimestamp = 0;
+    this.cachedAllowedFlowIdsKey = null;
+    this.logger.debug("Кэш списка моделей Bot Flow сброшен (invalidateCache)");
+  }
+
+  /**
    * Принудительно обновляет кэш моделей
    */
   async refreshCache(): Promise<void> {

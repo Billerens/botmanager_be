@@ -55,6 +55,7 @@ import { TelegramValidationService } from "../../common/telegram-validation.serv
 // Custom Domains Module (for redeploy and subdomain services)
 import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
 import { OpenRouterModule } from "../openrouter/openrouter.module";
+import { BotsModule } from "../bots/bots.module";
 import { AdminOpenRouterController } from "./controllers/admin-openrouter.controller";
 
 @Module({
@@ -80,6 +81,7 @@ import { AdminOpenRouterController } from "./controllers/admin-openrouter.contro
     PassportModule.register({ defaultStrategy: "admin-jwt" }),
     forwardRef(() => CustomDomainsModule),
     OpenRouterModule,
+    BotsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

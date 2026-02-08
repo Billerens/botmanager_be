@@ -15,6 +15,7 @@ import {
   OpenRouterAgentSettingsService,
   OpenRouterAgentSettingsDto,
 } from "../../openrouter/openrouter-agent-settings.service";
+import { AiModelSelectorService } from "../../bots/services/ai-model-selector.service";
 import { AdminJwtGuard } from "../guards/admin-jwt.guard";
 import { AdminRolesGuard } from "../guards/admin-roles.guard";
 import { ModelsListResponseDto } from "../../../common/dto/openrouter.dto";
@@ -72,7 +73,8 @@ export class AdminOpenRouterController {
   constructor(
     private readonly openRouterService: OpenRouterService,
     private readonly openRouterFeaturedService: OpenRouterFeaturedService,
-    private readonly openRouterAgentSettingsService: OpenRouterAgentSettingsService
+    private readonly openRouterAgentSettingsService: OpenRouterAgentSettingsService,
+    private readonly aiModelSelector: AiModelSelectorService,
   ) {}
 
   @Get("models")
@@ -128,10 +130,14 @@ export class AdminOpenRouterController {
   async setAgentSettings(
     @Body() body: SetAgentSettingsDto
   ): Promise<OpenRouterAgentSettingsDto> {
-    return this.openRouterAgentSettingsService.setSettings({
+    const result = await this.openRouterAgentSettingsService.setSettings({
       disabledModelIds: body.disabledModelIds,
       maxCostPerMillion: body.maxCostPerMillion,
       allowedForBotFlowModelIds: body.allowedForBotFlowModelIds,
     });
+    if (body.allowedForBotFlowModelIds !== undefined) {
+      this.aiModelSelector.invalidateCache();
+    }
+    return result;
   }
 }
