@@ -81,7 +81,7 @@ import { AdminOpenRouterController } from "./controllers/admin-openrouter.contro
     PassportModule.register({ defaultStrategy: "admin-jwt" }),
     forwardRef(() => CustomDomainsModule),
     OpenRouterModule,
-    BotsModule,
+    forwardRef(() => BotsModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
