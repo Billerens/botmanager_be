@@ -40,9 +40,10 @@ export class AiModelSelectorService {
   /** Модель по умолчанию при пустом списке «Разрешить в Bot Flow» (пробуем первой, при ошибке — фоллбэк на featured) */
   private static readonly DEFAULT_FREE_MODEL_ID = "openrouter/free";
 
-  // Кэш моделей
+  // Кэш моделей (инвалидируется при изменении allowedForBotFlowModelIds в админке)
   private cachedModels: AiModelInfo[] = [];
   private cacheTimestamp: number = 0;
+  private cachedAllowedFlowIdsKey: string | null = null;
   private readonly cacheTtl = 60 * 60 * 1000; // 1 час в миллисекундах
 
   // Приоритеты моделей по провайдеру (поиск по вхождению подстроки в название)
@@ -113,8 +114,13 @@ export class AiModelSelectorService {
    */
   async getAvailableModels(): Promise<AiModelInfo[]> {
     const now = Date.now();
+    const settings = await this.openRouterAgentSettings.getSettings();
+    const allowedFlowIds = settings.allowedForBotFlowModelIds || [];
+    const currentKey = JSON.stringify([...allowedFlowIds].sort());
+
     if (
       this.cachedModels.length > 0 &&
+      this.cachedAllowedFlowIdsKey === currentKey &&
       now - this.cacheTimestamp < this.cacheTtl
     ) {
       this.logger.debug(
@@ -122,18 +128,24 @@ export class AiModelSelectorService {
       );
       return this.cachedModels;
     }
+    if (this.cachedAllowedFlowIdsKey !== currentKey && this.cachedModels.length > 0) {
+      this.logger.debug(
+        "Кэш моделей Bot Flow сброшен: изменился список «Разрешить в Bot Flow»",
+      );
+      this.cachedModels = [];
+      this.cacheTimestamp = 0;
+      this.cachedAllowedFlowIdsKey = null;
+    }
 
     try {
       this.logger.debug("Загружаем список платных моделей для Bot Flow");
 
-      const [paidResult, settings, featuredIds] = await Promise.all([
+      const [paidResult, featuredIds] = await Promise.all([
         this.openRouterService.getPaidModels(),
-        this.openRouterAgentSettings.getSettings(),
         this.openRouterFeaturedService.getFeaturedModelIds(),
       ]);
 
       let modelsForFlow: OpenRouterModelDto[] = paidResult.data || [];
-      const allowedFlowIds = settings.allowedForBotFlowModelIds || [];
       const disabledModelIds = settings.disabledModelIds || [];
       const maxCostPerMillion = settings.maxCostPerMillion;
       const featuredSet = new Set(featuredIds || []);
@@ -224,6 +236,7 @@ export class AiModelSelectorService {
 
       this.cachedModels = processedModels;
       this.cacheTimestamp = now;
+      this.cachedAllowedFlowIdsKey = currentKey;
 
       this.logger.log(
         `Доступно ${this.cachedModels.length} платных моделей для Bot Flow`,
