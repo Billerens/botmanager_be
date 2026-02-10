@@ -78,10 +78,7 @@ export class BotFlowNode {
   @Column()
   nodeId: string; // ID ноды в React Flow
 
-  @Column({
-    type: "enum",
-    enum: NodeType,
-  })
+  @Column({ type: "varchar", length: 64 })
   type: NodeType;
 
   @Column()
