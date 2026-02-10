@@ -380,106 +380,18 @@ export class FlowExecutionService implements OnModuleInit {
       this.logger.log(`Определяем текущий узел...`);
       if (!session.currentNodeId) {
         this.logger.log(`Сессия не имеет текущего узла, ищем подходящий`);
-
-        // Если это команда /start, ищем START узел
-        if (message.text === "/start") {
-          this.logger.log(`Сообщение "/start" - ищем START узел`);
-          const startNode = activeFlow.nodes.find(
-            (node) => node.type === "start",
-          );
-          if (startNode) {
-            this.logger.log(`Найден START узел: ${startNode.nodeId}`);
-            context.currentNode = startNode;
-            session.currentNodeId = startNode.nodeId;
-          } else {
-            this.logger.warn(`START узел не найден в flow`);
-          }
-        } else if (message.text === "/shop") {
-          // Проверяем условия для команды /shop
-          // Shop теперь отдельная сущность - ищем магазин, привязанный к боту
-          const shop = await this.shopRepository.findOne({
-            where: { botId: bot.id },
-          });
-
-          this.logger.log(
-            `Получена команда "/shop". Shop привязан: ${!!shop}, buttonTypes=${JSON.stringify(shop?.buttonTypes)}`,
-          );
-
-          if (!shop) {
-            this.logger.warn(`У бота ${bot.id} нет привязанного магазина`);
-          } else if (!shop.buttonTypes?.includes("command")) {
-            this.logger.warn(
-              `В настройках магазина ${shop.id} не включена команда /shop. buttonTypes=${JSON.stringify(shop.buttonTypes)}`,
-            );
-          } else {
-            // Все условия выполнены - открываем магазин
-            this.logger.log(`Команда "/shop" - открываем магазин ${shop.id}`);
-            await this.handleShopCommand(bot, shop, message);
-            return; // Не обрабатываем через flow
-          }
-        } else if (message.text === "/booking") {
-          // Проверяем условия для команды /booking
-          // BookingSystem теперь отдельная сущность - ищем систему бронирования, привязанную к боту
-          const bookingSystem = await this.bookingSystemRepository.findOne({
-            where: { botId: bot.id },
-          });
-
-          this.logger.log(
-            `Получена команда "/booking". BookingSystem привязан: ${!!bookingSystem}, buttonTypes=${JSON.stringify(bookingSystem?.buttonTypes)}`,
-          );
-
-          if (!bookingSystem) {
-            this.logger.warn(
-              `У бота ${bot.id} нет привязанной системы бронирования`,
-            );
-          } else if (!bookingSystem.buttonTypes?.includes("command")) {
-            this.logger.warn(
-              `В настройках системы бронирования ${bookingSystem.id} не включена команда /booking. buttonTypes=${JSON.stringify(bookingSystem.buttonTypes)}`,
-            );
-          } else {
-            // Все условия выполнены - открываем бронирование
-            this.logger.log(
-              `Команда "/booking" - открываем бронирование ${bookingSystem.id}`,
-            );
-            await this.handleBookingCommand(bot, bookingSystem, message);
-            return; // Не обрабатываем через flow
-          }
-        } else if (message.text && message.text.startsWith("/")) {
-          // Проверяем, является ли это командой custom page
-          this.logger.log(
-            `Получена команда "${message.text}". Проверяем, является ли это командой custom page`,
-          );
-          const pageUrl = await this.customPagesBotService.getPageUrlByCommand(
-            bot.id,
-            message.text,
-          );
-          if (pageUrl) {
-            this.logger.log(
-              `Найдена custom page для команды "${message.text}": ${pageUrl}`,
-            );
-            await this.handleCustomPageCommand(bot, message, pageUrl);
-            return; // Не обрабатываем через flow
-          } else {
-            this.logger.log(
-              `Команда "${message.text}" не является командой custom page`,
-            );
-          }
-        } else {
-          this.logger.log(`Сообщение не "/start" - ищем NEW_MESSAGE узел`);
-          // Для других сообщений ищем подходящий NEW_MESSAGE узел
-          const newMessageNode = await this.findMatchingNewMessageNode(
-            activeFlow,
-            message,
-          );
-          if (newMessageNode) {
-            this.logger.log(
-              `Найден подходящий NEW_MESSAGE узел: ${newMessageNode.nodeId}`,
-            );
-            context.currentNode = newMessageNode;
-            session.currentNodeId = newMessageNode.nodeId;
-          } else {
-            this.logger.warn(`Подходящий NEW_MESSAGE узел не найден`);
-          }
+        const resolved = await this.resolveInitialNodeByMessage(
+          bot,
+          message,
+          activeFlow,
+          session,
+        );
+        if (resolved.returnEarly) {
+          return;
+        }
+        context.currentNode = resolved.node ?? undefined;
+        if (resolved.node) {
+          session.currentNodeId = resolved.node.nodeId;
         }
       } else {
         this.logger.log(`Продолжаем с текущего узла: ${session.currentNodeId}`);
@@ -492,9 +404,24 @@ export class FlowExecutionService implements OnModuleInit {
             `Найден текущий узел: ${context.currentNode.nodeId}, тип: "${context.currentNode.type}"`,
           );
         } else {
-          this.logger.error(
-            `Текущий узел ${session.currentNodeId} не найден в flow!`,
+          // Узел удалён или flow изменён — работаем по обычному флоу (определяем узел по сообщению)
+          this.logger.warn(
+            `Текущий узел ${session.currentNodeId} не найден в flow (flow мог быть изменён). Определяем узел по сообщению.`,
           );
+          session.currentNodeId = undefined;
+          const resolved = await this.resolveInitialNodeByMessage(
+            bot,
+            message,
+            activeFlow,
+            session,
+          );
+          if (resolved.returnEarly) {
+            return;
+          }
+          context.currentNode = resolved.node ?? undefined;
+          if (resolved.node) {
+            session.currentNodeId = resolved.node.nodeId;
+          }
         }
       }
 
@@ -613,6 +540,72 @@ export class FlowExecutionService implements OnModuleInit {
       this.logger.error(`Ошибка выполнения узла ${currentNode.type}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Определяет начальный узел по сообщению (как при отсутствии текущего узла в сессии).
+   * Используется при старте диалога и при fallback, когда сохранённый узел не найден в flow.
+   * @returns { node, returnEarly } — returnEarly true, если обработали команду (/shop, /booking, custom page) и вызывающий код должен выйти.
+   */
+  private async resolveInitialNodeByMessage(
+    bot: any,
+    message: any,
+    activeFlow: BotFlow,
+    session: UserSession,
+  ): Promise<{ node: BotFlowNode | null; returnEarly: boolean }> {
+    if (message.text === "/start") {
+      const startNode = activeFlow.nodes.find((node) => node.type === "start");
+      if (startNode) {
+        this.logger.log(`Найден START узел: ${startNode.nodeId}`);
+        return { node: startNode, returnEarly: false };
+      }
+      this.logger.warn(`START узел не найден в flow`);
+      return { node: null, returnEarly: false };
+    }
+    if (message.text === "/shop") {
+      const shop = await this.shopRepository.findOne({
+        where: { botId: bot.id },
+      });
+      if (shop?.buttonTypes?.includes("command")) {
+        await this.handleShopCommand(bot, shop, message);
+        return { node: null, returnEarly: true };
+      }
+      return { node: null, returnEarly: false };
+    }
+    if (message.text === "/booking") {
+      const bookingSystem = await this.bookingSystemRepository.findOne({
+        where: { botId: bot.id },
+      });
+      if (
+        bookingSystem?.buttonTypes?.includes("command")
+      ) {
+        await this.handleBookingCommand(bot, bookingSystem, message);
+        return { node: null, returnEarly: true };
+      }
+      return { node: null, returnEarly: false };
+    }
+    if (message.text?.startsWith("/")) {
+      const pageUrl = await this.customPagesBotService.getPageUrlByCommand(
+        bot.id,
+        message.text,
+      );
+      if (pageUrl) {
+        await this.handleCustomPageCommand(bot, message, pageUrl);
+        return { node: null, returnEarly: true };
+      }
+    }
+    const newMessageNode = await this.findMatchingNewMessageNode(
+      activeFlow,
+      message,
+    );
+    if (newMessageNode) {
+      this.logger.log(
+        `Найден подходящий NEW_MESSAGE узел: ${newMessageNode.nodeId}`,
+      );
+      return { node: newMessageNode, returnEarly: false };
+    }
+    this.logger.warn(`Подходящий NEW_MESSAGE узел не найден`);
+    return { node: null, returnEarly: false };
   }
 
   // Поиск подходящего NEW_MESSAGE узла
