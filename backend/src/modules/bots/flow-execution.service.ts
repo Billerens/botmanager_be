@@ -50,6 +50,8 @@ import {
   AiSingleNodeHandler,
   AiChatNodeHandler,
   PaymentNodeHandler,
+  PeriodicExecutionNodeHandler,
+  PeriodicControlNodeHandler,
 } from "./nodes";
 import { GroupSessionService } from "./group-session.service";
 import { CustomPagesBotService } from "../custom-pages/services/custom-pages-bot.service";
@@ -133,6 +135,9 @@ export class FlowExecutionService implements OnModuleInit {
     private readonly aiChatNodeHandler: AiChatNodeHandler,
     // Payment handler
     private readonly paymentNodeHandler: PaymentNodeHandler,
+    // Periodic handlers
+    private readonly periodicExecutionNodeHandler: PeriodicExecutionNodeHandler,
+    private readonly periodicControlNodeHandler: PeriodicControlNodeHandler,
   ) {
     // Регистрируем все обработчики
     this.registerNodeHandlers();
@@ -228,6 +233,16 @@ export class FlowExecutionService implements OnModuleInit {
     // Payment handler
     this.nodeHandlerService.registerHandler("payment", this.paymentNodeHandler);
 
+    // Periodic handlers
+    this.nodeHandlerService.registerHandler(
+      "periodic_execution",
+      this.periodicExecutionNodeHandler,
+    );
+    this.nodeHandlerService.registerHandler(
+      "periodic_control",
+      this.periodicControlNodeHandler,
+    );
+
     // Устанавливаем callback для всех обработчиков
     const handlers = [
       this.startNodeHandler,
@@ -256,6 +271,8 @@ export class FlowExecutionService implements OnModuleInit {
       this.aiSingleNodeHandler,
       this.aiChatNodeHandler,
       this.paymentNodeHandler,
+      this.periodicExecutionNodeHandler,
+      this.periodicControlNodeHandler,
     ];
 
     handlers.forEach((handler) => {
@@ -494,6 +511,71 @@ export class FlowExecutionService implements OnModuleInit {
       this.logger.error("Ошибка выполнения flow:", error);
       throw error;
     }
+  }
+
+  /**
+   * Публичный метод для выполнения дочерней ветки periodic_execution узла.
+   * Вызывается из PeriodicTasksProcessor при срабатывании repeatable job.
+   *
+   * Находит дочерние узлы по edges и выполняет их последовательно.
+   */
+  async executePeriodicBranch(
+    bot: any,
+    flow: BotFlow,
+    periodicNode: BotFlowNode,
+    sessionData: any,
+    syntheticMessage: any,
+  ): Promise<void> {
+    const session: UserSession = {
+      userId: sessionData.userId,
+      chatId: sessionData.chatId,
+      botId: sessionData.botId,
+      currentNodeId: sessionData.currentNodeId,
+      variables: sessionData.variables || {},
+      lastActivity: new Date(),
+      locationRequest: sessionData.locationRequest,
+    };
+
+    const context: FlowContext = {
+      bot,
+      user: syntheticMessage.from,
+      message: syntheticMessage,
+      session,
+      flow,
+      reachedThroughTransition: true,
+    };
+
+    // Находим дочерние узлы по edges
+    const childEdges =
+      flow.flowData?.edges?.filter(
+        (edge) => edge.source === periodicNode.nodeId,
+      ) || [];
+
+    this.logger.log(
+      `Выполняем ${childEdges.length} дочерних веток periodic_execution ${periodicNode.nodeId}`,
+    );
+
+    for (const edge of childEdges) {
+      const childNode = flow.nodes.find((n) => n.nodeId === edge.target);
+      if (childNode) {
+        context.currentNode = childNode;
+        session.currentNodeId = childNode.nodeId;
+        await this.executeNode(context);
+      }
+    }
+
+    // Сохраняем сессию после выполнения
+    const updatedSessionData: UserSessionData = {
+      userId: session.userId,
+      chatId: session.chatId,
+      botId: session.botId,
+      currentNodeId: session.currentNodeId,
+      variables: session.variables,
+      lastActivity: session.lastActivity,
+      locationRequest: session.locationRequest,
+    };
+
+    await this.sessionStorageService.saveSession(updatedSessionData);
   }
 
   private async executeNode(context: FlowContext): Promise<void> {

@@ -74,6 +74,8 @@ import {
   AiSingleNodeHandler,
   AiChatNodeHandler,
   PaymentNodeHandler,
+  PeriodicExecutionNodeHandler,
+  PeriodicControlNodeHandler,
 } from "./nodes";
 import { AiModelSelectorService } from "./services/ai-model-selector.service";
 import { StreamingResponseService } from "./services/streaming-response.service";
@@ -81,6 +83,8 @@ import { DatabaseService } from "./database.service";
 import { SessionStorageService } from "./session-storage.service";
 import { GroupSessionService } from "./group-session.service";
 import { GroupActionsProcessor } from "./processors/group-actions.processor";
+import { PeriodicTasksProcessor } from "./processors/periodic-tasks.processor";
+import { PeriodicTaskService } from "./services/periodic-task.service";
 import { BotPermissionsService } from "./bot-permissions.service";
 import { BotInvitationsService } from "./bot-invitations.service";
 import { BotNotificationsService } from "./bot-notifications.service";
@@ -116,6 +120,9 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
     ]),
     BullModule.registerQueue({
       name: "group-actions",
+    }),
+    BullModule.registerQueue({
+      name: "periodic-tasks",
     }),
     forwardRef(() => TelegramModule),
     MessagesModule,
@@ -167,6 +174,10 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
     AiSingleNodeHandler,
     AiChatNodeHandler,
     PaymentNodeHandler,
+    PeriodicExecutionNodeHandler,
+    PeriodicControlNodeHandler,
+    PeriodicTaskService,
+    PeriodicTasksProcessor,
     AiModelSelectorService,
     StreamingResponseService,
     BotPermissionGuard,

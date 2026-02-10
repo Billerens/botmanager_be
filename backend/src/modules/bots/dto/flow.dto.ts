@@ -38,6 +38,9 @@ export enum FlowNodeType {
   AI_CHAT = "ai_chat",
   // Платёжные узлы
   PAYMENT = "payment",
+  // Периодические задачи
+  PERIODIC_EXECUTION = "periodic_execution",
+  PERIODIC_CONTROL = "periodic_control",
 }
 
 export class KeyboardButtonDto {
@@ -422,6 +425,30 @@ export class FlowNodeDataDto {
     exitKeywords?: string[];
     /** Опционально: предпочтительная модель (из списка доступных для Bot Flow). Если не задано — выбор автоматический */
     preferredModelId?: string;
+  };
+
+  // Периодическое выполнение
+  @IsOptional()
+  @IsObject()
+  periodicExecution?: {
+    scheduleType: "interval" | "cron";
+    interval?: {
+      value: number;
+      unit: "seconds" | "minutes" | "hours" | "days";
+    };
+    cronExpression?: string;
+    mode: "standalone" | "triggered";
+    maxExecutions?: number | null;
+    taskIdVariable?: string;
+  };
+
+  // Управление периодической задачей
+  @IsOptional()
+  @IsObject()
+  periodicControl?: {
+    action: "start" | "stop" | "pause" | "resume" | "get_status" | "restart";
+    taskIdSource: string;
+    saveStatusVariable?: string;
   };
 
   // Платёжный узел

@@ -34,3 +34,7 @@ export * from "./ai-chat-node.handler";
 
 // Payment handler
 export * from "./payment-node.handler";
+
+// Periodic handlers
+export * from "./periodic-execution-node.handler";
+export * from "./periodic-control-node.handler";

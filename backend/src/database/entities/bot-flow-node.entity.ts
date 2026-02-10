@@ -41,6 +41,9 @@ export enum NodeType {
   AI_CHAT = "ai_chat",
   // Платежи
   PAYMENT = "payment",
+  // Периодические задачи
+  PERIODIC_EXECUTION = "periodic_execution",
+  PERIODIC_CONTROL = "periodic_control",
 }
 
 export enum MessageNodeType {
@@ -387,6 +390,26 @@ export class BotFlowNode {
       refundReason?: string; // Причина возврата
     };
 
+    // Для PERIODIC_EXECUTION нод
+    periodicExecution?: {
+      scheduleType: "interval" | "cron"; // Тип расписания
+      interval?: {
+        value: number;
+        unit: "seconds" | "minutes" | "hours" | "days";
+      };
+      cronExpression?: string; // Cron-выражение (например "0 9 * * 1")
+      mode: "standalone" | "triggered"; // standalone — при первом сообщении, triggered — от родительского узла
+      maxExecutions?: number | null; // Лимит выполнений (null = бесконечно)
+      taskIdVariable?: string; // Переменная для сохранения ID задачи
+    };
+
+    // Для PERIODIC_CONTROL нод
+    periodicControl?: {
+      action: "start" | "stop" | "pause" | "resume" | "get_status" | "restart";
+      taskIdSource: string; // Переменная контекста с ID задачи
+      saveStatusVariable?: string; // Переменная для сохранения статуса
+    };
+
     // Общие настройки
     nextNodeId?: string; // ID следующей ноды
     errorNodeId?: string; // ID ноды при ошибке
@@ -472,5 +495,13 @@ export class BotFlowNode {
 
   get isTransform(): boolean {
     return this.type === NodeType.TRANSFORM;
+  }
+
+  get isPeriodicExecution(): boolean {
+    return this.type === NodeType.PERIODIC_EXECUTION;
+  }
+
+  get isPeriodicControl(): boolean {
+    return this.type === NodeType.PERIODIC_CONTROL;
   }
 }
