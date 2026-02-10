@@ -403,6 +403,27 @@ export class FlowExecutionService implements OnModuleInit {
           this.logger.log(
             `Найден текущий узел: ${context.currentNode.nodeId}, тип: "${context.currentNode.type}"`,
           );
+          // Узел "end" означает завершение ветки — следующее сообщение обрабатываем с начала (по типу сообщения)
+          if (context.currentNode.type === "end") {
+            this.logger.log(
+              `Текущий узел — end, сбрасываем и определяем узел по сообщению`,
+            );
+            session.currentNodeId = undefined;
+            context.currentNode = undefined;
+            const resolved = await this.resolveInitialNodeByMessage(
+              bot,
+              message,
+              activeFlow,
+              session,
+            );
+            if (resolved.returnEarly) {
+              return;
+            }
+            context.currentNode = resolved.node ?? undefined;
+            if (resolved.node) {
+              session.currentNodeId = resolved.node.nodeId;
+            }
+          }
         } else {
           // Узел удалён или flow изменён — работаем по обычному флоу (определяем узел по сообщению)
           this.logger.warn(

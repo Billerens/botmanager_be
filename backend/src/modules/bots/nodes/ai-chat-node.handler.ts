@@ -222,8 +222,14 @@ export class AiChatNodeHandler extends BaseNodeHandler {
       chatSession.isActive = false;
       session.variables[chatSessionKey] = chatSession;
 
-      // Переходим к следующему узлу
+      // Переходим к следующему узлу (если в flow есть исходящий edge)
       await this.moveToNextNode(context, currentNode.nodeId);
+
+      // Если перехода не было (нет исходящего edge из ai_chat), сбрасываем текущий узел,
+      // чтобы следующее сообщение обрабатывалось по обычному флоу (NEW_MESSAGE / start).
+      if (session.currentNodeId === currentNode.nodeId) {
+        session.currentNodeId = undefined;
+      }
       return;
     }
 

@@ -650,9 +650,19 @@ export abstract class BaseNodeHandler implements INodeHandler {
         );
         context.session.currentNodeId = lastNodeId;
       } else {
-        // У обработанных узлов нет дальнейших связей, возвращаемся к исходному узлу
-        // Это позволяет пользователю снова отправить сообщение и получить ответ
-        if (originalCurrentNodeId) {
+        const lastNode = context.flow.nodes.find(
+          (n) => n.nodeId === lastNodeId
+        );
+        const lastNodeIsEnd = lastNode?.type === "end";
+
+        if (lastNodeIsEnd) {
+          // Ветка завершилась узлом end — сбрасываем текущий узел, следующее сообщение пойдёт по обычному флоу
+          this.logger.log(
+            `Последний узел в цепочке — end (${lastNodeId}), сбрасываем session.currentNodeId`
+          );
+          context.session.currentNodeId = undefined;
+        } else if (originalCurrentNodeId) {
+          // У обработанных узлов нет дальнейших связей, возвращаемся к исходному узлу
           this.logger.log(
             `У обработанных узлов нет дальнейших связей, возвращаемся к исходному узлу ${originalCurrentNodeId}`
           );
@@ -767,9 +777,19 @@ export abstract class BaseNodeHandler implements INodeHandler {
         );
         context.session.currentNodeId = lastNodeId;
       } else {
-        // У обработанных узлов нет дальнейших связей, возвращаемся к исходному узлу
-        // Это позволяет пользователю снова отправить сообщение и получить ответ
-        if (originalCurrentNodeId) {
+        const lastNode = context.flow.nodes.find(
+          (n) => n.nodeId === lastNodeId
+        );
+        const lastNodeIsEnd = lastNode?.type === "end";
+
+        if (lastNodeIsEnd) {
+          // Ветка завершилась узлом end — сбрасываем текущий узел, следующее сообщение пойдёт по обычному флоу
+          this.logger.log(
+            `Последний узел в цепочке — end (${lastNodeId}), сбрасываем session.currentNodeId`
+          );
+          context.session.currentNodeId = undefined;
+        } else if (originalCurrentNodeId) {
+          // У обработанных узлов нет дальнейших связей, возвращаемся к исходному узлу
           this.logger.log(
             `У обработанных узлов нет дальнейших связей, возвращаемся к исходному узлу ${originalCurrentNodeId}`
           );
