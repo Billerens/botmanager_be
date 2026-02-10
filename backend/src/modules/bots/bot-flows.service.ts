@@ -348,42 +348,16 @@ export class BotFlowsService {
     await this.botFlowNodeRepository.save(flowNodes);
   }
 
+  /**
+   * Маппинг строки в NodeType enum.
+   * Автоматически поддерживает все значения enum — при добавлении
+   * нового типа в NodeType ручное обновление здесь не требуется.
+   */
   private mapStringToNodeType(type: string): NodeType {
-    const typeMap: Record<string, NodeType> = {
-      start: NodeType.START,
-      message: NodeType.MESSAGE,
-      keyboard: NodeType.KEYBOARD,
-      condition: NodeType.CONDITION,
-      api: NodeType.API,
-      end: NodeType.END,
-      form: NodeType.FORM,
-      delay: NodeType.DELAY,
-      variable: NodeType.VARIABLE,
-      database: NodeType.DATABASE,
-      file: NodeType.FILE,
-      random: NodeType.RANDOM,
-      integration: NodeType.INTEGRATION,
-      webhook: NodeType.WEBHOOK,
-      new_message: NodeType.NEW_MESSAGE,
-      endpoint: NodeType.ENDPOINT,
-      broadcast: NodeType.BROADCAST,
-      group: NodeType.GROUP,
-      location: NodeType.LOCATION,
-      calculator: NodeType.CALCULATOR,
-      transform: NodeType.TRANSFORM,
-      group_create: NodeType.GROUP_CREATE,
-      group_join: NodeType.GROUP_JOIN,
-      group_action: NodeType.GROUP_ACTION,
-      group_leave: NodeType.GROUP_LEAVE,
-      // AI узлы
-      ai_single: NodeType.AI_SINGLE,
-      ai_chat: NodeType.AI_CHAT,
-    };
-
-    if (!typeMap[type]) {
-      throw new BadRequestException(`Неподдерживаемый тип узла: ${type}`);
+    const validTypes = Object.values(NodeType) as string[];
+    if (validTypes.includes(type)) {
+      return type as NodeType;
     }
-
-    return typeMap[type];
+    throw new BadRequestException(`Неподдерживаемый тип узла: ${type}`);
   }
 }
