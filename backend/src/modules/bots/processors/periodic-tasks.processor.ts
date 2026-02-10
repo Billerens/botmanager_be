@@ -70,7 +70,7 @@ export class PeriodicTasksProcessor {
       }
 
       // Загружаем бота
-      const bot = await this.botsService.findOne(botId);
+      const bot = await this.botsService.findOne(botId, userId);
       if (!bot) {
         this.logger.error(`Бот ${botId} не найден`);
         return;
