@@ -55,6 +55,7 @@ import {
 } from "./nodes";
 import { GroupSessionService } from "./group-session.service";
 import { CustomPagesBotService } from "../custom-pages/services/custom-pages-bot.service";
+import { PeriodicTaskService } from "./services/periodic-task.service";
 
 export interface UserSession {
   userId: string;
@@ -138,6 +139,7 @@ export class FlowExecutionService implements OnModuleInit {
     // Periodic handlers
     private readonly periodicExecutionNodeHandler: PeriodicExecutionNodeHandler,
     private readonly periodicControlNodeHandler: PeriodicControlNodeHandler,
+    private readonly periodicTaskService: PeriodicTaskService,
   ) {
     // Регистрируем все обработчики
     this.registerNodeHandlers();
@@ -380,6 +382,10 @@ export class FlowExecutionService implements OnModuleInit {
       this.logger.log(`Определяем текущий узел...`);
       if (!session.currentNodeId) {
         this.logger.log(`Сессия не имеет текущего узла, ищем подходящий`);
+
+        // Активируем standalone periodic_execution узлы при первом сообщении
+        await this.activateStandalonePeriodicNodes(activeFlow, session, context);
+
         const resolved = await this.resolveInitialNodeByMessage(
           bot,
           message,
@@ -459,6 +465,96 @@ export class FlowExecutionService implements OnModuleInit {
       this.logger.error("Ошибка выполнения flow:", error);
       throw error;
     }
+  }
+
+  /**
+   * Активирует все standalone periodic_execution узлы в flow.
+   *
+   * Вызывается при каждом сообщении пользователя. Для каждого
+   * periodic_execution узла с mode="standalone" проверяет,
+   * не создана ли уже задача (по taskIdVariable в сессии),
+   * и если нет — создаёт repeatable job через PeriodicTaskService.
+   *
+   * O(n) — по количеству узлов в flow.
+   */
+  private async activateStandalonePeriodicNodes(
+    flow: BotFlow,
+    session: UserSession,
+    context: FlowContext,
+  ): Promise<void> {
+    const periodicNodes = flow.nodes.filter(
+      (node) =>
+        node.type === "periodic_execution" &&
+        node.data?.periodicExecution?.mode === "standalone",
+    );
+
+    if (periodicNodes.length === 0) return;
+
+    this.logger.log(
+      `Найдено ${periodicNodes.length} standalone periodic_execution узлов`,
+    );
+
+    for (const periodicNode of periodicNodes) {
+      const config = periodicNode.data.periodicExecution;
+      if (!config) continue;
+
+      const variableName = config.taskIdVariable || "periodicTaskId";
+
+      // Проверяем, не создана ли уже задача для этого узла
+      const existingTaskId = session.variables[variableName];
+      if (existingTaskId) {
+        const existingStatus =
+          this.periodicTaskService.getTaskStatus(existingTaskId);
+        if (
+          existingStatus &&
+          (existingStatus.status === "running" ||
+            existingStatus.status === "paused")
+        ) {
+          this.logger.log(
+            `Standalone задача для узла ${periodicNode.nodeId} уже активна (${existingTaskId}), пропускаем`,
+          );
+          continue;
+        }
+      }
+
+      try {
+        const taskId = await this.periodicTaskService.createTask({
+          scheduleType: config.scheduleType,
+          interval: config.interval,
+          cronExpression: config.cronExpression,
+          maxExecutions: config.maxExecutions,
+          botId: session.botId,
+          flowId: flow.id,
+          nodeId: periodicNode.nodeId,
+          userId: session.userId,
+          chatId: session.chatId,
+          sessionKey: `${session.botId}-${session.userId}`,
+        });
+
+        session.variables[variableName] = taskId;
+
+        this.logger.log(
+          `Standalone periodic задача создана: ${taskId} для узла ${periodicNode.nodeId}, сохранена в '${variableName}'`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Ошибка активации standalone periodic узла ${periodicNode.nodeId}:`,
+          error,
+        );
+      }
+    }
+
+    // Сохраняем обновлённую сессию с taskId
+    const sessionData: UserSessionData = {
+      userId: session.userId,
+      chatId: session.chatId,
+      botId: session.botId,
+      currentNodeId: session.currentNodeId,
+      variables: session.variables,
+      lastActivity: session.lastActivity,
+      locationRequest: session.locationRequest,
+    };
+    await this.sessionStorageService.saveSession(sessionData);
   }
 
   /**

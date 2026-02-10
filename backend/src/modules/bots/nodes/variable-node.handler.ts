@@ -45,7 +45,7 @@ export class VariableNodeHandler extends BaseNodeHandler {
     }
 
     this.logger.log(
-      `Все переменные сессии: ${JSON.stringify(session.variables)}`
+      `Обновлено ${Object.keys(variables).length} переменных. Всего в сессии: ${Object.keys(session.variables).length}`
     );
 
     // Переходим к следующему узлу
