@@ -8,7 +8,7 @@ import {
   BotFlowNode,
   NodeType,
 } from "../../database/entities/bot-flow-node.entity";
-import { TelegramService } from "../telegram/telegram.service";
+import { TelegramService, TelegramBlockedError } from "../telegram/telegram.service";
 import { BotsService } from "./bots.service";
 import {
   SessionStorageService,
@@ -462,6 +462,15 @@ export class FlowExecutionService implements OnModuleInit {
       // Выполняем узел
       await this.executeNode(context);
     } catch (error) {
+      // Пользователь заблокировал бота — логируем и тихо завершаем,
+      // не пробрасываем ошибку (webhook всё равно не сможет отправить ответ)
+      if (error instanceof TelegramBlockedError) {
+        this.logger.warn(
+          `Пользователь ${error.chatId} заблокировал бота ${bot.id}, flow прерван`,
+        );
+        return;
+      }
+
       this.logger.error("Ошибка выполнения flow:", error);
       throw error;
     }
@@ -570,12 +579,16 @@ export class FlowExecutionService implements OnModuleInit {
     sessionData: any,
     syntheticMessage: any,
   ): Promise<void> {
+    // Сохраняем оригинальный currentNodeId основного flow —
+    // периодическая ветка не должна его менять
+    const originalCurrentNodeId = sessionData.currentNodeId;
+
     const session: UserSession = {
       userId: sessionData.userId,
       chatId: sessionData.chatId,
       botId: sessionData.botId,
-      currentNodeId: sessionData.currentNodeId,
-      variables: sessionData.variables || {},
+      currentNodeId: undefined, // Изолируем от основного flow
+      variables: { ...(sessionData.variables || {}) }, // Копия для безопасной мутации
       lastActivity: new Date(),
       locationRequest: sessionData.locationRequest,
     };
@@ -608,13 +621,14 @@ export class FlowExecutionService implements OnModuleInit {
       }
     }
 
-    // Сохраняем сессию после выполнения
+    // Сохраняем сессию: восстанавливаем оригинальный currentNodeId основного flow,
+    // но сохраняем обновлённые переменные (counter и т.д.)
     const updatedSessionData: UserSessionData = {
       userId: session.userId,
       chatId: session.chatId,
       botId: session.botId,
-      currentNodeId: session.currentNodeId,
-      variables: session.variables,
+      currentNodeId: originalCurrentNodeId, // Не ломаем основной flow
+      variables: session.variables, // Сохраняем изменённые переменные
       lastActivity: session.lastActivity,
       locationRequest: session.locationRequest,
     };
@@ -654,6 +668,14 @@ export class FlowExecutionService implements OnModuleInit {
         this.logger.warn(`Неизвестный тип узла: ${currentNode.type}`);
       }
     } catch (error) {
+      // Пользователь заблокировал бота — прекращаем выполнение flow без паники
+      if (error instanceof TelegramBlockedError) {
+        this.logger.warn(
+          `Пользователь ${error.chatId} заблокировал бота, прерываем выполнение flow на узле ${currentNode.type} (${currentNode.nodeId})`,
+        );
+        throw error; // Пробрасываем для обработки в processMessage / processor
+      }
+
       this.logger.error(`Ошибка выполнения узла ${currentNode.type}:`, error);
       throw error;
     }

@@ -5,7 +5,9 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { BotFlow, FlowStatus } from "../../../database/entities/bot-flow.entity";
 import { BotFlowNode } from "../../../database/entities/bot-flow-node.entity";
+import { Bot, BotStatus } from "../../../database/entities/bot.entity";
 import { BotsService } from "../bots.service";
+import { TelegramBlockedError } from "../../telegram/telegram.service";
 import { SessionStorageService } from "../session-storage.service";
 import { PeriodicTaskService } from "../services/periodic-task.service";
 import { FlowExecutionService } from "../flow-execution.service";
@@ -69,10 +71,19 @@ export class PeriodicTasksProcessor {
         return;
       }
 
-      // Загружаем бота
+      // Загружаем бота и проверяем его статус
       const bot = await this.botsService.findOne(botId, userId);
       if (!bot) {
-        this.logger.error(`Бот ${botId} не найден`);
+        this.logger.error(`Бот ${botId} не найден, останавливаем задачу ${taskId}`);
+        await this.periodicTaskService.stopTask(taskId);
+        return;
+      }
+
+      if (bot.status !== BotStatus.ACTIVE) {
+        this.logger.warn(
+          `Бот ${botId} неактивен (статус: ${bot.status}), останавливаем задачу ${taskId}`,
+        );
+        await this.periodicTaskService.stopTask(taskId);
         return;
       }
 
@@ -159,6 +170,15 @@ export class PeriodicTasksProcessor {
 
       this.logger.log(`Периодическая задача ${taskId} выполнена успешно`);
     } catch (error) {
+      // Если пользователь заблокировал бота — останавливаем задачу, retry бессмысленны
+      if (error instanceof TelegramBlockedError) {
+        this.logger.warn(
+          `Пользователь ${error.chatId} заблокировал бота, останавливаем задачу ${taskId}`,
+        );
+        await this.periodicTaskService.stopTask(taskId);
+        return; // Не бросаем — BullMQ не должен делать retry
+      }
+
       this.logger.error(
         `Ошибка выполнения периодической задачи ${taskId}:`,
         error,

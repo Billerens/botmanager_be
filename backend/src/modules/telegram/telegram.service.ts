@@ -8,6 +8,24 @@ import { Shop } from "../../database/entities/shop.entity";
 import { BookingSystem } from "../../database/entities/booking-system.entity";
 import { CustomPagesBotService } from "../custom-pages/services/custom-pages-bot.service";
 
+/**
+ * Ошибка, выбрасываемая когда пользователь Telegram заблокировал бота.
+ * Telegram API возвращает 403 "Forbidden: bot was blocked by the user".
+ *
+ * Используется для:
+ * - Остановки периодических задач для заблокировавшего пользователя
+ * - Корректного завершения flow без бесполезных retry
+ */
+export class TelegramBlockedError extends Error {
+  public readonly chatId: string;
+
+  constructor(chatId: string) {
+    super(`Пользователь ${chatId} заблокировал бота`);
+    this.name = "TelegramBlockedError";
+    this.chatId = chatId;
+  }
+}
+
 export interface TelegramBotInfo {
   id: number;
   is_bot: boolean;
@@ -80,6 +98,29 @@ export class TelegramService {
       "TELEGRAM_BOT_API_URL",
       "https://api.telegram.org/bot",
     );
+  }
+
+  /**
+   * Проверяет, является ли ошибка Telegram API блокировкой бота пользователем.
+   * Telegram возвращает 403 с описаниями:
+   * - "Forbidden: bot was blocked by the user"
+   * - "Forbidden: user is deactivated"
+   * - "Forbidden: bot was kicked from the group chat"
+   *
+   * @throws TelegramBlockedError если пользователь заблокировал бота
+   */
+  private throwIfBlocked(error: any, chatId: string): void {
+    const status = error.response?.status;
+    const description = error.response?.data?.description || "";
+
+    if (
+      status === 403 ||
+      description.includes("bot was blocked by the user") ||
+      description.includes("user is deactivated") ||
+      description.includes("bot was kicked from")
+    ) {
+      throw new TelegramBlockedError(chatId);
+    }
   }
 
   async getBotInfo(token: string): Promise<TelegramBotInfo | null> {
@@ -333,6 +374,9 @@ export class TelegramService {
 
       return response.data.ok ? response.data.result : null;
     } catch (error) {
+      // Проверяем, заблокировал ли пользователь бота (пробрасываем наверх)
+      this.throwIfBlocked(error, chatId);
+
       // Проверяем, является ли ошибка "text is too long"
       if (error.response?.data?.description?.includes("text is too long")) {
         // Для длинных сообщений отключаем parse_mode, так как разбитые части могут содержать невалидную разметку
@@ -570,6 +614,9 @@ export class TelegramService {
 
       return response.data.ok ? response.data.result : null;
     } catch (error) {
+      // Проверяем, заблокировал ли пользователь бота
+      this.throwIfBlocked(error, chatId);
+
       console.error("Ошибка отправки фото:", {
         message: error.message,
         response: error.response?.data,
@@ -628,6 +675,9 @@ export class TelegramService {
 
       return response.data.ok ? response.data.result : null;
     } catch (error) {
+      // Проверяем, заблокировал ли пользователь бота
+      this.throwIfBlocked(error, chatId);
+
       console.error("Ошибка отправки документа:", error.message);
       return null;
     }

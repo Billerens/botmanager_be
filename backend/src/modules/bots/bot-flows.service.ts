@@ -21,6 +21,7 @@ import {
   ActivityLevel,
 } from "../../database/entities/activity-log.entity";
 import { FlowExecutionService } from "./flow-execution.service";
+import { PeriodicTaskService } from "./services/periodic-task.service";
 
 @Injectable()
 export class BotFlowsService {
@@ -33,7 +34,8 @@ export class BotFlowsService {
     private botRepository: Repository<Bot>,
     private activityLogService: ActivityLogService,
     @Inject(forwardRef(() => FlowExecutionService))
-    private flowExecutionService: FlowExecutionService
+    private flowExecutionService: FlowExecutionService,
+    private periodicTaskService: PeriodicTaskService,
   ) {}
 
   async createFlow(
@@ -160,6 +162,15 @@ export class BotFlowsService {
 
       await this.createFlowNodes(savedFlow.id, updateFlowDto.flowData.nodes);
 
+      // Согласуем периодические задачи с новыми настройками узлов
+      const periodicNodes = (updateFlowDto.flowData.nodes || [])
+        .filter((n) => n.type === "periodic_execution")
+        .map((n) => ({ nodeId: n.id, data: n.data }));
+      await this.periodicTaskService.reconcileFlowTasks(
+        savedFlow.id,
+        periodicNodes,
+      );
+
       // Если Flow активен, сбрасываем все сессии бота
       if (savedFlow.status === FlowStatus.ACTIVE) {
         await this.flowExecutionService.resetBotSessions(botId);
@@ -228,6 +239,9 @@ export class BotFlowsService {
       id: flow.id,
       name: flow.name,
     };
+
+    // Останавливаем все периодические задачи для этого flow
+    await this.periodicTaskService.reconcileFlowTasks(flow.id, []);
 
     // Удаляем узлы flow
     await this.botFlowNodeRepository.delete({ flowId: flow.id });
@@ -303,6 +317,9 @@ export class BotFlowsService {
     // Деактивируем flow
     flow.status = FlowStatus.INACTIVE;
     const savedFlow = await this.botFlowRepository.save(flow);
+
+    // Останавливаем все периодические задачи этого бота
+    await this.periodicTaskService.cleanupBotTasks(botId);
 
     // Логируем деактивацию flow
     this.activityLogService

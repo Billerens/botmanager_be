@@ -25,6 +25,7 @@ import {
   ActivityType,
   ActivityLevel,
 } from "../../database/entities/activity-log.entity";
+import { PeriodicTaskService } from "./services/periodic-task.service";
 
 @Injectable()
 export class BotsService {
@@ -42,7 +43,8 @@ export class BotsService {
     @Inject(forwardRef(() => TelegramService))
     private telegramService: TelegramService,
     private notificationService: NotificationService,
-    private activityLogService: ActivityLogService
+    private activityLogService: ActivityLogService,
+    private periodicTaskService: PeriodicTaskService,
   ) {}
 
   async create(createBotDto: CreateBotDto, userId: string): Promise<Bot> {
@@ -237,6 +239,16 @@ export class BotsService {
       console.error("Ошибка удаления webhook:", error);
     }
 
+    // Останавливаем все периодические задачи бота
+    try {
+      await this.periodicTaskService.cleanupBotTasks(bot.id);
+    } catch (error) {
+      this.logger.error(
+        `Ошибка остановки периодических задач при удалении бота ${bot.id}:`,
+        error,
+      );
+    }
+
     // Отвязываем activity_logs от бота перед удалением
     // Это необходимо для обхода foreign key constraint
     try {
@@ -361,6 +373,21 @@ export class BotsService {
     bot.status = BotStatus.INACTIVE;
 
     const savedBot = await this.botRepository.save(bot);
+
+    // Останавливаем все периодические задачи бота
+    try {
+      const cleaned = await this.periodicTaskService.cleanupBotTasks(savedBot.id);
+      if (cleaned > 0) {
+        this.logger.log(
+          `Остановлено ${cleaned} периодических задач при деактивации бота ${savedBot.id}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Ошибка остановки периодических задач при деактивации бота ${savedBot.id}:`,
+        error,
+      );
+    }
 
     // Отправляем уведомление об изменении статуса
     this.notificationService

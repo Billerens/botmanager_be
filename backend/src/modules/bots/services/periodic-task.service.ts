@@ -434,6 +434,137 @@ export class PeriodicTaskService {
   }
 
   /**
+   * Сравнивает конфигурацию расписания двух конфигов.
+   * @returns true если расписание изменилось
+   */
+  private hasScheduleChanged(
+    oldConfig: PeriodicTaskConfig,
+    newConfig: {
+      scheduleType: string;
+      interval?: { value: number; unit: string };
+      cronExpression?: string;
+      maxExecutions?: number | null;
+    },
+  ): boolean {
+    if (oldConfig.scheduleType !== newConfig.scheduleType) return true;
+
+    if (oldConfig.scheduleType === "interval") {
+      if (
+        oldConfig.interval?.value !== newConfig.interval?.value ||
+        oldConfig.interval?.unit !== newConfig.interval?.unit
+      ) {
+        return true;
+      }
+    }
+
+    if (oldConfig.scheduleType === "cron") {
+      if (oldConfig.cronExpression !== newConfig.cronExpression) return true;
+    }
+
+    if (oldConfig.maxExecutions !== newConfig.maxExecutions) return true;
+
+    return false;
+  }
+
+  /**
+   * Согласует запущенные задачи с текущим состоянием узлов flow.
+   *
+   * Вызывается при сохранении flow. Алгоритм:
+   * 1. Находит все running/paused задачи для данного flowId
+   * 2. Для каждой задачи проверяет, существует ли узел с тем же nodeId
+   * 3. Если узел удалён → stopTask
+   * 4. Если настройки (interval, cron, maxExecutions) изменились → restartTask с новым конфигом
+   * 5. Если узел не изменился → ничего не делаем
+   *
+   * @param flowId — ID flow
+   * @param periodicNodes — массив узлов periodic_execution из нового flow
+   * @returns количество изменённых задач
+   *
+   * O(n*m) — n задач, m узлов. На практике оба числа малы (единицы).
+   */
+  async reconcileFlowTasks(
+    flowId: string,
+    periodicNodes: Array<{
+      nodeId: string;
+      data?: {
+        periodicExecution?: {
+          scheduleType: string;
+          interval?: { value: number; unit: string };
+          cronExpression?: string;
+          maxExecutions?: number | null;
+          mode?: string;
+          taskIdVariable?: string;
+        };
+      };
+    }>,
+  ): Promise<number> {
+    let changed = 0;
+
+    // Находим все активные задачи для этого flow
+    const flowTasks: TaskMetadata[] = [];
+    for (const [, metadata] of this.tasks.entries()) {
+      if (
+        metadata.config.flowId === flowId &&
+        (metadata.status === "running" || metadata.status === "paused")
+      ) {
+        flowTasks.push(metadata);
+      }
+    }
+
+    if (flowTasks.length === 0) {
+      this.logger.log(`Нет активных задач для flow ${flowId}, reconcile не требуется`);
+      return 0;
+    }
+
+    this.logger.log(
+      `Reconcile: ${flowTasks.length} активных задач для flow ${flowId}, ${periodicNodes.length} periodic_execution узлов`,
+    );
+
+    for (const task of flowTasks) {
+      const matchingNode = periodicNodes.find(
+        (node) => node.nodeId === task.config.nodeId,
+      );
+
+      if (!matchingNode || !matchingNode.data?.periodicExecution) {
+        // Узел удалён из flow → останавливаем задачу
+        this.logger.log(
+          `Reconcile: узел ${task.config.nodeId} удалён из flow, останавливаем задачу ${task.taskId}`,
+        );
+        await this.stopTask(task.taskId);
+        changed++;
+        continue;
+      }
+
+      const newConfig = matchingNode.data.periodicExecution;
+
+      // Проверяем, изменились ли настройки расписания
+      if (this.hasScheduleChanged(task.config, newConfig)) {
+        this.logger.log(
+          `Reconcile: настройки узла ${task.config.nodeId} изменились, перезапускаем задачу ${task.taskId}`,
+        );
+
+        // Обновляем конфиг задачи
+        task.config.scheduleType = newConfig.scheduleType as "interval" | "cron";
+        task.config.interval = newConfig.interval as PeriodicTaskConfig["interval"];
+        task.config.cronExpression = newConfig.cronExpression;
+        task.config.maxExecutions = newConfig.maxExecutions;
+        this.tasks.set(task.taskId, task);
+
+        // Перезапускаем с новым конфигом
+        await this.restartTask(task.taskId);
+        changed++;
+      } else {
+        this.logger.log(
+          `Reconcile: задача ${task.taskId} (узел ${task.config.nodeId}) не изменилась`,
+        );
+      }
+    }
+
+    this.logger.log(`Reconcile завершён: ${changed} задач изменено`);
+    return changed;
+  }
+
+  /**
    * Очистка всех задач для бота (при деактивации flow).
    * O(n) — итерация по всем задачам.
    */
