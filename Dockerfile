@@ -1,45 +1,28 @@
-# Используем официальный Node.js образ
-FROM node:20-alpine
-
-# Включение Corepack для Yarn
+# Сборка
+FROM node:20-alpine AS builder
 RUN corepack enable
-
-# Устанавливаем рабочую директорию
 WORKDIR /app
-
-# Копируем package.json и yarn.lock
 COPY backend/package.json backend/yarn.lock* ./
-
-
-# Копируем исходный код
 COPY backend/ ./
-
-# Устанавливаем все зависимости (включая dev для сборки)
 RUN yarn install --frozen-lockfile
-
-# Собираем приложение
 RUN yarn build
 
-# Копируем скрипт запуска с миграциями
-COPY backend/scripts/start-with-migrations.sh /app/start.sh
+# Runtime: только артефакты + COPY --chown → без тяжёлого chown -R по десяткам тысяч файлов
+FROM node:20-alpine
+RUN corepack enable
+WORKDIR /app
+RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001 -G nodejs
 
-# Делаем скрипт исполняемым
+COPY --chown=nestjs:nodejs --from=builder /app/node_modules ./node_modules
+COPY --chown=nestjs:nodejs --from=builder /app/dist ./dist
+COPY --chown=nestjs:nodejs --from=builder /app/package.json ./
+COPY --chown=nestjs:nodejs backend/package.json backend/yarn.lock* ./
+COPY --chown=nestjs:nodejs backend/src ./src
+COPY --chown=nestjs:nodejs backend/scripts/start-with-migrations.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-# Создаем пользователя для безопасности
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nestjs -u 1001
-
-# Меняем владельца файлов
-RUN chown -R nestjs:nodejs /app
 USER nestjs
 
-# Открываем порт
 EXPOSE 3000
 
-# Команда запуска с автоматическим применением миграций
-# Приложение автоматически проверит наличие критически важных переменных окружения:
-# - DATABASE_HOST, DATABASE_PORT, DATABASE_USERNAME, DATABASE_PASSWORD, DATABASE_NAME
-# - JWT_SECRET
-# - REDIS_URL
 CMD ["/app/start.sh"]
