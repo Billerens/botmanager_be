@@ -27,6 +27,7 @@ export class ActivityLogService {
     botId?: string,
     userId?: string,
     type?: ActivityType,
+    excludeTypes?: ActivityType[],
     level?: ActivityLevel,
     dateFrom?: string,
     dateTo?: string,
@@ -40,7 +41,6 @@ export class ActivityLogService {
     }
 
     if (userId) {
-      // Показываем логи текущего пользователя ИЛИ логи с userId = null (системные логи)
       query.andWhere("(log.userId = :userId OR log.userId IS NULL)", {
         userId,
       });
@@ -48,6 +48,10 @@ export class ActivityLogService {
 
     if (type) {
       query.andWhere("log.type = :type", { type });
+    }
+
+    if (excludeTypes?.length) {
+      query.andWhere("log.type NOT IN (:...excludeTypes)", { excludeTypes });
     }
 
     if (level) {

@@ -63,10 +63,31 @@ export class PeriodicTasksProcessor {
 
     try {
       // Проверяем статус задачи
-      const taskStatus = this.periodicTaskService.getTaskStatus(taskId);
+      let taskStatus = this.periodicTaskService.getTaskStatus(taskId);
+
+      if (!taskStatus) {
+        // Задача не найдена в in-memory Map (после рестарта сервера).
+        // Пробуем восстановить метаданные из job.data.
+        this.logger.log(
+          `Задача ${taskId} не найдена в памяти, восстанавливаем из job.data...`,
+        );
+
+        const restored = this.periodicTaskService.restoreTask(job.data);
+        if (!restored) {
+          // Старый формат job.data без scheduleType — удаляем orphaned job
+          this.logger.warn(
+            `Не удалось восстановить задачу ${taskId}, удаляем orphaned job из Redis`,
+          );
+          await this.periodicTaskService.removeOrphanedJob(taskId);
+          return;
+        }
+
+        taskStatus = this.periodicTaskService.getTaskStatus(taskId);
+      }
+
       if (!taskStatus || taskStatus.status !== "running") {
         this.logger.log(
-          `Задача ${taskId} не в статусе running (${taskStatus?.status || "not found"}), пропускаем выполнение`,
+          `Задача ${taskId} не в статусе running (${taskStatus?.status || "unknown"}), пропускаем выполнение`,
         );
         return;
       }

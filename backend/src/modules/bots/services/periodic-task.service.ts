@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { InjectQueue } from "@nestjs/bull";
 import { Queue, Job } from "bull";
 import { v4 as uuidv4 } from "uuid";
@@ -54,7 +54,7 @@ interface TaskMetadata {
  * Сложность операций: O(1) для CRUD по taskId (Map lookup).
  */
 @Injectable()
-export class PeriodicTaskService {
+export class PeriodicTaskService implements OnModuleInit {
   private readonly logger = new Logger(PeriodicTaskService.name);
 
   /**
@@ -66,6 +66,103 @@ export class PeriodicTaskService {
   constructor(
     @InjectQueue("periodic-tasks") private readonly periodicQueue: Queue,
   ) {}
+
+  /**
+   * При старте модуля логируем существующие repeatable jobs в Redis.
+   *
+   * После рестарта in-memory Map пуст, но repeatable jobs живут в Redis.
+   * Метаданные будут восстановлены лениво — при первом срабатывании
+   * каждого job процессор вызовет restoreTask() с данными из job.data.
+   */
+  async onModuleInit(): Promise<void> {
+    try {
+      const repeatableJobs = await this.periodicQueue.getRepeatableJobs();
+      if (repeatableJobs.length > 0) {
+        this.logger.log(
+          `Обнаружено ${repeatableJobs.length} repeatable jobs в Redis. ` +
+          `Метаданные будут восстановлены при первом срабатывании.`,
+        );
+        for (const job of repeatableJobs) {
+          this.logger.log(
+            `  Repeatable job: id=${job.id}, cron=${job.cron || "N/A"}, every=${job.every || "N/A"}`,
+          );
+        }
+      } else {
+        this.logger.log(`Repeatable jobs в Redis не обнаружено`);
+      }
+    } catch (error) {
+      this.logger.error(`Ошибка проверки repeatable jobs:`, error);
+    }
+  }
+
+  /**
+   * Восстанавливает метаданные задачи из данных job после рестарта сервера.
+   *
+   * Вызывается процессором, когда задача не найдена в in-memory Map,
+   * но repeatable job продолжает срабатывать из Redis.
+   * Воссоздаёт TaskMetadata из job.data и регистрирует в Map.
+   *
+   * @param jobData — данные из job.data (содержат taskId, конфиг и контекст)
+   * @returns true если задача успешно восстановлена
+   */
+  restoreTask(jobData: {
+    taskId: string;
+    botId: string;
+    flowId: string;
+    nodeId: string;
+    userId: string;
+    chatId: string;
+    sessionKey: string;
+    scheduleType?: string;
+    interval?: { value: number; unit: string };
+    cronExpression?: string;
+    maxExecutions?: number | null;
+  }): boolean {
+    // Если задача уже есть в Map — не перезаписываем (race condition guard)
+    if (this.tasks.has(jobData.taskId)) {
+      return true;
+    }
+
+    // Для старых задач, созданных до добавления scheduleType в job.data,
+    // восстановление невозможно — они будут очищены
+    if (!jobData.scheduleType) {
+      this.logger.warn(
+        `Задача ${jobData.taskId} не содержит scheduleType в job.data (старый формат), ` +
+        `восстановление невозможно`,
+      );
+      return false;
+    }
+
+    const config: PeriodicTaskConfig = {
+      scheduleType: jobData.scheduleType as "interval" | "cron",
+      interval: jobData.interval as PeriodicTaskConfig["interval"],
+      cronExpression: jobData.cronExpression,
+      maxExecutions: jobData.maxExecutions,
+      botId: jobData.botId,
+      flowId: jobData.flowId,
+      nodeId: jobData.nodeId,
+      userId: jobData.userId,
+      chatId: jobData.chatId,
+      sessionKey: jobData.sessionKey,
+    };
+
+    const metadata: TaskMetadata = {
+      taskId: jobData.taskId,
+      config,
+      status: "running",
+      executionCount: 0, // Счётчик сбрасывается (не персистится)
+      createdAt: new Date(), // Время восстановления
+    };
+
+    this.tasks.set(jobData.taskId, metadata);
+
+    this.logger.log(
+      `Задача ${jobData.taskId} восстановлена после рестарта: ` +
+      `${config.scheduleType}, bot=${config.botId}, node=${config.nodeId}`,
+    );
+
+    return true;
+  }
 
   /**
    * Конвертирует интервал в миллисекунды.
@@ -131,6 +228,11 @@ export class PeriodicTaskService {
         userId: config.userId,
         chatId: config.chatId,
         sessionKey: config.sessionKey,
+        // Конфиг расписания — для восстановления метаданных после рестарта сервера
+        scheduleType: config.scheduleType,
+        interval: config.interval,
+        cronExpression: config.cronExpression,
+        maxExecutions: config.maxExecutions,
       },
       {
         repeat: repeatOpts,
@@ -268,6 +370,10 @@ export class PeriodicTaskService {
         userId: config.userId,
         chatId: config.chatId,
         sessionKey: config.sessionKey,
+        scheduleType: config.scheduleType,
+        interval: config.interval,
+        cronExpression: config.cronExpression,
+        maxExecutions: config.maxExecutions,
       },
       {
         repeat: repeatOpts,
@@ -357,6 +463,10 @@ export class PeriodicTaskService {
         userId: config.userId,
         chatId: config.chatId,
         sessionKey: config.sessionKey,
+        scheduleType: config.scheduleType,
+        interval: config.interval,
+        cronExpression: config.cronExpression,
+        maxExecutions: config.maxExecutions,
       },
       {
         repeat: repeatOpts,
@@ -430,6 +540,40 @@ export class PeriodicTaskService {
         `Ошибка удаления repeatable job для задачи ${metadata.taskId}:`,
         error,
       );
+    }
+  }
+
+  /**
+   * Удаляет осиротевший repeatable job по taskId.
+   *
+   * Используется процессором, когда задача не найдена в in-memory Map
+   * (например, после рестарта сервера). В этом случае метаданных нет,
+   * но repeatable job продолжает срабатывать из Redis.
+   *
+   * @returns true если job найден и удалён
+   */
+  async removeOrphanedJob(taskId: string): Promise<boolean> {
+    try {
+      const repeatableJobs = await this.periodicQueue.getRepeatableJobs();
+      for (const job of repeatableJobs) {
+        if (job.id === taskId) {
+          await this.periodicQueue.removeRepeatableByKey(job.key);
+          this.logger.log(
+            `Удалён осиротевший repeatable job для taskId=${taskId}`,
+          );
+          return true;
+        }
+      }
+      this.logger.warn(
+        `Осиротевший repeatable job для taskId=${taskId} не найден в Redis`,
+      );
+      return false;
+    } catch (error) {
+      this.logger.error(
+        `Ошибка удаления осиротевшего repeatable job для taskId=${taskId}:`,
+        error,
+      );
+      return false;
     }
   }
 
