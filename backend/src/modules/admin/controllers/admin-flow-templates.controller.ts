@@ -77,7 +77,7 @@ export class AdminFlowTemplatesController {
 
     await this.actionLogService.logAction(
       req.user,
-      AdminActionType.SETTINGS_UPDATE,
+      AdminActionType.FLOW_TEMPLATE_CREATE,
       `Создан системный шаблон flow: "${dto.name}"`,
       { entityType: "flow_template", entityId: result.id, request: req }
     );
@@ -95,7 +95,7 @@ export class AdminFlowTemplatesController {
 
     await this.actionLogService.logAction(
       req.user,
-      AdminActionType.SETTINGS_UPDATE,
+      AdminActionType.FLOW_TEMPLATE_UPDATE,
       `Обновлён шаблон flow: "${result.name}"`,
       { entityType: "flow_template", entityId: id, request: req }
     );
@@ -109,7 +109,7 @@ export class AdminFlowTemplatesController {
 
     await this.actionLogService.logAction(
       req.user,
-      AdminActionType.SETTINGS_UPDATE,
+      AdminActionType.FLOW_TEMPLATE_DELETE,
       `Архивирован шаблон flow: ${id}`,
       {
         level: AdminActionLevel.WARNING,
@@ -128,7 +128,7 @@ export class AdminFlowTemplatesController {
 
     await this.actionLogService.logAction(
       req.user,
-      AdminActionType.SETTINGS_UPDATE,
+      AdminActionType.FLOW_TEMPLATE_APPROVE,
       `Одобрена публикация шаблона flow: "${result.name}"`,
       { entityType: "flow_template", entityId: id, request: req }
     );
@@ -146,7 +146,7 @@ export class AdminFlowTemplatesController {
 
     await this.actionLogService.logAction(
       req.user,
-      AdminActionType.SETTINGS_UPDATE,
+      AdminActionType.FLOW_TEMPLATE_REJECT,
       `Отклонена публикация шаблона flow: "${result.name}". Причина: ${dto.reason}`,
       { entityType: "flow_template", entityId: id, request: req }
     );
@@ -160,7 +160,7 @@ export class AdminFlowTemplatesController {
 
     await this.actionLogService.logAction(
       req.user,
-      AdminActionType.SETTINGS_UPDATE,
+      AdminActionType.FLOW_TEMPLATE_APPROVE_DELETION,
       `Одобрено удаление шаблона flow: "${result.name}"`,
       {
         level: AdminActionLevel.WARNING,
@@ -183,7 +183,7 @@ export class AdminFlowTemplatesController {
 
     await this.actionLogService.logAction(
       req.user,
-      AdminActionType.SETTINGS_UPDATE,
+      AdminActionType.FLOW_TEMPLATE_REJECT_DELETION,
       `Отклонено удаление шаблона flow: "${result.name}"`,
       { entityType: "flow_template", entityId: id, request: req }
     );
@@ -204,7 +204,7 @@ export class AdminFlowTemplatesController {
 
     await this.actionLogService.logAction(
       req.user,
-      AdminActionType.SETTINGS_UPDATE,
+      AdminActionType.FLOW_TEMPLATE_PLATFORM_CHOICE,
       `${dto.isPlatformChoice ? "Установлен" : "Снят"} "Выбор платформы" для шаблона: "${result.name}"`,
       { entityType: "flow_template", entityId: id, request: req }
     );
@@ -218,7 +218,7 @@ export class AdminFlowTemplatesController {
 
     await this.actionLogService.logAction(
       req.user,
-      AdminActionType.SETTINGS_UPDATE,
+      AdminActionType.FLOW_TEMPLATE_DUPLICATE,
       `Дублирован шаблон flow: ${id} → ${result.id}`,
       { entityType: "flow_template", entityId: result.id, request: req }
     );

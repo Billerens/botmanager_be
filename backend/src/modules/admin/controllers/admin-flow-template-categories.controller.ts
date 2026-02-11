@@ -41,7 +41,7 @@ export class AdminFlowTemplateCategoriesController {
 
     await this.actionLogService.logAction(
       req.user,
-      AdminActionType.SETTINGS_UPDATE,
+      AdminActionType.FLOW_TEMPLATE_CATEGORY_CREATE,
       `Создана категория шаблонов flow: "${dto.slug}"`,
       {
         entityType: "flow_template_category",
@@ -63,7 +63,7 @@ export class AdminFlowTemplateCategoriesController {
 
     await this.actionLogService.logAction(
       req.user,
-      AdminActionType.SETTINGS_UPDATE,
+      AdminActionType.FLOW_TEMPLATE_CATEGORY_UPDATE,
       `Обновлена категория шаблонов flow: "${result.slug}"`,
       {
         entityType: "flow_template_category",
@@ -81,7 +81,7 @@ export class AdminFlowTemplateCategoriesController {
 
     await this.actionLogService.logAction(
       req.user,
-      AdminActionType.SETTINGS_UPDATE,
+      AdminActionType.FLOW_TEMPLATE_CATEGORY_DELETE,
       `Деактивирована категория шаблонов flow: ${id}`,
       {
         entityType: "flow_template_category",

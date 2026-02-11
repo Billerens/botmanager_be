@@ -88,6 +88,25 @@ export enum AdminActionType {
   CUSTOM_PAGE_LIST = "custom_page_list",
   CUSTOM_PAGE_UPDATE = "custom_page_update",
   CUSTOM_PAGE_DELETE = "custom_page_delete",
+
+  // Шаблоны Flow
+  FLOW_TEMPLATE_LIST = "flow_template_list",
+  FLOW_TEMPLATE_VIEW = "flow_template_view",
+  FLOW_TEMPLATE_CREATE = "flow_template_create",
+  FLOW_TEMPLATE_UPDATE = "flow_template_update",
+  FLOW_TEMPLATE_DELETE = "flow_template_delete",
+  FLOW_TEMPLATE_APPROVE = "flow_template_approve",
+  FLOW_TEMPLATE_REJECT = "flow_template_reject",
+  FLOW_TEMPLATE_APPROVE_DELETION = "flow_template_approve_deletion",
+  FLOW_TEMPLATE_REJECT_DELETION = "flow_template_reject_deletion",
+  FLOW_TEMPLATE_PLATFORM_CHOICE = "flow_template_platform_choice",
+  FLOW_TEMPLATE_DUPLICATE = "flow_template_duplicate",
+
+  // Категории шаблонов Flow
+  FLOW_TEMPLATE_CATEGORY_LIST = "flow_template_category_list",
+  FLOW_TEMPLATE_CATEGORY_CREATE = "flow_template_category_create",
+  FLOW_TEMPLATE_CATEGORY_UPDATE = "flow_template_category_update",
+  FLOW_TEMPLATE_CATEGORY_DELETE = "flow_template_category_delete",
 }
 
 export enum AdminActionLevel {
