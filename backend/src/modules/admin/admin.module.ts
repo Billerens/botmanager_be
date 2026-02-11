@@ -57,6 +57,9 @@ import { CustomDomainsModule } from "../custom-domains/custom-domains.module";
 import { OpenRouterModule } from "../openrouter/openrouter.module";
 import { BotsModule } from "../bots/bots.module";
 import { AdminOpenRouterController } from "./controllers/admin-openrouter.controller";
+import { AdminFlowTemplatesController } from "./controllers/admin-flow-templates.controller";
+import { AdminFlowTemplateCategoriesController } from "./controllers/admin-flow-template-categories.controller";
+import { FlowTemplatesModule } from "../flow-templates/flow-templates.module";
 
 @Module({
   imports: [
@@ -82,6 +85,7 @@ import { AdminOpenRouterController } from "./controllers/admin-openrouter.contro
     forwardRef(() => CustomDomainsModule),
     OpenRouterModule,
     forwardRef(() => BotsModule),
+    FlowTemplatesModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -108,6 +112,8 @@ import { AdminOpenRouterController } from "./controllers/admin-openrouter.contro
     AdminRedeployController,
     AdminS3Controller,
     AdminOpenRouterController,
+    AdminFlowTemplatesController,
+    AdminFlowTemplateCategoriesController,
   ],
   providers: [
     AdminAuthService,

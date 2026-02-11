@@ -17,7 +17,7 @@ export class NotificationSettingsService {
 
   constructor(
     @InjectRepository(User)
-    private userRepository: Repository<User>
+    private userRepository: Repository<User>,
   ) {}
 
   /**
@@ -222,7 +222,7 @@ export class NotificationSettingsService {
    * Получает настройки уведомлений пользователя
    */
   async getUserNotificationSettings(
-    userId: string
+    userId: string,
   ): Promise<NotificationSettingsResponseDto> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -245,7 +245,7 @@ export class NotificationSettingsService {
             : typeInfo.defaultEnabled;
         return acc;
       },
-      {} as Record<NotificationType, boolean>
+      {} as Record<NotificationType, boolean>,
     );
 
     return {
@@ -259,7 +259,7 @@ export class NotificationSettingsService {
    */
   async updateUserNotificationSettings(
     userId: string,
-    settings: Partial<Record<NotificationType, boolean>>
+    settings: Partial<Record<NotificationType, boolean>>,
   ): Promise<NotificationSettingsResponseDto> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -281,7 +281,7 @@ export class NotificationSettingsService {
     await this.userRepository.save(user);
 
     this.logger.log(
-      `Настройки уведомлений обновлены для пользователя ${userId}`
+      `Настройки уведомлений обновлены для пользователя ${userId}`,
     );
 
     return this.getUserNotificationSettings(userId);
@@ -292,7 +292,7 @@ export class NotificationSettingsService {
    */
   async isNotificationEnabled(
     userId: string,
-    notificationType: NotificationType
+    notificationType: NotificationType,
   ): Promise<boolean> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -319,14 +319,14 @@ export class NotificationSettingsService {
    * Получает настройки по умолчанию
    */
   private getDefaultSettings(
-    availableTypes: NotificationTypeInfo[]
+    availableTypes: NotificationTypeInfo[],
   ): Record<NotificationType, boolean> {
     return availableTypes.reduce(
       (acc, typeInfo) => {
         acc[typeInfo.type] = typeInfo.defaultEnabled;
         return acc;
       },
-      {} as Record<NotificationType, boolean>
+      {} as Record<NotificationType, boolean>,
     );
   }
 }

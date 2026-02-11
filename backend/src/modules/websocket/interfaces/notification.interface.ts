@@ -70,6 +70,12 @@ export enum NotificationType {
   CUSTOM_PAGE_UPDATED = "custom_page.updated",
   CUSTOM_PAGE_DELETED = "custom_page.deleted",
 
+  // Шаблоны Flow (автору при смене статуса)
+  FLOW_TEMPLATE_APPROVED = "flow_template.approved",
+  FLOW_TEMPLATE_REJECTED = "flow_template.rejected",
+  FLOW_TEMPLATE_DELETION_APPROVED = "flow_template.deletion_approved",
+  FLOW_TEMPLATE_DELETION_REJECTED = "flow_template.deletion_rejected",
+
   // Системные
   SYSTEM_NOTIFICATION = "system.notification",
   ERROR = "error",

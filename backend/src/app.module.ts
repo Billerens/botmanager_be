@@ -44,6 +44,7 @@ import { CustomDomainsModule } from "./modules/custom-domains/custom-domains.mod
 import { BookingSystemsModule } from "./modules/booking-systems/booking-systems.module";
 import { DomainResolverModule } from "./modules/domain-resolver/domain-resolver.module";
 import { CustomDataModule } from "./modules/custom-data/custom-data.module";
+import { FlowTemplatesModule } from "./modules/flow-templates/flow-templates.module";
 
 @Module({
   imports: [
@@ -117,6 +118,7 @@ import { CustomDataModule } from "./modules/custom-data/custom-data.module";
     BookingSystemsModule, // Системы бронирования (независимые от ботов)
     DomainResolverModule, // Резолв кастомных доменов в ресурсы
     CustomDataModule, // Кастомная БД пользователей
+    FlowTemplatesModule, // Галерея шаблонов flow
   ],
 })
 export class AppModule {}
