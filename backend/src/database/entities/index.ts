@@ -83,6 +83,12 @@ export { CustomData } from "./custom-data.entity";
 export { PublicApiKey, generateApiKey } from "./public-api-key.entity";
 export { OpenRouterFeaturedModel } from "./openrouter-featured-model.entity";
 export { OpenRouterAgentSettings } from "./openrouter-agent-settings.entity";
+export { FlowTemplateCategory } from "./flow-template-category.entity";
+export {
+  FlowTemplate,
+  FlowTemplateType,
+  FlowTemplateStatus,
+} from "./flow-template.entity";
 
 /**
  * Массив всех entity классов для TypeORM
@@ -134,6 +140,8 @@ import { CustomData } from "./custom-data.entity";
 import { PublicApiKey } from "./public-api-key.entity";
 import { OpenRouterFeaturedModel } from "./openrouter-featured-model.entity";
 import { OpenRouterAgentSettings } from "./openrouter-agent-settings.entity";
+import { FlowTemplateCategory } from "./flow-template-category.entity";
+import { FlowTemplate } from "./flow-template.entity";
 
 export const ALL_ENTITIES = [
   User,
@@ -182,4 +190,6 @@ export const ALL_ENTITIES = [
   PublicApiKey,
   OpenRouterFeaturedModel,
   OpenRouterAgentSettings,
+  FlowTemplateCategory,
+  FlowTemplate,
 ];
