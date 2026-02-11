@@ -38,19 +38,25 @@ export class ActivityLogController {
     @Request() req,
     @Query("botId") botId?: string,
     @Query("type") type?: ActivityType,
+    @Query("excludeTypes") excludeTypes?: string | string[],
     @Query("level") level?: ActivityLevel,
     @Query("dateFrom") dateFrom?: string,
     @Query("dateTo") dateTo?: string,
     @Query("page") page: number = 1,
     @Query("limit") limit: number = 50
   ) {
-    // Автоматически фильтруем по userId текущего пользователя
-    // Параметр userId из query игнорируется для безопасности
     const userId = req.user.id;
+    const excludeArr =
+      excludeTypes === undefined
+        ? undefined
+        : Array.isArray(excludeTypes)
+          ? excludeTypes.filter(Boolean)
+          : excludeTypes.split(",").map((s) => s.trim()).filter(Boolean);
     return this.activityLogService.findAll(
       botId,
       userId,
       type,
+      excludeArr as ActivityType[] | undefined,
       level,
       dateFrom,
       dateTo,
