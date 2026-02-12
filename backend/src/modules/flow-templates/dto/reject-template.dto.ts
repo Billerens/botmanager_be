@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from "class-validator";
+import { IsString, IsOptional, IsBoolean } from "class-validator";
 
 export class RejectTemplateDto {
   @IsString()
@@ -18,5 +18,6 @@ export class RejectDeletionDto {
 }
 
 export class PlatformChoiceDto {
+  @IsBoolean()
   isPlatformChoice: boolean;
 }
