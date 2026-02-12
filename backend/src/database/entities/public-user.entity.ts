@@ -19,6 +19,12 @@ export enum PublicUserOwnerType {
   BOT = "bot",
   /** Пользователь магазина */
   SHOP = "shop",
+  /** Пользователь системы бронирования */
+  BOOKING = "booking",
+  /** Пользователь кастомной страницы (ownerId = customPageId) */
+  CUSTOM_PAGE = "custom_page",
+  /** Пользователь цепочки/проекта (ownerId = chainId); один аккаунт на всю цепочку */
+  CHAIN = "chain",
 }
 
 @Entity("public_users")

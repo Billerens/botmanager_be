@@ -18,10 +18,8 @@ import { Product } from "../../database/entities/product.entity";
 import { Category } from "../../database/entities/category.entity";
 import { Order } from "../../database/entities/order.entity";
 import { Cart } from "../../database/entities/cart.entity";
-import {
-  PublicUser,
-  PublicUserOwnerType,
-} from "../../database/entities/public-user.entity";
+import { PublicUser } from "../../database/entities/public-user.entity";
+import { PublicAuthService } from "../public-auth/public-auth.service";
 import {
   CreateShopDto,
   UpdateShopDto,
@@ -64,6 +62,7 @@ export class ShopsService {
     private readonly cartRepository: Repository<Cart>,
     @InjectRepository(PublicUser)
     private readonly publicUserRepository: Repository<PublicUser>,
+    private readonly publicAuthService: PublicAuthService,
     private readonly activityLogService: ActivityLogService,
     @Inject(forwardRef(() => TelegramService))
     private readonly telegramService: TelegramService,
@@ -935,9 +934,15 @@ export class ShopsService {
         .where("cart.shopId = :shopId", { shopId })
         .andWhere("json_array_length(cart.items) > 0")
         .getCount(),
-      this.publicUserRepository.count({
-        where: { ownerId: shopId, ownerType: PublicUserOwnerType.SHOP },
-      }),
+      (async () => {
+        const scope = await this.publicAuthService.getScopeForShop(shop);
+        return this.publicUserRepository.count({
+          where: {
+            ownerId: scope.scopeId,
+            ownerType: scope.scopeType,
+          },
+        });
+      })(),
     ]);
 
     return {

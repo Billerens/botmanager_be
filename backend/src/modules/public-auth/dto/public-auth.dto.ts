@@ -11,11 +11,13 @@ import { PublicUserOwnerType } from "../../../database/entities/public-user.enti
 
 /**
  * DTO для регистрации публичного пользователя
- * 
- * ownerId + ownerType определяют контекст регистрации:
+ *
+ * ownerId + ownerType определяют контекст регистрации (из каждой сущности — под её ownerType и ownerId):
  * - ownerType: 'user' + ownerId: userId — глобальный пользователь владельца аккаунта
  * - ownerType: 'bot' + ownerId: botId — пользователь конкретного бота
  * - ownerType: 'shop' + ownerId: shopId — пользователь магазина
+ * - ownerType: 'booking' + ownerId: bookingSystemId — пользователь системы бронирования
+ * - ownerType: 'custom_page' + ownerId: customPageId — пользователь кастомной страницы
  */
 export class RegisterPublicUserDto {
   @ApiProperty({

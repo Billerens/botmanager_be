@@ -12,6 +12,11 @@ import { Repository } from "typeorm";
 import * as bcrypt from "bcrypt";
 
 import { PublicUser, PublicUserOwnerType } from "../../database/entities/public-user.entity";
+import { Shop } from "../../database/entities/shop.entity";
+import { BookingSystem } from "../../database/entities/booking-system.entity";
+import { CustomPage } from "../../database/entities/custom-page.entity";
+import { Bot } from "../../database/entities/bot.entity";
+import { PublicChainScopeService } from "./public-chain-scope.service";
 import {
   RegisterPublicUserDto,
   LoginPublicUserDto,
@@ -40,13 +45,48 @@ export class PublicAuthService {
   constructor(
     @InjectRepository(PublicUser)
     private publicUserRepository: Repository<PublicUser>,
+    @InjectRepository(Shop)
+    private shopRepository: Repository<Shop>,
+    @InjectRepository(BookingSystem)
+    private bookingSystemRepository: Repository<BookingSystem>,
+    @InjectRepository(CustomPage)
+    private customPageRepository: Repository<CustomPage>,
+    @InjectRepository(Bot)
+    private botRepository: Repository<Bot>,
+    private chainScopeService: PublicChainScopeService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private mailService: MailService
   ) {}
 
   /**
-   * Регистрация нового публичного пользователя
+   * Scope авторизации: цепочка формируется автоматически по связям сущностей (shop–bot, booking–bot, page–shop/booking/bot).
+   */
+  async resolveToScope(
+    ownerId: string,
+    ownerType: PublicUserOwnerType
+  ): Promise<{ scopeId: string; scopeType: PublicUserOwnerType }> {
+    if (ownerType === PublicUserOwnerType.USER) {
+      return { scopeId: ownerId, scopeType: PublicUserOwnerType.USER };
+    }
+    if (ownerType === PublicUserOwnerType.CHAIN) {
+      return { scopeId: ownerId, scopeType: PublicUserOwnerType.CHAIN };
+    }
+    return this.chainScopeService.getScopeForEntity(ownerType, ownerId);
+  }
+
+  /** Scope для магазина (для Guard и счётчиков). */
+  async getScopeForShop(shop: {
+    id: string;
+    ownerId: string;
+    botId?: string | null;
+  }): Promise<{ scopeId: string; scopeType: PublicUserOwnerType }> {
+    return this.chainScopeService.getScopeForShop(shop);
+  }
+
+  /**
+   * Регистрация. Scope = цепочка (CHAIN) или одна сущность (SHOP/BOOKING/…).
+   * Между разными цепочками одного владельца аккаунты не общие.
    */
   async register(dto: RegisterPublicUserDto): Promise<{
     user: PublicUser;
@@ -58,41 +98,39 @@ export class PublicAuthService {
     const { ownerId, email, password, firstName, lastName, phone } = dto;
     const ownerType = dto.ownerType || PublicUserOwnerType.USER;
 
+    const { scopeId, scopeType } = await this.resolveToScope(ownerId, ownerType);
+
     this.logger.log(
-      `Регистрация публичного пользователя: ${email} для ${ownerType}:${ownerId}`
+      `Регистрация публичного пользователя: ${email} для scope ${scopeType}:${scopeId} (${ownerType}:${ownerId})`
     );
 
-    // Проверяем, существует ли пользователь у этого владельца
     const existingUser = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase(), ownerId, ownerType },
+      where: {
+        email: email.toLowerCase(),
+        ownerId: scopeId,
+        ownerType: scopeType,
+      },
     });
 
     if (existingUser) {
       throw new ConflictException("Пользователь с таким email уже существует");
     }
 
-    // Хешируем пароль
     const passwordHash = await bcrypt.hash(password, this.saltRounds);
-
-    // Генерируем код верификации email
     const emailVerificationCode = this.generateVerificationCode();
     const emailVerificationCodeExpires = new Date(
       Date.now() + 24 * 60 * 60 * 1000
-    ); // 24 часа
-
-    // Проверяем, работает ли email сервис
+    );
     const emailEnabled = this.mailService.isEnabled();
 
-    // Создаем пользователя
     const user = this.publicUserRepository.create({
-      ownerId,
-      ownerType,
+      ownerId: scopeId,
+      ownerType: scopeType,
       email: email.toLowerCase(),
       passwordHash,
       firstName,
       lastName,
       phone,
-      // Если email сервис не работает - автоверификация
       isEmailVerified: !emailEnabled,
       emailVerificationCode: emailEnabled ? emailVerificationCode : null,
       emailVerificationCodeExpires: emailEnabled
@@ -126,7 +164,7 @@ export class PublicAuthService {
   }
 
   /**
-   * Вход пользователя
+   * Вход. Только по scope (цепочка формируется автоматически по связям).
    */
   async login(dto: LoginPublicUserDto): Promise<{
     user: PublicUser;
@@ -136,8 +174,14 @@ export class PublicAuthService {
     const { ownerId, email, password } = dto;
     const ownerType = dto.ownerType || PublicUserOwnerType.USER;
 
+    const { scopeId, scopeType } = await this.resolveToScope(ownerId, ownerType);
+
     const user = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase(), ownerId, ownerType },
+      where: {
+        email: email.toLowerCase(),
+        ownerId: scopeId,
+        ownerType: scopeType,
+      },
     });
 
     if (!user) {
@@ -177,8 +221,13 @@ export class PublicAuthService {
     const { ownerId, email, code } = dto;
     const ownerType = dto.ownerType || PublicUserOwnerType.USER;
 
+    const { scopeId, scopeType } = await this.resolveToScope(ownerId, ownerType);
     const user = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase(), ownerId, ownerType },
+      where: {
+        email: email.toLowerCase(),
+        ownerId: scopeId,
+        ownerType: scopeType,
+      },
     });
 
     if (!user) {
@@ -223,8 +272,13 @@ export class PublicAuthService {
     ownerType: PublicUserOwnerType,
     email: string
   ): Promise<{ message: string }> {
+    const { scopeId, scopeType } = await this.resolveToScope(ownerId, ownerType);
     const user = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase(), ownerId, ownerType },
+      where: {
+        email: email.toLowerCase(),
+        ownerId: scopeId,
+        ownerType: scopeType,
+      },
     });
 
     if (!user) {
@@ -261,8 +315,13 @@ export class PublicAuthService {
     const { ownerId, email } = dto;
     const ownerType = dto.ownerType || PublicUserOwnerType.USER;
 
+    const { scopeId, scopeType } = await this.resolveToScope(ownerId, ownerType);
     const user = await this.publicUserRepository.findOne({
-      where: { email: email.toLowerCase(), ownerId, ownerType },
+      where: {
+        email: email.toLowerCase(),
+        ownerId: scopeId,
+        ownerType: scopeType,
+      },
     });
 
     if (!user) {
@@ -296,8 +355,13 @@ export class PublicAuthService {
     const { ownerId, token, newPassword } = dto;
     const ownerType = dto.ownerType || PublicUserOwnerType.USER;
 
+    const { scopeId, scopeType } = await this.resolveToScope(ownerId, ownerType);
     const user = await this.publicUserRepository.findOne({
-      where: { passwordResetToken: token, ownerId, ownerType },
+      where: {
+        passwordResetToken: token,
+        ownerId: scopeId,
+        ownerType: scopeType,
+      },
     });
 
     if (!user || user.isPasswordResetTokenExpired()) {

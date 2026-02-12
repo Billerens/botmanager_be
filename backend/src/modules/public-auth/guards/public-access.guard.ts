@@ -15,6 +15,7 @@ import { Shop } from "../../../database/entities/shop.entity";
 import { PublicUser } from "../../../database/entities/public-user.entity";
 import { TelegramInitDataValidationService } from "../../../common/telegram-initdata-validation.service";
 import { BotsService } from "../../bots/bots.service";
+import { PublicAuthService } from "../public-auth.service";
 import { PublicUserJwtPayload } from "../public-auth.service";
 
 export type AuthType = "telegram" | "browser" | "none";
@@ -53,9 +54,10 @@ export class PublicAccessGuard implements CanActivate {
     private shopRepository: Repository<Shop>,
     @InjectRepository(PublicUser)
     private publicUserRepository: Repository<PublicUser>,
+    private publicAuthService: PublicAuthService,
     private initDataValidationService: TelegramInitDataValidationService,
     private botsService: BotsService,
-    private jwtService: JwtService
+    private jwtService: JwtService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -139,7 +141,7 @@ export class PublicAccessGuard implements CanActivate {
       const browserAuth = await this.tryBrowserAuth(
         authHeader.substring(7),
         shop,
-        request
+        request,
       );
       if (browserAuth) {
         return true;
@@ -155,7 +157,7 @@ export class PublicAccessGuard implements CanActivate {
     }
 
     throw new UnauthorizedException(
-      "Требуется авторизация. Войдите через Telegram или зарегистрируйтесь."
+      "Требуется авторизация. Войдите через Telegram или зарегистрируйтесь.",
     );
   }
 
@@ -165,7 +167,7 @@ export class PublicAccessGuard implements CanActivate {
   private async tryTelegramAuth(
     initData: string,
     bot: Bot,
-    request: any
+    request: any,
   ): Promise<boolean> {
     try {
       let botToken: string;
@@ -178,7 +180,7 @@ export class PublicAccessGuard implements CanActivate {
 
       const validatedData = this.initDataValidationService.validateInitData(
         initData,
-        botToken
+        botToken,
       );
 
       if (!validatedData) {
@@ -203,13 +205,13 @@ export class PublicAccessGuard implements CanActivate {
   private async tryBrowserAuth(
     token: string,
     shop: Shop | null,
-    request: any
+    request: any,
   ): Promise<boolean> {
     try {
       // Проверяем, разрешен ли браузерный доступ для магазина
       if (shop && !shop.browserAccessEnabled) {
         this.logger.warn(
-          `Браузерный доступ к магазину отключен для ${shop.id}`
+          `Браузерный доступ к магазину отключен для ${shop.id}`,
         );
         throw new ForbiddenException("Браузерный доступ к магазину отключен");
       }
@@ -228,6 +230,21 @@ export class PublicAccessGuard implements CanActivate {
 
       if (!user) {
         return false;
+      }
+
+      // Доступ к shop: scope (цепочка или сущность) вычисляется автоматически по связям
+      if (shop) {
+        const scope = await this.publicAuthService.getScopeForShop(shop);
+        const allowed =
+          user.ownerId === scope.scopeId && user.ownerType === scope.scopeType;
+        if (!allowed) {
+          this.logger.warn(
+            `Пользователь ${user.id} не имеет доступа к магазину ${shop.id}`,
+          );
+          throw new ForbiddenException(
+            "Нет доступа к этому магазину с текущим аккаунтом",
+          );
+        }
       }
 
       request.authType = "browser";

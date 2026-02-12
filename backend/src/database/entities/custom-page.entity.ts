@@ -10,6 +10,7 @@ import {
 import { User } from "./user.entity";
 import { Bot } from "./bot.entity";
 import { Shop } from "./shop.entity";
+import { BookingSystem } from "./booking-system.entity";
 import { SubdomainStatus } from "../../modules/custom-domains/enums/domain-status.enum";
 
 export enum CustomPageStatus {
@@ -35,6 +36,7 @@ export interface CustomPageAsset {
  * Может быть опционально привязана к:
  * - Bot (N:1) - для отображения команд в меню бота
  * - Shop (N:1) - для ассоциации с магазином
+ * - BookingSystem (N:1) - для контекста авторизации и страницы бронирования
  *
  * Логика привязки:
  * - При привязке к боту, у которого есть магазин → страница привязывается и к магазину
@@ -149,6 +151,16 @@ export class CustomPage {
   shopId?: string;
 
   // ============================================================
+  // Связь с системой бронирования (опциональная)
+  // ============================================================
+  @ManyToOne(() => BookingSystem, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "bookingSystemId" })
+  bookingSystem?: BookingSystem;
+
+  @Column({ nullable: true })
+  bookingSystemId?: string;
+
+  // ============================================================
   // Временные метки
   // ============================================================
   @CreateDateColumn()
@@ -229,5 +241,12 @@ export class CustomPage {
    */
   get hasShop(): boolean {
     return !!this.shopId;
+  }
+
+  /**
+   * Проверка, привязана ли страница к системе бронирования
+   */
+  get hasBookingSystem(): boolean {
+    return !!this.bookingSystemId;
   }
 }

@@ -149,6 +149,12 @@ export class CustomPageResponseDto {
   })
   shopName?: string;
 
+  @ApiPropertyOptional({
+    description: "ID системы бронирования (если привязана)",
+    example: "123e4567-e89b-12d3-a456-426614174000",
+  })
+  bookingSystemId?: string;
+
   // ============================================================
   // Временные метки
   // ============================================================
@@ -258,6 +264,18 @@ export class PublicCustomPageResponseDto {
     example: "123e4567-e89b-12d3-a456-426614174000",
   })
   shopId?: string;
+
+  @ApiPropertyOptional({
+    description: "ID системы бронирования (если привязана)",
+    example: "123e4567-e89b-12d3-a456-426614174000",
+  })
+  bookingSystemId?: string;
+
+  @ApiProperty({
+    description: "ID владельца страницы (пользователя системы)",
+    example: "123e4567-e89b-12d3-a456-426614174000",
+  })
+  ownerId: string;
 
   @ApiProperty({
     description: "Дата создания",

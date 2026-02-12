@@ -73,7 +73,7 @@ export class CustomPagesService {
   ): Promise<CustomPage> {
     const page = await this.customPageRepository.findOne({
       where: { id: pageId },
-      relations: ["bot", "shop"],
+      relations: ["bot", "shop", "bookingSystem"],
     });
     if (!page) {
       throw new NotFoundException(`Страница с ID ${pageId} не найдена`);
@@ -182,6 +182,26 @@ export class CustomPagesService {
       }
     }
 
+    // Если указан bookingSystemId — проверяем права
+    let bookingSystemId: string | null = null;
+    if (createDto.bookingSystemId) {
+      const bookingSystem =
+        await this.bookingSystemRepository.findOne({
+          where: { id: createDto.bookingSystemId },
+        });
+      if (!bookingSystem) {
+        throw new NotFoundException(
+          `Система бронирования с ID ${createDto.bookingSystemId} не найдена`
+        );
+      }
+      if (bookingSystem.ownerId !== userId) {
+        throw new ForbiddenException(
+          "Нет прав доступа к этой системе бронирования"
+        );
+      }
+      bookingSystemId = bookingSystem.id;
+    }
+
     // Определяем тип страницы
     const pageType = createDto.pageType || CustomPageType.INLINE;
 
@@ -206,6 +226,7 @@ export class CustomPagesService {
       ownerId: userId,
       botId: botId || null,
       shopId: shopId || null,
+      bookingSystemId,
     });
 
     const savedPage = await this.customPageRepository.save(customPage);
@@ -213,7 +234,7 @@ export class CustomPagesService {
     // Загружаем страницу со всеми связями
     const pageWithRelations = await this.customPageRepository.findOne({
       where: { id: savedPage.id },
-      relations: ["bot", "shop"],
+      relations: ["bot", "shop", "bookingSystem"],
     });
 
     // Если привязана к боту и есть команда, обновляем команды бота
@@ -463,6 +484,29 @@ export class CustomPagesService {
       }
     }
 
+    // Обрабатываем изменение привязки к системе бронирования
+    let newBookingSystemId: string | null = page.bookingSystemId ?? null;
+    if (updateDto.bookingSystemId !== undefined) {
+      if (updateDto.bookingSystemId === null) {
+        newBookingSystemId = null;
+      } else if (updateDto.bookingSystemId !== page.bookingSystemId) {
+        const bookingSystem = await this.bookingSystemRepository.findOne({
+          where: { id: updateDto.bookingSystemId },
+        });
+        if (!bookingSystem) {
+          throw new NotFoundException(
+            `Система бронирования с ID ${updateDto.bookingSystemId} не найдена`
+          );
+        }
+        if (bookingSystem.ownerId !== userId) {
+          throw new ForbiddenException(
+            "Нет прав доступа к этой системе бронирования"
+          );
+        }
+        newBookingSystemId = bookingSystem.id;
+      }
+    }
+
     // Проверяем уникальность botCommand при изменении (для текущего бота)
     if (
       updateDto.botCommand !== undefined &&
@@ -517,6 +561,8 @@ export class CustomPagesService {
     // Обновляем привязки
     if (newBotId !== page.botId) updateData.botId = newBotId;
     if (newShopId !== page.shopId) updateData.shopId = newShopId;
+    if (newBookingSystemId !== (page.bookingSystemId ?? null))
+      updateData.bookingSystemId = newBookingSystemId;
 
     if (Object.keys(updateData).length > 0) {
       await this.customPageRepository.update(id, updateData);
@@ -524,7 +570,7 @@ export class CustomPagesService {
 
     const updatedPage = await this.customPageRepository.findOne({
       where: { id },
-      relations: ["bot", "shop"],
+      relations: ["bot", "shop", "bookingSystem"],
     });
 
     // Обновляем команды ботов при необходимости
@@ -914,12 +960,12 @@ export class CustomPagesService {
     if (isUuid) {
       page = await this.customPageRepository.findOne({
         where: { id: identifier, status: CustomPageStatus.ACTIVE },
-        relations: ["bot", "shop"],
+        relations: ["bot", "shop", "bookingSystem"],
       });
     } else {
       page = await this.customPageRepository.findOne({
         where: { slug: identifier, status: CustomPageStatus.ACTIVE },
-        relations: ["bot", "shop"],
+        relations: ["bot", "shop", "bookingSystem"],
       });
     }
 
@@ -1099,6 +1145,7 @@ export class CustomPagesService {
       botName: page.bot?.name,
       shopId: page.shopId,
       shopName: page.shop?.name,
+      bookingSystemId: page.bookingSystemId,
       createdAt: page.createdAt,
       updatedAt: page.updatedAt,
       url: page.url,
@@ -1122,6 +1169,8 @@ export class CustomPagesService {
       botId: page.botId,
       botUsername: page.bot?.username,
       shopId: page.shopId,
+      bookingSystemId: page.bookingSystemId,
+      ownerId: page.ownerId,
       createdAt: page.createdAt,
       updatedAt: page.updatedAt,
       url: page.url,

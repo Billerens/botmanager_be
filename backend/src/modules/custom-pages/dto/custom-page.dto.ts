@@ -132,6 +132,14 @@ export class CreateCustomPageDto {
   @IsOptional()
   @IsUUID("4", { message: "ID магазина должен быть валидным UUID" })
   shopId?: string;
+
+  @ApiPropertyOptional({
+    description: "ID системы бронирования для привязки (опционально)",
+    example: "123e4567-e89b-12d3-a456-426614174000",
+  })
+  @IsOptional()
+  @IsUUID("4", { message: "ID системы бронирования должен быть валидным UUID" })
+  bookingSystemId?: string;
 }
 
 export class UpdateCustomPageDto {
@@ -250,4 +258,16 @@ export class UpdateCustomPageDto {
   @ValidateIf((o) => o.shopId !== null)
   @IsUUID("4", { message: "ID магазина должен быть валидным UUID" })
   shopId?: string | null;
+
+  @ApiPropertyOptional({
+    description:
+      "ID системы бронирования для привязки. Передать null для отвязки",
+    example: "123e4567-e89b-12d3-a456-426614174000",
+  })
+  @IsOptional()
+  @ValidateIf((o) => o.bookingSystemId !== null)
+  @IsUUID("4", {
+    message: "ID системы бронирования должен быть валидным UUID",
+  })
+  bookingSystemId?: string | null;
 }

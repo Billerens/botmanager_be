@@ -125,12 +125,14 @@ export class ShopResponseDto {
 
   @ApiProperty({
     description: "URL магазина (стандартный)",
-    example: "https://botmanagertest.online/shop/123e4567-e89b-12d3-a456-426614174000",
+    example:
+      "https://botmanagertest.online/shop/123e4567-e89b-12d3-a456-426614174000",
   })
   url: string;
 
   @ApiPropertyOptional({
-    description: "Публичный URL магазина (субдомен если активен, иначе стандартный)",
+    description:
+      "Публичный URL магазина (субдомен если активен, иначе стандартный)",
     example: "https://myshop.shops.botmanagertest.online",
   })
   publicUrl?: string;
@@ -240,7 +242,8 @@ export class PublicShopResponseDto {
 
   @ApiProperty({
     description: "URL магазина",
-    example: "https://botmanagertest.online/shop/123e4567-e89b-12d3-a456-426614174000",
+    example:
+      "https://botmanagertest.online/shop/123e4567-e89b-12d3-a456-426614174000",
   })
   url: string;
 
@@ -314,4 +317,3 @@ export class ShopStatsResponseDto {
   })
   publicUsersCount: number;
 }
-

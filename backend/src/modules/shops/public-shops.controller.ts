@@ -72,7 +72,7 @@ export class PublicShopsController {
     private readonly cartService: CartService,
     private readonly ordersService: OrdersService,
     private readonly paymentConfigService: PaymentConfigService,
-    private readonly paymentTransactionService: PaymentTransactionService
+    private readonly paymentTransactionService: PaymentTransactionService,
   ) {}
 
   /**
@@ -105,7 +105,7 @@ export class PublicShopsController {
     description: "Магазин не найден",
   })
   async getShopBySlug(
-    @Param("slug") slug: string
+    @Param("slug") slug: string,
   ): Promise<PublicShopResponseDto> {
     const { shop, categories } =
       await this.shopsService.getPublicDataBySlug(slug);
@@ -244,7 +244,7 @@ export class PublicShopsController {
     @Query("inStock") inStock?: string,
     @Query("search") search?: string,
     @Query("sortBy")
-    sortBy?: "name-asc" | "name-desc" | "price-asc" | "price-desc"
+    sortBy?: "name-asc" | "name-desc" | "price-asc" | "price-desc",
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
@@ -257,7 +257,7 @@ export class PublicShopsController {
       categoryId,
       inStockBool,
       search,
-      sortBy
+      sortBy,
     );
   }
 
@@ -283,14 +283,14 @@ export class PublicShopsController {
   async addToCart(
     @Param("id") id: string,
     @Req() req: PublicRequest,
-    @Body() body: { productId: string; quantity?: number }
+    @Body() body: { productId: string; quantity?: number },
   ) {
     const user = this.getUserIdentifier(req);
     return this.cartService.addItemByShop(
       id,
       user,
       body.productId,
-      body.quantity || 1
+      body.quantity || 1,
     );
   }
 
@@ -303,14 +303,14 @@ export class PublicShopsController {
     @Param("id") id: string,
     @Param("productId") productId: string,
     @Req() req: PublicRequest,
-    @Body() body: { quantity: number }
+    @Body() body: { quantity: number },
   ) {
     const user = this.getUserIdentifier(req);
     return this.cartService.updateItemByShop(
       id,
       user,
       productId,
-      body.quantity
+      body.quantity,
     );
   }
 
@@ -322,7 +322,7 @@ export class PublicShopsController {
   async removeFromCart(
     @Param("id") id: string,
     @Param("productId") productId: string,
-    @Req() req: PublicRequest
+    @Req() req: PublicRequest,
   ) {
     const user = this.getUserIdentifier(req);
     return this.cartService.removeItemByShop(id, user, productId);
@@ -346,7 +346,7 @@ export class PublicShopsController {
   async applyPromocode(
     @Param("id") id: string,
     @Req() req: PublicRequest,
-    @Body() body: { code: string }
+    @Body() body: { code: string },
   ) {
     const user = this.getUserIdentifier(req);
     return this.cartService.applyPromocodeByShop(id, user, body.code);
@@ -374,7 +374,7 @@ export class PublicShopsController {
   async createOrder(
     @Param("id") id: string,
     @Req() req: PublicRequest,
-    @Body() createOrderDto: CreateOrderDto
+    @Body() createOrderDto: CreateOrderDto,
   ) {
     const user = this.getUserIdentifier(req) as OrderUserIdentifier;
     return this.ordersService.createOrderByShop(id, user, createOrderDto);
@@ -391,7 +391,7 @@ export class PublicShopsController {
     @Param("id") id: string,
     @Req() req: PublicRequest,
     @Query("page") page?: string,
-    @Query("limit") limit?: string
+    @Query("limit") limit?: string,
   ) {
     const user = this.getUserIdentifier(req) as OrderUserIdentifier;
     return this.ordersService.getUserOrdersByShop(id, user, {
@@ -413,7 +413,7 @@ export class PublicShopsController {
   async getPaymentProviders(@Param("id") shopId: string) {
     const config = await this.paymentConfigService.getConfig(
       PaymentEntityType.SHOP,
-      shopId
+      shopId,
     );
 
     if (!config || !config.enabled) {
@@ -468,7 +468,7 @@ export class PublicShopsController {
     @Param("id") shopId: string,
     @Param("orderId") orderId: string,
     @Body() dto: CreatePublicOrderPaymentDto,
-    @Req() req: PublicRequest
+    @Req() req: PublicRequest,
   ) {
     // Получаем заказ и проверяем принадлежность пользователю
     const user = this.getUserIdentifier(req) as OrderUserIdentifier;
@@ -514,7 +514,7 @@ export class PublicShopsController {
   async getOrderPaymentStatus(
     @Param("id") shopId: string,
     @Param("orderId") orderId: string,
-    @Req() req: PublicRequest
+    @Req() req: PublicRequest,
   ) {
     // Проверяем принадлежность заказа пользователю
     const user = this.getUserIdentifier(req) as OrderUserIdentifier;
@@ -527,7 +527,7 @@ export class PublicShopsController {
     // Получаем платёж для заказа
     const payment = await this.paymentTransactionService.getPaymentByTarget(
       PaymentTargetType.ORDER,
-      orderId
+      orderId,
     );
 
     return {
