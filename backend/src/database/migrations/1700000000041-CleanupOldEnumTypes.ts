@@ -54,7 +54,8 @@ export class CleanupOldEnumTypes1700000000041 implements MigrationInterface {
               USING "${col.column_name}"::text::"${newTypeName}"
             `);
           } catch (error) {
-            console.warn(`Failed to convert column ${col.table_name}.${col.column_name}: ${error.message}`);
+            const msg = error instanceof Error ? error.message : String(error);
+            console.warn(`Failed to convert column ${col.table_name}.${col.column_name}: ${msg}`);
           }
         }
       }
@@ -64,7 +65,8 @@ export class CleanupOldEnumTypes1700000000041 implements MigrationInterface {
         console.log(`Dropping old enum type: ${typname}`);
         await queryRunner.query(`DROP TYPE IF EXISTS "${typname}" CASCADE`);
       } catch (error) {
-        console.warn(`Failed to drop type ${typname}: ${error.message}`);
+        const msg = error instanceof Error ? error.message : String(error);
+        console.warn(`Failed to drop type ${typname}: ${msg}`);
       }
     }
   }
