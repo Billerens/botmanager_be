@@ -717,6 +717,8 @@ export class BookingSystemsService {
       bookingSystem.buttonSettings = visualSettings.buttonSettings;
     if (visualSettings.browserAccessEnabled !== undefined)
       bookingSystem.browserAccessEnabled = visualSettings.browserAccessEnabled;
+    if (visualSettings.layoutConfig !== undefined)
+      bookingSystem.layoutConfig = visualSettings.layoutConfig;
 
     // Мержим технические настройки бронирования
     if (settings) {

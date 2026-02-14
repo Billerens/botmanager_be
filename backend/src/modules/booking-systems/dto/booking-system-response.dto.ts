@@ -52,6 +52,11 @@ export class BookingSystemResponseDto {
   @ApiPropertyOptional({ description: "Настройки системы бронирования" })
   settings?: Record<string, any>;
 
+  @ApiPropertyOptional({
+    description: "Конфигурация макета страниц (модульный редактор)",
+  })
+  layoutConfig?: Record<string, any>;
+
   @ApiProperty({ description: "Браузерный доступ включен" })
   browserAccessEnabled: boolean;
 
@@ -130,6 +135,11 @@ export class PublicBookingSystemResponseDto {
 
   @ApiPropertyOptional({ description: "Настройки системы бронирования" })
   settings?: Record<string, any>;
+
+  @ApiPropertyOptional({
+    description: "Конфигурация макета страниц (для рендера в ext_fe)",
+  })
+  layoutConfig?: Record<string, any>;
 
   @ApiProperty({ description: "Браузерный доступ включен" })
   browserAccessEnabled: boolean;

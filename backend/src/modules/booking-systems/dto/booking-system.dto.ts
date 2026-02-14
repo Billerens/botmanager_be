@@ -172,6 +172,13 @@ export class CreateBookingSystemDto {
   @IsOptional()
   settings?: BookingSystemSettingsDto;
 
+  @ApiPropertyOptional({
+    description: "Конфигурация макета страниц (модульный редактор)",
+  })
+  @IsOptional()
+  @IsObject()
+  layoutConfig?: Record<string, any>;
+
   @ApiPropertyOptional({ description: "Включить браузерный доступ" })
   @IsOptional()
   @IsBoolean()
@@ -251,6 +258,13 @@ export class UpdateBookingSystemSettingsDto {
   @ApiPropertyOptional({ description: "Настройки системы бронирования" })
   @IsOptional()
   settings?: BookingSystemSettingsDto;
+
+  @ApiPropertyOptional({
+    description: "Конфигурация макета страниц (модульный редактор)",
+  })
+  @IsOptional()
+  @IsObject()
+  layoutConfig?: Record<string, any>;
 
   @ApiPropertyOptional({ description: "Включить браузерный доступ" })
   @IsOptional()

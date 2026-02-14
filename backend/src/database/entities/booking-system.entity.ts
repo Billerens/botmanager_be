@@ -142,6 +142,10 @@ export class BookingSystem {
   @Column({ type: "json", nullable: true })
   settings?: BookingSystemSettings;
 
+  /** Конфигурация макета страниц (редактор модулей, по аналогии с Shop) */
+  @Column({ type: "json", nullable: true })
+  layoutConfig?: Record<string, any>;
+
   // Настройки браузерного доступа
   @Column({ default: false })
   browserAccessEnabled: boolean;
