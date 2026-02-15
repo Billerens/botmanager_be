@@ -11,10 +11,18 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { OnEvent } from "@nestjs/event-emitter";
 import { Order, OrderStatus } from "../../database/entities/order.entity";
-import { Cart } from "../../database/entities/cart.entity";
+import { Cart, CartItem } from "../../database/entities/cart.entity";
 import { Shop } from "../../database/entities/shop.entity";
-import { Product } from "../../database/entities/product.entity";
-import { CreateOrderDto, UpdateOrderStatusDto } from "./dto/order.dto";
+import {
+  Product,
+  ProductVariation,
+} from "../../database/entities/product.entity";
+import {
+  CreateOrderDto,
+  UpdateOrderStatusDto,
+  UpdateOrderItemsDto,
+  OrderItemUpdateEntryDto,
+} from "./dto/order.dto";
 import { NotificationService } from "../websocket/services/notification.service";
 import { NotificationType } from "../websocket/interfaces/notification.interface";
 import { Message } from "../../database/entities/message.entity";
@@ -637,6 +645,143 @@ export class OrdersService {
     return savedOrder;
   }
 
+  /**
+   * Обновить состав заказа (позиции и количество).
+   * Возвращает старые товары на склад и списывает новые. Пересчитывает totalPrice.
+   */
+  async updateOrderItems(
+    id: string,
+    shopId: string,
+    userId: string,
+    updateDto: UpdateOrderItemsDto
+  ): Promise<Order> {
+    const shop = await this.validateShopOwnership(shopId, userId);
+    const order = await this.findOne(id, shopId, userId);
+
+    if (order.status === OrderStatus.CANCELLED) {
+      throw new BadRequestException(
+        "Нельзя изменить состав отменённого заказа"
+      );
+    }
+    if (order.status === OrderStatus.DELIVERED) {
+      throw new BadRequestException(
+        "Нельзя изменить состав доставленного заказа"
+      );
+    }
+
+    if (!updateDto.items || updateDto.items.length === 0) {
+      throw new BadRequestException("Состав заказа не может быть пустым");
+    }
+
+    const oldItems = order.items || [];
+    const newEntries = updateDto.items;
+
+    const newQtyByProduct = new Map<string, number>();
+    for (const entry of newEntries) {
+      newQtyByProduct.set(
+        entry.productId,
+        (newQtyByProduct.get(entry.productId) || 0) + entry.quantity
+      );
+    }
+
+    const oldQtyByProduct = new Map<string, number>();
+    for (const item of oldItems) {
+      oldQtyByProduct.set(
+        item.productId,
+        (oldQtyByProduct.get(item.productId) || 0) + item.quantity
+      );
+    }
+
+    const newCartItems: CartItem[] = [];
+    const currency = order.currency;
+
+    for (const entry of newEntries) {
+      const product = await this.productRepository.findOne({
+        where: { id: entry.productId, shopId },
+      });
+      if (!product) {
+        throw new NotFoundException(
+          `Товар с ID ${entry.productId} не найден`
+        );
+      }
+      if (!product.isActive) {
+        throw new BadRequestException(
+          `Товар "${product.name}" неактивен`
+        );
+      }
+
+      const effectiveStock =
+        product.stockQuantity +
+        (oldQtyByProduct.get(entry.productId) || 0);
+      const requiredTotal = newQtyByProduct.get(entry.productId) || 0;
+      if (effectiveStock < requiredTotal) {
+        throw new BadRequestException(
+          `Недостаточно товара "${product.name}" в наличии. Доступно с учётом текущего заказа: ${effectiveStock}, запрошено: ${requiredTotal}`
+        );
+      }
+
+      let price = Number(product.price);
+      let variationLabel: string | undefined;
+      if (entry.variationId && product.variations?.length) {
+        const variation = product.variations.find(
+          (v: ProductVariation) => v.id === entry.variationId
+        );
+        if (variation) {
+          variationLabel = variation.label;
+          if (variation.priceType === "fixed") {
+            price = Number(variation.priceModifier);
+          } else {
+            price = Number(product.price) + Number(variation.priceModifier);
+          }
+        }
+      }
+
+      newCartItems.push({
+        productId: product.id,
+        quantity: entry.quantity,
+        price,
+        currency: product.currency || currency,
+        name: product.name,
+        image:
+          Array.isArray(product.images) && product.images.length > 0
+            ? product.images[0]
+            : undefined,
+        variationId: entry.variationId,
+        variationLabel,
+      });
+    }
+
+    await this.returnProductsToStock(shopId, oldItems);
+    const subtotal = newCartItems.reduce(
+      (sum, item) => sum + Number(item.price) * item.quantity,
+      0
+    );
+    const discount = Number(order.promocodeDiscount) || 0;
+    order.items = newCartItems;
+    order.totalPrice = Math.max(0, subtotal - discount);
+
+    await this.reduceProductStock(shopId, newCartItems);
+    const savedOrder = await this.orderRepository.save(order);
+
+    this.logger.log(`Состав заказа ${id} обновлён`);
+
+    if (shop.ownerId) {
+      this.activityLogService
+        .create({
+          type: ActivityType.ORDER_UPDATED,
+          level: ActivityLevel.INFO,
+          message: `Обновлён состав заказа #${id.slice(-6)}`,
+          userId,
+          metadata: { shopId, orderId: id, itemsCount: newCartItems.length },
+        })
+        .catch((err) =>
+          this.logger.error("Ошибка логирования обновления состава заказа", err)
+        );
+    }
+
+    return savedOrder;
+  }
+
   // =====================================================
   // ПУБЛИЧНЫЕ МЕТОДЫ (для покупателей)
   // =====================================================
@@ -816,6 +961,15 @@ export class OrdersService {
     updateDto: UpdateOrderStatusDto
   ): Promise<Order> {
     return this.updateStatus(id, shopId, userId, updateDto);
+  }
+
+  async updateOrderItemsByShop(
+    id: string,
+    shopId: string,
+    userId: string,
+    updateDto: UpdateOrderItemsDto
+  ): Promise<Order> {
+    return this.updateOrderItems(id, shopId, userId, updateDto);
   }
 
   async getUserOrdersByShop(

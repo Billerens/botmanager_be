@@ -7,6 +7,9 @@ import {
   IsObject,
   ValidateNested,
   IsEmail,
+  IsArray,
+  IsNumber,
+  Min,
 } from "class-validator";
 import { Type } from "class-transformer";
 import {
@@ -64,4 +67,32 @@ export class UpdateOrderStatusDto {
   @IsEnum(OrderStatus)
   @IsNotEmpty()
   status: OrderStatus;
+}
+
+export class UpdateOrderCustomerDataDto {
+  @IsObject()
+  @ValidateNested()
+  @Type(() => OrderCustomerDataDto)
+  customerData: OrderCustomerDataDto;
+}
+
+/** Одна позиция при обновлении состава заказа (productId + quantity, цена берётся с сервера) */
+export class OrderItemUpdateEntryDto {
+  @IsUUID()
+  productId: string;
+
+  @IsNumber()
+  @Min(1)
+  quantity: number;
+
+  @IsOptional()
+  @IsString()
+  variationId?: string;
+}
+
+export class UpdateOrderItemsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OrderItemUpdateEntryDto)
+  items: OrderItemUpdateEntryDto[];
 }

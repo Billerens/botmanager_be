@@ -65,7 +65,11 @@ import {
   UpdateShopPromocodeDto,
   ShopPromocodeFiltersDto,
 } from "../shop-promocodes/dto/shop-promocode.dto";
-import { UpdateOrderStatusDto } from "../orders/dto/order.dto";
+import {
+  UpdateOrderStatusDto,
+  UpdateOrderCustomerDataDto,
+  UpdateOrderItemsDto,
+} from "../orders/dto/order.dto";
 import { OrderStatus } from "../../database/entities/order.entity";
 
 @ApiTags("Магазины")
@@ -850,6 +854,58 @@ export class ShopsController {
       req.user.id,
       updateDto
     );
+  }
+
+  @Patch(":id/orders/:orderId/customer-data")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.ORDERS, PermissionAction.UPDATE)
+  @ApiOperation({ summary: "Обновить данные покупателя заказа" })
+  @ApiResponse({ status: 200, description: "Данные обновлены" })
+  async updateOrderCustomerData(
+    @Param("id") id: string,
+    @Param("orderId") orderId: string,
+    @Request() req,
+    @Body() updateDto: UpdateOrderCustomerDataDto
+  ) {
+    return this.ordersService.updateCustomerData(
+      orderId,
+      id,
+      req.user.id,
+      updateDto.customerData
+    );
+  }
+
+  @Patch(":id/orders/:orderId/items")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.ORDERS, PermissionAction.UPDATE)
+  @ApiOperation({ summary: "Обновить состав заказа (позиции и количество)" })
+  @ApiResponse({ status: 200, description: "Состав заказа обновлён" })
+  async updateOrderItems(
+    @Param("id") id: string,
+    @Param("orderId") orderId: string,
+    @Request() req,
+    @Body() updateDto: UpdateOrderItemsDto
+  ) {
+    return this.ordersService.updateOrderItemsByShop(
+      orderId,
+      id,
+      req.user.id,
+      updateDto
+    );
+  }
+
+  @Delete(":id/orders/:orderId")
+  @UseGuards(ShopPermissionGuard)
+  @ShopPermission(ShopEntity.ORDERS, PermissionAction.DELETE)
+  @ApiOperation({ summary: "Удалить заказ" })
+  @ApiResponse({ status: 200, description: "Заказ удален" })
+  @ApiResponse({ status: 404, description: "Заказ не найден" })
+  async deleteOrder(
+    @Param("id") id: string,
+    @Param("orderId") orderId: string,
+    @Request() req
+  ) {
+    await this.ordersService.remove(orderId, id, req.user.id);
   }
 
   // =====================================================
