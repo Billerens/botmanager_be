@@ -58,14 +58,28 @@ export class ProductsService {
   // =====================================================
 
   /**
-   * Нормализация вариаций: только массив объектов с id, label (отсекает [[], []], пустые объекты и т.д.)
+   * Нормализация вариаций: только массив объектов с id, label (отсекает [[], []], пустые объекты и т.д.).
+   * Поддерживает передачу массива или JSON-строки (form-data, двойная сериализация).
    */
   private normalizeVariations(
     variations: unknown,
   ): ProductVariation[] | null | undefined {
     if (variations == null) return undefined;
-    if (!Array.isArray(variations)) return null;
-    const filtered = variations.filter(
+    let arr: unknown[];
+    if (Array.isArray(variations)) {
+      arr = variations;
+    } else if (typeof variations === "string") {
+      try {
+        const parsed = JSON.parse(variations) as unknown;
+        if (!Array.isArray(parsed)) return null;
+        arr = parsed;
+      } catch {
+        return null;
+      }
+    } else {
+      return null;
+    }
+    const filtered = arr.filter(
       (item): item is ProductVariation =>
         item != null &&
         typeof item === "object" &&
@@ -271,7 +285,12 @@ export class ProductsService {
     }
 
     const variations = this.normalizeVariations(updateProductDto.variations);
-    const updatePayload = { ...updateProductDto };
+    // Только определённые поля — не перезаписывать сущность через undefined (PATCH)
+    const updatePayload = Object.fromEntries(
+      Object.entries(updateProductDto).filter(
+        (entry): entry is [string, unknown] => entry[1] !== undefined
+      )
+    ) as Partial<UpdateProductDto>;
     if (variations !== undefined) {
       (updatePayload as { variations?: ProductVariation[] | null }).variations =
         variations;
