@@ -6,12 +6,36 @@ import {
   IsArray,
   IsObject,
   IsUUID,
+  IsIn,
   Min,
   Max,
   MaxLength,
+  ValidateNested,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Transform, Type } from "class-transformer";
+
+/** Элемент вариации товара — отдельный класс, чтобы class-transformer не обнулял поля в массиве */
+export class ProductVariationItemDto {
+  @IsString()
+  id: string;
+
+  @IsString()
+  label: string;
+
+  @IsIn(["relative", "fixed"])
+  priceType: "relative" | "fixed";
+
+  @Transform(({ value }) =>
+    value === undefined || value === null ? value : Number(value)
+  )
+  @IsNumber()
+  priceModifier: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
 
 export class CreateProductDto {
   @ApiProperty({ description: "Название товара" })
@@ -55,13 +79,9 @@ export class CreateProductDto {
   })
   @IsOptional()
   @IsArray()
-  variations?: Array<{
-    id: string;
-    label: string;
-    priceType: "relative" | "fixed";
-    priceModifier: number;
-    isActive?: boolean;
-  }>;
+  @ValidateNested({ each: true })
+  @Type(() => ProductVariationItemDto)
+  variations?: ProductVariationItemDto[];
 
   @ApiPropertyOptional({
     description: "Разрешить базовый вариант без выбора вариации",
@@ -130,27 +150,10 @@ export class UpdateProductDto {
       "Вариации: массив { id, label, priceType: 'relative'|'fixed', priceModifier, isActive? }",
   })
   @IsOptional()
-  @Transform(({ value }) => {
-    if (value == null) return value;
-    if (Array.isArray(value)) return value;
-    if (typeof value === "string") {
-      try {
-        const parsed = JSON.parse(value) as unknown;
-        return Array.isArray(parsed) ? parsed : value;
-      } catch {
-        return value;
-      }
-    }
-    return value;
-  })
   @IsArray()
-  variations?: Array<{
-    id: string;
-    label: string;
-    priceType: "relative" | "fixed";
-    priceModifier: number;
-    isActive?: boolean;
-  }>;
+  @ValidateNested({ each: true })
+  @Type(() => ProductVariationItemDto)
+  variations?: ProductVariationItemDto[];
 
   @ApiPropertyOptional({
     description: "Разрешить базовый вариант без выбора вариации",
