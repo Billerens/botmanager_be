@@ -130,6 +130,19 @@ export class UpdateProductDto {
       "Вариации: массив { id, label, priceType: 'relative'|'fixed', priceModifier, isActive? }",
   })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value == null) return value;
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value) as unknown;
+        return Array.isArray(parsed) ? parsed : value;
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
   @IsArray()
   variations?: Array<{
     id: string;

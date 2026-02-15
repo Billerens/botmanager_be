@@ -64,6 +64,9 @@ export class ProductsService {
   private normalizeVariations(
     variations: unknown,
   ): ProductVariation[] | null | undefined {
+    this.logger.debug(
+      `[variations] normalizeVariations input: type=${typeof variations}, isArray=${Array.isArray(variations)}, value=${JSON.stringify(variations?.toString?.() ?? variations)}`
+    );
     if (variations == null) return undefined;
     let arr: unknown[];
     if (Array.isArray(variations)) {
@@ -77,6 +80,7 @@ export class ProductsService {
         return null;
       }
     } else {
+      this.logger.warn(`[variations] normalizeVariations: not array or string, got ${typeof variations}`);
       return null;
     }
     const filtered = arr.filter(
@@ -87,7 +91,9 @@ export class ProductsService {
         "id" in item &&
         "label" in item
     );
-    return filtered.length > 0 ? filtered : null;
+    const result = filtered.length > 0 ? filtered : null;
+    this.logger.debug(`[variations] normalizeVariations result: ${filtered.length} items, returning ${result === null ? "null" : "array"}`);
+    return result;
   }
 
   /**
@@ -284,19 +290,52 @@ export class ProductsService {
       }
     }
 
+    // Логирование входящего DTO (в т.ч. variations) — флоу PATCH product
+    const rawVariations = (updateProductDto as Record<string, unknown>).variations;
+    this.logger.log(
+      `[variations] PATCH product ${id}: dto.variations type=${typeof rawVariations}, isArray=${Array.isArray(rawVariations)}, hasKey=${"variations" in updateProductDto}`
+    );
+
     const variations = this.normalizeVariations(updateProductDto.variations);
-    // Только определённые поля — не перезаписывать сущность через undefined (PATCH)
-    const updatePayload = Object.fromEntries(
-      Object.entries(updateProductDto).filter(
-        (entry): entry is [string, unknown] => entry[1] !== undefined
-      )
-    ) as Partial<UpdateProductDto>;
-    if (variations !== undefined) {
-      (updatePayload as { variations?: ProductVariation[] | null }).variations =
-        variations;
+
+    // Собираем payload только по известным полям DTO, без undefined
+    const allowedKeys = [
+      "name",
+      "price",
+      "currency",
+      "stockQuantity",
+      "images",
+      "parameters",
+      "variations",
+      "allowBaseOption",
+      "description",
+      "isActive",
+      "categoryId",
+    ] as const;
+    const updatePayload: Record<string, unknown> = {};
+    for (const key of allowedKeys) {
+      const val = (updateProductDto as Record<string, unknown>)[key];
+      if (val !== undefined) updatePayload[key] = val;
     }
+    if (variations !== undefined) {
+      updatePayload.variations = variations;
+    }
+
+    this.logger.log(
+      `[variations] PATCH product ${id}: normalized=${variations !== undefined ? (Array.isArray(variations) ? variations.length : "null") : "undefined"}, payload.variations=${updatePayload.variations !== undefined ? "set" : "unset"}`
+    );
+
     Object.assign(product, updatePayload);
+    // Явно выставляем variations на сущности, чтобы не терять при save
+    if (variations !== undefined) {
+      product.variations = variations;
+    }
+
     const updatedProduct = await this.productRepository.save(product);
+
+    this.logger.log(
+      `[variations] PATCH product ${id} after save: product.variations=${updatedProduct.variations == null ? "null" : `array(${(updatedProduct.variations as unknown[]).length})`}`
+    );
 
     this.notificationService
       .sendToUser(userId, NotificationType.PRODUCT_UPDATED, {

@@ -10,6 +10,7 @@ import {
   UseGuards,
   Request,
   Put,
+  ValidationPipe,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -682,7 +683,8 @@ export class ShopsController {
     @Param("id") id: string,
     @Param("productId") productId: string,
     @Request() req,
-    @Body() updateProductDto: UpdateProductDto
+    @Body(new ValidationPipe({ transform: true, whitelist: true }))
+    updateProductDto: UpdateProductDto
   ) {
     return this.productsService.update(
       productId,
