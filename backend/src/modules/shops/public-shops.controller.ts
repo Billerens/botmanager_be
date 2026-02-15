@@ -283,7 +283,8 @@ export class PublicShopsController {
   async addToCart(
     @Param("id") id: string,
     @Req() req: PublicRequest,
-    @Body() body: { productId: string; quantity?: number },
+    @Body()
+    body: { productId: string; quantity?: number; variationId?: string },
   ) {
     const user = this.getUserIdentifier(req);
     return this.cartService.addItemByShop(
@@ -291,6 +292,7 @@ export class PublicShopsController {
       user,
       body.productId,
       body.quantity || 1,
+      body.variationId,
     );
   }
 
@@ -303,7 +305,7 @@ export class PublicShopsController {
     @Param("id") id: string,
     @Param("productId") productId: string,
     @Req() req: PublicRequest,
-    @Body() body: { quantity: number },
+    @Body() body: { quantity: number; variationId?: string },
   ) {
     const user = this.getUserIdentifier(req);
     return this.cartService.updateItemByShop(
@@ -311,6 +313,7 @@ export class PublicShopsController {
       user,
       productId,
       body.quantity,
+      body.variationId,
     );
   }
 
@@ -323,9 +326,10 @@ export class PublicShopsController {
     @Param("id") id: string,
     @Param("productId") productId: string,
     @Req() req: PublicRequest,
+    @Query("variationId") variationId?: string,
   ) {
     const user = this.getUserIdentifier(req);
-    return this.cartService.removeItemByShop(id, user, productId);
+    return this.cartService.removeItemByShop(id, user, productId, variationId);
   }
 
   @Delete(":id/cart")

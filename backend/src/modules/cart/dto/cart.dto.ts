@@ -1,4 +1,11 @@
-import { IsString, IsNotEmpty, IsUUID, IsInt, Min } from "class-validator";
+import {
+  IsString,
+  IsNotEmpty,
+  IsUUID,
+  IsInt,
+  Min,
+  IsOptional,
+} from "class-validator";
 
 export class AddItemToCartDto {
   @IsString()
@@ -9,6 +16,11 @@ export class AddItemToCartDto {
   @IsInt()
   @Min(1)
   quantity: number;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  variationId?: string;
 }
 
 export class UpdateCartItemDto {
@@ -20,6 +32,11 @@ export class UpdateCartItemDto {
   @IsInt()
   @Min(1)
   quantity: number;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  variationId?: string;
 }
 
 export class RemoveItemFromCartDto {
@@ -27,5 +44,10 @@ export class RemoveItemFromCartDto {
   @IsNotEmpty()
   @IsUUID()
   productId: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  variationId?: string;
 }
 

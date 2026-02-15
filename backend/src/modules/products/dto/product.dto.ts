@@ -49,6 +49,28 @@ export class CreateProductDto {
   @IsObject()
   parameters?: Record<string, any>;
 
+  @ApiPropertyOptional({
+    description:
+      "Вариации: массив { id, label, priceType: 'relative'|'fixed', priceModifier, isActive? }",
+  })
+  @IsOptional()
+  @IsArray()
+  variations?: Array<{
+    id: string;
+    label: string;
+    priceType: "relative" | "fixed";
+    priceModifier: number;
+    isActive?: boolean;
+  }>;
+
+  @ApiPropertyOptional({
+    description: "Разрешить базовый вариант без выбора вариации",
+    default: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  allowBaseOption?: boolean = true;
+
   @ApiPropertyOptional({ description: "Описание товара" })
   @IsOptional()
   @IsString()
@@ -102,6 +124,27 @@ export class UpdateProductDto {
   @IsOptional()
   @IsObject()
   parameters?: Record<string, any>;
+
+  @ApiPropertyOptional({
+    description:
+      "Вариации: массив { id, label, priceType: 'relative'|'fixed', priceModifier, isActive? }",
+  })
+  @IsOptional()
+  @IsArray()
+  variations?: Array<{
+    id: string;
+    label: string;
+    priceType: "relative" | "fixed";
+    priceModifier: number;
+    isActive?: boolean;
+  }>;
+
+  @ApiPropertyOptional({
+    description: "Разрешить базовый вариант без выбора вариации",
+  })
+  @IsOptional()
+  @IsBoolean()
+  allowBaseOption?: boolean;
 
   @ApiPropertyOptional({ description: "Описание товара" })
   @IsOptional()

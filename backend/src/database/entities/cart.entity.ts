@@ -19,6 +19,10 @@ export interface CartItem {
   currency: string;
   name: string;
   image?: string;
+  /** ID вариации (если товар добавлен с вариацией) */
+  variationId?: string;
+  /** Название вариации для отображения в корзине */
+  variationLabel?: string;
 }
 
 @Entity("carts")

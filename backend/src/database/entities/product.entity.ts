@@ -11,6 +11,18 @@ import {
 import { Category } from "./category.entity";
 import { Shop } from "./shop.entity";
 
+/** Вариация товара: относительная (+N к базе) или фиксированная (=N) цена */
+export interface ProductVariation {
+  id: string;
+  label: string;
+  /** 'relative' — цена = база + priceModifier; 'fixed' — цена = priceModifier */
+  priceType: "relative" | "fixed";
+  /** Для relative — добавка к базе; для fixed — итоговая цена */
+  priceModifier: number;
+  /** Активна ли вариация (неактивные не показываются и не добавляются в корзину) */
+  isActive?: boolean;
+}
+
 @Entity("products")
 @Index(["shopId"])
 export class Product {
@@ -34,6 +46,14 @@ export class Product {
 
   @Column({ type: "json", nullable: true })
   parameters: Record<string, any>; // JSON object with product parameters
+
+  /** Вариации товара: массив { id, label, priceType: 'relative'|'fixed', priceModifier } */
+  @Column({ type: "json", nullable: true })
+  variations: ProductVariation[] | null;
+
+  /** Разрешить добавление в корзину без выбора вариации (базовый вариант по базовой цене) */
+  @Column({ type: "boolean", default: true })
+  allowBaseOption: boolean;
 
   @Column({ type: "text", nullable: true })
   description: string;

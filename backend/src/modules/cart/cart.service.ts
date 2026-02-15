@@ -9,7 +9,10 @@ import {
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Cart, CartItem } from "../../database/entities/cart.entity";
-import { Product } from "../../database/entities/product.entity";
+import {
+  Product,
+  ProductVariation,
+} from "../../database/entities/product.entity";
 import { Shop } from "../../database/entities/shop.entity";
 import { Message } from "../../database/entities/message.entity";
 import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
@@ -181,13 +184,44 @@ export class CartService {
   }
 
   /**
+   * Рассчитать цену товара с учётом вариации
+   */
+  private getItemPrice(
+    product: Product,
+    variationId?: string
+  ): { price: number; variationLabel?: string } {
+    const basePrice = Number(product.price);
+    if (!variationId || !product.variations?.length) {
+      return { price: basePrice };
+    }
+    const variation = product.variations.find(
+      (v: ProductVariation) => v.id === variationId
+    );
+    if (!variation) {
+      throw new BadRequestException("Вариация не найдена");
+    }
+    if (variation.isActive === false) {
+      throw new BadRequestException("Вариация неактивна");
+    }
+    const price =
+      variation.priceType === "fixed"
+        ? variation.priceModifier
+        : basePrice + variation.priceModifier;
+    return {
+      price,
+      variationLabel: variation.label,
+    };
+  }
+
+  /**
    * Добавить товар в корзину
    */
   async addItem(
     shopId: string,
     user: CartUserIdentifier,
     productId: string,
-    quantity: number = 1
+    quantity: number = 1,
+    variationId?: string
   ): Promise<Cart> {
     if (quantity <= 0) {
       throw new BadRequestException("Количество должно быть больше 0");
@@ -205,6 +239,19 @@ export class CartService {
       throw new BadRequestException("Товар неактивен");
     }
 
+    const hasVariations =
+      product.variations && product.variations.length > 0;
+    if (hasVariations && !product.allowBaseOption && !variationId) {
+      throw new BadRequestException(
+        "Необходимо выбрать вариацию товара"
+      );
+    }
+    if (variationId && !hasVariations) {
+      throw new BadRequestException("У товара нет вариаций");
+    }
+
+    const { price, variationLabel } = this.getItemPrice(product, variationId);
+
     if (product.stockQuantity < quantity) {
       throw new BadRequestException(
         `Недостаточно товара в наличии. Доступно: ${product.stockQuantity}`
@@ -214,7 +261,9 @@ export class CartService {
     let cart = await this.getCart(shopId, user);
 
     const existingItemIndex = cart.items.findIndex(
-      (item) => item.productId === productId
+      (item) =>
+        item.productId === productId &&
+        (item.variationId ?? null) === (variationId ?? null)
     );
 
     if (existingItemIndex >= 0) {
@@ -228,16 +277,20 @@ export class CartService {
 
       cart.items[existingItemIndex].quantity = newQuantity;
     } else {
+      const displayName =
+        variationLabel ? `${product.name} (${variationLabel})` : product.name;
       const cartItem: CartItem = {
         productId: product.id,
         quantity,
-        price: Number(product.price),
+        price,
         currency: product.currency,
-        name: product.name,
+        name: displayName,
         image:
           product.images && product.images.length > 0
             ? product.images[0]
             : undefined,
+        variationId: variationId || undefined,
+        variationLabel: variationLabel || undefined,
       };
 
       cart.items.push(cartItem);
@@ -276,14 +329,15 @@ export class CartService {
     shopId: string,
     user: CartUserIdentifier,
     productId: string,
-    quantity: number
+    quantity: number,
+    variationId?: string
   ): Promise<Cart> {
     if (quantity < 0) {
       throw new BadRequestException("Количество не может быть отрицательным");
     }
 
     if (quantity === 0) {
-      return this.removeItem(shopId, user, productId);
+      return this.removeItem(shopId, user, productId, variationId);
     }
 
     const product = await this.productRepository.findOne({
@@ -302,7 +356,9 @@ export class CartService {
 
     const cart = await this.getCart(shopId, user);
     const itemIndex = cart.items.findIndex(
-      (item) => item.productId === productId
+      (item) =>
+        item.productId === productId &&
+        (item.variationId ?? null) === (variationId ?? null)
     );
 
     if (itemIndex === -1) {
@@ -342,10 +398,17 @@ export class CartService {
   async removeItem(
     shopId: string,
     user: CartUserIdentifier,
-    productId: string
+    productId: string,
+    variationId?: string
   ): Promise<Cart> {
     const cart = await this.getCart(shopId, user);
-    cart.items = cart.items.filter((item) => item.productId !== productId);
+    cart.items = cart.items.filter(
+      (item) =>
+        !(
+          item.productId === productId &&
+          (item.variationId ?? null) === (variationId ?? null)
+        )
+    );
     const savedCart = await this.cartRepository.save(cart);
 
     // Уведомление
@@ -696,7 +759,8 @@ export class CartService {
     shopId: string,
     cartId: string,
     productId: string,
-    quantity: number
+    quantity: number,
+    variationId?: string
   ): Promise<Cart> {
     if (quantity <= 0) {
       throw new BadRequestException("Количество должно быть больше 0");
@@ -733,7 +797,9 @@ export class CartService {
     }
 
     const itemIndex = cart.items.findIndex(
-      (item) => item.productId === productId
+      (item) =>
+        item.productId === productId &&
+        (item.variationId ?? null) === (variationId ?? null)
     );
 
     if (itemIndex < 0) {
@@ -768,7 +834,8 @@ export class CartService {
   async removeCartItemByAdmin(
     shopId: string,
     cartId: string,
-    productId: string
+    productId: string,
+    variationId?: string
   ): Promise<Cart> {
     const shop = await this.shopRepository.findOne({
       where: { id: shopId },
@@ -787,14 +854,22 @@ export class CartService {
     }
 
     const itemIndex = cart.items.findIndex(
-      (item) => item.productId === productId
+      (item) =>
+        item.productId === productId &&
+        (item.variationId ?? null) === (variationId ?? null)
     );
 
     if (itemIndex < 0) {
       throw new NotFoundException("Товар не найден в корзине");
     }
 
-    cart.items = cart.items.filter((item) => item.productId !== productId);
+    cart.items = cart.items.filter(
+      (item) =>
+        !(
+          item.productId === productId &&
+          (item.variationId ?? null) === (variationId ?? null)
+        )
+    );
     const savedCart = await this.cartRepository.save(cart);
 
     if (shop.ownerId) {
@@ -866,26 +941,29 @@ export class CartService {
     shopId: string,
     user: CartUserIdentifier,
     productId: string,
-    quantity: number = 1
+    quantity: number = 1,
+    variationId?: string
   ): Promise<Cart> {
-    return this.addItem(shopId, user, productId, quantity);
+    return this.addItem(shopId, user, productId, quantity, variationId);
   }
 
   async updateItemByShop(
     shopId: string,
     user: CartUserIdentifier,
     productId: string,
-    quantity: number
+    quantity: number,
+    variationId?: string
   ): Promise<Cart> {
-    return this.updateItem(shopId, user, productId, quantity);
+    return this.updateItem(shopId, user, productId, quantity, variationId);
   }
 
   async removeItemByShop(
     shopId: string,
     user: CartUserIdentifier,
-    productId: string
+    productId: string,
+    variationId?: string
   ): Promise<Cart> {
-    return this.removeItem(shopId, user, productId);
+    return this.removeItem(shopId, user, productId, variationId);
   }
 
   async clearCartByShop(
