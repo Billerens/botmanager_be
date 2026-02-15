@@ -279,14 +279,26 @@ export class ProductsService {
       }
     }
 
-    if (updateProductDto.images && product.images) {
-      try {
-        await this.uploadService.deleteProductImages(product.images);
-        this.logger.log(`Deleted old images for product ${id}`);
-      } catch (error) {
-        this.logger.warn(
-          `Failed to delete old images for product ${id}: ${error.message}`
-        );
+    // Удаляем из S3 только те картинки, которых нет в новом списке (чтобы не бить ссылки при PATCH без смены картинок)
+    if (
+      updateProductDto.images &&
+      product.images?.length
+    ) {
+      const newUrls = new Set(
+        Array.isArray(updateProductDto.images) ? updateProductDto.images : []
+      );
+      const urlsToDelete = product.images.filter((url) => !newUrls.has(url));
+      if (urlsToDelete.length > 0) {
+        try {
+          await this.uploadService.deleteProductImages(urlsToDelete);
+          this.logger.log(
+            `Deleted ${urlsToDelete.length} old images for product ${id}`
+          );
+        } catch (error) {
+          this.logger.warn(
+            `Failed to delete old images for product ${id}: ${error.message}`
+          );
+        }
       }
     }
 
