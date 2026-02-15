@@ -48,7 +48,45 @@ export class Product {
   parameters: Record<string, any>; // JSON object with product parameters
 
   /** Вариации товара: массив { id, label, priceType: 'relative'|'fixed', priceModifier } */
-  @Column({ type: "json", nullable: true })
+  @Column({
+    type: "json",
+    nullable: true,
+    transformer: {
+      to(value: ProductVariation[] | null): ProductVariation[] | null {
+        return value == null ? null : value;
+      },
+      from(value: string | ProductVariation[] | null): ProductVariation[] | null {
+        if (value == null) return null;
+        if (typeof value === "string") {
+          try {
+            const parsed = JSON.parse(value) as unknown;
+            if (!Array.isArray(parsed)) return null;
+            return parsed.filter(
+              (item): item is ProductVariation =>
+                item != null &&
+                typeof item === "object" &&
+                !Array.isArray(item) &&
+                "id" in item &&
+                "label" in item
+            );
+          } catch {
+            return null;
+          }
+        }
+        if (Array.isArray(value)) {
+          return value.filter(
+            (item): item is ProductVariation =>
+              item != null &&
+              typeof item === "object" &&
+              !Array.isArray(item) &&
+              "id" in item &&
+              "label" in item
+          );
+        }
+        return null;
+      },
+    },
+  })
   variations: ProductVariation[] | null;
 
   /** Разрешить добавление в корзину без выбора вариации (базовый вариант по базовой цене) */

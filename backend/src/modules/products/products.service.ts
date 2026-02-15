@@ -6,7 +6,10 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { Product } from "../../database/entities/product.entity";
+import {
+  Product,
+  ProductVariation,
+} from "../../database/entities/product.entity";
 import { Category } from "../../database/entities/category.entity";
 import { Shop } from "../../database/entities/shop.entity";
 import {
@@ -55,6 +58,25 @@ export class ProductsService {
   // =====================================================
 
   /**
+   * Нормализация вариаций: только массив объектов с id, label (отсекает [[], []], пустые объекты и т.д.)
+   */
+  private normalizeVariations(
+    variations: unknown,
+  ): ProductVariation[] | null | undefined {
+    if (variations == null) return undefined;
+    if (!Array.isArray(variations)) return null;
+    const filtered = variations.filter(
+      (item): item is ProductVariation =>
+        item != null &&
+        typeof item === "object" &&
+        !Array.isArray(item) &&
+        "id" in item &&
+        "label" in item
+    );
+    return filtered.length > 0 ? filtered : null;
+  }
+
+  /**
    * Создать продукт для магазина
    */
   async create(
@@ -75,14 +97,18 @@ export class ProductsService {
       }
     }
 
+    const variations = this.normalizeVariations(createProductDto.variations);
+    const payload = {
+      ...createProductDto,
+      shopId,
+      ...(variations !== undefined && { variations }),
+    };
+
     this.logger.log(
       `Creating product for shop ${shopId} with ${createProductDto.images?.length || 0} images`
     );
 
-    const product = this.productRepository.create({
-      ...createProductDto,
-      shopId,
-    });
+    const product = this.productRepository.create(payload);
 
     const savedProduct = await this.productRepository.save(product);
 
@@ -244,7 +270,13 @@ export class ProductsService {
       }
     }
 
-    Object.assign(product, updateProductDto);
+    const variations = this.normalizeVariations(updateProductDto.variations);
+    const updatePayload = { ...updateProductDto };
+    if (variations !== undefined) {
+      (updatePayload as { variations?: ProductVariation[] | null }).variations =
+        variations;
+    }
+    Object.assign(product, updatePayload);
     const updatedProduct = await this.productRepository.save(product);
 
     this.notificationService
