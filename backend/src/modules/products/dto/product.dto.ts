@@ -62,12 +62,6 @@ export class CreateProductDto {
   @Min(0)
   price: number;
 
-  @ApiPropertyOptional({ description: "Валюта", default: "RUB" })
-  @IsOptional()
-  @IsString()
-  @MaxLength(3)
-  currency?: string = "RUB";
-
   @ApiPropertyOptional({ description: "Количество на складе", default: 0 })
   @IsOptional()
   @Transform(({ value }) => (value !== undefined ? parseInt(value) : value))
@@ -141,12 +135,6 @@ export class UpdateProductDto {
   @IsNumber()
   @Min(0)
   price?: number;
-
-  @ApiPropertyOptional({ description: "Валюта" })
-  @IsOptional()
-  @IsString()
-  @MaxLength(3)
-  currency?: string;
 
   @ApiPropertyOptional({ description: "Количество на складе" })
   @IsOptional()

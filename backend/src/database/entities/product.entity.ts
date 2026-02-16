@@ -58,9 +58,6 @@ export class Product {
   @Column({ type: "decimal", precision: 10, scale: 2 })
   price: number;
 
-  @Column({ length: 3, default: "RUB" })
-  currency: string;
-
   @Column({ type: "int", default: 0 })
   stockQuantity: number;
 
@@ -153,9 +150,9 @@ export class Product {
   @Column({ type: "json", nullable: true })
   discount: ProductDiscount | null;
 
-  // Методы
+  // Методы (валюта задаётся на уровне магазина, в ответах API добавляется отдельно)
   get formattedPrice(): string {
-    return `${this.price} ${this.currency}`;
+    return String(this.price);
   }
 
   get isInStock(): boolean {

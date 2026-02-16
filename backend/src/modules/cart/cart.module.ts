@@ -9,6 +9,7 @@ import { Message } from "../../database/entities/message.entity";
 import { ShopPromocode } from "../../database/entities/shop-promocode.entity";
 import { PublicUser } from "../../database/entities/public-user.entity";
 import { CartService } from "./cart.service";
+import { PaymentsModule } from "../payments/payments.module";
 import { BotsModule } from "../bots/bots.module";
 import { TelegramModule } from "../telegram/telegram.module";
 import { WebSocketModule } from "../websocket/websocket.module";
@@ -25,6 +26,7 @@ import { ActivityLogModule } from "../activity-log/activity-log.module";
       ShopPromocode,
       PublicUser,
     ]),
+    PaymentsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

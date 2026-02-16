@@ -112,6 +112,10 @@ export class Shop {
   @Column({ type: "json", nullable: true })
   layoutConfig?: Record<string, any>;
 
+  /** Валюта магазина (RUB, USD, EUR, GBP, BYN). При привязанных платёжных системах в заказах используется USD. */
+  @Column({ length: 3, default: "BYN" })
+  currency: string;
+
   // Настройки браузерного доступа
   @Column({ default: false })
   browserAccessEnabled: boolean;

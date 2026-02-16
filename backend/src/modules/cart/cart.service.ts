@@ -25,6 +25,7 @@ import {
   ActivityType,
   ActivityLevel,
 } from "../../database/entities/activity-log.entity";
+import { PaymentConfigService } from "../payments/services/payment-config.service";
 
 /**
  * Идентификатор пользователя для корзины
@@ -53,7 +54,8 @@ export class CartService {
     private readonly notificationService: NotificationService,
     @Inject(forwardRef(() => ShopPromocodesService))
     private readonly shopPromocodesService: ShopPromocodesService,
-    private readonly activityLogService: ActivityLogService
+    private readonly activityLogService: ActivityLogService,
+    private readonly paymentConfigService: PaymentConfigService
   ) {}
 
   // =====================================================
@@ -285,11 +287,14 @@ export class CartService {
     } else {
       const displayName =
         variationLabel ? `${product.name} (${variationLabel})` : product.name;
+      const currency = await this.paymentConfigService.getEffectiveShopCurrency(
+        shopId
+      );
       const cartItem: CartItem = {
         productId: product.id,
         quantity,
         price,
-        currency: product.currency,
+        currency,
         name: displayName,
         image:
           product.images && product.images.length > 0

@@ -694,7 +694,8 @@ export class OrdersService {
     }
 
     const newCartItems: CartItem[] = [];
-    const currency = order.currency;
+    const currency =
+      await this.paymentConfigService.getEffectiveShopCurrency(shopId);
 
     for (const entry of newEntries) {
       const product = await this.productRepository.findOne({
@@ -746,7 +747,7 @@ export class OrdersService {
         productId: product.id,
         quantity: entry.quantity,
         price,
-        currency: product.currency || currency,
+        currency,
         name: product.name,
         image:
           Array.isArray(product.images) && product.images.length > 0

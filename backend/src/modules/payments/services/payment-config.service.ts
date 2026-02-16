@@ -243,6 +243,24 @@ export class PaymentConfigService {
   }
 
   /**
+   * Эффективная валюта магазина: при привязанных платёжных системах — USD, иначе — настройка магазина (по умолчанию BYN).
+   */
+  async getEffectiveShopCurrency(shopId: string): Promise<string> {
+    const hasPayments = await this.isPaymentEnabled(
+      PaymentEntityType.SHOP,
+      shopId
+    );
+    if (hasPayments) {
+      return "USD";
+    }
+    const shop = await this.shopRepository.findOne({
+      where: { id: shopId },
+      select: ["currency"],
+    });
+    return shop?.currency ?? "BYN";
+  }
+
+  /**
    * Получение активных провайдеров для сущности
    */
   async getEnabledProviders(

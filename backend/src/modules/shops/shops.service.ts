@@ -40,6 +40,7 @@ import {
   DomainTargetType,
 } from "../custom-domains/enums/domain-status.enum";
 import { ShopPermissionsService } from "./shop-permissions.service";
+import { PaymentConfigService } from "../payments/services/payment-config.service";
 
 @Injectable()
 export class ShopsService {
@@ -70,7 +71,8 @@ export class ShopsService {
     private readonly subdomainService: SubdomainService,
     @Inject(forwardRef(() => CustomDomainsService))
     private readonly customDomainsService: CustomDomainsService,
-    private readonly shopPermissionsService: ShopPermissionsService
+    private readonly shopPermissionsService: ShopPermissionsService,
+    private readonly paymentConfigService: PaymentConfigService
   ) {}
 
   /**
@@ -1024,7 +1026,7 @@ export class ShopsService {
     onlyDiscounted?: boolean,
     onlyNewDays?: number
   ): Promise<{
-    products: Product[];
+    products: (Product & { currency: string })[];
     pagination: {
       page: number;
       limit: number;
@@ -1107,9 +1109,15 @@ export class ShopsService {
     }
 
     const [products, total] = await queryBuilder.getManyAndCount();
+    const currency =
+      await this.paymentConfigService.getEffectiveShopCurrency(shopId);
+    const productsWithCurrency = products.map((p) => ({
+      ...p,
+      currency,
+    })) as (Product & { currency: string })[];
 
     return {
-      products,
+      products: productsWithCurrency,
       pagination: {
         page,
         limit,

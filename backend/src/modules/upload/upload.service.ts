@@ -74,6 +74,43 @@ export class UploadService {
   }
 
   /**
+   * Скачивает изображение по URL и загружает в S3 (для импорта продуктов).
+   * При ошибке загрузки выбрасывает исключение с сообщением.
+   */
+  async downloadAndUploadProductImage(imageUrl: string): Promise<string> {
+    const res = await fetch(imageUrl, {
+      signal: AbortSignal.timeout(30000),
+      headers: { "User-Agent": "BotManager-Import/1.0" },
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${imageUrl}`);
+    }
+    const contentType =
+      res.headers.get("content-type") || "image/jpeg";
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const isImage = await this.imageConversionService.isImage(buffer);
+    if (!isImage) {
+      throw new Error(`Not an image: ${imageUrl}`);
+    }
+    const ext =
+      contentType.includes("png")
+        ? "png"
+        : contentType.includes("webp")
+          ? "webp"
+          : contentType.includes("gif")
+            ? "gif"
+            : "jpg";
+    const files = await this.uploadProductImages([
+      {
+        buffer,
+        originalname: `import.${ext}`,
+        mimetype: contentType.split(";")[0].trim(),
+      },
+    ]);
+    return files[0];
+  }
+
+  /**
    * Загружает изображения продукта в S3 с конвертацией в WebP
    */
   async uploadProductImages(

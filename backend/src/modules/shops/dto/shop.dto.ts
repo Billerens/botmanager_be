@@ -9,6 +9,7 @@ import {
   MaxLength,
   MinLength,
   Matches,
+  IsIn,
 } from "class-validator";
 
 /**
@@ -102,6 +103,16 @@ export class UpdateShopDto extends PartialType(CreateShopDto) {
   @IsOptional()
   @IsBoolean()
   browserAccessRequireEmailVerification?: boolean;
+
+  @ApiPropertyOptional({
+    description: "Валюта магазина (при привязанных платёжных системах в заказах используется USD)",
+    enum: ["RUB", "USD", "EUR", "GBP", "BYN"],
+    default: "BYN",
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(["RUB", "USD", "EUR", "GBP", "BYN"])
+  currency?: string;
 }
 
 /**
@@ -200,6 +211,15 @@ export class UpdateShopSettingsDto {
   @IsOptional()
   @IsBoolean()
   browserAccessRequireEmailVerification?: boolean;
+
+  @ApiPropertyOptional({
+    description: "Валюта магазина",
+    enum: ["RUB", "USD", "EUR", "GBP", "BYN"],
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(["RUB", "USD", "EUR", "GBP", "BYN"])
+  currency?: string;
 }
 
 /**

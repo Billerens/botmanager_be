@@ -26,6 +26,7 @@ import {
   ActivityType,
   ActivityLevel,
 } from "../../database/entities/activity-log.entity";
+import { PaymentConfigService } from "../payments/services/payment-config.service";
 
 export interface ProductStats {
   totalProducts: number;
@@ -49,7 +50,8 @@ export class ProductsService {
     private readonly uploadService: UploadService,
     private readonly notificationService: NotificationService,
     private readonly activityLogService: ActivityLogService,
-    private readonly shopPermissionsService: ShopPermissionsService
+    private readonly shopPermissionsService: ShopPermissionsService,
+    private readonly paymentConfigService: PaymentConfigService
   ) {}
 
   // =====================================================
@@ -96,14 +98,20 @@ export class ProductsService {
     return result;
   }
 
+  private isExternalImageUrl(url: string): boolean {
+    return /^https?:\/\//i.test(url);
+  }
+
   /**
-   * Создать продукт для магазина
+   * Создать продукт для магазина.
+   * Если в images переданы внешние http(s) URL — скачивает изображения, сохраняет в хранилище, подставляет внутренние URL.
+   * В ответе может быть imageWarnings при неудачной загрузке отдельных картинок.
    */
   async create(
     shopId: string,
     userId: string,
     createProductDto: CreateProductDto
-  ): Promise<Product> {
+  ): Promise<Product & { imageWarnings?: string[] }> {
     const shop = await this.validateShopOwnership(shopId, userId);
 
     // Если указана категория, проверяем её
@@ -118,14 +126,37 @@ export class ProductsService {
     }
 
     const variations = this.normalizeVariations(createProductDto.variations);
+    let images = createProductDto.images;
+    const imageWarnings: string[] = [];
+
+    if (images?.length) {
+      const resolved: string[] = [];
+      for (const url of images) {
+        if (this.isExternalImageUrl(url)) {
+          try {
+            const internalUrl = await this.uploadService.downloadAndUploadProductImage(url);
+            resolved.push(internalUrl);
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.logger.warn(`Failed to fetch product image ${url}: ${msg}`);
+            imageWarnings.push(`Не удалось загрузить: ${url} (${msg})`);
+          }
+        } else {
+          resolved.push(url);
+        }
+      }
+      images = resolved;
+    }
+
     const payload = {
       ...createProductDto,
       shopId,
+      images,
       ...(variations !== undefined && { variations }),
     };
 
     this.logger.log(
-      `Creating product for shop ${shopId} with ${createProductDto.images?.length || 0} images`
+      `Creating product for shop ${shopId} with ${payload.images?.length || 0} images`
     );
 
     const product = this.productRepository.create(payload);
@@ -168,7 +199,9 @@ export class ProductsService {
         this.logger.error("Ошибка логирования создания продукта:", error);
       });
 
-    return savedProduct;
+    return imageWarnings.length
+      ? { ...savedProduct, imageWarnings }
+      : savedProduct;
   }
 
   /**
@@ -221,9 +254,15 @@ export class ProductsService {
     }
 
     const [products, total] = await queryBuilder.getManyAndCount();
+    const currency =
+      await this.paymentConfigService.getEffectiveShopCurrency(shopId);
+    const productsWithCurrency = products.map((p) => ({
+      ...p,
+      currency,
+    }));
 
     return {
-      products,
+      products: productsWithCurrency,
       pagination: {
         page,
         limit,
@@ -236,7 +275,11 @@ export class ProductsService {
   /**
    * Получить продукт по ID
    */
-  async findOne(id: string, shopId: string, userId: string): Promise<Product> {
+  async findOne(
+    id: string,
+    shopId: string,
+    userId: string
+  ): Promise<Product & { currency: string }> {
     await this.validateShopOwnership(shopId, userId);
 
     const product = await this.productRepository.findOne({
@@ -248,7 +291,9 @@ export class ProductsService {
       throw new NotFoundException("Товар не найден");
     }
 
-    return product;
+    const currency =
+      await this.paymentConfigService.getEffectiveShopCurrency(shopId);
+    return { ...product, currency };
   }
 
   /**
@@ -314,7 +359,6 @@ export class ProductsService {
     const allowedKeys = [
       "name",
       "price",
-      "currency",
       "stockQuantity",
       "images",
       "parameters",

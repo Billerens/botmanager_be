@@ -8,6 +8,7 @@ import { Shop } from "../../database/entities/shop.entity";
 import { UploadModule } from "../upload/upload.module";
 import { ActivityLogModule } from "../activity-log/activity-log.module";
 import { ShopPermissionsModule } from "../shops/shop-permissions.module";
+import { PaymentsModule } from "../payments/payments.module";
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { ShopPermissionsModule } from "../shops/shop-permissions.module";
     UploadModule,
     ActivityLogModule,
     ShopPermissionsModule,
+    PaymentsModule,
   ],
   controllers: [ProductsController],
   providers: [ProductsService],
