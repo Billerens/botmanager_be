@@ -732,6 +732,11 @@ export class OrdersService {
           variationLabel = variation.label;
           if (variation.priceType === "fixed") {
             priceBeforeDiscount = Number(variation.priceModifier);
+          } else if (variation.priceType === "relative_negative") {
+            priceBeforeDiscount = Math.max(
+              0,
+              Number(product.price) - Number(variation.priceModifier),
+            );
           } else {
             priceBeforeDiscount =
               Number(product.price) + Number(variation.priceModifier);

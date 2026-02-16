@@ -208,10 +208,13 @@ export class CartService {
       if (variation.isActive === false) {
         throw new BadRequestException("Вариация неактивна");
       }
-      priceBeforeDiscount =
-        variation.priceType === "fixed"
-          ? variation.priceModifier
-          : basePrice + variation.priceModifier;
+      if (variation.priceType === "fixed") {
+        priceBeforeDiscount = variation.priceModifier;
+      } else if (variation.priceType === "relative_negative") {
+        priceBeforeDiscount = Math.max(0, basePrice - variation.priceModifier);
+      } else {
+        priceBeforeDiscount = basePrice + variation.priceModifier;
+      }
       variationLabel = variation.label;
     }
     const price = applyProductDiscount(

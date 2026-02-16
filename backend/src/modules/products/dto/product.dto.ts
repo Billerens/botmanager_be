@@ -36,8 +36,8 @@ export class ProductVariationItemDto {
   @IsString()
   label: string;
 
-  @IsIn(["relative", "fixed"])
-  priceType: "relative" | "fixed";
+  @IsIn(["relative", "relative_negative", "fixed"])
+  priceType: "relative" | "relative_negative" | "fixed";
 
   @Transform(({ value }) =>
     value === undefined || value === null ? value : Number(value)
@@ -82,7 +82,7 @@ export class CreateProductDto {
 
   @ApiPropertyOptional({
     description:
-      "Вариации: массив { id, label, priceType: 'relative'|'fixed', priceModifier, isActive? }",
+      "Вариации: массив { id, label, priceType: 'relative'|'relative_negative'|'fixed', priceModifier, isActive? }",
   })
   @IsOptional()
   @IsArray()
@@ -156,7 +156,7 @@ export class UpdateProductDto {
 
   @ApiPropertyOptional({
     description:
-      "Вариации: массив { id, label, priceType: 'relative'|'fixed', priceModifier, isActive? }",
+      "Вариации: массив { id, label, priceType: 'relative'|'relative_negative'|'fixed', priceModifier, isActive? }",
   })
   @IsOptional()
   @IsArray()

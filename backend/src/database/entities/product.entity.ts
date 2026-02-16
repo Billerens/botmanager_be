@@ -11,13 +11,13 @@ import {
 import { Category } from "./category.entity";
 import { Shop } from "./shop.entity";
 
-/** Вариация товара: относительная (+N к базе) или фиксированная (=N) цена */
+/** Вариация товара: + к базе, − от базы или фиксированная (=) цена */
 export interface ProductVariation {
   id: string;
   label: string;
-  /** 'relative' — цена = база + priceModifier; 'fixed' — цена = priceModifier */
-  priceType: "relative" | "fixed";
-  /** Для relative — добавка к базе; для fixed — итоговая цена */
+  /** 'relative' — база + priceModifier; 'relative_negative' — база − priceModifier; 'fixed' — цена = priceModifier */
+  priceType: "relative" | "relative_negative" | "fixed";
+  /** Для relative — добавка; для relative_negative — вычитание; для fixed — итоговая цена */
   priceModifier: number;
   /** Активна ли вариация (неактивные не показываются и не добавляются в корзину) */
   isActive?: boolean;
@@ -67,7 +67,7 @@ export class Product {
   @Column({ type: "json", nullable: true })
   parameters: Record<string, any>; // JSON object with product parameters
 
-  /** Вариации товара: массив { id, label, priceType: 'relative'|'fixed', priceModifier } */
+  /** Вариации товара: массив { id, label, priceType: 'relative'|'relative_negative'|'fixed', priceModifier } */
   @Column({
     type: "json",
     nullable: true,
