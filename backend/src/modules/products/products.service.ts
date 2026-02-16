@@ -199,9 +199,11 @@ export class ProductsService {
         this.logger.error("Ошибка логирования создания продукта:", error);
       });
 
-    return imageWarnings.length
-      ? { ...savedProduct, imageWarnings }
-      : savedProduct;
+    if (imageWarnings.length) {
+      (savedProduct as Product & { imageWarnings: string[] }).imageWarnings =
+        imageWarnings;
+    }
+    return savedProduct as Product & { imageWarnings?: string[] };
   }
 
   /**
@@ -293,7 +295,8 @@ export class ProductsService {
 
     const currency =
       await this.paymentConfigService.getEffectiveShopCurrency(shopId);
-    return { ...product, currency };
+    (product as Product & { currency: string }).currency = currency;
+    return product as Product & { currency: string };
   }
 
   /**
