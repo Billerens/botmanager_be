@@ -15,6 +15,19 @@ import {
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Transform, Type } from "class-transformer";
 
+/** Скидка на товар */
+export class ProductDiscountDto {
+  @IsIn(["percent", "fixed"])
+  type: "percent" | "fixed";
+
+  @Transform(({ value }) =>
+    value === undefined || value === null ? value : Number(value)
+  )
+  @IsNumber()
+  @Min(0)
+  value: number;
+}
+
 /** Элемент вариации товара — отдельный класс, чтобы class-transformer не обнулял поля в массиве */
 export class ProductVariationItemDto {
   @IsString()
@@ -105,6 +118,14 @@ export class CreateProductDto {
   @IsOptional()
   @IsUUID()
   categoryId?: string;
+
+  @ApiPropertyOptional({
+    description: "Скидка: { type: 'percent' | 'fixed', value: number }",
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ProductDiscountDto)
+  discount?: ProductDiscountDto;
 }
 
 export class UpdateProductDto {
@@ -176,6 +197,14 @@ export class UpdateProductDto {
   @IsOptional()
   @IsUUID()
   categoryId?: string;
+
+  @ApiPropertyOptional({
+    description: "Скидка: { type: 'percent' | 'fixed', value: number }",
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ProductDiscountDto)
+  discount?: ProductDiscountDto;
 }
 
 export class ProductFiltersDto {

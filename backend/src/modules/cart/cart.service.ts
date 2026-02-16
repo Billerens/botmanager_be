@@ -12,6 +12,7 @@ import { Cart, CartItem } from "../../database/entities/cart.entity";
 import {
   Product,
   ProductVariation,
+  applyProductDiscount,
 } from "../../database/entities/product.entity";
 import { Shop } from "../../database/entities/shop.entity";
 import { Message } from "../../database/entities/message.entity";
@@ -191,26 +192,31 @@ export class CartService {
     variationId?: string
   ): { price: number; variationLabel?: string } {
     const basePrice = Number(product.price);
+    let priceBeforeDiscount: number;
+    let variationLabel: string | undefined;
     if (!variationId || !product.variations?.length) {
-      return { price: basePrice };
+      priceBeforeDiscount = basePrice;
+    } else {
+      const variation = product.variations.find(
+        (v: ProductVariation) => v.id === variationId
+      );
+      if (!variation) {
+        throw new BadRequestException("Вариация не найдена");
+      }
+      if (variation.isActive === false) {
+        throw new BadRequestException("Вариация неактивна");
+      }
+      priceBeforeDiscount =
+        variation.priceType === "fixed"
+          ? variation.priceModifier
+          : basePrice + variation.priceModifier;
+      variationLabel = variation.label;
     }
-    const variation = product.variations.find(
-      (v: ProductVariation) => v.id === variationId
+    const price = applyProductDiscount(
+      priceBeforeDiscount,
+      product.discount ?? undefined
     );
-    if (!variation) {
-      throw new BadRequestException("Вариация не найдена");
-    }
-    if (variation.isActive === false) {
-      throw new BadRequestException("Вариация неактивна");
-    }
-    const price =
-      variation.priceType === "fixed"
-        ? variation.priceModifier
-        : basePrice + variation.priceModifier;
-    return {
-      price,
-      variationLabel: variation.label,
-    };
+    return { price, variationLabel };
   }
 
   /**

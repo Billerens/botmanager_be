@@ -16,6 +16,7 @@ import { Shop } from "../../database/entities/shop.entity";
 import {
   Product,
   ProductVariation,
+  applyProductDiscount,
 } from "../../database/entities/product.entity";
 import {
   CreateOrderDto,
@@ -720,7 +721,7 @@ export class OrdersService {
         );
       }
 
-      let price = Number(product.price);
+      let priceBeforeDiscount = Number(product.price);
       let variationLabel: string | undefined;
       if (entry.variationId && product.variations?.length) {
         const variation = product.variations.find(
@@ -729,12 +730,17 @@ export class OrdersService {
         if (variation) {
           variationLabel = variation.label;
           if (variation.priceType === "fixed") {
-            price = Number(variation.priceModifier);
+            priceBeforeDiscount = Number(variation.priceModifier);
           } else {
-            price = Number(product.price) + Number(variation.priceModifier);
+            priceBeforeDiscount =
+              Number(product.price) + Number(variation.priceModifier);
           }
         }
       }
+      const price = applyProductDiscount(
+        priceBeforeDiscount,
+        product.discount ?? undefined
+      );
 
       newCartItems.push({
         productId: product.id,

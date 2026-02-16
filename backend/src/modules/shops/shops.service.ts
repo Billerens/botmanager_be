@@ -1019,7 +1019,10 @@ export class ShopsService {
     categoryId?: string,
     inStock?: boolean,
     search?: string,
-    sortBy?: "name-asc" | "name-desc" | "price-asc" | "price-desc"
+    sortBy?: "name-asc" | "name-desc" | "price-asc" | "price-desc",
+    randomize?: boolean,
+    onlyDiscounted?: boolean,
+    onlyNewDays?: number
   ): Promise<{
     products: Product[];
     pagination: {
@@ -1049,7 +1052,6 @@ export class ShopsService {
     }
 
     if (categoryId) {
-      // Получаем все ID подкатегорий
       const subcategoryIds = await this.getAllSubcategoryIds(
         categoryId,
         shopId
@@ -1069,22 +1071,39 @@ export class ShopsService {
       }
     }
 
-    // Сортировка
-    switch (sortBy) {
-      case "name-asc":
-        queryBuilder.orderBy("product.name", "ASC");
-        break;
-      case "name-desc":
-        queryBuilder.orderBy("product.name", "DESC");
-        break;
-      case "price-asc":
-        queryBuilder.orderBy("product.price", "ASC");
-        break;
-      case "price-desc":
-        queryBuilder.orderBy("product.price", "DESC");
-        break;
-      default:
-        queryBuilder.orderBy("product.createdAt", "DESC");
+    if (onlyDiscounted === true) {
+      queryBuilder.andWhere(
+        "product.discount IS NOT NULL AND (product.discount->>'value')::numeric > 0"
+      );
+    }
+
+    if (onlyNewDays != null && onlyNewDays > 0) {
+      const sinceDate = new Date();
+      sinceDate.setDate(sinceDate.getDate() - onlyNewDays);
+      queryBuilder.andWhere("product.createdAt >= :sinceDate", {
+        sinceDate,
+      });
+    }
+
+    if (randomize === true) {
+      queryBuilder.orderBy("RANDOM()");
+    } else {
+      switch (sortBy) {
+        case "name-asc":
+          queryBuilder.orderBy("product.name", "ASC");
+          break;
+        case "name-desc":
+          queryBuilder.orderBy("product.name", "DESC");
+          break;
+        case "price-asc":
+          queryBuilder.orderBy("product.price", "ASC");
+          break;
+        case "price-desc":
+          queryBuilder.orderBy("product.price", "DESC");
+          break;
+        default:
+          queryBuilder.orderBy("product.createdAt", "DESC");
+      }
     }
 
     const [products, total] = await queryBuilder.getManyAndCount();

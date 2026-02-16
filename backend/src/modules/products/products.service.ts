@@ -323,6 +323,7 @@ export class ProductsService {
       "description",
       "isActive",
       "categoryId",
+      "discount",
     ] as const;
     const updatePayload: Record<string, unknown> = {};
     for (const key of allowedKeys) {

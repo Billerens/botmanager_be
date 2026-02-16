@@ -228,6 +228,24 @@ export class PublicShopsController {
     enum: ["name-asc", "name-desc", "price-asc", "price-desc"],
     description: "Сортировка товаров",
   })
+  @ApiQuery({
+    name: "randomize",
+    required: false,
+    type: Boolean,
+    description: "Случайный порядок товаров",
+  })
+  @ApiQuery({
+    name: "onlyDiscounted",
+    required: false,
+    type: Boolean,
+    description: "Только товары со скидкой",
+  })
+  @ApiQuery({
+    name: "onlyNewDays",
+    required: false,
+    type: Number,
+    description: "Только новинки за последние N дней (0 — не фильтровать)",
+  })
   @ApiResponse({
     status: 200,
     description: "Товары получены успешно",
@@ -245,10 +263,18 @@ export class PublicShopsController {
     @Query("search") search?: string,
     @Query("sortBy")
     sortBy?: "name-asc" | "name-desc" | "price-asc" | "price-desc",
+    @Query("randomize") randomize?: string,
+    @Query("onlyDiscounted") onlyDiscounted?: string,
+    @Query("onlyNewDays") onlyNewDays?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
     const inStockBool = inStock !== undefined ? inStock === "true" : undefined;
+    const randomizeBool = randomize !== undefined ? randomize === "true" : undefined;
+    const onlyDiscountedBool =
+      onlyDiscounted !== undefined ? onlyDiscounted === "true" : undefined;
+    const onlyNewDaysNum =
+      onlyNewDays !== undefined ? parseInt(onlyNewDays, 10) : undefined;
 
     return this.shopsService.getPublicProducts(
       id,
@@ -258,6 +284,9 @@ export class PublicShopsController {
       inStockBool,
       search,
       sortBy,
+      randomizeBool,
+      onlyDiscountedBool,
+      onlyNewDaysNum,
     );
   }
 

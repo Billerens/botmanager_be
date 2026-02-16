@@ -23,6 +23,29 @@ export interface ProductVariation {
   isActive?: boolean;
 }
 
+/** Скидка на товар: процент или фиксированная сумма */
+export interface ProductDiscount {
+  type: "percent" | "fixed";
+  value: number;
+}
+
+/**
+ * Цена после применения скидки товара.
+ * percent: price * (1 - value/100); fixed: max(0, price - value).
+ */
+export function applyProductDiscount(
+  price: number,
+  discount: ProductDiscount | null | undefined
+): number {
+  if (!discount || discount.value <= 0) return Number(price);
+  const p = Number(price);
+  if (discount.type === "percent") {
+    const v = Math.min(100, Math.max(0, Number(discount.value)));
+    return Math.max(0, p * (1 - v / 100));
+  }
+  return Math.max(0, p - Number(discount.value));
+}
+
 @Entity("products")
 @Index(["shopId"])
 export class Product {
@@ -125,6 +148,10 @@ export class Product {
 
   @Column({ nullable: true })
   categoryId: string;
+
+  /** Скидка: { type: 'percent' | 'fixed', value: number } */
+  @Column({ type: "json", nullable: true })
+  discount: ProductDiscount | null;
 
   // Методы
   get formattedPrice(): string {
