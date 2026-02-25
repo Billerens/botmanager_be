@@ -76,6 +76,12 @@ export enum NotificationType {
   FLOW_TEMPLATE_DELETION_APPROVED = "flow_template.deletion_approved",
   FLOW_TEMPLATE_DELETION_REJECTED = "flow_template.deletion_rejected",
 
+  // Пресеты стилей (автору при смене статуса)
+  STYLE_PRESET_APPROVED = "style_preset.approved",
+  STYLE_PRESET_REJECTED = "style_preset.rejected",
+  STYLE_PRESET_DELETION_APPROVED = "style_preset.deletion_approved",
+  STYLE_PRESET_DELETION_REJECTED = "style_preset.deletion_rejected",
+
   // Системные
   SYSTEM_NOTIFICATION = "system.notification",
   ERROR = "error",

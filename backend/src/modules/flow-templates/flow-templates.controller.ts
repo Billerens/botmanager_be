@@ -57,6 +57,11 @@ export class FlowTemplatesController {
     return this.templatesService.getMyTemplates(req.user.id);
   }
 
+  @Get("my/:id")
+  async getMyTemplateById(@Req() req: AuthRequest, @Param("id") id: string) {
+    return this.templatesService.getMyTemplateById(req.user.id, id);
+  }
+
   @Post()
   async create(
     @Req() req: AuthRequest,

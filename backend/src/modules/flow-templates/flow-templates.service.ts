@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, SelectQueryBuilder } from "typeorm";
+import { Not, Repository, SelectQueryBuilder } from "typeorm";
 import {
   FlowTemplate,
   FlowTemplateStatus,
@@ -19,7 +19,7 @@ import {
 } from "../websocket/interfaces/notification.interface";
 
 const MAX_TEMPLATES_PER_USER = 50;
-const MAX_FLOW_DATA_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_FLOW_DATA_SIZE = 1.5 * 1024 * 1024; // 1.5 MB
 
 @Injectable()
 export class FlowTemplatesService {
@@ -135,14 +135,47 @@ export class FlowTemplatesService {
     return template;
   }
 
-  /** Мои темплейты (все статусы кроме archived) */
+  /** Мои шаблоны — лёгкий список без flowData */
   async getMyTemplates(userId: string) {
-    const templates = await this.templateRepository.find({
-      where: { authorId: userId },
+    const templates = await this.templateRepository
+      .createQueryBuilder("t")
+      .select([
+        "t.id",
+        "t.name",
+        "t.description",
+        "t.type",
+        "t.categoryId",
+        "t.tags",
+        "t.status",
+        "t.isPlatformChoice",
+        "t.rejectionReason",
+        "t.deletionRequestReason",
+        "t.usageCount",
+        "t.nodeCount",
+        "t.sortOrder",
+        "t.createdAt",
+        "t.updatedAt",
+        "t.publishedAt",
+        // flowData НЕ выбирается — только по запросу /my/:id
+      ])
+      .leftJoinAndSelect("t.category", "category")
+      .where("t.authorId = :userId", { userId })
+      .andWhere("t.status != :archived", { archived: FlowTemplateStatus.ARCHIVED })
+      .orderBy("t.updatedAt", "DESC")
+      .getMany();
+    return templates;
+  }
+
+  /** Мой шаблон — полный объект с flowData (для применения) */
+  async getMyTemplateById(userId: string, id: string): Promise<FlowTemplate> {
+    const template = await this.templateRepository.findOne({
+      where: { id, authorId: userId },
       relations: ["category"],
-      order: { updatedAt: "DESC" },
     });
-    return templates.filter((t) => t.status !== FlowTemplateStatus.ARCHIVED);
+    if (!template) {
+      throw new NotFoundException("Шаблон не найден или вам не принадлежит");
+    }
+    return template;
   }
 
   /** Создать темплейт */
@@ -150,13 +183,13 @@ export class FlowTemplatesService {
     userId: string,
     dto: CreateFlowTemplateDto,
   ): Promise<FlowTemplate> {
-    // Лимит на количество темплейтов
+    // Архивированные темплейты не занимают квоту
     const count = await this.templateRepository.count({
-      where: { authorId: userId },
+      where: { authorId: userId, status: Not(FlowTemplateStatus.ARCHIVED) },
     });
     if (count >= MAX_TEMPLATES_PER_USER) {
       throw new BadRequestException(
-        `Достигнут лимит: ${MAX_TEMPLATES_PER_USER} темплейтов на пользователя`,
+        `Достигнут лимит: ${MAX_TEMPLATES_PER_USER} активных шаблонов на пользователя. Архивируйте ненужные шаблоны, чтобы освободить место.`,
       );
     }
 
@@ -211,7 +244,11 @@ export class FlowTemplatesService {
     return this.templateRepository.save(template);
   }
 
-  /** Архивировать свой темплейт (draft/private/rejected) */
+  /** Архивировать свой темплейт.
+   * draft/private/rejected — удаляются напрямую.
+   * published/pending_deletion — опубликованная системная копия в галерее остаётся,
+   * поэтому пользователь может свободно убрать оригинал, освободив квоту.
+   */
   async archive(userId: string, id: string): Promise<void> {
     const template = await this.findOwnTemplate(userId, id);
 
@@ -219,10 +256,12 @@ export class FlowTemplatesService {
       FlowTemplateStatus.DRAFT,
       FlowTemplateStatus.PRIVATE,
       FlowTemplateStatus.REJECTED,
+      FlowTemplateStatus.PUBLISHED,
+      FlowTemplateStatus.PENDING_DELETION,
     ];
     if (!archivableStatuses.includes(template.status)) {
       throw new ForbiddenException(
-        `Нельзя удалить темплейт в статусе "${template.status}". Используйте "Запрос на удаление"`,
+        `Нельзя архивировать шаблон в статусе "${template.status}"`,
       );
     }
 
@@ -399,23 +438,49 @@ export class FlowTemplatesService {
     await this.templateRepository.save(template);
   }
 
-  /** Админ: одобрить публикацию */
+  /** Админ: одобрить публикацию.
+   * При одобрении создаётся СИСТЕМНАЯ КОПИЯ шаблона (authorId = null).
+   * Это гарантирует, что галерея не зависит от оригинального аккаунта:
+   * пользователь может удалить свой шаблон, освободив квоту, а копия
+   * останется публично доступной.
+   */
   async approve(id: string): Promise<FlowTemplate> {
     const template = await this.adminGetById(id);
     if (template.status !== FlowTemplateStatus.PENDING_REVIEW) {
       throw new BadRequestException(
-        `Можно одобрить только темплейт со статусом "pending_review", текущий: "${template.status}"`,
+        `Можно одобрить только шаблон со статусом "pending_review", текущий: "${template.status}"`,
       );
     }
+
+    // 1. Обновляем оригинал пользователя
     template.status = FlowTemplateStatus.PUBLISHED;
     template.publishedAt = new Date();
     template.rejectionReason = null;
     const saved = await this.templateRepository.save(template);
+
+    // 2. Создаём системную копию (authorId = null)
+    const systemCopy = this.templateRepository.create({
+      name: saved.name,
+      description: saved.description,
+      type: saved.type,
+      categoryId: saved.categoryId,
+      tags: saved.tags,
+      flowData: saved.flowData,
+      status: FlowTemplateStatus.PUBLISHED,
+      isPlatformChoice: saved.isPlatformChoice,
+      authorId: null, // системный — не привязан к пользователю
+      nodeCount: saved.nodeCount,
+      sortOrder: saved.sortOrder,
+      publishedAt: saved.publishedAt,
+    });
+    await this.templateRepository.save(systemCopy);
+
+    // 3. Уведомляем автора
     if (saved.authorId) {
       await this.notifyAuthor(
         saved.authorId,
         NotificationType.FLOW_TEMPLATE_APPROVED,
-        `Ваш шаблон «${saved.name}» одобрен и опубликован в галерее`,
+        `Ваш шаблон «${saved.name}» одобрен и опубликован в галерее. Вы можете удалить свою копию, чтобы освободить место в лимите.`,
         { templateId: saved.id, templateName: saved.name },
       );
     }

@@ -89,6 +89,11 @@ export {
   FlowTemplateType,
   FlowTemplateStatus,
 } from "./flow-template.entity";
+export {
+  StylePreset,
+  StylePresetTarget,
+  StylePresetStatus,
+} from "./style-preset.entity";
 
 /**
  * Массив всех entity классов для TypeORM
@@ -142,6 +147,7 @@ import { OpenRouterFeaturedModel } from "./openrouter-featured-model.entity";
 import { OpenRouterAgentSettings } from "./openrouter-agent-settings.entity";
 import { FlowTemplateCategory } from "./flow-template-category.entity";
 import { FlowTemplate } from "./flow-template.entity";
+import { StylePreset } from "./style-preset.entity";
 
 export const ALL_ENTITIES = [
   User,
@@ -192,4 +198,5 @@ export const ALL_ENTITIES = [
   OpenRouterAgentSettings,
   FlowTemplateCategory,
   FlowTemplate,
+  StylePreset,
 ];

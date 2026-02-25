@@ -60,6 +60,8 @@ import { AdminOpenRouterController } from "./controllers/admin-openrouter.contro
 import { AdminFlowTemplatesController } from "./controllers/admin-flow-templates.controller";
 import { AdminFlowTemplateCategoriesController } from "./controllers/admin-flow-template-categories.controller";
 import { FlowTemplatesModule } from "../flow-templates/flow-templates.module";
+import { AdminStylePresetsController } from "./controllers/admin-style-presets.controller";
+import { StylePresetsModule } from "../style-presets/style-presets.module";
 
 @Module({
   imports: [
@@ -86,6 +88,7 @@ import { FlowTemplatesModule } from "../flow-templates/flow-templates.module";
     OpenRouterModule,
     forwardRef(() => BotsModule),
     FlowTemplatesModule,
+    StylePresetsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -114,6 +117,7 @@ import { FlowTemplatesModule } from "../flow-templates/flow-templates.module";
     AdminOpenRouterController,
     AdminFlowTemplatesController,
     AdminFlowTemplateCategoriesController,
+    AdminStylePresetsController,
   ],
   providers: [
     AdminAuthService,
