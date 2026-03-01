@@ -75,6 +75,9 @@ export class StylePreset {
   @Column({ type: "uuid", nullable: true })
   authorId: string | null; // null = системный / созданный админом
 
+  @Column({ length: 255, nullable: true })
+  originalAuthorName: string | null; // Имя автора для системной копии
+
   // --- Метаданные ---
 
   @Column({ type: "int", default: 0 })

@@ -58,7 +58,8 @@ export class StylePresetsService {
         "author.lastName",
         "author.telegramUsername",
       ])
-      .where("p.status = :status", { status: StylePresetStatus.PUBLISHED });
+      .where("p.status = :status", { status: StylePresetStatus.PUBLISHED })
+      .andWhere("p.authorId IS NULL"); // Показываем только системные копии
 
     this.applyGalleryFilters(qb, query);
     this.applyGallerySorting(qb, query.sortBy);
@@ -388,6 +389,13 @@ export class StylePresetsService {
     const saved = await this.presetRepository.save(preset);
 
     // 2. Создаём системную копию (authorId = null)
+    const author = preset.author;
+    const authorName = author
+      ? `${author.firstName || ""} ${author.lastName || ""}`.trim() ||
+        author.telegramUsername ||
+        null
+      : null;
+
     const systemCopy = this.presetRepository.create({
       name: saved.name,
       description: saved.description,
@@ -397,6 +405,7 @@ export class StylePresetsService {
       status: StylePresetStatus.PUBLISHED,
       isPlatformChoice: saved.isPlatformChoice,
       authorId: null, // системный — не привязан к пользователю
+      originalAuthorName: authorName, // Сохраняем имя автора
       sortOrder: saved.sortOrder,
       publishedAt: saved.publishedAt,
     });
@@ -574,11 +583,13 @@ export class StylePresetsService {
 
   private toGalleryListItem(preset: StylePreset) {
     const author = preset.author;
-    const authorName = author
-      ? `${author.firstName || ""} ${author.lastName || ""}`.trim() ||
-        author.telegramUsername ||
-        null
-      : null;
+    const authorName =
+      preset.originalAuthorName ||
+      (author
+        ? `${author.firstName || ""} ${author.lastName || ""}`.trim() ||
+          author.telegramUsername ||
+          null
+        : null);
 
     return {
       id: preset.id,

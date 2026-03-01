@@ -105,7 +105,8 @@ export class FlowTemplatesService {
         "author.lastName",
         "author.telegramUsername",
       ])
-      .where("t.status = :status", { status: FlowTemplateStatus.PUBLISHED });
+      .where("t.status = :status", { status: FlowTemplateStatus.PUBLISHED })
+      .andWhere("t.authorId IS NULL"); // Показываем только системные копии
 
     this.applyGalleryFilters(qb, query);
     this.applyGallerySorting(qb, query.sortBy);
@@ -459,6 +460,13 @@ export class FlowTemplatesService {
     const saved = await this.templateRepository.save(template);
 
     // 2. Создаём системную копию (authorId = null)
+    const author = template.author;
+    const authorName = author
+      ? `${author.firstName || ""} ${author.lastName || ""}`.trim() ||
+        author.telegramUsername ||
+        null
+      : null;
+
     const systemCopy = this.templateRepository.create({
       name: saved.name,
       description: saved.description,
@@ -469,6 +477,7 @@ export class FlowTemplatesService {
       status: FlowTemplateStatus.PUBLISHED,
       isPlatformChoice: saved.isPlatformChoice,
       authorId: null, // системный — не привязан к пользователю
+      originalAuthorName: authorName, // Сохраняем имя автора
       nodeCount: saved.nodeCount,
       sortOrder: saved.sortOrder,
       publishedAt: saved.publishedAt,
@@ -677,11 +686,13 @@ export class FlowTemplatesService {
 
   private toGalleryListItem(template: FlowTemplate) {
     const author = template.author;
-    const authorName = author
-      ? `${author.firstName || ""} ${author.lastName || ""}`.trim() ||
-        author.telegramUsername ||
-        null
-      : null;
+    const authorName =
+      template.originalAuthorName ||
+      (author
+        ? `${author.firstName || ""} ${author.lastName || ""}`.trim() ||
+          author.telegramUsername ||
+          null
+        : null);
 
     return {
       id: template.id,
