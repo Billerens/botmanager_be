@@ -225,4 +225,23 @@ export class AdminFlowTemplatesController {
 
     return result;
   }
+
+  @Delete(":id/hard")
+  async hardDelete(@Req() req: AdminRequest, @Param("id") id: string) {
+    await this.templatesService.adminHardDelete(id);
+
+    await this.actionLogService.logAction(
+      req.user,
+      AdminActionType.FLOW_TEMPLATE_DELETE,
+      `ОКОНЧАТЕЛЬНО удалён шаблон flow: ${id}`,
+      {
+        level: AdminActionLevel.CRITICAL,
+        entityType: "flow_template",
+        entityId: id,
+        request: req,
+      }
+    );
+
+    return { message: "Темплейт окончательно удалён" };
+  }
 }

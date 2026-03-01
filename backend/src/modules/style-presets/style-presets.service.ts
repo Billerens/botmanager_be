@@ -604,4 +604,9 @@ export class StylePresetsService {
       // cssData НЕ включается в список — только при GET /gallery/:id
     };
   }
+
+  /** Админ: ОКОНЧАТЕЛЬНОЕ удаление */
+  async adminHardDelete(id: string): Promise<void> {
+    await this.presetRepository.delete(id);
+  }
 }

@@ -93,4 +93,10 @@ export class AdminStylePresetsController {
   ) {
     return this.presetsService.setPlatformChoice(id, dto.isPlatformChoice);
   }
+
+  @Delete(":id/hard")
+  async hardDelete(@Param("id") id: string) {
+    await this.presetsService.adminHardDelete(id);
+    return { message: "Пресет окончательно удалён" };
+  }
 }

@@ -714,4 +714,9 @@ export class FlowTemplatesService {
       publishedAt: template.publishedAt,
     };
   }
+
+  /** Админ: ОКОНЧАТЕЛЬНОЕ удаление */
+  async adminHardDelete(id: string): Promise<void> {
+    await this.templateRepository.delete(id);
+  }
 }
