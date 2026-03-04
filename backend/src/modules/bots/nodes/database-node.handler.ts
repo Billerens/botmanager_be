@@ -68,9 +68,9 @@ export class DatabaseNodeHandler extends BaseNodeHandler {
       `Конфигурация: ${JSON.stringify(processedConfig, null, 2)}`
     );
 
+    let result: DatabaseQueryResult;
     try {
-      const result: DatabaseQueryResult =
-        await this.databaseService.executeQuery(bot.id, processedConfig);
+      result = await this.databaseService.executeQuery(bot.id, processedConfig);
 
       // Сохраняем результаты в переменные сессии
       session.variables[`db_${currentNode.nodeId}_success`] =
@@ -105,10 +105,14 @@ export class DatabaseNodeHandler extends BaseNodeHandler {
       this.logger.error("Critical error in database node:", error);
       session.variables[`db_${currentNode.nodeId}_error`] = error.message;
       session.variables[`db_${currentNode.nodeId}_success`] = "false";
+      
+      // Инициализируем result как ошибку для корректной навигации в конце
+      result = { success: false, error: error.message };
     }
 
-    // Всегда переходим к следующему узлу
-    await this.moveToNextNode(context, currentNode.nodeId);
+    // Переходим к следующему узлу в зависимости от результата
+    const nextHandle = result.success ? "success" : "error";
+    await this.moveToNextNode(context, currentNode.nodeId, nextHandle);
   }
 
   private substituteVariablesInConfig(
