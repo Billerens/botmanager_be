@@ -196,7 +196,8 @@ export class FlowNodeDataDto {
         | "number"
         | "select"
         | "multiselect"
-        | "date";
+        | "date"
+        | "image";
       required: boolean;
       placeholder?: string;
       options?: string[];

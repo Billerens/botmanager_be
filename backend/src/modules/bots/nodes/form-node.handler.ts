@@ -9,9 +9,32 @@ import { CustomLoggerService } from "../../../common/logger.service";
 import { MessagesService } from "../../messages/messages.service";
 import { FlowContext } from "./base-node-handler.interface";
 import { BaseNodeHandler } from "./base-node-handler";
+import { ActivityLogService } from "../../activity-log/activity-log.service";
 
 @Injectable()
 export class FormNodeHandler extends BaseNodeHandler {
+  constructor(
+    @InjectRepository(BotFlow)
+    protected readonly botFlowRepository: Repository<BotFlow>,
+    @InjectRepository(BotFlowNode)
+    protected readonly botFlowNodeRepository: Repository<BotFlowNode>,
+    protected readonly telegramService: TelegramService,
+    protected readonly botsService: BotsService,
+    protected readonly logger: CustomLoggerService,
+    protected readonly messagesService: MessagesService,
+    protected readonly activityLogService: ActivityLogService
+  ) {
+    super(
+      botFlowRepository,
+      botFlowNodeRepository,
+      telegramService,
+      botsService,
+      logger,
+      messagesService,
+      activityLogService
+    );
+  }
+
   canHandle(nodeType: string): boolean {
     return nodeType === "form";
   }
@@ -99,8 +122,8 @@ export class FormNodeHandler extends BaseNodeHandler {
       return;
     }
 
-    // Если это текстовое сообщение (ответ пользователя на поле)
-    if (message.text && !message.is_callback) {
+    // Если это текстовое сообщение или медиа (ответ пользователя на поле)
+    if (!message.is_callback && (message.text || message.photo || message.document || message.video || message.audio || message.voice)) {
       await this.handleFieldInput(context, currentFieldIndex);
       return;
     }
@@ -186,6 +209,9 @@ export class FormNodeHandler extends BaseNodeHandler {
           });
         }
         break;
+      case "image":
+        fieldMessage += "\n\n🖼 Пожалуйста, отправьте изображение";
+        break;
     }
 
     // Показываем прогресс заполнения
@@ -216,13 +242,31 @@ export class FormNodeHandler extends BaseNodeHandler {
       return;
     }
 
-    const userInput = message.text.trim();
+    let userInput = "";
+    if (currentField.type === "image") {
+      // Пытаемся получить file_id из разных типов медиа
+      if (message.photo && message.photo.length > 0) {
+        userInput = message.photo[message.photo.length - 1].file_id;
+      } else if (message.document && message.document.mime_type?.startsWith("image/")) {
+        userInput = message.document.file_id;
+      } else {
+        await this.sendAndSaveMessage(
+          bot,
+          session.chatId,
+          "❌ Пожалуйста, отправьте именно изображение."
+        );
+        return;
+      }
+    } else {
+      userInput = (message.text || "").trim();
+    }
+
     this.logger.log(
-      `Пользователь ввел: "${userInput}" для поля ${currentField.label}`
+      `Пользователь ввел: "${currentField.type === "image" ? "[IMAGE]" : userInput}" для поля ${currentField.label}`
     );
 
     // Валидация введенных данных
-    const validationResult = this.validateFieldInput(currentField, userInput);
+    const validationResult = this.validateFieldInput(currentField, userInput, message);
 
     if (!validationResult.isValid) {
       await this.sendAndSaveMessage(
@@ -251,12 +295,6 @@ export class FormNodeHandler extends BaseNodeHandler {
     if (nextFieldIndex >= totalFields) {
       session.variables[`form_${currentNode.nodeId}_completed`] = "true";
       this.logger.log(`=== ФОРМА ЗАВЕРШЕНА ===`);
-      this.logger.log(
-        `Установлена переменная: form_${currentNode.nodeId}_completed = "true"`
-      );
-      this.logger.log(
-        `Все переменные сессии: ${JSON.stringify(session.variables)}`
-      );
       await this.showFormCompletion(context);
     } else {
       // Показываем следующее поле
@@ -266,10 +304,19 @@ export class FormNodeHandler extends BaseNodeHandler {
 
   private validateFieldInput(
     field: any,
-    input: string
+    input: string,
+    message: any
   ): { isValid: boolean; error?: string } {
     // Проверка обязательности
     if (field.required && (!input || input.trim() === "")) {
+      // Для типа image проверяем наличие медиа
+      if (field.type === "image" && !message.photo && !message.document) {
+        return {
+          isValid: false,
+          error: `Поле "${field.label}" обязательно. Пожалуйста, отправьте изображение.`,
+        };
+      }
+      
       return {
         isValid: false,
         error: `Поле "${field.label}" обязательно для заполнения`,
@@ -395,6 +442,11 @@ export class FormNodeHandler extends BaseNodeHandler {
           }
         }
         break;
+      case "image":
+        if (field.required && !input) {
+          return { isValid: false, error: "Пожалуйста, отправьте изображение" };
+        }
+        break;
     }
 
     return { isValid: true };
@@ -419,7 +471,7 @@ export class FormNodeHandler extends BaseNodeHandler {
       const fieldValue =
         session.variables[`form_${currentNode.nodeId}_${field.id}`];
       if (fieldValue) {
-        summary += `**${field.label}:** ${fieldValue}\n`;
+        summary += `**${field.label}:** ${field.type === 'image' ? '[Изображение сохранено]' : fieldValue}\n`;
       }
     }
 
