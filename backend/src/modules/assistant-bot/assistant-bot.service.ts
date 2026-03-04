@@ -131,12 +131,11 @@ export class AssistantBotService implements OnModuleInit {
     } else {
       this.logger.log(`ℹ️ Неизвестная команда: ${text}`);
       
-      let helpMessage = `Я не понимаю эту команду. 🤔
-      
-        📋 Ваш Telegram ID: \`${telegramId}\`\n\n`;
+      let helpMessage = `Я не понимаю эту команду. 🤔\n\n` +
+        `📋 Ваш Telegram ID: \`${telegramId}\`\n\n`;
       
       if (this.adminTelegramService.canManageAdmins(telegramId)) {
-        helpMessage += `\n\n🛠 **Админ-панель:**\n• /admin_help - Справка по командам`;
+        helpMessage += `🛠 **Админ-панель:**\n• \`/admin_help\` - Справка по командам`;
       }
       
       await this.sendMessage(chat.id, helpMessage, { parse_mode: "Markdown" });
@@ -184,13 +183,9 @@ export class AssistantBotService implements OnModuleInit {
     firstName: string,
     telegramId: string
   ): Promise<void> {
-    const message = `Привет, ${firstName}! 
-    
-    👋\n\nДобро пожаловать обратно в UForge! 
-    
-    Ваш аккаунт \`${telegramId}\` зарегистрирован и готов к использованию.
-    
-    🔗 Веб-интерфейс: ${this.configService.get("app.frontendUrl")}`;
+    const message = `Привет, ${firstName}! 👋\n\n` +
+      `Добро пожаловать обратно в UForge! Ваш аккаунт \`${telegramId}\` зарегистрирован и готов к использованию.\n\n` +
+      `🔗 Веб-интерфейс: ${this.configService.get("app.frontendUrl")}`;
 
     this.logger.log(`📤 Отправка приветствия пользователю ${chatId}`);
     await this.sendMessage(chatId, message, { parse_mode: "Markdown" });

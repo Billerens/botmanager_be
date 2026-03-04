@@ -28,11 +28,9 @@ export class TelegramValidationService {
     }
 
     try {
-      const message = `🔐 Код подтверждения для UForge
-      
-      Ваш код: \`${code}\`
-      
-      Код действителен 1 минуту.`;
+      const message = `🔐 Код подтверждения для UForge\n\n` +
+        `Ваш код: \`${code}\`\n\n` +
+        `Код действителен 1 минуту.`;
 
       const response = await axios.post(
         `https://api.telegram.org/bot${this.botToken}/sendMessage`,
