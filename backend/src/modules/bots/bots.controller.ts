@@ -43,6 +43,10 @@ import {
   BotEntity,
   PermissionAction,
 } from "../../database/entities/bot-user-permission.entity";
+import {
+  BotSessionResponseDto,
+  UpdateBotSessionVariablesDto,
+} from "./dto/bot-session.dto";
 
 @ApiTags("Боты")
 @Controller("bots")
@@ -303,6 +307,42 @@ export class BotsController {
       req.user.id,
       botId
     );
+  }
+
+  // ========== Эндпоинты для управления сессиями пользователей ==========
+
+  @Get(":id/sessions")
+  @ApiOperation({ summary: "Получить список сессий пользователей бота" })
+  @ApiResponse({
+    status: 200,
+    description: "Список сессий получен",
+    type: [BotSessionResponseDto],
+  })
+  @BotPermission(BotEntity.BOT_USERS, PermissionAction.READ)
+  async getSessions(@Param("id") botId: string, @Request() req) {
+    return this.botsService.findSessions(botId, req.user.id);
+  }
+
+  @Patch(":id/sessions/:userId/variables")
+  @ApiOperation({ summary: "Обновить переменные сессии пользователя" })
+  @ApiResponse({
+    status: 200,
+    description: "Переменные обновлены",
+  })
+  @BotPermission(BotEntity.BOT_USERS, PermissionAction.UPDATE)
+  async updateSessionVariables(
+    @Param("id") botId: string,
+    @Param("userId") targetUserId: string,
+    @Body() dto: UpdateBotSessionVariablesDto,
+    @Request() req
+  ) {
+    await this.botsService.updateSessionVariables(
+      botId,
+      req.user.id,
+      targetUserId,
+      dto.variables
+    );
+    return { message: "Переменные обновлены" };
   }
 
   // ========== Эндпоинты для приглашений ==========

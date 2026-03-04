@@ -26,6 +26,7 @@ import {
   ActivityLevel,
 } from "../../database/entities/activity-log.entity";
 import { PeriodicTaskService } from "./services/periodic-task.service";
+import { SessionStorageService } from "./session-storage.service";
 
 @Injectable()
 export class BotsService {
@@ -45,7 +46,77 @@ export class BotsService {
     private notificationService: NotificationService,
     private activityLogService: ActivityLogService,
     private periodicTaskService: PeriodicTaskService,
+    private sessionStorageService: SessionStorageService,
   ) {}
+
+  /**
+   * Получить список всех сессий бота с данными пользователей
+   */
+  async findSessions(botId: string, userId: string): Promise<any[]> {
+    // Проверка прав доступа (findOne бросит ошибку если не найден или нет прав)
+    await this.findOne(botId, userId);
+
+    // Получаем все активные сессии из SessionStorageService
+    const sessions = await this.sessionStorageService.getActiveSessionsForBot(botId);
+
+    // Получаем всех публичных пользователей этого бота для маппинга имен
+    // Фильтруем по ownerType = BOT и ownerId = botId
+    // В Telegram бот-движке userId в сессии — это telegramId пользователя
+    const publicUsers = await this.botRepository.manager.find("PublicUser", {
+      where: {
+        ownerType: "bot",
+        ownerId: botId,
+      },
+    });
+
+    const userMap = new Map(publicUsers.map((u: any) => [u.telegramId, u]));
+
+    return sessions.map((session) => ({
+      ...session,
+      user: userMap.get(session.userId)
+        ? {
+            id: (userMap.get(session.userId) as any).id,
+            telegramId: (userMap.get(session.userId) as any).telegramId,
+            telegramUsername: (userMap.get(session.userId) as any).telegramUsername,
+            firstName: (userMap.get(session.userId) as any).firstName,
+            lastName: (userMap.get(session.userId) as any).lastName,
+          }
+        : undefined,
+    }));
+  }
+
+  /**
+   * Обновить переменные сессии
+   */
+  async updateSessionVariables(
+    botId: string,
+    userId: string,
+    targetUserId: string,
+    variables: Record<string, any>,
+  ): Promise<void> {
+    // Проверка прав доступа
+    await this.findOne(botId, userId);
+
+    // Обновляем переменные через SessionStorageService
+    await this.sessionStorageService.updateVariables(botId, targetUserId, variables);
+
+    // Логируем действие
+    this.activityLogService
+      .create({
+        type: ActivityType.BOT_UPDATED,
+        level: ActivityLevel.INFO,
+        message: `Обновлены переменные сессии пользователя ${targetUserId} в боте ${botId}`,
+        userId,
+        botId,
+        metadata: {
+          targetUserId,
+          variables,
+        },
+      })
+      .catch((error) => {
+        this.logger.error("Ошибка логирования обновления переменных сессии:", error);
+      });
+  }
 
   async create(createBotDto: CreateBotDto, userId: string): Promise<Bot> {
     const { name, description, token } = createBotDto;

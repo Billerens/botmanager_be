@@ -1,4 +1,4 @@
-import { Injectable, Inject, Logger, OnModuleDestroy } from "@nestjs/common";
+import { Injectable, Inject, Logger, OnModuleDestroy, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { RedisService } from "../websocket/services/redis.service";
@@ -143,6 +143,32 @@ export class SessionStorageService implements OnModuleDestroy {
     } catch (error) {
       this.logger.error(`Ошибка удаления сессии ${sessionKey}:`, error);
     }
+  }
+
+  /**
+   * Обновить переменные сессии
+   */
+  async updateVariables(
+    botId: string,
+    userId: string,
+    variables: Record<string, any>
+  ): Promise<void> {
+    const sessionKey = `${botId}-${userId}`;
+    const session = await this.getSession(botId, userId);
+
+    if (!session) {
+      throw new NotFoundException(`Сессия ${sessionKey} не найдена`);
+    }
+
+    // Обновляем переменные
+    session.variables = {
+      ...session.variables,
+      ...variables,
+    };
+    session.lastActivity = new Date();
+
+    // Сохраняем (saveSession обновит и Redis, и БД если нужно)
+    await this.saveSession(session, true);
   }
 
   /**
