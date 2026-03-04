@@ -76,6 +76,8 @@ import {
   PaymentNodeHandler,
   PeriodicExecutionNodeHandler,
   PeriodicControlNodeHandler,
+  PortalInNodeHandler,
+  PortalOutNodeHandler,
 } from "./nodes";
 import { AiModelSelectorService } from "./services/ai-model-selector.service";
 import { StreamingResponseService } from "./services/streaming-response.service";
@@ -176,6 +178,8 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
     PaymentNodeHandler,
     PeriodicExecutionNodeHandler,
     PeriodicControlNodeHandler,
+    PortalInNodeHandler,
+    PortalOutNodeHandler,
     PeriodicTaskService,
     PeriodicTasksProcessor,
     AiModelSelectorService,

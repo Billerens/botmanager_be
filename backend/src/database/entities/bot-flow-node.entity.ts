@@ -44,6 +44,9 @@ export enum NodeType {
   // Периодические задачи
   PERIODIC_EXECUTION = "periodic_execution",
   PERIODIC_CONTROL = "periodic_control",
+  // Порталы
+  PORTAL_IN = "portal_in",
+  PORTAL_OUT = "portal_out",
 }
 
 export enum MessageNodeType {
@@ -420,6 +423,11 @@ export class BotFlowNode {
       saveStatusVariable?: string; // Переменная для сохранения статуса
     };
 
+    // Для PORTAL_IN нод
+    portalIn?: {
+      targetNodeId: string; // ID Portal Out узла (nodeId из React Flow)
+    };
+
     // Общие настройки
     nextNodeId?: string; // ID следующей ноды
     errorNodeId?: string; // ID ноды при ошибке
@@ -513,5 +521,13 @@ export class BotFlowNode {
 
   get isPeriodicControl(): boolean {
     return this.type === NodeType.PERIODIC_CONTROL;
+  }
+
+  get isPortalIn(): boolean {
+    return this.type === NodeType.PORTAL_IN;
+  }
+
+  get isPortalOut(): boolean {
+    return this.type === NodeType.PORTAL_OUT;
   }
 }

@@ -52,6 +52,8 @@ import {
   PaymentNodeHandler,
   PeriodicExecutionNodeHandler,
   PeriodicControlNodeHandler,
+  PortalInNodeHandler,
+  PortalOutNodeHandler,
 } from "./nodes";
 import { GroupSessionService } from "./group-session.service";
 import { CustomPagesBotService } from "../custom-pages/services/custom-pages-bot.service";
@@ -139,6 +141,9 @@ export class FlowExecutionService implements OnModuleInit {
     // Periodic handlers
     private readonly periodicExecutionNodeHandler: PeriodicExecutionNodeHandler,
     private readonly periodicControlNodeHandler: PeriodicControlNodeHandler,
+    // Portals
+    private readonly portalInNodeHandler: PortalInNodeHandler,
+    private readonly portalOutNodeHandler: PortalOutNodeHandler,
     private readonly periodicTaskService: PeriodicTaskService,
   ) {
     // Регистрируем все обработчики
@@ -245,6 +250,16 @@ export class FlowExecutionService implements OnModuleInit {
       this.periodicControlNodeHandler,
     );
 
+    // Portals
+    this.nodeHandlerService.registerHandler(
+      "portal_in",
+      this.portalInNodeHandler,
+    );
+    this.nodeHandlerService.registerHandler(
+      "portal_out",
+      this.portalOutNodeHandler,
+    );
+
     // Устанавливаем callback для всех обработчиков
     const handlers = [
       this.startNodeHandler,
@@ -275,6 +290,8 @@ export class FlowExecutionService implements OnModuleInit {
       this.paymentNodeHandler,
       this.periodicExecutionNodeHandler,
       this.periodicControlNodeHandler,
+      this.portalInNodeHandler,
+      this.portalOutNodeHandler,
     ];
 
     handlers.forEach((handler) => {

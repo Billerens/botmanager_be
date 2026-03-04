@@ -38,3 +38,7 @@ export * from "./payment-node.handler";
 // Periodic handlers
 export * from "./periodic-execution-node.handler";
 export * from "./periodic-control-node.handler";
+
+// Portals
+export * from "./portal-in-node.handler";
+export * from "./portal-out-node.handler";
