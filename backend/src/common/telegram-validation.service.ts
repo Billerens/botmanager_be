@@ -28,14 +28,18 @@ export class TelegramValidationService {
     }
 
     try {
-      const message = `🔐 Код подтверждения для UForge\n\nВаш код: <b>${code}</b>\n\nКод действителен 1 минуту.`;
+      const message = `🔐 Код подтверждения для UForge
+      
+      Ваш код: \`${code}\`
+      
+      Код действителен 1 минуту.`;
 
       const response = await axios.post(
         `https://api.telegram.org/bot${this.botToken}/sendMessage`,
         {
           chat_id: telegramId,
           text: message,
-          parse_mode: "HTML",
+          parse_mode: "Markdown",
         }
       );
 

@@ -130,14 +130,16 @@ export class AssistantBotService implements OnModuleInit {
       await this.handleAdminCommand(text, telegramId, chat.id, from);
     } else {
       this.logger.log(`ℹ️ Неизвестная команда: ${text}`);
-      // Показываем справку по доступным командам
+      
+      let helpMessage = `Я не понимаю эту команду. 🤔
+      
+        📋 Ваш Telegram ID: \`${telegramId}\`\n\n`;
+      
       if (this.adminTelegramService.canManageAdmins(telegramId)) {
-        await this.sendMessage(
-          chat.id,
-          `Доступные команды:\n• /start - Начать работу\n• /admin_help - Справка по управлению админами`,
-          { parse_mode: "Markdown" }
-        );
+        helpMessage += `\n\n🛠 **Админ-панель:**\n• /admin_help - Справка по командам`;
       }
+      
+      await this.sendMessage(chat.id, helpMessage, { parse_mode: "Markdown" });
     }
   }
 
@@ -157,7 +159,7 @@ export class AssistantBotService implements OnModuleInit {
       if (existingUser) {
         // Пользователь уже зарегистрирован
         this.logger.log(`✅ Пользователь найден: ${existingUser.id}`);
-        await this.sendWelcomeBackMessage(chat.id, from.first_name);
+        await this.sendWelcomeBackMessage(chat.id, from.first_name, telegramId);
       } else {
         // Новый пользователь - автоматически регистрируем его
         this.logger.log(`📝 Новый пользователь, автоматическая регистрация`);
@@ -179,12 +181,19 @@ export class AssistantBotService implements OnModuleInit {
 
   private async sendWelcomeBackMessage(
     chatId: number,
-    firstName: string
+    firstName: string,
+    telegramId: string
   ): Promise<void> {
-    const message = `Привет, ${firstName}! 👋\n\nДобро пожаловать обратно в UForge! Ваш аккаунт зарегистрирован и готов к использованию.\n\n🔗 Веб-интерфейс: ${this.configService.get("app.frontendUrl")}\n\n💡 Используйте свои учетные данные для входа или авторизуйтесь через Telegram.`;
+    const message = `Привет, ${firstName}! 
+    
+    👋\n\nДобро пожаловать обратно в UForge! 
+    
+    Ваш аккаунт \`${telegramId}\` зарегистрирован и готов к использованию.
+    
+    🔗 Веб-интерфейс: ${this.configService.get("app.frontendUrl")}`;
 
     this.logger.log(`📤 Отправка приветствия пользователю ${chatId}`);
-    await this.sendMessage(chatId, message);
+    await this.sendMessage(chatId, message, { parse_mode: "Markdown" });
   }
 
   private async autoRegisterUser(
