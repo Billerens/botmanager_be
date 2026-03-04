@@ -671,6 +671,10 @@ export class CustomDataService {
     if (hardDelete) {
       await this.dataRepo.delete(record.id);
     } else {
+      // При мягком удалении переименовываем ключ, чтобы освободить оригинальный
+      // для создания новых записей (unique index conflict fix)
+      const timestamp = Date.now();
+      record.key = `${record.key}_deleted_${timestamp}`;
       record.isDeleted = true;
       record.deletedAt = new Date();
       await this.dataRepo.save(record);
@@ -696,19 +700,26 @@ export class CustomDataService {
       });
       return { deleted: result.affected || 0 };
     } else {
-      const result = await this.dataRepo.update(
-        {
+      // Для массового удаления также переименовываем ключи
+      const records = await this.dataRepo.find({
+        where: {
           ownerId,
           ownerType,
           collection: collectionName,
           key: In(keys),
+          isDeleted: false,
         },
-        {
-          isDeleted: true,
-          deletedAt: new Date(),
-        },
-      );
-      return { deleted: result.affected || 0 };
+      });
+
+      const timestamp = Date.now();
+      for (const record of records) {
+        record.key = `${record.key}_deleted_${timestamp}`;
+        record.isDeleted = true;
+        record.deletedAt = new Date();
+      }
+
+      await this.dataRepo.save(records);
+      return { deleted: records.length };
     }
   }
 
