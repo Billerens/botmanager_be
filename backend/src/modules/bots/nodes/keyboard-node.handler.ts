@@ -337,7 +337,12 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       const pressedButtonData = message.callback_query.data;
 
       const buttonIndex = processedFlatButtons.findIndex(
-        (button) => button.callbackData === pressedButtonData
+        (button) =>
+          button.callbackData === pressedButtonData ||
+          (!button.callbackData &&
+            !button.url &&
+            !button.webApp &&
+            button.text === pressedButtonData),
       );
 
       // Очищаем callback_query и text из сообщения перед переходом к следующему узлу
