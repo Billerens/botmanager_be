@@ -170,6 +170,15 @@ export class BotFlowNode {
       }>;
       submitText: string;
       successMessage: string;
+      resetOnEntry?: boolean;
+      validation?: {
+        // This is a placeholder for FormValidation type
+        // You might need to define FormValidation type elsewhere
+        // For example:
+        // minFields?: number;
+        // maxFields?: number;
+        // customValidationScript?: string;
+      };
     };
 
     // Для DELAY нод

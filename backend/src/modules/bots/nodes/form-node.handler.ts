@@ -48,12 +48,54 @@ export class FormNodeHandler extends BaseNodeHandler {
     const isFormCompleted =
       session.variables[`form_${currentNode.nodeId}_completed`] === "true";
 
+    // Если узел был достигнут через переход от другого узла
+    if (context.reachedThroughTransition) {
+      if (formData.resetOnEntry) {
+        this.logger.log(`Сброс состояния формы ${currentNode.nodeId} при входе`);
+        this.resetFormState(context);
+        await this.showCurrentField(context, 0);
+      } else {
+        this.logger.log(
+          `Форма ${currentNode.nodeId} достигнута через переход. Показываем текущее состояние.`
+        );
+        if (isFormCompleted) {
+          await this.showFormCompletion(context);
+        } else {
+          await this.showCurrentField(context, currentFieldIndex);
+        }
+      }
+      return;
+    }
+
+    // Проверяем корректность индекса
+    if (currentFieldIndex >= formFields.length && !isFormCompleted) {
+      this.logger.warn(
+        `Индекс поля ${currentFieldIndex} >= количества полей ${formFields.length}. Принудительно завершаем форму.`
+      );
+      session.variables[`form_${currentNode.nodeId}_completed`] = "true";
+      await this.showFormCompletion(context);
+      return;
+    }
+
+    // Проверяем завершение формы ДО обработки ввода
+    if (isFormCompleted) {
+      this.logger.log(
+        `Форма ${currentNode.nodeId} уже завершена, обрабатываем как сабмит или переход`
+      );
+      if (message.is_callback && message.callback_query?.data === `form_submit_${currentNode.nodeId}`) {
+        await this.handleFormSubmit(context, currentFieldIndex, true);
+      } else {
+        await this.moveToNextNode(context, currentNode.nodeId);
+      }
+      return;
+    }
+
     // Если это callback от кнопки отправки формы
     if (
       message.is_callback &&
       message.callback_query?.data === `form_submit_${currentNode.nodeId}`
     ) {
-      await this.handleFormSubmit(context, currentFieldIndex, isFormCompleted);
+      await this.handleFormSubmit(context, currentFieldIndex, false);
       return;
     }
 
@@ -87,7 +129,14 @@ export class FormNodeHandler extends BaseNodeHandler {
     const currentField = formFields[currentFieldIndex];
 
     if (!currentField) {
-      this.logger.warn(`Поле с индексом ${currentFieldIndex} не найдено`);
+      this.logger.warn(
+        `Поле с индексом ${currentFieldIndex} не найдено. Пытаемся завершить или перейти.`
+      );
+      if (currentFieldIndex >= formFields.length) {
+        await this.showFormCompletion(context);
+      } else {
+        await this.moveToNextNode(context, currentNode.nodeId);
+      }
       return;
     }
 
@@ -160,7 +209,10 @@ export class FormNodeHandler extends BaseNodeHandler {
     const currentField = formFields[currentFieldIndex];
 
     if (!currentField) {
-      this.logger.warn(`Поле с индексом ${currentFieldIndex} не найдено`);
+      this.logger.warn(
+        `Поле с индексом ${currentFieldIndex} не найдено при обработке ввода. Переходим к завершению.`
+      );
+      await this.showFormCompletion(context);
       return;
     }
 
@@ -392,6 +444,26 @@ export class FormNodeHandler extends BaseNodeHandler {
     } else {
       // Показываем текущее поле для заполнения
       await this.showCurrentField(context, currentFieldIndex);
+    }
+  }
+
+  /**
+   * Сбрасывает состояние формы в сессии
+   */
+  private resetFormState(context: FlowContext): void {
+    const { currentNode, session } = context;
+    const formData = currentNode.data.form;
+    const formFields = formData.fields || [];
+
+    // Сбрасываем индекс и флаг завершения
+    session.variables[`form_${currentNode.nodeId}_current_field`] = "0";
+    session.variables[`form_${currentNode.nodeId}_total_fields`] =
+      formFields.length.toString();
+    session.variables[`form_${currentNode.nodeId}_completed`] = "false";
+
+    // Очищаем ответы
+    for (const field of formFields) {
+      delete session.variables[`form_${currentNode.nodeId}_${field.id}`];
     }
   }
 }
