@@ -60,9 +60,10 @@ export class AuthService {
     let allowedIds: string[] = [];
 
     try {
-      const dbValue = await this.systemSettingsService.get<string[]>("allowed_users");
+      const dbValue = await this.systemSettingsService.get<any[]>("allowed_users");
+      this.logger.debug(`Allowed users from DB: ${JSON.stringify(dbValue)}`);
       if (dbValue && Array.isArray(dbValue) && dbValue.length > 0) {
-        allowedIds = dbValue.map((id) => id.trim()).filter((id) => id.length > 0);
+        allowedIds = dbValue.map((id) => String(id).trim()).filter((id) => id.length > 0);
       }
     } catch (error) {
       this.logger.warn(`Не удалось получить allowed_users из БД: ${error.message}`);
@@ -80,6 +81,7 @@ export class AuthService {
           .map((id) => id.trim())
           .filter((id) => id.length > 0);
       }
+      this.logger.debug(`Allowed users from ENV: ${JSON.stringify(allowedIds)}`);
     }
 
     if (allowedIds.length === 0) {
@@ -87,7 +89,9 @@ export class AuthService {
       return;
     }
 
-    if (!allowedIds.includes(telegramId)) {
+    this.logger.debug(`Checking user ${telegramId} against list: ${JSON.stringify(allowedIds)}`);
+
+    if (!allowedIds.includes(String(telegramId))) {
       this.logger.warn(
         `Попытка доступа пользователя ${telegramId}, который не в списке разрешенных`
       );
