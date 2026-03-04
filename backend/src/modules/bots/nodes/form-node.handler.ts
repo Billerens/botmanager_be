@@ -168,7 +168,7 @@ export class FormNodeHandler extends BaseNodeHandler {
     );
 
     // Формируем сообщение для текущего поля
-    let fieldMessage = `📝 **${currentField.label}**`;
+    let fieldMessage = `📝 *${currentField.label}:*`;
 
     if (currentField.required) {
       fieldMessage += " * (обязательное)";
@@ -219,9 +219,11 @@ export class FormNodeHandler extends BaseNodeHandler {
       session.variables[`form_${currentNode.nodeId}_total_fields`] || "0"
     );
     const progress = `${currentFieldIndex + 1}/${totalFields}`;
-    fieldMessage += `\n\n📊 Прогресс: ${progress}`;
+    fieldMessage += `\n\n📊 *Прогресс:* ${progress}`;
 
-    await this.sendAndSaveMessage(bot, session.chatId, fieldMessage);
+    await this.sendAndSaveMessage(bot, session.chatId, fieldMessage, {
+      parse_mode: "Markdown",
+    });
   }
 
   private async handleFieldInput(
@@ -465,18 +467,20 @@ export class FormNodeHandler extends BaseNodeHandler {
     await this.sendAndSaveMessage(bot, session.chatId, successMessage);
 
     // Показываем сводку заполненных данных
-    const summaryMessage = "📋 **Заполненные данные:**\n\n";
+    const summaryMessage = "📋 *Заполненные данные:*\n\n";
     let summary = summaryMessage;
 
     for (const field of formData.fields) {
       const fieldValue =
         session.variables[`form_${currentNode.nodeId}_${field.id}`];
       if (fieldValue) {
-        summary += `**${field.label}:** ${field.type === 'image' ? '[Изображение сохранено]' : fieldValue}\n`;
+        summary += `*${field.label}:* ${field.type === 'image' ? '[Изображение сохранено]' : fieldValue}\n`;
       }
     }
 
-    await this.sendAndSaveMessage(bot, session.chatId, summary);
+    await this.sendAndSaveMessage(bot, session.chatId, summary, {
+      parse_mode: "Markdown",
+    });
 
     // Переходим к следующему узлу
     await this.moveToNextNode(context, currentNode.nodeId);

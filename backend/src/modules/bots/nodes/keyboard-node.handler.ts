@@ -413,6 +413,13 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
 
       // Отправляем клавиатуру и ждем выбора пользователя
 
+      // Игнорируем некорректный текстовый ввод для inline-клавиатур, чтобы избежать дублирования
+      // Если узел уже активен (context.reachedThroughTransition = false), ожидаем callback
+      if (isInline && !context.reachedThroughTransition && message.text) {
+        this.logger.log(`Игнорируем некорректный текстовый ввод для клавиатуры ${currentNode.nodeId}`);
+        return;
+      }
+
       // Отправляем сообщение и сохраняем message_id
       const telegramResponse = await this.sendMessageWithKeyboard(
         bot,
