@@ -10,6 +10,7 @@ import { UserSession } from "../../database/entities/user-session.entity";
 import { SessionStorageService } from "./session-storage.service";
 import { CustomLoggerService } from "../../common/logger.service";
 import { RedisService } from "../websocket/services/redis.service";
+import { SystemSettingsService } from "../system-settings/system-settings.service";
 
 export const GROUP_LIMITS = {
   MAX_PARTICIPANTS_PER_GROUP: 10000,
@@ -29,8 +30,17 @@ export class GroupSessionService {
     private readonly userSessionRepository: Repository<UserSession>,
     private readonly sessionStorageService: SessionStorageService,
     private readonly customLogger: CustomLoggerService,
-    private readonly redisService: RedisService
+    private readonly redisService: RedisService,
+    private readonly systemSettingsService: SystemSettingsService,
   ) {}
+
+  /**
+   * Получить текущий лимит активных групп на бота
+   */
+  private async getMaxActiveGroupsPerBot(): Promise<number> {
+    const val = await this.systemSettingsService.get<number>("max_active_groups_per_bot");
+    return val ?? GROUP_LIMITS.MAX_ACTIVE_GROUPS_PER_BOT;
+  }
 
   /**
    * Создать новую групповую сессию
@@ -43,9 +53,10 @@ export class GroupSessionService {
   ): Promise<GroupSession> {
     // Проверяем лимит активных групп для бота
     const activeCount = await this.countActiveGroups(botId);
-    if (activeCount >= GROUP_LIMITS.MAX_ACTIVE_GROUPS_PER_BOT) {
+    const maxGroups = await this.getMaxActiveGroupsPerBot();
+    if (activeCount >= maxGroups) {
       throw new Error(
-        `Достигнут лимит активных групп для бота (${GROUP_LIMITS.MAX_ACTIVE_GROUPS_PER_BOT})`
+        `Достигнут лимит активных групп для бота (${maxGroups})`
       );
     }
 

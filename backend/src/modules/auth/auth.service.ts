@@ -29,6 +29,7 @@ import {
 } from "./dto/auth.dto";
 import { JwtPayload } from "./interfaces/jwt-payload.interface";
 import { TelegramValidationService } from "../../common/telegram-validation.service";
+import { SystemSettingsService } from "../system-settings/system-settings.service";
 import {
   VerificationRequiredResponseDto,
   TwoFactorRequiredResponseDto,
@@ -46,28 +47,40 @@ export class AuthService {
     private telegramValidationService: TelegramValidationService,
     private twoFactorService: TwoFactorService,
     private activityLogService: ActivityLogService,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private systemSettingsService: SystemSettingsService,
   ) {}
 
   /**
    * Проверяет, разрешен ли пользователь для регистрации/входа
    * Если ALLOWED_USERS не задан, проверка не выполняется (разрешены все)
    */
-  private checkAllowedUser(telegramId: string): void {
-    // Используем process.env напрямую, так как переменная может быть не определена в конфигурационных файлах
-    const allowedUsers =
-      process.env.ALLOWED_USERS ||
-      this.configService.get<string>("ALLOWED_USERS");
+  private async checkAllowedUser(telegramId: string): Promise<void> {
+    // Сначала пытаемся получить из БД (SystemSettings)
+    let allowedIds: string[] = [];
 
-    if (!allowedUsers) {
-      // Если переменная не задана, разрешаем всем
-      return;
+    try {
+      const dbValue = await this.systemSettingsService.get<string[]>("allowed_users");
+      if (dbValue && Array.isArray(dbValue) && dbValue.length > 0) {
+        allowedIds = dbValue.map((id) => id.trim()).filter((id) => id.length > 0);
+      }
+    } catch (error) {
+      this.logger.warn(`Не удалось получить allowed_users из БД: ${error.message}`);
     }
 
-    const allowedIds = allowedUsers
-      .split(",")
-      .map((id) => id.trim())
-      .filter((id) => id.length > 0);
+    // Fallback на переменную окружения, если из БД не получено
+    if (allowedIds.length === 0) {
+      const allowedUsers =
+        process.env.ALLOWED_USERS ||
+        this.configService.get<string>("ALLOWED_USERS");
+
+      if (allowedUsers) {
+        allowedIds = allowedUsers
+          .split(",")
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0);
+      }
+    }
 
     if (allowedIds.length === 0) {
       // Если список пустой, разрешаем всем
@@ -95,7 +108,7 @@ export class AuthService {
     this.logger.log(`Telegram ID: ${telegramId}`);
 
     // Проверяем, разрешен ли пользователь для регистрации
-    this.checkAllowedUser(telegramId);
+    await this.checkAllowedUser(telegramId);
     this.logger.log(`Telegram Username: ${telegramUsername || "не указан"}`);
     this.logger.log(`Имя: ${firstName} ${lastName}`);
 
@@ -217,7 +230,7 @@ export class AuthService {
     const { telegramId, password } = loginDto;
 
     // Проверяем, разрешен ли пользователь для входа
-    this.checkAllowedUser(telegramId);
+    await this.checkAllowedUser(telegramId);
 
     // Находим пользователя
     const user = await this.userRepository.findOne({ where: { telegramId } });

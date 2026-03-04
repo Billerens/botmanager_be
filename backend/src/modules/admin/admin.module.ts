@@ -61,6 +61,7 @@ import { AdminFlowTemplatesController } from "./controllers/admin-flow-templates
 import { AdminFlowTemplateCategoriesController } from "./controllers/admin-flow-template-categories.controller";
 import { FlowTemplatesModule } from "../flow-templates/flow-templates.module";
 import { AdminStylePresetsController } from "./controllers/admin-style-presets.controller";
+import { AdminSettingsController } from "./controllers/admin-settings.controller";
 import { StylePresetsModule } from "../style-presets/style-presets.module";
 
 @Module({
@@ -118,6 +119,7 @@ import { StylePresetsModule } from "../style-presets/style-presets.module";
     AdminFlowTemplatesController,
     AdminFlowTemplateCategoriesController,
     AdminStylePresetsController,
+    AdminSettingsController,
   ],
   providers: [
     AdminAuthService,

@@ -46,6 +46,7 @@ import { DomainResolverModule } from "./modules/domain-resolver/domain-resolver.
 import { CustomDataModule } from "./modules/custom-data/custom-data.module";
 import { FlowTemplatesModule } from "./modules/flow-templates/flow-templates.module";
 import { StylePresetsModule } from "./modules/style-presets/style-presets.module";
+import { SystemSettingsModule } from "./modules/system-settings/system-settings.module";
 
 @Module({
   imports: [
@@ -121,6 +122,7 @@ import { StylePresetsModule } from "./modules/style-presets/style-presets.module
     CustomDataModule, // Кастомная БД пользователей
     FlowTemplatesModule, // Галерея шаблонов flow
     StylePresetsModule,  // Галерея пресетов CSS
+    SystemSettingsModule, // Системные настройки (из БД)
   ],
 })
 export class AppModule {}
