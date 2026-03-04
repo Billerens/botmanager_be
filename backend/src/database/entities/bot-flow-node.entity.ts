@@ -172,6 +172,9 @@ export class BotFlowNode {
       submitText: string;
       successMessage: string;
       resetOnEntry?: boolean;
+      isInterruptible?: boolean;
+      interruptCommand?: string;
+      interruptSuccessMessage?: string;
       validation?: {
         // This is a placeholder for FormValidation type
         // You might need to define FormValidation type elsewhere

@@ -122,6 +122,15 @@ export class FormNodeHandler extends BaseNodeHandler {
       return;
     }
 
+    // Обработка кнопки "Пропустить" для опциональных полей
+    if (
+      message.is_callback &&
+      message.callback_query?.data === `form_skip_${currentNode.nodeId}`
+    ) {
+      await this.handleFieldSkip(context, currentFieldIndex);
+      return;
+    }
+
     // Если это текстовое сообщение или медиа (ответ пользователя на поле)
     if (!message.is_callback && (message.text || message.photo || message.document || message.video || message.audio || message.voice)) {
       await this.handleFieldInput(context, currentFieldIndex);
@@ -214,6 +223,10 @@ export class FormNodeHandler extends BaseNodeHandler {
         break;
     }
 
+    if (formData.isInterruptible && formData.interruptCommand) {
+      fieldMessage += `\n\nЧтобы прервать заполнение формы и удалить указанные данные, отправьте команду: ${formData.interruptCommand}`;
+    }
+
     // Показываем прогресс заполнения
     const totalFields = parseInt(
       session.variables[`form_${currentNode.nodeId}_total_fields`] || "0"
@@ -221,8 +234,16 @@ export class FormNodeHandler extends BaseNodeHandler {
     const progress = `${currentFieldIndex + 1}/${totalFields}`;
     fieldMessage += `\n\n📊 *Прогресс:* ${progress}`;
 
+    const replyMarkup: any = {};
+    if (!currentField.required) {
+      replyMarkup.inline_keyboard = [
+        [{ text: "Пропустить ⏭", callback_data: `form_skip_${currentNode.nodeId}` }]
+      ];
+    }
+
     await this.sendAndSaveMessage(bot, session.chatId, fieldMessage, {
       parse_mode: "Markdown",
+      reply_markup: replyMarkup.inline_keyboard ? replyMarkup : undefined,
     });
   }
 
@@ -267,6 +288,29 @@ export class FormNodeHandler extends BaseNodeHandler {
       `Пользователь ввел: "${currentField.type === "image" ? "[IMAGE]" : userInput}" для поля ${currentField.label}`
     );
 
+    // Обработка прерывания формы
+    if (
+      formData.isInterruptible &&
+      formData.interruptCommand &&
+      userInput.toLowerCase() === formData.interruptCommand.toLowerCase()
+    ) {
+      this.logger.log(`Форма ${currentNode.nodeId} прервана пользователем командой ${formData.interruptCommand}`);
+      
+      this.resetFormState(context);
+      
+      // Отправляем сообщение об успешном прерывании (если задано) или сообщение по умолчанию
+      const interruptMsg = formData.interruptSuccessMessage || "Заполнение формы прервано.";
+      await this.sendAndSaveMessage(bot, session.chatId, interruptMsg);
+      
+      // Сбрасываем текущий узел, чтобы вернуть пользователя в обычное состояние ("переводится на end")
+      session.currentNodeId = undefined;
+      context.currentNode = undefined;
+      
+      // Помечаем ввод как поглощенный, чтобы не срабатывали глобальные обработчики команд
+      context.inputConsumed = true;
+      return;
+    }
+
     // Валидация введенных данных
     const validationResult = this.validateFieldInput(currentField, userInput, message);
 
@@ -285,6 +329,55 @@ export class FormNodeHandler extends BaseNodeHandler {
     context.inputConsumed = true;
 
     this.logger.log(`Сохранено значение поля ${currentField.id}: ${userInput}`);
+
+    // Обновляем индекс текущего поля
+    const nextFieldIndex = currentFieldIndex + 1;
+    session.variables[`form_${currentNode.nodeId}_current_field`] =
+      nextFieldIndex.toString();
+
+    // Проверяем, завершена ли форма
+    const totalFields = parseInt(
+      session.variables[`form_${currentNode.nodeId}_total_fields`] || "0"
+    );
+    if (nextFieldIndex >= totalFields) {
+      session.variables[`form_${currentNode.nodeId}_completed`] = "true";
+      this.logger.log(`=== ФОРМА ЗАВЕРШЕНА ===`);
+      await this.showFormCompletion(context);
+    } else {
+      // Показываем следующее поле
+      await this.showCurrentField(context, nextFieldIndex);
+    }
+  }
+
+  private async handleFieldSkip(
+    context: FlowContext,
+    currentFieldIndex: number
+  ): Promise<void> {
+    const { currentNode, session, message, bot } = context;
+    const formData = currentNode.data.form;
+    const formFields = formData.fields || [];
+    const currentField = formFields[currentFieldIndex];
+
+    if (!currentField) return;
+
+    // Скрываем inline клавиатуру нажатой кнопки
+    if (message.message_id) {
+      try {
+        await bot.editMessageReplyMarkup(
+          { inline_keyboard: [] },
+          { chat_id: session.chatId, message_id: message.message_id }
+        );
+      } catch (e) {
+        this.logger.error("Ошибка при скрытии клавиатуры:", e);
+      }
+    }
+
+    this.logger.log(`Пользователь пропустил опциональное поле ${currentField.id}`);
+
+    // Сохраняем пустое значение для пропущенного поля
+    const fieldVariableName = `form_${currentNode.nodeId}_${currentField.id}`;
+    session.variables[fieldVariableName] = "";
+    context.inputConsumed = true;
 
     // Обновляем индекс текущего поля
     const nextFieldIndex = currentFieldIndex + 1;
