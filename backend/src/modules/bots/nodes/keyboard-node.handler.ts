@@ -362,6 +362,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
             currentNode.nodeId,
             `button-${buttonIndex}`
           );
+          context.inputConsumed = true;
         } else {
           // Если кнопка не найдена, переходим к первому выходу
           await this.moveToNextNodeByOutput(
@@ -401,6 +402,7 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
               currentNode.nodeId,
               `button-${buttonIndex}`
             );
+            context.inputConsumed = true;
           } finally {
             // Восстанавливаем текст сообщения на случай, если он нужен для других целей
             message.text = originalText;

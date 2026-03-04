@@ -280,6 +280,7 @@ export class FormNodeHandler extends BaseNodeHandler {
     // Сохраняем данные поля в переменную сессии
     const fieldVariableName = `form_${currentNode.nodeId}_${currentField.id}`;
     session.variables[fieldVariableName] = userInput;
+    context.inputConsumed = true;
 
     this.logger.log(`Сохранено значение поля ${currentField.id}: ${userInput}`);
 

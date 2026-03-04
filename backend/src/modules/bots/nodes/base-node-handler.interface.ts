@@ -14,6 +14,8 @@ export interface FlowContext {
   // Групповой контекст
   groupSession?: any; // GroupSession entity
   isGroupContext?: boolean; // Флаг, что выполнение в контексте группы
+  // Флаг, указывающий, что ввод был обработан текущим узлом
+  inputConsumed?: boolean;
 }
 
 export interface INodeHandler {

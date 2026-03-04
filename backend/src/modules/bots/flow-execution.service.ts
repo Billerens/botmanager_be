@@ -380,87 +380,103 @@ export class FlowExecutionService implements OnModuleInit {
 
       // Определяем текущий узел
       this.logger.log(`Определяем текущий узел...`);
-      if (!session.currentNodeId) {
-        this.logger.log(`Сессия не имеет текущего узла, ищем подходящий`);
 
-        // Активируем standalone periodic_execution узлы при первом сообщении
-        await this.activateStandalonePeriodicNodes(activeFlow, session, context);
-
+      // 1. Сначала проверяем команды (всегда высший приоритет)
+      if (message.text?.startsWith("/")) {
         const resolved = await this.resolveInitialNodeByMessage(
           bot,
           message,
           activeFlow,
           session,
         );
-        if (resolved.returnEarly) {
+
+        if (resolved?.returnEarly) {
           return;
         }
-        context.currentNode = resolved.node ?? undefined;
-        if (resolved.node) {
+
+        if (resolved?.node) {
+          this.logger.log(
+            `Глобальная команда перенаправила на узел: ${resolved.node.nodeId}`,
+          );
+          context.currentNode = resolved.node;
           session.currentNodeId = resolved.node.nodeId;
+          await this.executeNode(context);
+          return;
         }
-      } else {
+      }
+
+      // 2. Если есть текущий узел, выполняем его первым
+      if (session.currentNodeId) {
         this.logger.log(`Продолжаем с текущего узла: ${session.currentNodeId}`);
-        // Продолжаем с текущего узла
+        
         context.currentNode = activeFlow.nodes.find(
           (node) => node.nodeId === session.currentNodeId,
         );
+
         if (context.currentNode) {
           this.logger.log(
             `Найден текущий узел: ${context.currentNode.nodeId}, тип: "${context.currentNode.type}"`,
           );
-          // Узел "end" означает завершение ветки — следующее сообщение обрабатываем с начала (по типу сообщения)
+
+          // Узел "end" означает завершение ветки — сбрасываем и ищем по тексту ниже
           if (context.currentNode.type === "end") {
             this.logger.log(
-              `Текущий узел — end, сбрасываем и определяем узел по сообщению`,
+              `Текущий узел — end, сбрасываем и ищем глобальный перехват`,
             );
             session.currentNodeId = undefined;
             context.currentNode = undefined;
-            const resolved = await this.resolveInitialNodeByMessage(
-              bot,
-              message,
-              activeFlow,
-              session,
-            );
-            if (resolved.returnEarly) {
+          } else {
+            // Выполняем узел
+            await this.executeNode(context);
+
+            // Если ввод был поглощен (нажата кнопка или валидный ввод в форме), выходим
+            if (context.inputConsumed) {
+              this.logger.log(`Ввод поглощен текущим узлом, завершаем обработку`);
               return;
             }
-            context.currentNode = resolved.node ?? undefined;
-            if (resolved.node) {
-              session.currentNodeId = resolved.node.nodeId;
-            }
+            
+            this.logger.log(`Ввод НЕ поглощен текущим узлом, ищем глобальный перехват`);
           }
         } else {
-          // Узел удалён или flow изменён — работаем по обычному флоу (определяем узел по сообщению)
           this.logger.warn(
-            `Текущий узел ${session.currentNodeId} не найден в flow (flow мог быть изменён). Определяем узел по сообщению.`,
+            `Текущий узел ${session.currentNodeId} не найден в flow. Сбрасываем.`,
           );
           session.currentNodeId = undefined;
-          const resolved = await this.resolveInitialNodeByMessage(
-            bot,
-            message,
-            activeFlow,
-            session,
-          );
-          if (resolved.returnEarly) {
-            return;
-          }
-          context.currentNode = resolved.node ?? undefined;
-          if (resolved.node) {
-            session.currentNodeId = resolved.node.nodeId;
-          }
         }
       }
 
-      if (!context.currentNode) {
-        this.logger.warn(
-          `Не найден узел для выполнения в flow ${activeFlow.id}`,
-        );
+      // 3. Проверяем глобальные перехваты (ключевые слова)
+      // Сюда попадаем если:
+      // - Текущего узла не было
+      // - Текущий узел был "end"
+      // - Текущий узел НЕ поглотил ввод (например, в меню ввели текст, не соответствующий кнопкам)
+      const resolvedKeyword = await this.resolveInitialNodeByMessage(
+        bot,
+        message,
+        activeFlow,
+        session,
+      );
+
+      if (resolvedKeyword?.returnEarly) {
         return;
       }
 
-      // Выполняем узел
-      await this.executeNode(context);
+      if (resolvedKeyword?.node) {
+        this.logger.log(
+          `Глобальный перехват по ключевому слову: ${resolvedKeyword.node.nodeId}`,
+        );
+        context.currentNode = resolvedKeyword.node;
+        session.currentNodeId = resolvedKeyword.node.nodeId;
+        await this.executeNode(context);
+        return;
+      }
+
+      // 4. Если ничего не сработало и это первое сообщение - активируем периодические задачи
+      if (!session.variables.lastMessageAt) {
+        await this.activateStandalonePeriodicNodes(activeFlow, session, context);
+      }
+      
+      session.variables.lastMessageAt = new Date().toISOString();
     } catch (error) {
       // Пользователь заблокировал бота — логируем и тихо завершаем,
       // не пробрасываем ошибку (webhook всё равно не сможет отправить ответ)
@@ -757,14 +773,6 @@ export class FlowExecutionService implements OnModuleInit {
     const newMessageNodes = flow.nodes.filter(
       (node) => node.type === "new_message",
     );
-
-    const executionStatus = await this.getFlowExecutionStatus(
-      flow.botId,
-      message.from.id,
-    );
-    if (executionStatus.isExecuting) {
-      return null;
-    }
 
     this.logger.log(`Найдено ${newMessageNodes.length} NEW_MESSAGE узлов`);
 

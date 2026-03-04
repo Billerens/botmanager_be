@@ -527,6 +527,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
     if (targetNode) {
       context.session.currentNodeId = nodeId;
       context.session.lastActivity = new Date();
+      context.inputConsumed = true;
 
       this.logger.log(`Переход к узлу: ${nodeId}`);
       if (this.executeNodeCallback) {
