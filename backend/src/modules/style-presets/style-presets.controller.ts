@@ -11,7 +11,7 @@ import {
   Req,
 } from "@nestjs/common";
 import { Request } from "express";
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { JwtAuthGuard, Public } from "../auth/guards/jwt-auth.guard";
 import { StylePresetsService } from "./style-presets.service";
 import { CreateStylePresetDto } from "./dto/create-style-preset.dto";
 import { UpdateStylePresetDto } from "./dto/update-style-preset.dto";
@@ -29,11 +29,13 @@ export class StylePresetsController {
 
   // ===== Галерея =====
 
+  @Public()
   @Get("gallery")
   async getGallery(@Query() query: GalleryQueryDto) {
     return this.presetsService.getGallery(query);
   }
 
+  @Public()
   @Get("gallery/:id")
   async getGalleryItem(@Param("id") id: string) {
     return this.presetsService.getGalleryItem(id);

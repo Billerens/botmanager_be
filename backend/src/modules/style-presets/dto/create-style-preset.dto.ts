@@ -18,6 +18,11 @@ export class CreateStylePresetDto {
   @IsString({ each: true })
   tags?: string[];
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  glowColor?: string;
+
   @IsString()
   cssData: string;
 

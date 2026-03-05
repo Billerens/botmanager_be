@@ -60,6 +60,9 @@ export class StylePreset {
   @Column({ default: false })
   isPlatformChoice: boolean; // Помечен админом как «Выбор платформы»
 
+  @Column({ length: 32, nullable: true })
+  glowColor: string | null; // Цвет свечения (HEX или RGBA)
+
   @Column({ nullable: true })
   rejectionReason: string; // Причина отклонения (заполняет админ)
 

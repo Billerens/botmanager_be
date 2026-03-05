@@ -21,5 +21,9 @@ export class UpdateStylePresetDto {
 
   @IsOptional()
   @IsString()
+  glowColor?: string;
+
+  @IsOptional()
+  @IsString()
   cssData?: string;
 }

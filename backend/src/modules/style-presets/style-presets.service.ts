@@ -149,6 +149,7 @@ export class StylePresetsService {
       target: dto.target,
       tags: dto.tags || [],
       cssData: dto.cssData,
+      glowColor: dto.glowColor || null,
       status: (dto.initialStatus as StylePresetStatus) || StylePresetStatus.DRAFT,
       authorId: userId,
     });
@@ -184,6 +185,7 @@ export class StylePresetsService {
     if (dto.description !== undefined) preset.description = dto.description;
     if (dto.target !== undefined) preset.target = dto.target;
     if (dto.tags !== undefined) preset.tags = dto.tags;
+    if (dto.glowColor !== undefined) preset.glowColor = dto.glowColor || null;
 
     return this.presetRepository.save(preset);
   }
@@ -335,6 +337,7 @@ export class StylePresetsService {
       target: dto.target,
       tags: dto.tags || [],
       cssData: dto.cssData,
+      glowColor: dto.glowColor || null,
       status: StylePresetStatus.PUBLISHED,
       authorId: null,
       publishedAt: new Date(),
@@ -356,6 +359,7 @@ export class StylePresetsService {
     if (dto.description !== undefined) preset.description = dto.description;
     if (dto.target !== undefined) preset.target = dto.target;
     if (dto.tags !== undefined) preset.tags = dto.tags;
+    if (dto.glowColor !== undefined) preset.glowColor = dto.glowColor || null;
 
     return this.presetRepository.save(preset);
   }
@@ -402,6 +406,7 @@ export class StylePresetsService {
       target: saved.target,
       tags: saved.tags,
       cssData: saved.cssData,
+      glowColor: saved.glowColor,
       status: StylePresetStatus.PUBLISHED,
       isPlatformChoice: saved.isPlatformChoice,
       authorId: null, // системный — не привязан к пользователю
@@ -598,6 +603,7 @@ export class StylePresetsService {
       target: preset.target,
       tags: preset.tags,
       isPlatformChoice: preset.isPlatformChoice,
+      glowColor: preset.glowColor,
       usageCount: preset.usageCount,
       authorName,
       publishedAt: preset.publishedAt,
