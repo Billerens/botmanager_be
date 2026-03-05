@@ -361,6 +361,38 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Получает ключи по паттерну
+   */
+  async getKeys(pattern: string): Promise<string[]> {
+    if (!this.isConnected || !this.publisher) {
+      return [];
+    }
+
+    try {
+      return await this.publisher.keys(pattern);
+    } catch (error) {
+      this.logger.error(`Ошибка получения ключей: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Получает несколько значений по списку ключей
+   */
+  async mget(keys: string[]): Promise<(string | null)[]> {
+    if (!this.isConnected || !this.publisher || keys.length === 0) {
+      return [];
+    }
+
+    try {
+      return await this.publisher.mGet(keys);
+    } catch (error) {
+      this.logger.error(`Ошибка mget: ${error.message}`);
+      return keys.map(() => null);
+    }
+  }
+
+  /**
    * Получить значение по ключу
    */
   async get(key: string): Promise<string | null> {

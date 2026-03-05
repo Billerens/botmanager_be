@@ -1,4 +1,5 @@
 import { Injectable, Inject, Logger, OnModuleDestroy, NotFoundException } from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { RedisService } from "../websocket/services/redis.service";
@@ -29,14 +30,15 @@ export interface UserSessionData {
     joinedAt?: Date;
     participantVariables?: Record<string, any>;
   };
+  lastSavedToDb?: Date;
 }
 
 @Injectable()
 export class SessionStorageService implements OnModuleDestroy {
   private readonly logger = new Logger(SessionStorageService.name);
 
-  // TTL в секундах (1 год = 365 * 24 * 60 * 60)
-  private readonly SESSION_TTL = 365 * 24 * 60 * 60;
+  // TTL в секундах (2 часа)
+  private readonly SESSION_TTL = 2 * 60 * 60;
 
   constructor(
     @InjectRepository(UserSession)
@@ -111,6 +113,7 @@ export class SessionStorageService implements OnModuleDestroy {
       // Сохраняем в БД по необходимости
       if (persistToDb || this.shouldPersistToDb(sessionData)) {
         await this.saveToDb(sessionKey, sessionData);
+        sessionData.lastSavedToDb = new Date();
       }
 
       this.logger.debug(`Сессия ${sessionKey} сохранена`);
@@ -172,7 +175,7 @@ export class SessionStorageService implements OnModuleDestroy {
   }
 
   /**
-   * Очистить старые сессии
+   * Очистить старые сессии (отмечает в БД как EXPIRED)
    */
   async cleanupExpiredSessions(): Promise<void> {
     try {
@@ -196,20 +199,150 @@ export class SessionStorageService implements OnModuleDestroy {
   }
 
   /**
+   * Фоновая задача для архивации неактивных сессий из Redis в PostgreSQL.
+   * Вызывается кроном раз в 10 минут, например в другом модуле или через @Cron здесь.
+   * Будем архивировать сессии, которые не обновлялись больше 1 часа (половина TTL).
+   */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async archiveInactiveSessions(): Promise<void> {
+    try {
+      this.logger.verbose("Начинается архивация неактивных сессий из Redis...");
+      let archivedCount = 0;
+
+      // Получаем все ключи сессий
+      const redisKeys = await this.redisService.getKeys("session:*");
+      if (!redisKeys || redisKeys.length === 0) {
+        return;
+      }
+
+      // Получаем все значения
+      const redisValues = await this.redisService.mget(redisKeys);
+      const nowMs = Date.now();
+      
+      // Порог архивации: сессия старше 1 часа (3600 сек)
+      const ARCHIVE_THRESHOLD_MS = 60 * 60 * 1000;
+
+      for (let i = 0; i < redisKeys.length; i++) {
+        const val = redisValues[i];
+        if (val) {
+          try {
+            const sessionData = JSON.parse(val) as UserSessionData;
+            
+            // Восстанавливаем даты для корректного сравнения
+            const lastActivityDate = sessionData.lastActivity 
+              ? new Date(sessionData.lastActivity) 
+              : new Date();
+              
+            const lastSavedToDbDate = sessionData.lastSavedToDb
+              ? new Date(sessionData.lastSavedToDb)
+              : new Date(0); // Означает "никогда не сохранялась"
+
+            const timeSinceLastActivity = nowMs - lastActivityDate.getTime();
+            
+            // Если сессия неактивна больше часа И после последней активности она еще не была сохранена в БД
+            if (
+              timeSinceLastActivity > ARCHIVE_THRESHOLD_MS && 
+              lastSavedToDbDate.getTime() < lastActivityDate.getTime()
+            ) {
+              const sessionKey = `${sessionData.botId}-${sessionData.userId}`;
+              
+              // Переназначаем в формат Date те поля, которые нужны для saveToDb
+              sessionData.lastActivity = lastActivityDate;
+              if (sessionData.locationRequest?.timestamp) {
+                sessionData.locationRequest.timestamp = new Date(sessionData.locationRequest.timestamp);
+              }
+              if (sessionData.lobbyData?.joinedAt) {
+                sessionData.lobbyData.joinedAt = new Date(sessionData.lobbyData.joinedAt);
+              }
+
+              await this.saveToDb(sessionKey, sessionData);
+              sessionData.lastSavedToDb = new Date();
+              
+              // Обновляем Redis, чтобы зафиксировать lastSavedToDb (TTL не сбрасываем, т.к. это архивация)
+              const serialized = JSON.stringify(sessionData);
+              // Получаем оставшийся TTL из ключа, если нужно сохранить, либо заново ставим стандартный
+              // В данном случае просто перезаписываем со стандартным TTL, т.к. он всё равно скоро вытеснится
+              await this.redisService.set(redisKeys[i], serialized, { EX: this.SESSION_TTL });
+
+              archivedCount++;
+            }
+          } catch (e) {
+            this.logger.error(`Ошибка архивации сессии ${redisKeys[i]}: ${e.message}`);
+          }
+        }
+      }
+
+      if (archivedCount > 0) {
+        this.logger.log(`Успешно архивировано в БД ${archivedCount} неактивных сессий из Redis`);
+      }
+    } catch (error) {
+      this.logger.error("Ошибка при выполнении задачи архивации сессий:", error);
+    }
+  }
+
+  /**
    * Получить все активные сессии для бота
    */
   async getActiveSessionsForBot(botId: string): Promise<UserSessionData[]> {
     try {
-      // Получаем сессии из БД (Redis может содержать не все)
+      const mergedSessions = new Map<string, UserSessionData>();
+
+      // 1. Получаем сессии из БД (как базовый слой, так как Redis может очищаться)
       const dbSessions = await this.sessionRepository.find({
         where: {
           botId,
           status: SessionStatus.ACTIVE,
         },
-        order: { lastActivity: "DESC" },
       });
 
-      return dbSessions.map((session) => this.entityToData(session));
+      for (const dbSession of dbSessions) {
+        const sessionData = this.entityToData(dbSession);
+        const key = `${sessionData.botId}-${sessionData.userId}`;
+        mergedSessions.set(key, sessionData);
+      }
+
+      // 2. Получаем актуальные сессии из Redis и перетираем ими данные из БД
+      const redisPattern = `session:${botId}-*`;
+      const redisKeys = await this.redisService.getKeys(redisPattern);
+
+      if (redisKeys && redisKeys.length > 0) {
+        const redisValues = await this.redisService.mget(redisKeys);
+
+        for (let i = 0; i < redisKeys.length; i++) {
+          const val = redisValues[i];
+          if (val) {
+            try {
+              const session = JSON.parse(val) as UserSessionData;
+
+              // Восстанавливаем объекты Date
+              if (session.lastActivity) {
+                session.lastActivity = new Date(session.lastActivity);
+              }
+              if (session.locationRequest?.timestamp) {
+                session.locationRequest.timestamp = new Date(session.locationRequest.timestamp);
+              }
+              if (session.lobbyData?.joinedAt) {
+                session.lobbyData.joinedAt = new Date(session.lobbyData.joinedAt);
+              }
+              if (session.lastSavedToDb) {
+                session.lastSavedToDb = new Date(session.lastSavedToDb);
+              }
+
+              const key = `${session.botId}-${session.userId}`;
+              mergedSessions.set(key, session);
+            } catch (e) {
+              this.logger.error(`Ошибка парсинга сессии из Redis: ${redisKeys[i]}`);
+            }
+          }
+        }
+      }
+
+      // 3. Отдаем в виде массива, сортируя по lastActivity
+      return Array.from(mergedSessions.values()).sort((a, b) => {
+        const timeA = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
+        const timeB = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
+        return timeB - timeA;
+      });
     } catch (error) {
       this.logger.error(
         `Ошибка получения активных сессий для бота ${botId}:`,
@@ -348,6 +481,7 @@ export class SessionStorageService implements OnModuleDestroy {
       locationRequest: entity.locationRequest,
       sessionType: entity.sessionType,
       lobbyData: entity.lobbyData,
+      lastSavedToDb: entity.updatedAt || entity.createdAt,
     };
   }
 }
