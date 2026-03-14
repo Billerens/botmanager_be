@@ -1,6 +1,7 @@
 import { BotFlow } from "../../../database/entities/bot-flow.entity";
 import { BotFlowNode } from "../../../database/entities/bot-flow-node.entity";
 import { UserSession } from "../flow-execution.service";
+import { IMessageTransport } from "./message-transport.interface";
 
 export interface FlowContext {
   bot: any;
@@ -16,6 +17,9 @@ export interface FlowContext {
   isGroupContext?: boolean; // Флаг, что выполнение в контексте группы
   // Флаг, указывающий, что ввод был обработан текущим узлом
   inputConsumed?: boolean;
+  // Подменяемый транспорт для отправки сообщений (simulation mode)
+  // Если не задан — используется TelegramService напрямую (production)
+  transport?: IMessageTransport;
 }
 
 export interface INodeHandler {

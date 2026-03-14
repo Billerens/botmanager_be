@@ -47,6 +47,7 @@ import { CustomDataModule } from "./modules/custom-data/custom-data.module";
 import { FlowTemplatesModule } from "./modules/flow-templates/flow-templates.module";
 import { StylePresetsModule } from "./modules/style-presets/style-presets.module";
 import { SystemSettingsModule } from "./modules/system-settings/system-settings.module";
+import { SimulationModule } from "./modules/simulation/simulation.module";
 
 @Module({
   imports: [
@@ -123,6 +124,7 @@ import { SystemSettingsModule } from "./modules/system-settings/system-settings.
     FlowTemplatesModule, // Галерея шаблонов flow
     StylePresetsModule,  // Галерея пресетов CSS
     SystemSettingsModule, // Системные настройки (из БД)
+    SimulationModule,     // Симуляция botflow (WebSocket)
   ],
 })
 export class AppModule {}

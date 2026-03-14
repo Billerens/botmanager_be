@@ -1,6 +1,7 @@
 export * from "./base-node-handler.interface";
 export * from "./base-node-handler";
 export * from "./node-handler.service";
+export * from "./message-transport.interface";
 
 // Node handlers
 export * from "./start-node.handler";

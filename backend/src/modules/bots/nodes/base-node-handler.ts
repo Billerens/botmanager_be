@@ -44,7 +44,14 @@ export abstract class BaseNodeHandler implements INodeHandler {
   abstract canHandle(nodeType: string): boolean;
 
   /**
-   * Отправляет сообщение через Telegram API и сохраняет его в базу данных
+   * Текущий FlowContext — устанавливается перед вызовом execute().
+   * Используется для доступа к transport (simulation mode).
+   */
+  protected _currentContext?: FlowContext;
+
+  /**
+   * Отправляет сообщение через Telegram API и сохраняет его в базу данных.
+   * Если в текущем контексте задан transport (simulation mode) — делегирует ему.
    */
   protected async sendAndSaveMessage(
     bot: any,
@@ -55,8 +62,14 @@ export abstract class BaseNodeHandler implements INodeHandler {
       reply_markup?: any;
       reply_to_message_id?: number;
       disable_web_page_preview?: boolean;
-    } = {}
+    } = {},
   ): Promise<void> {
+    // Simulation mode — делегируем transport
+    if (this._currentContext?.transport) {
+      await this._currentContext.transport.sendMessage(bot, chatId, text, options);
+      return;
+    }
+
     const decryptedToken = this.botsService.decryptToken(bot.token);
 
     // Отправляем сообщение через Telegram API
@@ -64,7 +77,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
       decryptedToken,
       chatId,
       text,
-      options
+      options,
     );
 
     if (telegramResponse) {
@@ -159,7 +172,8 @@ export abstract class BaseNodeHandler implements INodeHandler {
   }
 
   /**
-   * Отправляет фото через Telegram API и сохраняет его в базу данных
+   * Отправляет фото через Telegram API и сохраняет его в базу данных.
+   * Если в текущем контексте задан transport (simulation mode) — делегирует ему.
    */
   protected async sendAndSavePhoto(
     bot: any,
@@ -170,8 +184,14 @@ export abstract class BaseNodeHandler implements INodeHandler {
       parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
       reply_markup?: any;
       reply_to_message_id?: number;
-    } = {}
+    } = {},
   ): Promise<void> {
+    // Simulation mode — делегируем transport
+    if (this._currentContext?.transport) {
+      await this._currentContext.transport.sendPhoto(bot, chatId, photoUrl, options);
+      return;
+    }
+
     const decryptedToken = this.botsService.decryptToken(bot.token);
 
     // Отправляем фото через Telegram API
@@ -179,7 +199,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
       decryptedToken,
       chatId,
       photoUrl,
-      options
+      options,
     );
 
     if (telegramResponse) {
@@ -285,7 +305,8 @@ export abstract class BaseNodeHandler implements INodeHandler {
   }
 
   /**
-   * Отправляет документ через Telegram API и сохраняет его в базу данных
+   * Отправляет документ через Telegram API и сохраняет его в базу данных.
+   * Если в текущем контексте задан transport (simulation mode) — делегирует ему.
    */
   protected async sendAndSaveDocument(
     bot: any,
@@ -296,8 +317,14 @@ export abstract class BaseNodeHandler implements INodeHandler {
       parse_mode?: "HTML" | "Markdown" | "MarkdownV2";
       reply_markup?: any;
       reply_to_message_id?: number;
-    } = {}
+    } = {},
   ): Promise<void> {
+    // Simulation mode — делегируем transport
+    if (this._currentContext?.transport) {
+      await this._currentContext.transport.sendDocument(bot, chatId, document, options);
+      return;
+    }
+
     const decryptedToken = this.botsService.decryptToken(bot.token);
 
     // Отправляем документ через Telegram API

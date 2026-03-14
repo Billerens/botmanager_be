@@ -683,6 +683,10 @@ export class FlowExecutionService implements OnModuleInit {
       const handler = this.nodeHandlerService.getHandler(currentNode.type);
 
       if (handler) {
+        // Устанавливаем текущий контекст для доступа к transport (simulation mode)
+        if ('_currentContext' in handler) {
+          (handler as any)._currentContext = context;
+        }
         await handler.execute(context);
 
         // Сохраняем изменения сессии после выполнения узла

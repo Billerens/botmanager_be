@@ -204,6 +204,7 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
     BotInvitationsService,
     BotNotificationsService,
     AiModelSelectorService,
+    NodeHandlerService,
   ],
 })
 export class BotsModule {}
