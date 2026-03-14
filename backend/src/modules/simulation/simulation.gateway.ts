@@ -15,6 +15,7 @@ import { AuthService } from "../auth/auth.service";
 import { User } from "../../database/entities/user.entity";
 import { JwtPayload } from "../auth/interfaces/jwt-payload.interface";
 import { SimulationService } from "./simulation.service";
+import type { SimulationGuestPayload } from "./simulation.controller";
 
 /**
  * Аутентифицированный сокет симуляции
@@ -22,6 +23,10 @@ import { SimulationService } from "./simulation.service";
 interface SimulationSocket extends Socket {
   user?: User;
   userId?: string;
+  /** true если клиент аутентифицирован через guest-токен */
+  isGuest?: boolean;
+  /** Разрешённый botId для guest-клиентов */
+  guestBotId?: string;
 }
 
 /**
@@ -74,7 +79,18 @@ export class SimulationGateway implements OnGatewayConnection, OnGatewayDisconne
         return;
       }
 
-      const user = await this.authenticate(token);
+      // Пробуем guest-токен
+      const guestResult = this.authenticateGuest(token);
+      if (guestResult) {
+        client.isGuest = true;
+        client.guestBotId = guestResult.botId;
+        client.userId = `guest:${guestResult.botId}`;
+        this.logger.log(`[SIM] Guest-клиент ${client.id} подключен (botId: ${guestResult.botId})`);
+        return;
+      }
+
+      // Пробуем обычный JWT
+      const user = await this.authenticateUser(token);
       if (!user) {
         this.logger.warn(`[SIM] Клиент ${client.id} не аутентифицирован`);
         client.emit("simulation:error", { message: "Невалидный токен" });
@@ -110,6 +126,12 @@ export class SimulationGateway implements OnGatewayConnection, OnGatewayDisconne
   ) {
     if (!client.userId) {
       client.emit("simulation:error", { message: "Не аутентифицирован" });
+      return;
+    }
+
+    // Guest-клиенты могут симулировать только разрешённый бот
+    if (client.isGuest && client.guestBotId && data.botId !== client.guestBotId) {
+      client.emit("simulation:error", { message: "Доступ к этому боту запрещён" });
       return;
     }
 
@@ -224,12 +246,34 @@ export class SimulationGateway implements OnGatewayConnection, OnGatewayDisconne
     return null;
   }
 
-  private async authenticate(token: string): Promise<User | null> {
+  /**
+   * Попытка аутентификации как guest (simulation_guest токен)
+   */
+  private authenticateGuest(token: string): SimulationGuestPayload | null {
+    try {
+      const payload = this.jwtService.verify<SimulationGuestPayload>(token, {
+        secret: this.configService.get<string>("jwt.secret"),
+      });
+
+      if (payload?.type === "simulation_guest" && payload?.scope === "simulation_only" && payload?.botId) {
+        return payload;
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Аутентификация обычного пользователя через JWT
+   */
+  private async authenticateUser(token: string): Promise<User | null> {
     try {
       const payload = this.jwtService.verify<JwtPayload>(token, {
         secret: this.configService.get<string>("jwt.secret"),
       });
-      if (!payload) return null;
+      if (!payload?.sub) return null;
       return await this.authService.validateJwtPayload(payload);
     } catch (error) {
       this.logger.error(`[SIM] Ошибка аутентификации: ${error.message}`);

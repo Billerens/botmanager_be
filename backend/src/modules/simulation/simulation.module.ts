@@ -13,6 +13,7 @@ import { BotsModule } from "../bots/bots.module";
 
 import { SimulationGateway } from "./simulation.gateway";
 import { SimulationService } from "./simulation.service";
+import { SimulationController } from "./simulation.controller";
 import { SimulationSessionStore } from "./simulation-session.store";
 import { SimulationTransportService } from "./simulation-transport.service";
 import { CustomLoggerService } from "../../common/logger.service";
@@ -22,6 +23,7 @@ import { CustomLoggerService } from "../../common/logger.service";
  *
  * Предоставляет:
  * - WebSocket Gateway (/simulation namespace) для запуска и управления симуляциями
+ * - REST Controller (POST /simulation/guest-token) для выдачи guest-токенов
  * - Изолированный контекст выполнения flow (in-memory session, variables, customData)
  * - Подменяемый transport layer (WebSocket вместо Telegram API)
  *
@@ -44,6 +46,7 @@ import { CustomLoggerService } from "../../common/logger.service";
     AuthModule,
     forwardRef(() => BotsModule),
   ],
+  controllers: [SimulationController],
   providers: [
     SimulationGateway,
     SimulationService,
