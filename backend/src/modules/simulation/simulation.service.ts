@@ -61,9 +61,11 @@ export class SimulationService {
     botId: string,
     flowId?: string,
   ): Promise<{ simulationId: string }> {
-    // Проверяем, что бот принадлежит пользователю
+    // Проверяем, что бот принадлежит пользователю (для гостей пропускаем проверку владения, 
+    // так как она уже проверена в gateway через guestBotId)
+    const isGuest = ownerId.startsWith("guest:");
     const bot = await this.botRepository.findOne({
-      where: { id: botId, ownerId },
+      where: isGuest ? { id: botId } : { id: botId, ownerId },
     });
 
     if (!bot) {
