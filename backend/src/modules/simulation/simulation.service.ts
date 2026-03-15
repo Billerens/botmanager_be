@@ -335,7 +335,7 @@ export class SimulationService {
   }
 
   /**
-   * РћР±СЂР°Р±РѕС‚Р°С‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ В«РѕС‚ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏВ» РІ СЃРёРјСѓР»СЏС†РёРё
+   * Обработать сообщение «от пользователя» в симуляции
    */
   async processMessage(
     socket: Socket,
@@ -560,7 +560,7 @@ export class SimulationService {
   // ==================== Private ====================
 
   /**
-   * РСЃРїРѕР»РЅРµРЅРёРµ flow РІ СЂРµР¶РёРјРµ СЃРёРјСѓР»СЏС†РёРё
+   * Исполнение flow в режиме симуляции
    */
   private async executeSimulationFlow(
     context: FlowContext,
