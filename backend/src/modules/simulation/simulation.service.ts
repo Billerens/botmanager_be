@@ -604,7 +604,12 @@ export class SimulationService {
       if (currentNode) {
         context.currentNode = currentNode;
         await this.executeNodeWithSimulation(context, session, socket);
-        return;
+        
+        // Если узел поглотил ввод (нажата кнопка, заполнена форма и т.д.) — выходим.
+        // Иначе — позволяем проверить глобальные перехваты ниже.
+        if (context.inputConsumed) {
+          return;
+        }
       }
     }
 

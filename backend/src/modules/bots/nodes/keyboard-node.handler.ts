@@ -437,7 +437,8 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       // Игнорируем некорректный текстовый ввод для inline-клавиатур, чтобы избежать дублирования
       // Если узел уже активен (context.reachedThroughTransition = false), ожидаем callback
       if (isInline && !context.reachedThroughTransition && message.text) {
-        this.logger.log(`Игнорируем некорректный текстовый ввод для клавиатуры ${currentNode.nodeId}`);
+        this.logger.log(`Игнорируем некорректный текстовый ввод для клавиатуры ${currentNode.nodeId}. Ввод не поглощен.`);
+        context.inputConsumed = false;
         return;
       }
 
