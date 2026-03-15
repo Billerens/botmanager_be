@@ -17,31 +17,14 @@ import { JwtPayload } from "../auth/interfaces/jwt-payload.interface";
 import { SimulationService } from "./simulation.service";
 import type { SimulationGuestPayload } from "./simulation.controller";
 
-/**
- * РђСѓС‚РµРЅС‚РёС„РёС†РёСЂРѕРІР°РЅРЅС‹Р№ СЃРѕРєРµС‚ СЃРёРјСѓР»СЏС†РёРё
- */
 interface SimulationSocket extends Socket {
   user?: User;
   userId?: string;
-  /** true РµСЃР»Рё РєР»РёРµРЅС‚ Р°СѓС‚РµРЅС‚РёС„РёС†РёСЂРѕРІР°РЅ С‡РµСЂРµР· guest-С‚РѕРєРµРЅ */
   isGuest?: boolean;
-  /** Р Р°Р·СЂРµС€С‘РЅРЅС‹Р№ botId РґР»СЏ guest-РєР»РёРµРЅС‚РѕРІ */
   guestBotId?: string;
+  sentBotConfigIds?: Set<string>;
 }
 
-/**
- * WebSocket Gateway РґР»СЏ СЃРёРјСѓР»СЏС†РёРё botflow.
- *
- * Namespace: /simulation (РёР·РѕР»РёСЂРѕРІР°РЅ РѕС‚ РѕСЃРЅРѕРІРЅРѕРіРѕ WS)
- * РђСѓС‚РµРЅС‚РёС„РёРєР°С†РёСЏ: JWT (С‡РµСЂРµР· query.token РёР»Рё Authorization header)
- *
- * РџРѕРґРґРµСЂР¶РёРІР°РµРјС‹Рµ СЃРѕР±С‹С‚РёСЏ:
- *   Client в†’ Server: simulation:start, simulation:message, simulation:callback,
- *                    simulation:endpoint_data, simulation:stop
- *   Server в†’ Client: simulation:started, simulation:bot_message, simulation:bot_photo,
- *                    simulation:bot_document, simulation:typing, simulation:endpoint_waiting,
- *                    simulation:periodic_tick, simulation:error, simulation:ended
- */
 @WebSocketGateway({
   cors: {
     origin: [
@@ -66,34 +49,34 @@ export class SimulationGateway implements OnGatewayConnection, OnGatewayDisconne
     private readonly simulationService: SimulationService,
   ) {}
 
-  /**
-   * РћР±СЂР°Р±РѕС‚РєР° РїРѕРґРєР»СЋС‡РµРЅРёСЏ вЂ” Р°СѓС‚РµРЅС‚РёС„РёРєР°С†РёСЏ С‡РµСЂРµР· JWT
-   */
   async handleConnection(client: SimulationSocket) {
     try {
       const token = this.extractToken(client);
       if (!token) {
-        this.logger.warn(`[SIM] РљР»РёРµРЅС‚ ${client.id} Р±РµР· С‚РѕРєРµРЅР°`);
-        client.emit("simulation:error", { message: "РўСЂРµР±СѓРµС‚СЃСЏ Р°СѓС‚РµРЅС‚РёС„РёРєР°С†РёСЏ" });
+        this.logger.warn(`[SIM] Клиент ${client.id} без токена`);
+        client.emit("simulation:error", { message: "Требуется аутентификация" });
         client.disconnect();
         return;
       }
 
-      // РџСЂРѕР±СѓРµРј guest-С‚РѕРєРµРЅ
       const guestResult = this.authenticateGuest(token);
       if (guestResult) {
         client.isGuest = true;
         client.guestBotId = guestResult.botId;
         client.userId = `guest:${guestResult.botId}`;
-        this.logger.log(`[SIM] Guest-РєР»РёРµРЅС‚ ${client.id} РїРѕРґРєР»СЋС‡РµРЅ (botId: ${guestResult.botId})`);
+
+        this.logger.log(
+          `[SIM] Guest-клиент ${client.id} подключен (botId: ${guestResult.botId})`,
+        );
+
+        await this.emitBotConfig(client, guestResult.botId);
         return;
       }
 
-      // РџСЂРѕР±СѓРµРј РѕР±С‹С‡РЅС‹Р№ JWT
       const user = await this.authenticateUser(token);
       if (!user) {
-        this.logger.warn(`[SIM] РљР»РёРµРЅС‚ ${client.id} РЅРµ Р°СѓС‚РµРЅС‚РёС„РёС†РёСЂРѕРІР°РЅ`);
-        client.emit("simulation:error", { message: "РќРµРІР°Р»РёРґРЅС‹Р№ С‚РѕРєРµРЅ" });
+        this.logger.warn(`[SIM] Клиент ${client.id} не аутентифицирован`);
+        client.emit("simulation:error", { message: "Невалидный токен" });
         client.disconnect();
         return;
       }
@@ -101,41 +84,41 @@ export class SimulationGateway implements OnGatewayConnection, OnGatewayDisconne
       client.user = user;
       client.userId = user.id;
 
-      this.logger.log(`[SIM] РљР»РёРµРЅС‚ ${client.id} РїРѕРґРєР»СЋС‡РµРЅ (user: ${user.id})`);
+      this.logger.log(`[SIM] Клиент ${client.id} подключен (user: ${user.id})`);
+
+      const handshakeBotId = this.extractBotId(client);
+      if (handshakeBotId) {
+        await this.emitBotConfig(client, handshakeBotId);
+      }
     } catch (error) {
-      this.logger.error(`[SIM] РћС€РёР±РєР° РїРѕРґРєР»СЋС‡РµРЅРёСЏ ${client.id}: ${error.message}`);
+      this.logger.error(`[SIM] Ошибка подключения ${client.id}: ${error.message}`);
       client.disconnect();
     }
   }
 
-  /**
-   * РћР±СЂР°Р±РѕС‚РєР° РѕС‚РєР»СЋС‡РµРЅРёСЏ вЂ” РѕС‡РёСЃС‚РєР° СЃРµСЃСЃРёР№
-   */
   handleDisconnect(client: SimulationSocket) {
     this.simulationService.handleDisconnect(client.id);
-    this.logger.log(`[SIM] РљР»РёРµРЅС‚ ${client.id} РѕС‚РєР»СЋС‡РµРЅ`);
+    this.logger.log(`[SIM] Клиент ${client.id} отключен`);
   }
 
-  /**
-   * Р—Р°РїСѓСЃРє СЃРёРјСѓР»СЏС†РёРё
-   */
   @SubscribeMessage("simulation:start")
   async handleStart(
     @MessageBody() data: { botId: string; flowId?: string },
     @ConnectedSocket() client: SimulationSocket,
   ) {
     if (!client.userId) {
-      client.emit("simulation:error", { message: "РќРµ Р°СѓС‚РµРЅС‚РёС„РёС†РёСЂРѕРІР°РЅ" });
+      client.emit("simulation:error", { message: "Не аутентифицирован" });
       return;
     }
 
-    // Guest-РєР»РёРµРЅС‚С‹ РјРѕРіСѓС‚ СЃРёРјСѓР»РёСЂРѕРІР°С‚СЊ С‚РѕР»СЊРєРѕ СЂР°Р·СЂРµС€С‘РЅРЅС‹Р№ Р±РѕС‚
     if (client.isGuest && client.guestBotId && data.botId !== client.guestBotId) {
-      client.emit("simulation:error", { message: "Р”РѕСЃС‚СѓРї Рє СЌС‚РѕРјСѓ Р±РѕС‚Сѓ Р·Р°РїСЂРµС‰С‘РЅ" });
+      client.emit("simulation:error", { message: "Доступ к этому боту запрещён" });
       return;
     }
 
     try {
+      await this.emitBotConfig(client, data.botId);
+
       const { simulationId } = await this.simulationService.startSimulation(
         client,
         client.userId,
@@ -144,65 +127,79 @@ export class SimulationGateway implements OnGatewayConnection, OnGatewayDisconne
       );
 
       client.emit("simulation:started", { simulationId });
-      this.logger.log(`[SIM] РЎРёРјСѓР»СЏС†РёСЏ ${simulationId} Р·Р°РїСѓС‰РµРЅР° РґР»СЏ Р±РѕС‚Р° ${data.botId}`);
+      this.logger.log(`[SIM] Симуляция ${simulationId} запущена для бота ${data.botId}`);
     } catch (error) {
-      this.logger.error(`[SIM] РћС€РёР±РєР° СЃС‚Р°СЂС‚Р°: ${error.message}`);
+      this.logger.error(`[SIM] Ошибка старта: ${error.message}`);
       client.emit("simulation:error", { message: error.message });
     }
   }
 
-  /**
-   * РџРѕР»СѓС‡РµРЅРёРµ СЃРѕРѕР±С‰РµРЅРёСЏ В«РѕС‚ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏВ»
-   */
+  @SubscribeMessage("simulation:get_bot_config")
+  async handleGetBotConfig(
+    @MessageBody() data: { botId: string },
+    @ConnectedSocket() client: SimulationSocket,
+  ) {
+    if (!client.userId) {
+      client.emit("simulation:error", { message: "Не аутентифицирован" });
+      return;
+    }
+
+    if (!data?.botId) {
+      client.emit("simulation:error", { message: "botId обязателен" });
+      return;
+    }
+
+    if (client.isGuest && client.guestBotId && data.botId !== client.guestBotId) {
+      client.emit("simulation:error", { message: "Доступ к этому боту запрещён" });
+      return;
+    }
+
+    await this.emitBotConfig(client, data.botId, true);
+  }
+
   @SubscribeMessage("simulation:message")
   async handleMessage(
     @MessageBody() data: { simulationId: string; text: string },
     @ConnectedSocket() client: SimulationSocket,
   ) {
     if (!client.userId) {
-      client.emit("simulation:error", { message: "РќРµ Р°СѓС‚РµРЅС‚РёС„РёС†РёСЂРѕРІР°РЅ" });
+      client.emit("simulation:error", { message: "Не аутентифицирован" });
       return;
     }
 
     try {
       await this.simulationService.processMessage(client, data.simulationId, data.text);
     } catch (error) {
-      this.logger.error(`[SIM] РћС€РёР±РєР° РѕР±СЂР°Р±РѕС‚РєРё СЃРѕРѕР±С‰РµРЅРёСЏ: ${error.message}`);
+      this.logger.error(`[SIM] Ошибка обработки сообщения: ${error.message}`);
       client.emit("simulation:error", { message: error.message });
     }
   }
 
-  /**
-   * РќР°Р¶Р°С‚РёРµ inline-РєРЅРѕРїРєРё
-   */
   @SubscribeMessage("simulation:callback")
   async handleCallback(
     @MessageBody() data: { simulationId: string; callbackData: string },
     @ConnectedSocket() client: SimulationSocket,
   ) {
     if (!client.userId) {
-      client.emit("simulation:error", { message: "РќРµ Р°СѓС‚РµРЅС‚РёС„РёС†РёСЂРѕРІР°РЅ" });
+      client.emit("simulation:error", { message: "Не аутентифицирован" });
       return;
     }
 
     try {
       await this.simulationService.processCallback(client, data.simulationId, data.callbackData);
     } catch (error) {
-      this.logger.error(`[SIM] РћС€РёР±РєР° callback: ${error.message}`);
+      this.logger.error(`[SIM] Ошибка callback: ${error.message}`);
       client.emit("simulation:error", { message: error.message });
     }
   }
 
-  /**
-   * Р”Р°РЅРЅС‹Рµ РґР»СЏ endpoint-СѓР·Р»Р°
-   */
   @SubscribeMessage("simulation:endpoint_data")
   async handleEndpointData(
     @MessageBody() data: { simulationId: string; nodeId: string; data: Record<string, any> },
     @ConnectedSocket() client: SimulationSocket,
   ) {
     if (!client.userId) {
-      client.emit("simulation:error", { message: "РќРµ Р°СѓС‚РµРЅС‚РёС„РёС†РёСЂРѕРІР°РЅ" });
+      client.emit("simulation:error", { message: "Не аутентифицирован" });
       return;
     }
 
@@ -214,14 +211,11 @@ export class SimulationGateway implements OnGatewayConnection, OnGatewayDisconne
         data.data,
       );
     } catch (error) {
-      this.logger.error(`[SIM] РћС€РёР±РєР° endpoint data: ${error.message}`);
+      this.logger.error(`[SIM] Ошибка endpoint data: ${error.message}`);
       client.emit("simulation:error", { message: error.message });
     }
   }
 
-  /**
-   * РћСЃС‚Р°РЅРѕРІРєР° СЃРёРјСѓР»СЏС†РёРё
-   */
   @SubscribeMessage("simulation:stop")
   handleStop(
     @MessageBody() data: { simulationId: string },
@@ -229,14 +223,14 @@ export class SimulationGateway implements OnGatewayConnection, OnGatewayDisconne
   ) {
     this.simulationService.stopSimulation(data.simulationId);
     client.emit("simulation:ended");
-    this.logger.log(`[SIM] РЎРёРјСѓР»СЏС†РёСЏ ${data.simulationId} РѕСЃС‚Р°РЅРѕРІР»РµРЅР°`);
+    this.logger.log(`[SIM] Симуляция ${data.simulationId} остановлена`);
   }
-
-  // ==================== Private ====================
 
   private extractToken(client: Socket): string | null {
     const token = client.handshake.auth?.token || client.handshake.query?.token;
-    if (token && typeof token === "string") return token;
+    if (token && typeof token === "string") {
+      return token;
+    }
 
     const authHeader = client.handshake.headers.authorization;
     if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -246,16 +240,57 @@ export class SimulationGateway implements OnGatewayConnection, OnGatewayDisconne
     return null;
   }
 
-  /**
-   * РџРѕРїС‹С‚РєР° Р°СѓС‚РµРЅС‚РёС„РёРєР°С†РёРё РєР°Рє guest (simulation_guest С‚РѕРєРµРЅ)
-   */
+  private extractBotId(client: Socket): string | null {
+    const botId = client.handshake.auth?.botId || client.handshake.query?.botId;
+    if (botId && typeof botId === "string") {
+      return botId;
+    }
+    return null;
+  }
+
+  private async emitBotConfig(
+    client: SimulationSocket,
+    botId: string,
+    force = false,
+  ): Promise<void> {
+    if (!client.userId || !botId) {
+      return;
+    }
+
+    if (!client.sentBotConfigIds) {
+      client.sentBotConfigIds = new Set<string>();
+    }
+
+    if (!force && client.sentBotConfigIds.has(botId)) {
+      return;
+    }
+
+    try {
+      const config = await this.simulationService.getBotConfig(botId, client.userId);
+      client.emit("simulation:bot_config", config);
+      client.sentBotConfigIds.add(botId);
+      this.logger.debug(`[SIM] Отправлен bot_config для botId=${botId} (socket: ${client.id})`);
+    } catch (error) {
+      this.logger.warn(
+        `[SIM] Не удалось отправить bot_config для botId=${botId}: ${error.message}`,
+      );
+      client.emit("simulation:error", {
+        message: `Не удалось загрузить конфигурацию бота: ${error.message}`,
+      });
+    }
+  }
+
   private authenticateGuest(token: string): SimulationGuestPayload | null {
     try {
       const payload = this.jwtService.verify<SimulationGuestPayload>(token, {
         secret: this.configService.get<string>("jwt.secret"),
       });
 
-      if (payload?.type === "simulation_guest" && payload?.scope === "simulation_only" && payload?.botId) {
+      if (
+        payload?.type === "simulation_guest" &&
+        payload?.scope === "simulation_only" &&
+        payload?.botId
+      ) {
         return payload;
       }
 
@@ -265,18 +300,19 @@ export class SimulationGateway implements OnGatewayConnection, OnGatewayDisconne
     }
   }
 
-  /**
-   * РђСѓС‚РµРЅС‚РёС„РёРєР°С†РёСЏ РѕР±С‹С‡РЅРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ С‡РµСЂРµР· JWT
-   */
   private async authenticateUser(token: string): Promise<User | null> {
     try {
       const payload = this.jwtService.verify<JwtPayload>(token, {
         secret: this.configService.get<string>("jwt.secret"),
       });
-      if (!payload?.sub) return null;
+
+      if (!payload?.sub) {
+        return null;
+      }
+
       return await this.authService.validateJwtPayload(payload);
     } catch (error) {
-      this.logger.error(`[SIM] РћС€РёР±РєР° Р°СѓС‚РµРЅС‚РёС„РёРєР°С†РёРё: ${error.message}`);
+      this.logger.error(`[SIM] Ошибка аутентификации: ${error.message}`);
       return null;
     }
   }

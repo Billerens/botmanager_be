@@ -8,12 +8,52 @@ import { Bot } from "../../database/entities/bot.entity";
 import { BotFlow, FlowStatus } from "../../database/entities/bot-flow.entity";
 import { BotFlowNode } from "../../database/entities/bot-flow-node.entity";
 import { BotCustomData } from "../../database/entities/bot-custom-data.entity";
+import { CustomData } from "../../database/entities/custom-data.entity";
+import { CustomDataOwnerType } from "../../database/entities/custom-collection-schema.entity";
+import { Shop } from "../../database/entities/shop.entity";
+import { BookingSystem } from "../../database/entities/booking-system.entity";
+import {
+  CustomPage,
+  CustomPageStatus,
+} from "../../database/entities/custom-page.entity";
 import { SimulationSessionStore, SimulationSessionData } from "./simulation-session.store";
 import { SimulationTransportService } from "./simulation-transport.service";
 import { FlowContext } from "../bots/nodes/base-node-handler.interface";
 import { NodeHandlerService } from "../bots/nodes/node-handler.service";
 import { UserSession } from "../bots/flow-execution.service";
 import { CustomLoggerService } from "../../common/logger.service";
+
+export interface SimulationBotCommandConfig {
+  command: string;
+  description: string;
+  source: "core" | "shop" | "booking" | "custom_page";
+}
+
+export interface SimulationMiniAppConfig {
+  hasMenuButton: boolean;
+  menuButton: {
+    enabled: boolean;
+    source: "shop" | "booking" | null;
+    text: string | null;
+    url: string | null;
+  };
+  shop: {
+    commandEnabled: boolean;
+    menuButtonEnabled: boolean;
+    url: string | null;
+  };
+  booking: {
+    commandEnabled: boolean;
+    menuButtonEnabled: boolean;
+    url: string | null;
+  };
+}
+
+export interface SimulationBotConfig {
+  botId: string;
+  availableCommands: SimulationBotCommandConfig[];
+  miniapp: SimulationMiniAppConfig;
+}
 
 /** Типы узлов, которые не симулируются */
 const NON_SIMULATABLE_NODES = new Set([
@@ -46,11 +86,149 @@ export class SimulationService {
     private readonly botFlowNodeRepository: Repository<BotFlowNode>,
     @InjectRepository(BotCustomData)
     private readonly customDataRepository: Repository<BotCustomData>,
+    @InjectRepository(CustomData)
+    private readonly customDataV2Repository: Repository<CustomData>,
+    @InjectRepository(Shop)
+    private readonly shopRepository: Repository<Shop>,
+    @InjectRepository(BookingSystem)
+    private readonly bookingSystemRepository: Repository<BookingSystem>,
+    @InjectRepository(CustomPage)
+    private readonly customPageRepository: Repository<CustomPage>,
     private readonly sessionStore: SimulationSessionStore,
     private readonly transportService: SimulationTransportService,
     private readonly nodeHandlerService: NodeHandlerService,
     private readonly customLogger: CustomLoggerService,
   ) {}
+
+  /**
+   * Получить runtime-конфигурацию бота для клиента симуляции.
+   * Включает доступные команды и конфигурацию miniapp-кнопок.
+   */
+  async getBotConfig(botId: string, ownerId: string): Promise<SimulationBotConfig> {
+    const isGuest = ownerId.startsWith("guest:");
+    const bot = await this.botRepository.findOne({
+      where: isGuest ? { id: botId } : { id: botId, ownerId },
+    });
+
+    if (!bot) {
+      throw new ForbiddenException("Бот не найден или нет доступа");
+    }
+
+    const [shop, bookingSystem, customPages] = await Promise.all([
+      this.shopRepository.findOne({ where: { botId } }),
+      this.bookingSystemRepository.findOne({ where: { botId } }),
+      this.customPageRepository.find({
+        where: {
+          botId,
+          status: CustomPageStatus.ACTIVE,
+        },
+      }),
+    ]);
+
+    const commands: SimulationBotCommandConfig[] = [
+      {
+        command: "start",
+        description: "Запустить бота",
+        source: "core",
+      },
+    ];
+
+    if (shop?.buttonTypes?.includes("command")) {
+      commands.push({
+        command: "shop",
+        description:
+          shop.buttonSettings?.command?.description || "🛒 Открыть магазин",
+        source: "shop",
+      });
+    }
+
+    if (bookingSystem?.buttonTypes?.includes("command")) {
+      commands.push({
+        command: "booking",
+        description:
+          bookingSystem.buttonSettings?.command?.description ||
+          "📅 Записаться на прием",
+        source: "booking",
+      });
+    }
+
+    for (const page of customPages) {
+      if (!page.botCommand || !page.showInMenu) {
+        continue;
+      }
+
+      const normalizedCommand = page.botCommand.startsWith("/")
+        ? page.botCommand.substring(1)
+        : page.botCommand;
+
+      commands.push({
+        command: normalizedCommand,
+        description: `📄 ${page.title}`,
+        source: "custom_page",
+      });
+    }
+
+    // Защита от дублей команд (оставляем первое совпадение)
+    const uniqueCommands = commands.filter(
+      (item, index, arr) =>
+        arr.findIndex((candidate) => candidate.command === item.command) === index,
+    );
+
+    const shopMenuEnabled = !!shop?.buttonTypes?.includes("menu_button");
+    const bookingMenuEnabled = !!bookingSystem?.buttonTypes?.includes("menu_button");
+
+    const shopUrl = shop
+      ? shop.url ||
+        `${process.env.EXTERNAL_FRONTEND_URL || "https://uforge.online"}/shop/${shop.id}`
+      : null;
+    const bookingUrl = bookingSystem
+      ? bookingSystem.url ||
+        `${process.env.EXTERNAL_FRONTEND_URL || "https://uforge.online"}/booking/${bookingSystem.id}`
+      : null;
+
+    let menuButton: SimulationMiniAppConfig["menuButton"] = {
+      enabled: false,
+      source: null,
+      text: null,
+      url: null,
+    };
+
+    // Приоритет полностью повторяет TelegramService.setBotCommands: shop > booking
+    if (shopMenuEnabled) {
+      menuButton = {
+        enabled: true,
+        source: "shop",
+        text: shop?.buttonSettings?.menu_button?.text || "🛒 Магазин",
+        url: shopUrl,
+      };
+    } else if (bookingMenuEnabled) {
+      menuButton = {
+        enabled: true,
+        source: "booking",
+        text: bookingSystem?.buttonSettings?.menu_button?.text || "📅 Записаться",
+        url: bookingUrl,
+      };
+    }
+
+    return {
+      botId,
+      availableCommands: uniqueCommands,
+      miniapp: {
+        hasMenuButton: menuButton.enabled,
+        menuButton,
+        shop: {
+          commandEnabled: !!shop?.buttonTypes?.includes("command"),
+          menuButtonEnabled: shopMenuEnabled,
+          url: shopUrl,
+        },
+        booking: {
+          commandEnabled: !!bookingSystem?.buttonTypes?.includes("command"),
+          menuButtonEnabled: bookingMenuEnabled,
+          url: bookingUrl,
+        },
+      },
+    };
+  }
 
   /**
    * Запустить новую симуляцию
@@ -91,8 +269,10 @@ export class SimulationService {
       throw new NotFoundException("Flow не найден для данного бота");
     }
 
-    // Копируем customData (custom_storage) в in-memory snapshot
+    // Копируем customData legacy (custom_storage) в in-memory snapshot
     const customStorageSnapshot = new Map<string, any>();
+    // Копируем customData v2 (custom_data) в отдельный snapshot
+    const customDataSnapshot = new Map<string, any>();
     try {
       const customRecords = await this.customDataRepository.find({
         where: { botId },
@@ -104,9 +284,36 @@ export class SimulationService {
           data: JSON.parse(JSON.stringify(record.data)),
         });
       }
-      this.logger.log(`Скопировано ${customRecords.length} записей customData для симуляции`);
+      this.logger.log(`Скопировано ${customRecords.length} записей custom_storage для симуляции`);
     } catch (error) {
-      this.logger.warn(`Ошибка копирования customData: ${error.message}`);
+      this.logger.warn(`Ошибка копирования custom_storage: ${error.message}`);
+    }
+
+    try {
+      const customDataRecords = await this.customDataV2Repository.find({
+        where: {
+          ownerId: botId,
+          ownerType: CustomDataOwnerType.BOT,
+          isDeleted: false,
+        },
+      });
+
+      for (const record of customDataRecords) {
+        const key = `${record.collection}::${record.key}`;
+        customDataSnapshot.set(key, {
+          ...record,
+          data: JSON.parse(JSON.stringify(record.data)),
+          indexedData: record.indexedData
+            ? JSON.parse(JSON.stringify(record.indexedData))
+            : undefined,
+          metadata: record.metadata
+            ? JSON.parse(JSON.stringify(record.metadata))
+            : undefined,
+        });
+      }
+      this.logger.log(`Скопировано ${customDataRecords.length} записей custom_data для симуляции`);
+    } catch (error) {
+      this.logger.warn(`Ошибка копирования custom_data: ${error.message}`);
     }
 
     // Создаём сессию симуляции
@@ -119,7 +326,7 @@ export class SimulationService {
       socketId: socket.id,
       variables: {},
       customStorageSnapshot,
-      customDataSnapshot: new Map(),
+      customDataSnapshot,
     });
 
     this.logger.log(`Симуляция запущена: ${simulationId} (bot: ${botId}, flow: ${activeFlow.id})`);

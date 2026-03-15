@@ -49,6 +49,36 @@ export class BroadcastNodeHandler extends BaseNodeHandler {
       return;
     }
 
+    // Safety net for simulation mode:
+    // even if this node is reached, do not send anything to real recipients.
+    if (context.transport) {
+      const startedAt = new Date();
+      session.variables[`broadcast_${currentNode.nodeId}_sent_count`] = "0";
+      session.variables[`broadcast_${currentNode.nodeId}_failed_count`] = "0";
+      session.variables[`broadcast_${currentNode.nodeId}_total_recipients`] = "0";
+      session.variables[`broadcast_${currentNode.nodeId}_status`] = "simulated";
+      session.variables[`broadcast_${currentNode.nodeId}_started_at`] =
+        startedAt.toISOString();
+      session.variables[`broadcast_${currentNode.nodeId}_completed_at`] =
+        new Date().toISOString();
+
+      const chatId =
+        context.message?.chat?.id !== undefined
+          ? String(context.message.chat.id)
+          : context.session?.chatId;
+
+      if (chatId) {
+        await this.sendAndSaveMessage(
+          bot,
+          chatId,
+          "Simulation: broadcast skipped, no production recipients were contacted.",
+        );
+      }
+
+      await this.moveToNextNode(context, currentNode.nodeId);
+      return;
+    }
+
     const broadcast = currentNode.data.broadcast as any;
     const startTime = new Date();
 

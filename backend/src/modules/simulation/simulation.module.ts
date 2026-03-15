@@ -7,6 +7,10 @@ import { Bot } from "../../database/entities/bot.entity";
 import { BotFlow } from "../../database/entities/bot-flow.entity";
 import { BotFlowNode } from "../../database/entities/bot-flow-node.entity";
 import { BotCustomData } from "../../database/entities/bot-custom-data.entity";
+import { CustomData } from "../../database/entities/custom-data.entity";
+import { Shop } from "../../database/entities/shop.entity";
+import { BookingSystem } from "../../database/entities/booking-system.entity";
+import { CustomPage } from "../../database/entities/custom-page.entity";
 
 import { AuthModule } from "../auth/auth.module";
 import { BotsModule } from "../bots/bots.module";
@@ -30,11 +34,20 @@ import { CustomLoggerService } from "../../common/logger.service";
  * Зависимости:
  * - AuthModule — JWT аутентификация
  * - BotsModule — NodeHandlerService (общие обработчики узлов)
- * - TypeORM entities — Bot, BotFlow, BotFlowNode, BotCustomData
+ * - TypeORM entities — Bot, BotFlow, BotFlowNode, BotCustomData, CustomData
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Bot, BotFlow, BotFlowNode, BotCustomData]),
+    TypeOrmModule.forFeature([
+      Bot,
+      BotFlow,
+      BotFlowNode,
+      BotCustomData,
+      CustomData,
+      Shop,
+      BookingSystem,
+      CustomPage,
+    ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
