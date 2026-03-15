@@ -854,7 +854,7 @@ export class SimulationService {
     const maxExecutions = config.maxExecutions || 5; // Лимитируем в симуляции
     const nodeId = currentNode.nodeId;
 
-    // РћС‡РёС‰Р°РµРј РїСЂРµРґС‹РґСѓС‰РёР№ С‚Р°Р№РјРµСЂ РµСЃР»Рё Р±С‹Р»
+    // Очищаем предыдущий таймер если был
     const existingTimer = session.periodicTimers.get(nodeId);
     if (existingTimer) {
       clearTimeout(existingTimer);
