@@ -482,13 +482,17 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
         }
       }
 
-      // Отправляем клавиатуру и ждем выбора пользователя
-
-      // Игнорируем некорректный текстовый ввод для inline-клавиатур, чтобы избежать дублирования
-      // Если узел уже активен (context.reachedThroughTransition = false), ожидаем callback
-      if (isInline && !context.reachedThroughTransition && message.text) {
-        this.logger.log(`Игнорируем некорректный текстовый ввод для клавиатуры ${currentNode.nodeId}. Ввод не поглощен.`);
-        context.inputConsumed = false;
+      // Игнорируем некорректный текстовый ввод для клавиатур, чтобы избежать дублирования
+      // Если узел уже активен (context.reachedThroughTransition = false), ожидаем ввода
+      if (!context.reachedThroughTransition && message.text) {
+        if (isInline) {
+          this.logger.log(`Игнорируем некорректный текстовый ввод для inline-клавиатуры ${currentNode.nodeId}. Ввод не поглощен.`);
+          context.inputConsumed = false;
+        } else {
+          this.logger.log(`Игнорируем некорректный текстовый ввод для reply-клавиатуры ${currentNode.nodeId}. Узел завершается.`);
+          session.currentNodeId = undefined;
+          context.inputConsumed = true;
+        }
         return;
       }
 
