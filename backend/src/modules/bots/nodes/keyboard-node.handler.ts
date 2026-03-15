@@ -410,25 +410,75 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
           (button) => button.text.trim() === pressedButtonText
         );
 
+        let targetIsEnd = false;
         if (buttonIndex !== -1) {
+          // Проверяем, куда ведет эта кнопка
+          const edge = context.flow.flowData?.edges?.find(
+            (e) =>
+              e.source === currentNode.nodeId &&
+              e.sourceHandle === `button-${buttonIndex}`
+          );
+          if (edge) {
+            const targetNode = context.flow.nodes.find(
+              (n) => n.nodeId === edge.target
+            );
+            if (targetNode?.type === "end") {
+              targetIsEnd = true;
+            }
+          }
+        }
+
+        // Логика:
+        // 1. Если кнопка есть и ведет НЕ в END — идем по ребру (стандартно)
+        // 2. Если кнопка ведет в END ИЛИ кнопки нет вовсе — ищем глобальный хендлер new_message
+
+        if (buttonIndex !== -1 && !targetIsEnd) {
           // Нашли кнопку - очищаем текст сообщения перед переходом к следующему узлу
-          // чтобы следующий узел не получил текст кнопки как ввод пользователя
           const originalText = message.text;
           message.text = undefined;
 
           try {
-            // Переходим к узлу, подключенному к соответствующему выходу
             await this.moveToNextNodeByOutput(
               context,
               currentNode.nodeId,
               `button-${buttonIndex}`
             );
             context.inputConsumed = true;
+            return;
           } finally {
-            // Восстанавливаем текст сообщения на случай, если он нужен для других целей
             message.text = originalText;
           }
-          return;
+        } else {
+          // Либо кнопка ведет в END, либо кнопки нет. Ищем хендлер перехвата.
+          const matchingHandler = this.findMatchingNewMessageNode(
+            context.flow,
+            pressedButtonText
+          );
+
+          if (matchingHandler) {
+            // Нашли хендлер — сбрасываем текущий узел и прыгаем на него
+            context.session.currentNodeId = undefined;
+            context.currentNode = matchingHandler;
+            await context.executeNodeCallback(context);
+            context.inputConsumed = true;
+            return;
+          } else if (buttonIndex !== -1) {
+            // Хендлера нет, но кнопка была (значит она ведет в END) — выполняем переход в END
+            const originalText = message.text;
+            message.text = undefined;
+
+            try {
+              await this.moveToNextNodeByOutput(
+                context,
+                currentNode.nodeId,
+                `button-${buttonIndex}`
+              );
+              context.inputConsumed = true;
+              return;
+            } finally {
+              message.text = originalText;
+            }
+          }
         }
       }
 
@@ -475,5 +525,33 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
       }
       // Иначе - ждем callback запрос
     }
+  }
+
+  /**
+   * Ищет подходящий new_message узел во всем флоу.
+   * Копирует логику FlowExecutionService для консистентности.
+   */
+  private findMatchingNewMessageNode(
+    flow: BotFlow,
+    text: string
+  ): BotFlowNode | null {
+    if (!flow.nodes) return null;
+
+    const newMessageNodes = flow.nodes.filter((n) => n.type === "new_message");
+
+    for (const nmNode of newMessageNodes) {
+      const newMessageData = nmNode.data?.newMessage;
+      if (!newMessageData?.text) continue;
+
+      const { text: filterText, caseSensitive } = newMessageData;
+      const userText = caseSensitive ? text : (text || "").toLowerCase();
+      const compareText = caseSensitive ? filterText : filterText.toLowerCase();
+
+      if (userText === compareText) {
+        return nmNode;
+      }
+    }
+
+    return null;
   }
 }
