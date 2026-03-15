@@ -184,6 +184,9 @@ export class SimulationService {
       flow,
       reachedThroughTransition: false,
       transport: this.transportService,
+      executeNodeCallback: async (ctx: FlowContext) => {
+        await this.executeNodeWithSimulation(ctx, session, socket);
+      },
     };
 
     try {
@@ -249,6 +252,9 @@ export class SimulationService {
       flow,
       reachedThroughTransition: false,
       transport: this.transportService,
+      executeNodeCallback: async (ctx: FlowContext) => {
+        await this.executeNodeWithSimulation(ctx, session, socket);
+      },
     };
 
     try {
@@ -310,6 +316,9 @@ export class SimulationService {
           flow,
           reachedThroughTransition: true,
           transport: this.transportService,
+          executeNodeCallback: async (ctx: FlowContext) => {
+            await this.executeNodeWithSimulation(ctx, session, socket);
+          },
         };
 
         try {

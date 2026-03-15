@@ -20,6 +20,9 @@ export interface FlowContext {
   // Подменяемый транспорт для отправки сообщений (simulation mode)
   // Если не задан — используется TelegramService напрямую (production)
   transport?: IMessageTransport;
+  // Контекстный executor следующего узла (используется симуляцией,
+  // чтобы не уходить в production-цепочку выполнения)
+  executeNodeCallback?: (context: FlowContext) => Promise<void>;
 }
 
 export interface INodeHandler {

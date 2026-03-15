@@ -557,10 +557,11 @@ export abstract class BaseNodeHandler implements INodeHandler {
       context.inputConsumed = true;
 
       this.logger.log(`Переход к узлу: ${nodeId}`);
-      if (this.executeNodeCallback) {
+      const executeNode = context.executeNodeCallback || this.executeNodeCallback;
+      if (executeNode) {
         context.currentNode = targetNode;
         context.reachedThroughTransition = true;
-        await this.executeNodeCallback(context);
+        await executeNode(context);
       }
     } else {
       this.logger.warn(`Узел с ID ${nodeId} не найден`);
@@ -592,10 +593,11 @@ export abstract class BaseNodeHandler implements INodeHandler {
         const nextNode = context.flow.nodes.find(
           (node) => node.nodeId === nextNodeId
         );
-        if (nextNode && this.executeNodeCallback) {
+        const executeNode = context.executeNodeCallback || this.executeNodeCallback;
+        if (nextNode && executeNode) {
           context.currentNode = nextNode;
           context.reachedThroughTransition = true;
-          await this.executeNodeCallback(context);
+          await executeNode(context);
         }
       }
       return;
@@ -623,10 +625,11 @@ export abstract class BaseNodeHandler implements INodeHandler {
       const nextNode = context.flow.nodes.find(
         (node) => node.nodeId === nextNodeId
       );
-      if (nextNode && this.executeNodeCallback) {
+      const executeNode = context.executeNodeCallback || this.executeNodeCallback;
+      if (nextNode && executeNode) {
         context.currentNode = nextNode;
         context.reachedThroughTransition = true;
-        await this.executeNodeCallback(context);
+        await executeNode(context);
       }
       return;
     }
@@ -650,7 +653,8 @@ export abstract class BaseNodeHandler implements INodeHandler {
         (node) => node.nodeId === nextNodeId
       );
 
-      if (nextNode && this.executeNodeCallback) {
+      const executeNode = context.executeNodeCallback || this.executeNodeCallback;
+      if (nextNode && executeNode) {
         // Устанавливаем текущий узел для выполнения
         context.currentNode = nextNode;
         context.session.currentNodeId = nextNodeId;
@@ -658,7 +662,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
         context.reachedThroughTransition = true;
 
         // Выполняем узел
-        await this.executeNodeCallback(context);
+        await executeNode(context);
       } else {
         this.logger.warn(`Узел ${nextNodeId} не найден в flow`);
       }
@@ -726,10 +730,11 @@ export abstract class BaseNodeHandler implements INodeHandler {
       const nextNode = context.flow.nodes.find(
         (node) => node.nodeId === nextNodeId
       );
-      if (nextNode && this.executeNodeCallback) {
+      const executeNode = context.executeNodeCallback || this.executeNodeCallback;
+      if (nextNode && executeNode) {
         context.currentNode = nextNode;
         context.reachedThroughTransition = true;
-        await this.executeNodeCallback(context);
+        await executeNode(context);
       }
     } else {
       this.logger.warn(
@@ -776,7 +781,8 @@ export abstract class BaseNodeHandler implements INodeHandler {
         (node) => node.nodeId === nextNodeId
       );
 
-      if (nextNode && this.executeNodeCallback) {
+      const executeNode = context.executeNodeCallback || this.executeNodeCallback;
+      if (nextNode && executeNode) {
         // Устанавливаем текущий узел для выполнения
         context.currentNode = nextNode;
         context.session.currentNodeId = nextNodeId;
@@ -784,7 +790,7 @@ export abstract class BaseNodeHandler implements INodeHandler {
         context.reachedThroughTransition = true;
 
         // Выполняем узел
-        await this.executeNodeCallback(context);
+        await executeNode(context);
       } else {
         this.logger.warn(`Узел ${nextNodeId} не найден в flow`);
       }

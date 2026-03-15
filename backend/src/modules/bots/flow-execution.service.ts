@@ -393,6 +393,7 @@ export class FlowExecutionService implements OnModuleInit {
         reachedThroughTransition: false, // По умолчанию узел не достигнут через переход
         groupSession: groupSession || undefined,
         isGroupContext: !!groupSession,
+        executeNodeCallback: this.executeNode.bind(this),
       };
 
       // Определяем текущий узел
@@ -633,6 +634,7 @@ export class FlowExecutionService implements OnModuleInit {
       session,
       flow,
       reachedThroughTransition: true,
+      executeNodeCallback: this.executeNode.bind(this),
     };
 
     // Находим дочерние узлы по edges
@@ -1161,6 +1163,7 @@ export class FlowExecutionService implements OnModuleInit {
         session,
         flow: activeFlow,
         currentNode,
+        executeNodeCallback: this.executeNode.bind(this),
       };
 
       // Получаем обработчик endpoint ноды
