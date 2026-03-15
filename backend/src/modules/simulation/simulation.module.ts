@@ -23,18 +23,18 @@ import { SimulationTransportService } from "./simulation-transport.service";
 import { CustomLoggerService } from "../../common/logger.service";
 
 /**
- * Модуль симуляции Botflow.
+ * РњРѕРґСѓР»СЊ СЃРёРјСѓР»СЏС†РёРё Botflow.
  *
- * Предоставляет:
- * - WebSocket Gateway (/simulation namespace) для запуска и управления симуляциями
- * - REST Controller (POST /simulation/guest-token) для выдачи guest-токенов
- * - Изолированный контекст выполнения flow (in-memory session, variables, customData)
- * - Подменяемый transport layer (WebSocket вместо Telegram API)
+ * РџСЂРµРґРѕСЃС‚Р°РІР»СЏРµС‚:
+ * - WebSocket Gateway (/simulation namespace) РґР»СЏ Р·Р°РїСѓСЃРєР° Рё СѓРїСЂР°РІР»РµРЅРёСЏ СЃРёРјСѓР»СЏС†РёСЏРјРё
+ * - REST Controller (POST /simulation/guest-token) РґР»СЏ РІС‹РґР°С‡Рё guest-С‚РѕРєРµРЅРѕРІ
+ * - РР·РѕР»РёСЂРѕРІР°РЅРЅС‹Р№ РєРѕРЅС‚РµРєСЃС‚ РІС‹РїРѕР»РЅРµРЅРёСЏ flow (in-memory session, variables, customData)
+ * - РџРѕРґРјРµРЅСЏРµРјС‹Р№ transport layer (WebSocket РІРјРµСЃС‚Рѕ Telegram API)
  *
- * Зависимости:
- * - AuthModule — JWT аутентификация
- * - BotsModule — NodeHandlerService (общие обработчики узлов)
- * - TypeORM entities — Bot, BotFlow, BotFlowNode, BotCustomData, CustomData
+ * Р—Р°РІРёСЃРёРјРѕСЃС‚Рё:
+ * - AuthModule вЂ” JWT Р°СѓС‚РµРЅС‚РёС„РёРєР°С†РёСЏ
+ * - BotsModule вЂ” NodeHandlerService (РѕР±С‰РёРµ РѕР±СЂР°Р±РѕС‚С‡РёРєРё СѓР·Р»РѕРІ)
+ * - TypeORM entities вЂ” Bot, BotFlow, BotFlowNode, BotCustomData, CustomData
  */
 @Module({
   imports: [

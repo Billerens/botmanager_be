@@ -55,7 +55,7 @@ export interface SimulationBotConfig {
   miniapp: SimulationMiniAppConfig;
 }
 
-/** Типы узлов, которые не симулируются */
+/** РўРёРїС‹ СѓР·Р»РѕРІ, РєРѕС‚РѕСЂС‹Рµ РЅРµ СЃРёРјСѓР»РёСЂСѓСЋС‚СЃСЏ */
 const NON_SIMULATABLE_NODES = new Set([
   "payment",
   "webhook",
@@ -64,13 +64,13 @@ const NON_SIMULATABLE_NODES = new Set([
   "broadcast",
 ]);
 
-/** Заглушки для несимулируемых узлов */
+/** Р—Р°РіР»СѓС€РєРё РґР»СЏ РЅРµСЃРёРјСѓР»РёСЂСѓРµРјС‹С… СѓР·Р»РѕРІ */
 const NODE_STUBS: Record<string, string> = {
-  payment: "💳 Симуляция: оплата пропущена, переход далее",
-  webhook: "🔗 Симуляция: вебхук пропущен",
-  ai_single: "🤖 Симуляция: AI-ответ (заглушка)",
-  ai_chat: "🤖 Симуляция: AI-чат (заглушка)",
-  broadcast: "📢 Симуляция: рассылка пропущена",
+  payment: "рџ’і РЎРёРјСѓР»СЏС†РёСЏ: РѕРїР»Р°С‚Р° РїСЂРѕРїСѓС‰РµРЅР°, РїРµСЂРµС…РѕРґ РґР°Р»РµРµ",
+  webhook: "рџ”— РЎРёРјСѓР»СЏС†РёСЏ: РІРµР±С…СѓРє РїСЂРѕРїСѓС‰РµРЅ",
+  ai_single: "рџ¤– РЎРёРјСѓР»СЏС†РёСЏ: AI-РѕС‚РІРµС‚ (Р·Р°РіР»СѓС€РєР°)",
+  ai_chat: "рџ¤– РЎРёРјСѓР»СЏС†РёСЏ: AI-С‡Р°С‚ (Р·Р°РіР»СѓС€РєР°)",
+  broadcast: "рџ“ў РЎРёРјСѓР»СЏС†РёСЏ: СЂР°СЃСЃС‹Р»РєР° РїСЂРѕРїСѓС‰РµРЅР°",
 };
 
 @Injectable()
@@ -101,8 +101,8 @@ export class SimulationService {
   ) {}
 
   /**
-   * Получить runtime-конфигурацию бота для клиента симуляции.
-   * Включает доступные команды и конфигурацию miniapp-кнопок.
+   * РџРѕР»СѓС‡РёС‚СЊ runtime-РєРѕРЅС„РёРіСѓСЂР°С†РёСЋ Р±РѕС‚Р° РґР»СЏ РєР»РёРµРЅС‚Р° СЃРёРјСѓР»СЏС†РёРё.
+   * Р’РєР»СЋС‡Р°РµС‚ РґРѕСЃС‚СѓРїРЅС‹Рµ РєРѕРјР°РЅРґС‹ Рё РєРѕРЅС„РёРіСѓСЂР°С†РёСЋ miniapp-РєРЅРѕРїРѕРє.
    */
   async getBotConfig(botId: string, ownerId: string): Promise<SimulationBotConfig> {
     const isGuest = ownerId.startsWith("guest:");
@@ -111,7 +111,7 @@ export class SimulationService {
     });
 
     if (!bot) {
-      throw new ForbiddenException("Бот не найден или нет доступа");
+      throw new ForbiddenException("Р‘РѕС‚ РЅРµ РЅР°Р№РґРµРЅ РёР»Рё РЅРµС‚ РґРѕСЃС‚СѓРїР°");
     }
 
     const [shop, bookingSystem, customPages] = await Promise.all([
@@ -128,7 +128,7 @@ export class SimulationService {
     const commands: SimulationBotCommandConfig[] = [
       {
         command: "start",
-        description: "Запустить бота",
+        description: "Р—Р°РїСѓСЃС‚РёС‚СЊ Р±РѕС‚Р°",
         source: "core",
       },
     ];
@@ -137,7 +137,7 @@ export class SimulationService {
       commands.push({
         command: "shop",
         description:
-          shop.buttonSettings?.command?.description || "🛒 Открыть магазин",
+          shop.buttonSettings?.command?.description || "рџ›’ РћС‚РєСЂС‹С‚СЊ РјР°РіР°Р·РёРЅ",
         source: "shop",
       });
     }
@@ -147,7 +147,7 @@ export class SimulationService {
         command: "booking",
         description:
           bookingSystem.buttonSettings?.command?.description ||
-          "📅 Записаться на прием",
+          "рџ“… Р—Р°РїРёСЃР°С‚СЊСЃСЏ РЅР° РїСЂРёРµРј",
         source: "booking",
       });
     }
@@ -163,12 +163,12 @@ export class SimulationService {
 
       commands.push({
         command: normalizedCommand,
-        description: `📄 ${page.title}`,
+        description: `рџ“„ ${page.title}`,
         source: "custom_page",
       });
     }
 
-    // Защита от дублей команд (оставляем первое совпадение)
+    // Р—Р°С‰РёС‚Р° РѕС‚ РґСѓР±Р»РµР№ РєРѕРјР°РЅРґ (РѕСЃС‚Р°РІР»СЏРµРј РїРµСЂРІРѕРµ СЃРѕРІРїР°РґРµРЅРёРµ)
     const uniqueCommands = commands.filter(
       (item, index, arr) =>
         arr.findIndex((candidate) => candidate.command === item.command) === index,
@@ -193,19 +193,19 @@ export class SimulationService {
       url: null,
     };
 
-    // Приоритет полностью повторяет TelegramService.setBotCommands: shop > booking
+    // РџСЂРёРѕСЂРёС‚РµС‚ РїРѕР»РЅРѕСЃС‚СЊСЋ РїРѕРІС‚РѕСЂСЏРµС‚ TelegramService.setBotCommands: shop > booking
     if (shopMenuEnabled) {
       menuButton = {
         enabled: true,
         source: "shop",
-        text: shop?.buttonSettings?.menu_button?.text || "🛒 Магазин",
+        text: shop?.buttonSettings?.menu_button?.text || "рџ›’ РњР°РіР°Р·РёРЅ",
         url: shopUrl,
       };
     } else if (bookingMenuEnabled) {
       menuButton = {
         enabled: true,
         source: "booking",
-        text: bookingSystem?.buttonSettings?.menu_button?.text || "📅 Записаться",
+        text: bookingSystem?.buttonSettings?.menu_button?.text || "рџ“… Р—Р°РїРёСЃР°С‚СЊСЃСЏ",
         url: bookingUrl,
       };
     }
@@ -231,7 +231,7 @@ export class SimulationService {
   }
 
   /**
-   * Запустить новую симуляцию
+   * Р—Р°РїСѓСЃС‚РёС‚СЊ РЅРѕРІСѓСЋ СЃРёРјСѓР»СЏС†РёСЋ
    */
   async startSimulation(
     socket: Socket,
@@ -239,18 +239,18 @@ export class SimulationService {
     botId: string,
     flowId?: string,
   ): Promise<{ simulationId: string }> {
-    // Проверяем, что бот принадлежит пользователю (для гостей пропускаем проверку владения, 
-    // так как она уже проверена в gateway через guestBotId)
+    // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ Р±РѕС‚ РїСЂРёРЅР°РґР»РµР¶РёС‚ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ (РґР»СЏ РіРѕСЃС‚РµР№ РїСЂРѕРїСѓСЃРєР°РµРј РїСЂРѕРІРµСЂРєСѓ РІР»Р°РґРµРЅРёСЏ, 
+    // С‚Р°Рє РєР°Рє РѕРЅР° СѓР¶Рµ РїСЂРѕРІРµСЂРµРЅР° РІ gateway С‡РµСЂРµР· guestBotId)
     const isGuest = ownerId.startsWith("guest:");
     const bot = await this.botRepository.findOne({
       where: isGuest ? { id: botId } : { id: botId, ownerId },
     });
 
     if (!bot) {
-      throw new ForbiddenException("Бот не найден или нет доступа");
+      throw new ForbiddenException("Р‘РѕС‚ РЅРµ РЅР°Р№РґРµРЅ РёР»Рё РЅРµС‚ РґРѕСЃС‚СѓРїР°");
     }
 
-    // Находим flow
+    // РќР°С…РѕРґРёРј flow
     let activeFlow: BotFlow;
     if (flowId) {
       activeFlow = await this.botFlowRepository.findOne({
@@ -258,7 +258,7 @@ export class SimulationService {
         relations: ["nodes"],
       });
     } else {
-      // Берём активный flow
+      // Р‘РµСЂС‘Рј Р°РєС‚РёРІРЅС‹Р№ flow
       activeFlow = await this.botFlowRepository.findOne({
         where: { botId, status: FlowStatus.ACTIVE },
         relations: ["nodes"],
@@ -266,12 +266,12 @@ export class SimulationService {
     }
 
     if (!activeFlow) {
-      throw new NotFoundException("Flow не найден для данного бота");
+      throw new NotFoundException("Flow РЅРµ РЅР°Р№РґРµРЅ РґР»СЏ РґР°РЅРЅРѕРіРѕ Р±РѕС‚Р°");
     }
 
-    // Копируем customData legacy (custom_storage) в in-memory snapshot
+    // РљРѕРїРёСЂСѓРµРј customData legacy (custom_storage) РІ in-memory snapshot
     const customStorageSnapshot = new Map<string, any>();
-    // Копируем customData v2 (custom_data) в отдельный snapshot
+    // РљРѕРїРёСЂСѓРµРј customData v2 (custom_data) РІ РѕС‚РґРµР»СЊРЅС‹Р№ snapshot
     const customDataSnapshot = new Map<string, any>();
     try {
       const customRecords = await this.customDataRepository.find({
@@ -284,9 +284,9 @@ export class SimulationService {
           data: JSON.parse(JSON.stringify(record.data)),
         });
       }
-      this.logger.log(`Скопировано ${customRecords.length} записей custom_storage для симуляции`);
+      this.logger.log(`РЎРєРѕРїРёСЂРѕРІР°РЅРѕ ${customRecords.length} Р·Р°РїРёСЃРµР№ custom_storage РґР»СЏ СЃРёРјСѓР»СЏС†РёРё`);
     } catch (error) {
-      this.logger.warn(`Ошибка копирования custom_storage: ${error.message}`);
+      this.logger.warn(`РћС€РёР±РєР° РєРѕРїРёСЂРѕРІР°РЅРёСЏ custom_storage: ${error.message}`);
     }
 
     try {
@@ -311,12 +311,12 @@ export class SimulationService {
             : undefined,
         });
       }
-      this.logger.log(`Скопировано ${customDataRecords.length} записей custom_data для симуляции`);
+      this.logger.log(`РЎРєРѕРїРёСЂРѕРІР°РЅРѕ ${customDataRecords.length} Р·Р°РїРёСЃРµР№ custom_data РґР»СЏ СЃРёРјСѓР»СЏС†РёРё`);
     } catch (error) {
-      this.logger.warn(`Ошибка копирования custom_data: ${error.message}`);
+      this.logger.warn(`РћС€РёР±РєР° РєРѕРїРёСЂРѕРІР°РЅРёСЏ custom_data: ${error.message}`);
     }
 
-    // Создаём сессию симуляции
+    // РЎРѕР·РґР°С‘Рј СЃРµСЃСЃРёСЋ СЃРёРјСѓР»СЏС†РёРё
     const simulationId = crypto.randomUUID();
     const session = this.sessionStore.create({
       simulationId,
@@ -329,13 +329,13 @@ export class SimulationService {
       customDataSnapshot,
     });
 
-    this.logger.log(`Симуляция запущена: ${simulationId} (bot: ${botId}, flow: ${activeFlow.id})`);
+    this.logger.log(`РЎРёРјСѓР»СЏС†РёСЏ Р·Р°РїСѓС‰РµРЅР°: ${simulationId} (bot: ${botId}, flow: ${activeFlow.id})`);
 
     return { simulationId };
   }
 
   /**
-   * Обработать сообщение «от пользователя» в симуляции
+   * РћР±СЂР°Р±РѕС‚Р°С‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ В«РѕС‚ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏВ» РІ СЃРёРјСѓР»СЏС†РёРё
    */
   async processMessage(
     socket: Socket,
@@ -344,16 +344,16 @@ export class SimulationService {
   ): Promise<void> {
     const session = this.sessionStore.get(simulationId);
     if (!session) {
-      socket.emit("simulation:error", { message: "Сессия симуляции не найдена" });
+      socket.emit("simulation:error", { message: "РЎРµСЃСЃРёСЏ СЃРёРјСѓР»СЏС†РёРё РЅРµ РЅР°Р№РґРµРЅР°" });
       return;
     }
 
     this.sessionStore.touch(simulationId);
 
-    // Получаем бота и flow
+    // РџРѕР»СѓС‡Р°РµРј Р±РѕС‚Р° Рё flow
     const bot = await this.botRepository.findOne({ where: { id: session.botId } });
     if (!bot) {
-      socket.emit("simulation:error", { message: "Бот не найден" });
+      socket.emit("simulation:error", { message: "Р‘РѕС‚ РЅРµ РЅР°Р№РґРµРЅ" });
       return;
     }
 
@@ -362,14 +362,14 @@ export class SimulationService {
       relations: ["nodes"],
     });
     if (!flow) {
-      socket.emit("simulation:error", { message: "Flow не найден" });
+      socket.emit("simulation:error", { message: "Flow РЅРµ РЅР°Р№РґРµРЅ" });
       return;
     }
 
-    // Создаём синтетическое сообщение Telegram
+    // РЎРѕР·РґР°С‘Рј СЃРёРЅС‚РµС‚РёС‡РµСЃРєРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ Telegram
     const syntheticMessage = this.createSyntheticMessage(text, session);
 
-    // Создаём изолированную сессию пользователя
+    // РЎРѕР·РґР°С‘Рј РёР·РѕР»РёСЂРѕРІР°РЅРЅСѓСЋ СЃРµСЃСЃРёСЋ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
     const userSession: UserSession = {
       userId: `sim_${simulationId}`,
       chatId: `sim_chat_${simulationId}`,
@@ -379,10 +379,10 @@ export class SimulationService {
       lastActivity: new Date(),
     };
 
-    // Настраиваем transport для WebSocket
+    // РќР°СЃС‚СЂР°РёРІР°РµРј transport РґР»СЏ WebSocket
     this.transportService.setSocket(socket);
 
-    // Создаём FlowContext с подменённым transport
+    // РЎРѕР·РґР°С‘Рј FlowContext СЃ РїРѕРґРјРµРЅС‘РЅРЅС‹Рј transport
     const context: FlowContext = {
       bot,
       user: syntheticMessage.from,
@@ -399,15 +399,15 @@ export class SimulationService {
     try {
       await this.executeSimulationFlow(context, session, socket);
     } catch (error) {
-      this.logger.error(`Ошибка симуляции ${simulationId}: ${error.message}`);
-      socket.emit("simulation:error", { message: `Ошибка выполнения: ${error.message}` });
+      this.logger.error(`РћС€РёР±РєР° СЃРёРјСѓР»СЏС†РёРё ${simulationId}: ${error.message}`);
+      socket.emit("simulation:error", { message: `РћС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ: ${error.message}` });
     } finally {
       this.transportService.clearSocket();
     }
   }
 
   /**
-   * Обработать callback query (нажатие inline-кнопки)
+   * РћР±СЂР°Р±РѕС‚Р°С‚СЊ callback query (РЅР°Р¶Р°С‚РёРµ inline-РєРЅРѕРїРєРё)
    */
   async processCallback(
     socket: Socket,
@@ -416,7 +416,7 @@ export class SimulationService {
   ): Promise<void> {
     const session = this.sessionStore.get(simulationId);
     if (!session) {
-      socket.emit("simulation:error", { message: "Сессия симуляции не найдена" });
+      socket.emit("simulation:error", { message: "РЎРµСЃСЃРёСЏ СЃРёРјСѓР»СЏС†РёРё РЅРµ РЅР°Р№РґРµРЅР°" });
       return;
     }
 
@@ -429,11 +429,11 @@ export class SimulationService {
     });
 
     if (!bot || !flow) {
-      socket.emit("simulation:error", { message: "Бот или flow не найден" });
+      socket.emit("simulation:error", { message: "Р‘РѕС‚ РёР»Рё flow РЅРµ РЅР°Р№РґРµРЅ" });
       return;
     }
 
-    // Создаём синтетический callback_query
+    // РЎРѕР·РґР°С‘Рј СЃРёРЅС‚РµС‚РёС‡РµСЃРєРёР№ callback_query
     const syntheticMessage = this.createSyntheticCallbackMessage(
       callbackData,
       simulationId,
@@ -467,15 +467,15 @@ export class SimulationService {
     try {
       await this.executeSimulationFlow(context, session, socket);
     } catch (error) {
-      this.logger.error(`Ошибка callback симуляции ${simulationId}: ${error.message}`);
-      socket.emit("simulation:error", { message: `Ошибка: ${error.message}` });
+      this.logger.error(`РћС€РёР±РєР° callback СЃРёРјСѓР»СЏС†РёРё ${simulationId}: ${error.message}`);
+      socket.emit("simulation:error", { message: `РћС€РёР±РєР°: ${error.message}` });
     } finally {
       this.transportService.clearSocket();
     }
   }
 
   /**
-   * Отправить данные для endpoint-узла
+   * РћС‚РїСЂР°РІРёС‚СЊ РґР°РЅРЅС‹Рµ РґР»СЏ endpoint-СѓР·Р»Р°
    */
   async processEndpointData(
     socket: Socket,
@@ -485,16 +485,16 @@ export class SimulationService {
   ): Promise<void> {
     const session = this.sessionStore.get(simulationId);
     if (!session) {
-      socket.emit("simulation:error", { message: "Сессия не найдена" });
+      socket.emit("simulation:error", { message: "РЎРµСЃСЃРёСЏ РЅРµ РЅР°Р№РґРµРЅР°" });
       return;
     }
 
     this.sessionStore.touch(simulationId);
 
-    // Записываем данные в переменные сессии
+    // Р—Р°РїРёСЃС‹РІР°РµРј РґР°РЅРЅС‹Рµ РІ РїРµСЂРµРјРµРЅРЅС‹Рµ СЃРµСЃСЃРёРё
     Object.assign(session.variables, data);
 
-    // Если flow ожидает на этом endpoint-узле — продолжаем выполнение
+    // Р•СЃР»Рё flow РѕР¶РёРґР°РµС‚ РЅР° СЌС‚РѕРј endpoint-СѓР·Р»Рµ вЂ” РїСЂРѕРґРѕР»Р¶Р°РµРј РІС‹РїРѕР»РЅРµРЅРёРµ
     if (session.currentNodeId === nodeId) {
       const bot = await this.botRepository.findOne({ where: { id: session.botId } });
       const flow = await this.botFlowRepository.findOne({
@@ -529,7 +529,7 @@ export class SimulationService {
         };
 
         try {
-          // Находим endpoint-узел и переходим к следующему
+          // РќР°С…РѕРґРёРј endpoint-СѓР·РµР» Рё РїРµСЂРµС…РѕРґРёРј Рє СЃР»РµРґСѓСЋС‰РµРјСѓ
           const endpointNode = flow.nodes.find(n => n.nodeId === nodeId);
           if (endpointNode) {
             context.currentNode = endpointNode;
@@ -543,15 +543,15 @@ export class SimulationService {
   }
 
   /**
-   * Остановить симуляцию
+   * РћСЃС‚Р°РЅРѕРІРёС‚СЊ СЃРёРјСѓР»СЏС†РёСЋ
    */
   stopSimulation(simulationId: string): void {
     this.sessionStore.delete(simulationId);
-    this.logger.log(`Симуляция остановлена: ${simulationId}`);
+    this.logger.log(`РЎРёРјСѓР»СЏС†РёСЏ РѕСЃС‚Р°РЅРѕРІР»РµРЅР°: ${simulationId}`);
   }
 
   /**
-   * Обработка disconnect — очистка сессий по socketId
+   * РћР±СЂР°Р±РѕС‚РєР° disconnect вЂ” РѕС‡РёСЃС‚РєР° СЃРµСЃСЃРёР№ РїРѕ socketId
    */
   handleDisconnect(socketId: string): void {
     this.sessionStore.deleteBySocketId(socketId);
@@ -560,7 +560,7 @@ export class SimulationService {
   // ==================== Private ====================
 
   /**
-   * Исполнение flow в режиме симуляции
+   * РСЃРїРѕР»РЅРµРЅРёРµ flow РІ СЂРµР¶РёРјРµ СЃРёРјСѓР»СЏС†РёРё
    */
   private async executeSimulationFlow(
     context: FlowContext,
@@ -568,22 +568,39 @@ export class SimulationService {
     socket: Socket,
   ): Promise<void> {
     const { flow, message } = context;
+    const messageText = message.text || "";
 
-    // Определяем текущий узел
-    if (message.text === "/start") {
-      const startNode = flow.nodes.find(n => n.type === "start");
-      if (startNode) {
-        context.currentNode = startNode;
-        context.session.currentNodeId = startNode.nodeId;
-        session.currentNodeId = startNode.nodeId;
+    // Как и в проде, slash-команды имеют наивысший приоритет.
+    if (messageText.startsWith("/")) {
+      if (messageText === "/start") {
+        const startNode = flow.nodes.find((n) => n.type === "start");
+        if (startNode) {
+          context.currentNode = startNode;
+          context.session.currentNodeId = startNode.nodeId;
+          session.currentNodeId = startNode.nodeId;
+          await this.executeNodeWithSimulation(context, session, socket);
+          return;
+        }
+      }
+
+      const commandHandled = await this.tryHandleDirectCommand(context, messageText);
+      if (commandHandled) {
+        return;
+      }
+
+      const commandNode = this.findMatchingNewMessageNode(flow, messageText);
+      if (commandNode) {
+        context.currentNode = commandNode;
+        context.session.currentNodeId = commandNode.nodeId;
+        session.currentNodeId = commandNode.nodeId;
         await this.executeNodeWithSimulation(context, session, socket);
         return;
       }
     }
 
-    // Если есть текущий узел — продолжаем выполнение от него
+    // Если есть текущий узел — продолжаем выполнение от него.
     if (session.currentNodeId) {
-      const currentNode = flow.nodes.find(n => n.nodeId === session.currentNodeId);
+      const currentNode = flow.nodes.find((n) => n.nodeId === session.currentNodeId);
       if (currentNode) {
         context.currentNode = currentNode;
         await this.executeNodeWithSimulation(context, session, socket);
@@ -591,31 +608,169 @@ export class SimulationService {
       }
     }
 
-    // Ищем new_message узлы (глобальные перехваты)
-    const newMessageNodes = flow.nodes.filter(n => n.type === "new_message");
+    // Ищем new_message узлы (глобальные перехваты).
+    const newMessageNode = this.findMatchingNewMessageNode(flow, messageText);
+    if (newMessageNode) {
+      context.currentNode = newMessageNode;
+      context.session.currentNodeId = newMessageNode.nodeId;
+      session.currentNodeId = newMessageNode.nodeId;
+      await this.executeNodeWithSimulation(context, session, socket);
+      return;
+    }
+
+    this.logger.warn(
+      `Симуляция: не найден подходящий узел для сообщения "${messageText}"`,
+    );
+  }
+
+  private findMatchingNewMessageNode(
+    flow: BotFlow,
+    text: string,
+  ): BotFlowNode | null {
+    const newMessageNodes = flow.nodes.filter((n) => n.type === "new_message");
     for (const nmNode of newMessageNodes) {
       const newMessageData = nmNode.data?.newMessage;
-      if (!newMessageData?.text) continue;
+      if (!newMessageData?.text) {
+        continue;
+      }
 
       const { text: filterText, caseSensitive } = newMessageData;
-      const userText = caseSensitive ? message.text : (message.text || "").toLowerCase();
+      const userText = caseSensitive ? text : (text || "").toLowerCase();
       const compareText = caseSensitive ? filterText : filterText.toLowerCase();
 
       if (userText === compareText) {
-        context.currentNode = nmNode;
-        context.session.currentNodeId = nmNode.nodeId;
-        session.currentNodeId = nmNode.nodeId;
-        await this.executeNodeWithSimulation(context, session, socket);
-        return;
+        return nmNode;
       }
     }
 
-    this.logger.warn(`Симуляция: не найден подходящий узел для сообщения "${message.text}"`);
+    return null;
   }
 
   /**
-   * Выполнить узел с учётом simulation-специфики
+   * Обработать прямые slash-команды, не связанные с узлами flow:
+   * /shop, /booking, а также custom page команды.
    */
+  private async tryHandleDirectCommand(
+    context: FlowContext,
+    commandText: string,
+  ): Promise<boolean> {
+    const botId = context.bot?.id;
+    if (!botId || !commandText.startsWith("/")) {
+      return false;
+    }
+
+    if (commandText === "/shop") {
+      const shop = await this.shopRepository.findOne({ where: { botId } });
+      if (shop?.buttonTypes?.includes("command")) {
+        const commandSettings = shop.buttonSettings?.command;
+        const buttonText = commandSettings?.text || "Открыть магазин";
+        const messageText =
+          commandSettings?.messageText ||
+          shop.description ||
+          "Добро пожаловать в наш магазин! Нажмите кнопку ниже, чтобы открыть магазин.";
+        const shopUrl =
+          shop.url ||
+          `${process.env.EXTERNAL_FRONTEND_URL || "https://uforge.online"}/shop/${shop.id}`;
+
+        await this.transportService.sendMessage(
+          context.bot,
+          context.session.chatId,
+          messageText,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: buttonText,
+                    web_app: { url: shopUrl },
+                  },
+                ],
+              ],
+            },
+          },
+        );
+
+        return true;
+      }
+    }
+
+    if (commandText === "/booking") {
+      const bookingSystem = await this.bookingSystemRepository.findOne({
+        where: { botId },
+      });
+      if (bookingSystem?.buttonTypes?.includes("command")) {
+        const commandSettings = bookingSystem.buttonSettings?.command;
+        const buttonText = commandSettings?.text || "Записаться на прием";
+        const messageText =
+          commandSettings?.messageText ||
+          bookingSystem.description ||
+          "Добро пожаловать в нашу систему бронирования! Нажмите кнопку ниже, чтобы записаться.";
+        const bookingUrl =
+          bookingSystem.url ||
+          `${process.env.EXTERNAL_FRONTEND_URL || "https://uforge.online"}/booking/${bookingSystem.id}`;
+
+        await this.transportService.sendMessage(
+          context.bot,
+          context.session.chatId,
+          messageText,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: buttonText,
+                    web_app: { url: bookingUrl },
+                  },
+                ],
+              ],
+            },
+          },
+        );
+
+        return true;
+      }
+    }
+
+    const requestedCommand = commandText.replace(/^\//, "").toLowerCase();
+    const pages = await this.customPageRepository.find({
+      where: {
+        botId,
+        status: CustomPageStatus.ACTIVE,
+      },
+    });
+
+    const page = pages.find((candidate) => {
+      if (!candidate.botCommand) {
+        return false;
+      }
+      return candidate.botCommand.replace(/^\//, "").toLowerCase() === requestedCommand;
+    });
+
+    if (page) {
+      await this.transportService.sendMessage(
+        context.bot,
+        context.session.chatId,
+        page.description || "Нажмите кнопку ниже, чтобы открыть страницу.",
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "Открыть страницу",
+                  web_app: { url: page.url },
+                },
+              ],
+            ],
+          },
+        },
+      );
+
+      return true;
+    }
+
+    return false;
+  }
+
   private async executeNodeWithSimulation(
     context: FlowContext,
     session: SimulationSessionData,
@@ -626,12 +781,12 @@ export class SimulationService {
 
     const nodeType = currentNode.type;
 
-    // Проверяем, является ли узел несимулируемым
+    // РџСЂРѕРІРµСЂСЏРµРј, СЏРІР»СЏРµС‚СЃСЏ Р»Рё СѓР·РµР» РЅРµСЃРёРјСѓР»РёСЂСѓРµРјС‹Рј
     if (NON_SIMULATABLE_NODES.has(nodeType)) {
-      const stubMessage = NODE_STUBS[nodeType] || `⚠️ Узел "${nodeType}" не поддерживается в симуляции`;
+      const stubMessage = NODE_STUBS[nodeType] || `вљ пёЏ РЈР·РµР» "${nodeType}" РЅРµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚СЃСЏ РІ СЃРёРјСѓР»СЏС†РёРё`;
       socket.emit("simulation:bot_message", { text: stubMessage });
 
-      // Пропускаем узел — переходим к следующему
+      // РџСЂРѕРїСѓСЃРєР°РµРј СѓР·РµР» вЂ” РїРµСЂРµС…РѕРґРёРј Рє СЃР»РµРґСѓСЋС‰РµРјСѓ
       const nextEdge = context.flow.flowData?.edges?.find(
         e => e.source === currentNode.nodeId,
       );
@@ -647,13 +802,13 @@ export class SimulationService {
       return;
     }
 
-    // Специальная обработка periodic_execution
+    // РЎРїРµС†РёР°Р»СЊРЅР°СЏ РѕР±СЂР°Р±РѕС‚РєР° periodic_execution
     if (nodeType === "periodic_execution") {
       await this.handlePeriodicSimulation(context, session, socket);
       return;
     }
 
-    // Специальная обработка endpoint (ожидание данных)
+    // РЎРїРµС†РёР°Р»СЊРЅР°СЏ РѕР±СЂР°Р±РѕС‚РєР° endpoint (РѕР¶РёРґР°РЅРёРµ РґР°РЅРЅС‹С…)
     if (nodeType === "endpoint" && !context.reachedThroughTransition) {
       session.currentNodeId = currentNode.nodeId;
       context.session.currentNodeId = currentNode.nodeId;
@@ -666,25 +821,25 @@ export class SimulationService {
       return;
     }
 
-    // Стандартное выполнение через зарегистрированный handler
+    // РЎС‚Р°РЅРґР°СЂС‚РЅРѕРµ РІС‹РїРѕР»РЅРµРЅРёРµ С‡РµСЂРµР· Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅРЅС‹Р№ handler
     const handler = this.nodeHandlerService.getHandler(nodeType);
     if (handler) {
-      // Важно: задаём контекст всегда. Проверка через `in` здесь не работает
-      // для TypeScript-полей без runtime-инициализации.
+      // Р’Р°Р¶РЅРѕ: Р·Р°РґР°С‘Рј РєРѕРЅС‚РµРєСЃС‚ РІСЃРµРіРґР°. РџСЂРѕРІРµСЂРєР° С‡РµСЂРµР· `in` Р·РґРµСЃСЊ РЅРµ СЂР°Р±РѕС‚Р°РµС‚
+      // РґР»СЏ TypeScript-РїРѕР»РµР№ Р±РµР· runtime-РёРЅРёС†РёР°Р»РёР·Р°С†РёРё.
       (handler as any)._currentContext = context;
 
       await handler.execute(context);
 
-      // Синхронизируем состояние обратно в SimulationSessionData
+      // РЎРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµРј СЃРѕСЃС‚РѕСЏРЅРёРµ РѕР±СЂР°С‚РЅРѕ РІ SimulationSessionData
       session.currentNodeId = context.session.currentNodeId;
       session.variables = { ...context.session.variables };
     } else {
-      this.logger.warn(`Симуляция: неизвестный тип узла "${nodeType}"`);
+      this.logger.warn(`РЎРёРјСѓР»СЏС†РёСЏ: РЅРµРёР·РІРµСЃС‚РЅС‹Р№ С‚РёРї СѓР·Р»Р° "${nodeType}"`);
     }
   }
 
   /**
-   * Симуляция periodic_execution через setTimeout
+   * РЎРёРјСѓР»СЏС†РёСЏ periodic_execution С‡РµСЂРµР· setTimeout
    */
   private async handlePeriodicSimulation(
     context: FlowContext,
@@ -696,10 +851,10 @@ export class SimulationService {
     if (!config) return;
 
     const intervalMs = this.getIntervalMs(config);
-    const maxExecutions = config.maxExecutions || 5; // Лимитируем в симуляции
+    const maxExecutions = config.maxExecutions || 5; // Р›РёРјРёС‚РёСЂСѓРµРј РІ СЃРёРјСѓР»СЏС†РёРё
     const nodeId = currentNode.nodeId;
 
-    // Очищаем предыдущий таймер если был
+    // РћС‡РёС‰Р°РµРј РїСЂРµРґС‹РґСѓС‰РёР№ С‚Р°Р№РјРµСЂ РµСЃР»Рё Р±С‹Р»
     const existingTimer = session.periodicTimers.get(nodeId);
     if (existingTimer) {
       clearTimeout(existingTimer);
@@ -707,9 +862,9 @@ export class SimulationService {
 
     session.periodicCounts.set(nodeId, 0);
 
-    this.logger.log(`Симуляция periodic: interval=${intervalMs}ms, max=${maxExecutions}`);
+    this.logger.log(`РЎРёРјСѓР»СЏС†РёСЏ periodic: interval=${intervalMs}ms, max=${maxExecutions}`);
 
-    // Запускаем периодическое выполнение
+    // Р—Р°РїСѓСЃРєР°РµРј РїРµСЂРёРѕРґРёС‡РµСЃРєРѕРµ РІС‹РїРѕР»РЅРµРЅРёРµ
     const executePeriodicTick = async () => {
       const count = (session.periodicCounts.get(nodeId) || 0) + 1;
       session.periodicCounts.set(nodeId, count);
@@ -721,7 +876,7 @@ export class SimulationService {
 
       socket.emit("simulation:periodic_tick", { nodeId, executionCount: count });
 
-      // Выполняем дочерние узлы
+      // Р’С‹РїРѕР»РЅСЏРµРј РґРѕС‡РµСЂРЅРёРµ СѓР·Р»С‹
       const childEdges = context.flow.flowData?.edges?.filter(
         e => e.source === nodeId,
       ) || [];
@@ -745,20 +900,20 @@ export class SimulationService {
         }
       }
 
-      // Планируем следующий тик
+      // РџР»Р°РЅРёСЂСѓРµРј СЃР»РµРґСѓСЋС‰РёР№ С‚РёРє
       if (count < maxExecutions) {
         const timer = setTimeout(executePeriodicTick, intervalMs);
         session.periodicTimers.set(nodeId, timer);
       }
     };
 
-    // Первый тик через интервал
-    const timer = setTimeout(executePeriodicTick, Math.min(intervalMs, 10000)); // Макс 10 сек в симуляции
+    // РџРµСЂРІС‹Р№ С‚РёРє С‡РµСЂРµР· РёРЅС‚РµСЂРІР°Р»
+    const timer = setTimeout(executePeriodicTick, Math.min(intervalMs, 10000)); // РњР°РєСЃ 10 СЃРµРє РІ СЃРёРјСѓР»СЏС†РёРё
     session.periodicTimers.set(nodeId, timer);
   }
 
   /**
-   * Получить интервал в миллисекундах из конфигурации periodic
+   * РџРѕР»СѓС‡РёС‚СЊ РёРЅС‚РµСЂРІР°Р» РІ РјРёР»Р»РёСЃРµРєСѓРЅРґР°С… РёР· РєРѕРЅС„РёРіСѓСЂР°С†РёРё periodic
    */
   private getIntervalMs(config: any): number {
     if (config.scheduleType === "interval") {
@@ -768,14 +923,14 @@ export class SimulationService {
         (interval.hours || 0) * 3600 +
         (interval.minutes || 0) * 60 +
         (interval.seconds || 0);
-      return Math.max(seconds * 1000, 5000); // Минимум 5 сек
+      return Math.max(seconds * 1000, 5000); // РњРёРЅРёРјСѓРј 5 СЃРµРє
     }
-    // Для cron — используем фиксированный интервал в симуляции
-    return 10000; // 10 секунд
+    // Р”Р»СЏ cron вЂ” РёСЃРїРѕР»СЊР·СѓРµРј С„РёРєСЃРёСЂРѕРІР°РЅРЅС‹Р№ РёРЅС‚РµСЂРІР°Р» РІ СЃРёРјСѓР»СЏС†РёРё
+    return 10000; // 10 СЃРµРєСѓРЅРґ
   }
 
   /**
-   * Создать синтетический callback_query для inline-кнопок в симуляции
+   * РЎРѕР·РґР°С‚СЊ СЃРёРЅС‚РµС‚РёС‡РµСЃРєРёР№ callback_query РґР»СЏ inline-РєРЅРѕРїРѕРє РІ СЃРёРјСѓР»СЏС†РёРё
    */
   private createSyntheticCallbackMessage(
     callbackData: string,
@@ -804,14 +959,14 @@ export class SimulationService {
           chat: baseMessage.chat,
         },
       },
-      // Сохраняем также callback_data на верхнем уровне для совместимости
+      // РЎРѕС…СЂР°РЅСЏРµРј С‚Р°РєР¶Рµ callback_data РЅР° РІРµСЂС…РЅРµРј СѓСЂРѕРІРЅРµ РґР»СЏ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё
       callback_data: callbackData,
       simulationId,
     };
   }
 
   /**
-   * Создать синтетическое Telegram-сообщение для симуляции
+   * РЎРѕР·РґР°С‚СЊ СЃРёРЅС‚РµС‚РёС‡РµСЃРєРѕРµ Telegram-СЃРѕРѕР±С‰РµРЅРёРµ РґР»СЏ СЃРёРјСѓР»СЏС†РёРё
    */
   private createSyntheticMessage(text: string, session: SimulationSessionData): any {
     return {
@@ -819,19 +974,20 @@ export class SimulationService {
       from: {
         id: parseInt(session.simulationId.replace(/\D/g, "").substring(0, 9)) || 999999,
         is_bot: false,
-        first_name: "Симулятор",
-        last_name: "Пользователь",
+        first_name: "РЎРёРјСѓР»СЏС‚РѕСЂ",
+        last_name: "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ",
         username: "sim_user",
         language_code: "ru",
       },
       chat: {
         id: parseInt(session.simulationId.replace(/\D/g, "").substring(0, 9)) || 999999,
         type: "private" as const,
-        first_name: "Симулятор",
-        last_name: "Пользователь",
+        first_name: "РЎРёРјСѓР»СЏС‚РѕСЂ",
+        last_name: "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ",
       },
       date: Math.floor(Date.now() / 1000),
       text,
     };
   }
 }
+
