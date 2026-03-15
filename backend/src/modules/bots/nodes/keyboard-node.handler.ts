@@ -54,6 +54,27 @@ export class KeyboardNodeHandler extends BaseNodeHandler {
     messageOptions: any,
     processedFlatButtons: KeyboardButton[]
   ): Promise<any> {
+    // Simulation mode: отправляем через transport, не трогаем Telegram API/БД.
+    if (this._currentContext?.transport) {
+      if (imageUrl) {
+        await this.sendAndSavePhoto(bot, chatId, imageUrl, {
+          caption: messageText || undefined,
+          parse_mode: messageText ? messageOptions.parse_mode : undefined,
+          reply_markup: messageOptions.reply_markup,
+        });
+      } else {
+        await this._currentContext.transport.sendMessage(
+          bot,
+          chatId,
+          messageText,
+          messageOptions,
+        );
+      }
+
+      // KeyboardNode ожидает message_id для валидации callback.
+      return { message_id: Date.now() };
+    }
+
     if (imageUrl) {
       return await this.sendAndSavePhoto(bot, chatId, imageUrl, {
         caption: messageText || undefined,

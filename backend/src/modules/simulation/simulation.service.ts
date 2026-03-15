@@ -224,8 +224,11 @@ export class SimulationService {
     }
 
     // Создаём синтетический callback_query
-    const syntheticMessage = this.createSyntheticMessage(callbackData, session);
-    syntheticMessage.text = callbackData;
+    const syntheticMessage = this.createSyntheticCallbackMessage(
+      callbackData,
+      simulationId,
+      session,
+    );
 
     const userSession: UserSession = {
       userId: `sim_${simulationId}`,
@@ -450,10 +453,9 @@ export class SimulationService {
     // Стандартное выполнение через зарегистрированный handler
     const handler = this.nodeHandlerService.getHandler(nodeType);
     if (handler) {
-      // Устанавливаем _currentContext для transport
-      if ("_currentContext" in handler) {
-        (handler as any)._currentContext = context;
-      }
+      // Важно: задаём контекст всегда. Проверка через `in` здесь не работает
+      // для TypeScript-полей без runtime-инициализации.
+      (handler as any)._currentContext = context;
 
       await handler.execute(context);
 
@@ -554,6 +556,42 @@ export class SimulationService {
     }
     // Для cron — используем фиксированный интервал в симуляции
     return 10000; // 10 секунд
+  }
+
+  /**
+   * Создать синтетический callback_query для inline-кнопок в симуляции
+   */
+  private createSyntheticCallbackMessage(
+    callbackData: string,
+    simulationId: string,
+    session: SimulationSessionData,
+  ): any {
+    const baseMessage = this.createSyntheticMessage(callbackData, session);
+
+    const currentNodeId = session.currentNodeId;
+    const savedMessageIdRaw =
+      currentNodeId
+        ? session.variables?.[`keyboard_${currentNodeId}_sent_message_id`]
+        : undefined;
+    const savedMessageId = Number(savedMessageIdRaw) || Date.now();
+
+    return {
+      ...baseMessage,
+      is_callback: true,
+      text: callbackData,
+      callback_query: {
+        id: `sim_cb_${Date.now()}`,
+        from: baseMessage.from,
+        data: callbackData,
+        message: {
+          message_id: savedMessageId,
+          chat: baseMessage.chat,
+        },
+      },
+      // Сохраняем также callback_data на верхнем уровне для совместимости
+      callback_data: callbackData,
+      simulationId,
+    };
   }
 
   /**
