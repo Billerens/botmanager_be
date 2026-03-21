@@ -168,6 +168,22 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Проверяет доступность Redis командой PING
+   */
+  async ping(): Promise<string> {
+    if (!this.isConnected || !this.publisher) {
+      throw new Error("Redis не подключен");
+    }
+
+    try {
+      return await this.publisher.ping();
+    } catch (error) {
+      this.logger.error(`Ошибка Redis PING: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
    * Добавляет сообщение в Redis Stream
    * @param streamKey - ключ стрима (например, "notifications:user:123")
    * @param data - данные для сохранения
