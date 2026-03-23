@@ -48,6 +48,7 @@ import { FlowTemplatesModule } from "./modules/flow-templates/flow-templates.mod
 import { StylePresetsModule } from "./modules/style-presets/style-presets.module";
 import { SystemSettingsModule } from "./modules/system-settings/system-settings.module";
 import { SimulationModule } from "./modules/simulation/simulation.module";
+import { AiProvidersModule } from "./modules/ai-providers/ai-providers.module";
 
 @Module({
   imports: [
@@ -125,6 +126,7 @@ import { SimulationModule } from "./modules/simulation/simulation.module";
     StylePresetsModule,  // Галерея пресетов CSS
     SystemSettingsModule, // Системные настройки (из БД)
     SimulationModule,     // Симуляция botflow (WebSocket)
+    AiProvidersModule,    // Профили подключения к ИИ-провайдерам
   ],
 })
 export class AppModule {}

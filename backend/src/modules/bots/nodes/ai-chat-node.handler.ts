@@ -17,17 +17,21 @@ import {
   MessageRole,
   ChatMessageDto,
 } from "../../langchain-openrouter/dto/langchain-chat.dto";
+import { AiProvidersService } from "../../ai-providers/ai-providers.service";
 
 /**
  * Структура данных узла AI Chat
  */
 interface AiChatNodeData {
-  systemPrompt: string; // Системный промпт (поддержка {{variables}})
-  welcomeMessage?: string; // Приветственное сообщение (опционально)
-  maxHistoryTokens?: number; // Лимит токенов истории (default: 10000)
-  temperature?: number; // Температура (default: 0.7)
-  exitKeywords?: string[]; // Слова для выхода из чата (например: ["стоп", "выход"])
-  preferredModelId?: string; // Опционально: конкретная модель из списка для Bot Flow
+  systemPrompt: string;
+  welcomeMessage?: string;
+  maxHistoryTokens?: number;
+  temperature?: number;
+  exitKeywords?: string[];
+  /** Предпочтительная модель из списка OpenRouter. Игнорируется если задан aiProviderId. */
+  preferredModelId?: string;
+  /** ID профиля AI-провайдера. Если задан — используется кастомный провайдер вместо системного OpenRouter. */
+  aiProviderId?: string;
 }
 
 /**
@@ -83,7 +87,8 @@ export class AiChatNodeHandler extends BaseNodeHandler {
     activityLogService: ActivityLogService,
     private readonly aiModelSelector: AiModelSelectorService,
     private readonly langChainService: LangChainOpenRouterService,
-    private readonly streamingService: StreamingResponseService
+    private readonly streamingService: StreamingResponseService,
+    private readonly aiProvidersService: AiProvidersService,
   ) {
     super(
       botFlowRepository,
@@ -122,6 +127,7 @@ export class AiChatNodeHandler extends BaseNodeHandler {
       temperature = 0.7,
       exitKeywords = ["стоп", "выход", "конец", "/stop", "/exit"],
       preferredModelId,
+      aiProviderId,
     } = nodeData;
 
     // Ключ для хранения сессии AI чата
@@ -250,12 +256,89 @@ export class AiChatNodeHandler extends BaseNodeHandler {
     }
 
     try {
-      // Формируем сообщения для API
       const messages = this.buildMessagesForApi(chatSession);
       const chatId = message.chat.id.toString();
       const decryptedToken = this.botsService.decryptToken(bot.token);
 
-      // Модель: предпочтительная из узла или автоматический выбор
+      // === Ветка 1: Кастомный AI-провайдер ===
+      if (aiProviderId?.trim()) {
+        this.logger.log(`AI Chat: используем кастомный провайдер ${aiProviderId}`);
+        let aiResponse = "";
+        try {
+          const { model, resolvedModel, providerName } =
+            await this.aiProvidersService.buildChatOpenAI(
+              aiProviderId.trim(),
+              bot.ownerId,
+              {
+                modelName: preferredModelId?.trim() || undefined,
+                temperature,
+                maxTokens: 1000,
+              },
+            );
+          this.logger.log(`AI Chat: провайдер "${providerName}", модель ${resolvedModel}`);
+
+          const rawMessages = messages.map((m) => ({
+            role: m.role === MessageRole.SYSTEM ? "system" : m.role === MessageRole.HUMAN ? "user" : "assistant",
+            content: m.content,
+          }));
+
+          const streamGenerator = (async function* () {
+            const stream = await model.stream(rawMessages);
+            for await (const chunk of stream) {
+              if (chunk.content) {
+                const textChunk = 
+                  typeof chunk.content === "string" 
+                    ? chunk.content 
+                    : Array.isArray(chunk.content)
+                      ? (chunk.content as any[]).map((b) => (typeof b === "string" ? b : b?.text ?? b?.content ?? "")).join("")
+                      : String(chunk.content ?? "");
+                if (textChunk) {
+                  yield textChunk;
+                }
+              }
+            }
+          })();
+
+          const messagePrefix = `🤖 [${resolvedModel}]\n\n`;
+
+          const result = await this.streamingService.sendStreamingResponse(
+            bot,
+            chatId,
+            streamGenerator,
+            {
+              messagePrefix,
+              initialMessage: "Думаю...",
+              showCursor: true,
+              throttleMs: 800,
+              onTypingNeeded: async () => {
+                await this.telegramService.sendChatAction(
+                  decryptedToken,
+                  chatId,
+                  "typing"
+                );
+              },
+            }
+          );
+
+          aiResponse = result.fullResponse || "Извините, не удалось сформировать ответ.";
+          
+          this.logger.log(
+            `AI Chat [Custom]: Streaming ответ отправлен (${aiResponse.length} символов)`
+          );
+        } catch (providerError) {
+          this.logger.error(`AI Chat: ошибка кастомного провайдера: ${providerError.message}`);
+          await this.sendAndSaveMessage(bot, chatId, "Извините, произошла ошибка при обработке вашего сообщения.");
+        }
+        if (aiResponse) {
+          chatSession.chatHistory.push({ role: "assistant", content: aiResponse, timestamp: Date.now() });
+          chatSession.totalTokensEstimate += this.estimateTokens(aiResponse);
+          session.variables[chatSessionKey] = chatSession;
+        }
+        session.currentNodeId = currentNode.nodeId;
+        return;
+      }
+
+      // === Ветка 2: Системный OpenRouter (стандартное поведение) ===
       let modelId: string;
       let modelName: string;
       if (preferredModelId?.trim()) {
