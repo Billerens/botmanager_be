@@ -91,6 +91,7 @@ import { BotPermissionsService } from "./bot-permissions.service";
 import { BotInvitationsService } from "./bot-invitations.service";
 import { BotNotificationsService } from "./bot-notifications.service";
 import { BotPermissionGuard } from "./guards/bot-permission.guard";
+import { AiProvidersModule } from "../ai-providers/ai-providers.module";
 
 @Module({
   imports: [
@@ -139,6 +140,7 @@ import { BotPermissionGuard } from "./guards/bot-permission.guard";
     forwardRef(() => CustomDomainsModule),
     forwardRef(() => PaymentsModule),
     forwardRef(() => CustomDataModule),
+    AiProvidersModule,
   ],
   providers: [
     BotsService,

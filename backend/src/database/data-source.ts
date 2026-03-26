@@ -1,9 +1,14 @@
 import { DataSource } from "typeorm";
 import { config } from "dotenv";
 import { ALL_ENTITIES } from "./entities";
+import { join } from "path";
 
 // Загружаем переменные окружения
 config();
+
+// Поддерживаем и TS (локально/ts-node), и JS (production/dist) миграции.
+const isTsRuntime = __filename.endsWith(".ts");
+const runtimeExt = isTsRuntime ? "ts" : "js";
 
 export const AppDataSource = new DataSource({
   type: "postgres",
@@ -20,8 +25,8 @@ export const AppDataSource = new DataSource({
   // Это необходимо для PostgreSQL enum: новые значения не доступны в той же транзакции
   migrationsTransactionMode: "each",
   entities: ALL_ENTITIES,
-  migrations: ["src/database/migrations/*.ts"],
-  subscribers: ["src/database/subscribers/*.ts"],
+  migrations: [join(__dirname, "migrations", `*.${runtimeExt}`)],
+  subscribers: [join(__dirname, "subscribers", `*.${runtimeExt}`)],
 });
 
 // Функция для инициализации подключения

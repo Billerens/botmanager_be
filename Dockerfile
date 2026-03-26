@@ -25,4 +25,6 @@ USER nestjs
 
 EXPOSE 3000
 
+HEALTHCHECK --interval=15s --timeout=5s --start-period=120s --retries=5 CMD ["node", "-e", "const http=require('http');const port=process.env.PORT||3000;const req=http.get({host:'127.0.0.1',port,path:'/health/ready',timeout:4000},(res)=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.on('timeout',()=>{req.destroy();process.exit(1);});"]
+
 CMD ["/app/start.sh"]

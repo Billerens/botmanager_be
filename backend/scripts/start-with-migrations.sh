@@ -8,18 +8,49 @@ set -e  # Выходим при любой ошибке
 echo "🚀 Запуск UForge API..."
 echo "📅 $(date)"
 
+# Быстрый запуск TypeORM CLI (без ts-node) для production/dist
+TYPEORM_CLI="node ./node_modules/typeorm/cli.js"
+DATA_SOURCE_PATH="dist/database/data-source.js"
+
 # Функция для проверки подключения к базе данных
 check_database_connection() {
     echo "🔄 Проверяем подключение к базе данных..."
     
     # Пытаемся подключиться к базе данных с таймаутом
     timeout=30
+    interval=1
     counter=0
     last_error=""
     
     while [ $counter -lt $timeout ]; do
-        connection_output=$(yarn typeorm -- query "SELECT 1" --dataSource dist/database/data-source.js 2>&1)
+        set +e
+        connection_output=$(node -e '
+const { Client } = require("pg");
+const client = new Client({
+  host: process.env.DATABASE_HOST || "localhost",
+  port: parseInt(process.env.DATABASE_PORT || "5432", 10),
+  user: process.env.DATABASE_USERNAME || "botmanager",
+  password: process.env.DATABASE_PASSWORD || "botmanager_password",
+  database: process.env.DATABASE_NAME || "botmanager_dev",
+  connectionTimeoutMillis: 1500,
+  statement_timeout: 1500,
+  query_timeout: 1500,
+});
+(async () => {
+  try {
+    await client.connect();
+    await client.query("SELECT 1");
+    await client.end();
+    process.exit(0);
+  } catch (err) {
+    try { await client.end(); } catch (_) {}
+    console.error(err?.message || err);
+    process.exit(1);
+  }
+})();
+' 2>&1)
         connection_exit_code=$?
+        set -e
         
         if [ $connection_exit_code -eq 0 ]; then
             echo "✅ База данных подключена"
@@ -28,8 +59,8 @@ check_database_connection() {
         
         last_error="$connection_output"
         echo "⏳ База данных недоступна - ждем... ($counter/$timeout)"
-        sleep 2
-        counter=$((counter + 2))
+        sleep $interval
+        counter=$((counter + interval))
     done
     
     echo "❌ Не удалось подключиться к базе данных за $timeout секунд"
@@ -57,25 +88,17 @@ check_database_connection() {
 
 # Функция для применения миграций
 run_migrations() {
-    echo "🔄 Проверяем статус миграций..."
-    
-    # Показываем текущий статус миграций
-    migration_show_output=$(yarn typeorm -- migration:show --dataSource dist/database/data-source.js 2>&1) || true
-    echo "$migration_show_output"
-    
     echo "🔄 Применяем миграции..."
     
     # Применяем миграции с захватом вывода
-    migration_output=$(yarn typeorm -- migration:run --dataSource dist/database/data-source.js 2>&1)
+    set +e
+    migration_output=$($TYPEORM_CLI migration:run -d "$DATA_SOURCE_PATH" 2>&1)
     migration_exit_code=$?
+    set -e
     
     if [ $migration_exit_code -eq 0 ]; then
         echo "✅ Миграции успешно применены"
         echo "$migration_output"
-        
-        # Показываем финальный статус
-        echo "📊 Финальный статус миграций:"
-        yarn typeorm -- migration:show --dataSource dist/database/data-source.js || true
     else
         echo "❌ Ошибка при применении миграций"
         echo "🔍 Код ошибки: $migration_exit_code"

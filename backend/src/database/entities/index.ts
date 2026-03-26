@@ -94,6 +94,7 @@ export {
   StylePresetTarget,
   StylePresetStatus,
 } from "./style-preset.entity";
+export { AiProvider, AiProviderType } from "./ai-provider.entity";
 export { SystemSetting } from "./system-setting.entity";
 
 /**
@@ -149,6 +150,7 @@ import { OpenRouterAgentSettings } from "./openrouter-agent-settings.entity";
 import { FlowTemplateCategory } from "./flow-template-category.entity";
 import { FlowTemplate } from "./flow-template.entity";
 import { StylePreset } from "./style-preset.entity";
+import { AiProvider } from "./ai-provider.entity";
 import { SystemSetting } from "./system-setting.entity";
 
 export const ALL_ENTITIES = [
@@ -202,4 +204,5 @@ export const ALL_ENTITIES = [
   FlowTemplate,
   StylePreset,
   SystemSetting,
+  AiProvider,
 ];

@@ -240,6 +240,10 @@ function checkOptionalEnvVars() {
 }
 
 async function bootstrap() {
+  // Отключаем ANSI-цвета в логах для платформ, которые не очищают escape-коды (например, Timeweb logs).
+  process.env.NO_COLOR = process.env.NO_COLOR || "1";
+  process.env.FORCE_COLOR = "0";
+
   // Проверяем переменные окружения перед запуском
   checkCriticalEnvVars();
   checkOptionalEnvVars();

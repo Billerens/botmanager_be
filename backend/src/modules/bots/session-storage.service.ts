@@ -8,6 +8,7 @@ import {
   SessionStatus,
   SessionType,
 } from "../../database/entities/user-session.entity";
+import { Bot } from "../../database/entities/bot.entity";
 import { CustomLoggerService } from "../../common/logger.service";
 
 export interface UserSessionData {
@@ -43,6 +44,8 @@ export class SessionStorageService implements OnModuleDestroy {
   constructor(
     @InjectRepository(UserSession)
     private readonly sessionRepository: Repository<UserSession>,
+    @InjectRepository(Bot)
+    private readonly botRepository: Repository<Bot>,
     private readonly redisService: RedisService,
     private readonly customLogger: CustomLoggerService
   ) {}
@@ -208,6 +211,9 @@ export class SessionStorageService implements OnModuleDestroy {
     try {
       this.logger.verbose("Начинается архивация неактивных сессий из Redis...");
       let archivedCount = 0;
+      let orphanedCount = 0;
+      const existingBotIds = new Set<string>();
+      const missingBotIds = new Set<string>();
 
       // Получаем все ключи сессий
       const redisKeys = await this.redisService.getKeys("session:*");
@@ -244,6 +250,37 @@ export class SessionStorageService implements OnModuleDestroy {
               timeSinceLastActivity > ARCHIVE_THRESHOLD_MS && 
               lastSavedToDbDate.getTime() < lastActivityDate.getTime()
             ) {
+              const botId = sessionData.botId;
+              if (!botId) {
+                await this.redisService.del(redisKeys[i]);
+                orphanedCount++;
+                this.logger.warn(
+                  `Удалена осиротевшая сессия ${redisKeys[i]}: отсутствует botId`
+                );
+                continue;
+              }
+
+              // Проверяем существование бота один раз на botId, чтобы не спамить БД.
+              if (!existingBotIds.has(botId) && !missingBotIds.has(botId)) {
+                const botExists = await this.botRepository.exist({
+                  where: { id: botId },
+                });
+                if (botExists) {
+                  existingBotIds.add(botId);
+                } else {
+                  missingBotIds.add(botId);
+                }
+              }
+
+              if (missingBotIds.has(botId)) {
+                await this.redisService.del(redisKeys[i]);
+                orphanedCount++;
+                this.logger.warn(
+                  `Удалена осиротевшая сессия ${redisKeys[i]}: бот ${botId} не найден`
+                );
+                continue;
+              }
+
               const sessionKey = `${sessionData.botId}-${sessionData.userId}`;
               
               // Переназначаем в формат Date те поля, которые нужны для saveToDb
@@ -267,6 +304,15 @@ export class SessionStorageService implements OnModuleDestroy {
               archivedCount++;
             }
           } catch (e) {
+            // Race condition: бот могли удалить между проверкой и saveToDb.
+            if (e?.message?.includes("FK_0e69637a83365abcef2c486e7e5")) {
+              await this.redisService.del(redisKeys[i]);
+              orphanedCount++;
+              this.logger.warn(
+                `Удалена осиротевшая сессия ${redisKeys[i]} после FK-конфликта`
+              );
+              continue;
+            }
             this.logger.error(`Ошибка архивации сессии ${redisKeys[i]}: ${e.message}`);
           }
         }
@@ -274,6 +320,9 @@ export class SessionStorageService implements OnModuleDestroy {
 
       if (archivedCount > 0) {
         this.logger.log(`Успешно архивировано в БД ${archivedCount} неактивных сессий из Redis`);
+      }
+      if (orphanedCount > 0) {
+        this.logger.warn(`Удалено ${orphanedCount} осиротевших сессий из Redis`);
       }
     } catch (error) {
       this.logger.error("Ошибка при выполнении задачи архивации сессий:", error);
