@@ -623,14 +623,9 @@ export class UploadService {
         `Deleting ${assets.length} files from custom page bundle`
       );
 
-      // Формируем URL файлов для удаления
-      const fileUrls = assets.map((asset) => {
-        const s3Endpoint = process.env.AWS_S3_ENDPOINT;
-        const bucket = process.env.AWS_S3_BUCKET || "botmanager-products";
-        return `${s3Endpoint}/${bucket}/${asset.s3Key}`;
-      });
-
-      await this.s3Service.deleteMultipleFiles(fileUrls);
+      // Удаляем по ключам, чтобы не зависеть от формата endpoint URL.
+      const fileKeys = assets.map((asset) => asset.s3Key);
+      await this.s3Service.deleteMultipleFilesByKeys(fileKeys);
 
       this.logger.log(`Successfully deleted custom page bundle`);
     } catch (error) {

@@ -280,20 +280,25 @@ async function bootstrap() {
       req.method === "PATCH"
     ) {
       const contentType = req.headers["content-type"] || "";
+      const isMultipart = contentType.includes("multipart/form-data");
       // Если Content-Type не установлен или не содержит json, но тело есть
       if (
+        !isMultipart &&
         (!contentType || !contentType.includes("application/json")) &&
         req.body &&
         typeof req.body === "object" &&
         Object.keys(req.body).length === 0
       ) {
-        // Пытаемся прочитать сырые данные из потока (если они еще не прочитаны)
-        // Но это сложно сделать без изменения потока
-        // Вместо этого просто логируем предупреждение
         const logger = new Logger("BodyParserWarning");
-        logger.warn(
-          `Request to ${req.url} has no Content-Type header. Body may not be parsed correctly.`
-        );
+        if (!contentType) {
+          logger.warn(
+            `Request to ${req.url} has no Content-Type header. Body may not be parsed correctly.`
+          );
+        } else {
+          logger.warn(
+            `Request to ${req.url} has non-JSON Content-Type (${contentType}). Body may not be parsed by JSON parser.`
+          );
+        }
       }
     }
     next();

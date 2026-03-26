@@ -703,7 +703,14 @@ export class CustomPagesService {
     const page = await this.ensureAccessToPage(pageId, userId);
     // Если у страницы уже есть бандл, удаляем его
     if (page.assets && page.assets.length > 0) {
-      await this.uploadService.deleteCustomPageBundle(page.assets);
+      try {
+        await this.uploadService.deleteCustomPageBundle(page.assets);
+      } catch (error) {
+        this.logger.error(
+          `Failed to delete previous bundle for page ${pageId}: ${error.message}`
+        );
+        // Не блокируем загрузку нового бандла из-за временных проблем с S3/DNS.
+      }
     }
 
     // Загружаем новый бандл
